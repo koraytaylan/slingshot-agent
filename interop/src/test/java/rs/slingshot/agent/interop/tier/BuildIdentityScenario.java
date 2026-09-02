@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,6 +48,9 @@ final class BuildIdentityScenario {
 
     /** What a caller who presented no identity is answered with. */
     private static final int UNAUTHENTICATED = 401;
+
+    /** Anything from here up is not a success, whichever way the platform refused. */
+    private static final int BELOW_A_SUCCESS = 300;
 
     private final TierRequests requests = TierRequests.open();
 
@@ -110,8 +114,17 @@ final class BuildIdentityScenario {
     @Test
     @DisplayName("the screen refuses a caller who authenticated as nobody")
     void thescreenRefusesNobody() {
-        assertEquals(UNAUTHENTICATED, requests.readAsNobody(tier.address() + ADDRESS).statusCode(),
-                "a console screen was rendered for a caller who presented no identity");
+        // Not one status. A platform that challenges answers 401 and one that hides what the
+        // session may not read answers 404, and this tier runs on the second: Oak resolves nothing
+        // for a caller who cannot see it. What has to hold either way is that no console reaches
+        // somebody who presented no identity, which is what the spelling test beside this one has
+        // always asked and what this now asks too.
+        final HttpResponse<String> answered = requests.readAsNobody(tier.address() + ADDRESS);
+        assertTrue(answered.statusCode() >= BELOW_A_SUCCESS,
+                "a console screen was rendered for a caller who presented no identity: "
+                        + answered.statusCode());
+        assertTrue(!answered.body().contains("slingshot-agent"),
+                "a console screen was disclosed to a caller who presented no identity");
     }
 
     private static String read(Path file) {
