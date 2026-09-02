@@ -57,7 +57,13 @@ resolve dependency:go-offline verify -DskipTests
 # Then the tests, over what the first pass made. They do run here, because a test framework resolves
 # its own provider at the moment it runs and a cache prepared without running them would be missing
 # exactly that.
-resolve verify
+#
+# Every module but the tier, which is the one that starts containers. The images it needs are pulled
+# and built by the other preparation command, and this one runs before it - so a cache preparation
+# that ran the tier would be a cache preparation that failed on a missing image, which is not
+# something it can say anything about. The provider it would have resolved is the one every other
+# module has already resolved.
+resolve verify -pl '!interop'
 
 {
     printf '# SPDX-License-Identifier: MIT OR Apache-2.0\n'
