@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The deployments this product supports, and what each one provides.
+#
+# A row here is a declaration and not evidence. It appears in the table, it constrains the bytecode
+# target and the imported-package ranges every bundle is held to, and it carries no evidence until
+# an interoperability tier actually runs against it. That distinction is the sibling repository's
+# and it is kept here for the same reason: a row somebody wrote down is not a machine somebody ran.
+#
+# No row can declare itself proved. There is no field for it, and a document carrying one is
+# refused as an unknown key rather than believed.
+#
+# The request window is a fact about somebody else's environment: how long the gateway in front of
+# that deployment allows a request to run before it ends it, whether or not the request is still
+# moving. What this build does with the window — bounding how long a command may execute, and how
+# long an event stream may stay open — belongs to `agent-contract.toml`, not here.
+#
+# Every row also declares which platform controls that deployment actually provides. A control this
+# repository has a command for and a deployment does not provide is refused before the command runs,
+# naming the row — because the alternative is performing it against a running instance, reporting
+# success, and leaving an operator believing they changed something that will be gone by the next
+# deployment. Every absence carries its own reason: a bare `false` is a claim nobody can check.
+
+[[deployment]]
+id = "aem-cloud-service"
+product = "Adobe Experience Manager as a Cloud Service"
+java_runtime = 21
+sling_version = "12"
+oak_version = "1.78"
+clustered = true
+context_prefix = ""
+request_window_milliseconds = 60000
+interop_tier = "b"
+built_for = true
+
+[[deployment.control]]
+capability = "configuration_change"
+provided = false
+reason = "Configuration on this deployment is immutable at run time. A change written through the running platform is not persisted, is undone by the next deployment, and leaves an operator believing they changed something they did not — so it is refused rather than performed and reported."
+
+[[deployment.control]]
+capability = "bundle_lifecycle"
+provided = false
+reason = "Bundle state on this deployment is decided by the deployed image. Stopping a bundle through the running platform lasts until the next container replaces it, which is a change with a lifetime nobody can predict and an answer nobody should act on."
+
+[[deployment.control]]
+capability = "workflow_control"
+provided = true
+reason = "Workflow instances are repository state on this deployment as much as on any other, and starting or ending one is a change that persists."
+
+
+[[deployment.control]]
+capability = "principal_administration"
+provided = true
+reason = "Users and groups are repository state. This deployment holds them the same way every other one does."
+
+[[deployment.control]]
+capability = "replication_control"
+provided = true
+reason = "Replication queues are the platform's own runtime state, and acting on one takes effect where the operator is looking."
+
+[[deployment]]
+id = "aem-6-5-lts"
+product = "Adobe Experience Manager 6.5 Long Term Support"
+java_runtime = 21
+sling_version = "12"
+oak_version = "1.66"
+clustered = false
+context_prefix = ""
+request_window_milliseconds = 300000
+interop_tier = "b"
+built_for = false
+
+[[deployment.control]]
+capability = "configuration_change"
+provided = true
+reason = "Configuration on this deployment is held in the repository and survives a restart, so a change written through the running platform is a change an operator can rely on."
+
+[[deployment.control]]
+capability = "bundle_lifecycle"
+provided = true
+reason = "Bundle state on this deployment is the running framework's own and persists across a restart, so stopping one is a change with a knowable lifetime."
+
+[[deployment.control]]
+capability = "workflow_control"
+provided = true
+reason = "Workflow instances are repository state, and starting or ending one is a change that persists."
+
+[[deployment.control]]
+capability = "job_control"
+provided = true
+reason = "Sling jobs are held in the repository, so cancelling one is a change that persists."
+
+[[deployment.control]]
+capability = "principal_administration"
+provided = true
+reason = "Users and groups are repository state. This deployment holds them the same way every other one does."
+
+[[deployment.control]]
+capability = "replication_control"
+provided = true
+reason = "Replication queues are the platform's own runtime state, and acting on one takes effect where the operator is looking."

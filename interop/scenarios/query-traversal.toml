@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "query-traversal"
+kind = "property"
+feature = "query-index-coverage"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.QueryTraversalScenario"
+reason = "Adobe Experience Manager answers a query either from an index or by walking the repository, and walking it is how one command takes an author instance down. What this checks is what a customer actually installs: the produced archives, entry by entry, carrying no index definition — because an index lives outside /apps, changes the shape of somebody else's repository, and is an operator's decision rather than a side effect of installing an agent."

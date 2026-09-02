@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "retry-replication-queue-entry"
+kind = "command"
+feature = "retry_replication_queue_entry"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.RetryReplicationQueueEntryScenario"
+reason = "The narrow action that fixes one entry rather than discarding the queue. What this proves that no unit suite can: that its row requires an operation key, that a missing entry is its own declared category rather than the agent's, and that the surface is reachable through the transport."

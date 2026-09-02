@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "client-conformance"
+kind = "property"
+feature = "client-route-constants"
+tier = "c"
+deployments = ["aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ClientConformanceScenario"
+reason = "The only thing in either repository that proves the two halves speak to one another, which is why a result names the exact client commit it ran against and claims nothing about any other build. The executable is built from the sibling repository and is never committed or fetched here, so what runs without one is the refusal — distinct, and naming what its holder has to do — rather than a quiet skip that would report success nobody earned."

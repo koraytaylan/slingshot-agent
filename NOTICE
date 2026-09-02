@@ -1,0 +1,16 @@
+Slingshot Agent
+Copyright 2026 Koray Taylan Davgana
+
+This product is offered under MIT OR Apache-2.0. The full texts are in LICENSE,
+LICENSE-MIT, and LICENSE-APACHE.
+
+The artifacts this repository builds embed nothing. Both bundles declare every
+product dependency at provided scope, neither carries a private package it does
+not own, and no embedding, included-jar, or second class-path instruction
+appears in either manifest. The check that decides this reads the produced
+archives rather than the build configuration, so the claim above is a property
+of the bytes this repository ships and not a statement about its intentions.
+
+Because nothing is embedded, no third party's terms travel with these
+artifacts, and this file names none. If that ever stops being true, the
+imported-package footprint check fails before the artifact is published.

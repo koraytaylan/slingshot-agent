@@ -1,0 +1,2086 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every significant type names the pattern it implements and why that pattern.
+#
+# A pattern that has to be declared with a reason is a pattern somebody chose; one that is merely
+# present is a pattern somebody copied. The checker verifies each declared pattern's own structural
+# signature, so a row is a claim the build can refuse rather than a comment.
+#
+# The vocabulary is closed. A pattern with no signature would be a label, and the register would
+# then be a place to write labels.
+
+[[pattern]]
+name = "value-object"
+signature = "A record, or a final class whose every field is final and which declares both equality and a hash."
+reason = "A value has no identity beyond what it holds, so two of them holding the same thing are the same thing."
+
+[[pattern]]
+name = "builder"
+signature = "Declares a build method returning the built type, and the built type declares no setter."
+reason = "A thing assembled over several statements and then closed cannot be half-built when somebody reads it."
+
+[[pattern]]
+name = "closed-outcome"
+signature = "A sealed interface whose permitted types are all records."
+reason = "An operation that can fail in more than one way answers which one, exhaustively, so a caller cannot forget a case the compiler knows about."
+
+[[pattern]]
+name = "stateless-policy"
+signature = "A final class with a private constructor and no instance field."
+reason = "A rule that holds no state answers the same way every time it is asked, and can be read without knowing what has happened before."
+
+[[pattern]]
+name = "document-reader"
+signature = "A final class declaring a static read method that answers a closed outcome declared beside it."
+reason = "Reading a document either produces the whole thing or names the one reason it did not, and a partly-populated document is never reachable."
+
+[[pattern]]
+name = "enumeration"
+signature = "An enumeration."
+reason = "A closed set of named values the compiler can check a switch against."
+
+[[pattern]]
+name = "closed-value"
+signature = "A sealed interface whose permitted types are all records."
+reason = "A value that is one of a fixed set of shapes, so a caller that handles every shape cannot meet a seventh - and the compiler is what says so rather than a comment. It shares a signature with the closed outcome and is a different claim: one is what an operation answered, the other is what a value is."
+
+[[pattern]]
+name = "template-method"
+signature = "A sealed abstract class declaring at least one abstract method, whose permitted subclasses are the ones its permits clause names."
+reason = "One place decides the order of things and the subclasses fill in what differs. Sealed because the set of things that may fill it in is a decision rather than whatever happens to compile, and abstract because a base with nothing left to fill in is a class pretending to be a pattern."
+
+[[pattern]]
+name = "protection-proxy"
+signature = "A final class holding exactly one thing, offering exactly one public instance method."
+reason = "Something whose whole job is to decide whether the thing it holds may be reached at all. Final because a subclass could replace the deciding with nothing; one thing held because a second is a second thing to reach and the register would no longer say which is guarded; one way in because a guard with two of them has one way in and one way around."
+
+[[pattern]]
+name = "accessor"
+signature = "A final class whose every field is final and which declares no setter."
+reason = "Something that answers questions about state it was given, and never changes it."
+
+[[type]]
+name = "PolicyFinding"
+pattern = "value-object"
+reason = "Two findings at the same file, line, rule, and symbol are the same finding, which is what lets a report hold one of them."
+
+[[type]]
+name = "PolicyReport"
+pattern = "accessor"
+reason = "A report is a set of findings in one order, answered rather than changed."
+
+[[type]]
+name = "PolicyDocument"
+pattern = "document-reader"
+reason = "Every policy and support file this repository has is loaded through it, and a refusal produces no document at all."
+
+[[type]]
+name = "ReactorModel"
+pattern = "accessor"
+reason = "It answers questions about the reactor the build resolved and changes nothing about it."
+
+[[type]]
+name = "BuiltArtifact"
+pattern = "accessor"
+reason = "It answers questions about bytes a build produced and changes nothing about them."
+
+[[type]]
+name = "RepositoryTree"
+pattern = "stateless-policy"
+reason = "Where the repository is and what a file holds are the same answers however often they are asked."
+
+[[type]]
+name = "BytecodeContract"
+pattern = "stateless-policy"
+reason = "The bytecode contract is one release level and a set of rules about it, with nothing to remember between calls."
+
+[[type]]
+name = "ProjectScaffold"
+pattern = "stateless-policy"
+reason = "The structure rules are decided from the reactor each time they are asked, with nothing carried between them."
+
+[[type]]
+name = "DeploymentMatrix"
+pattern = "document-reader"
+reason = "The matrix is read once and either produces every row or names the one row that was wrong."
+
+[[type]]
+name = "ModuleDirection"
+pattern = "document-reader"
+reason = "The module diagram is read once and either produces every edge or names what was wrong with the document."
+
+[[type]]
+name = "ImportedPackages"
+pattern = "document-reader"
+reason = "The footprint policy is read once and either produces every row or names what was wrong with the document."
+
+[[type]]
+name = "LicenceHeaders"
+pattern = "document-reader"
+reason = "The header policy is read once, and an exclusion with no reason refuses the whole document rather than being skipped."
+
+[[type]]
+name = "PublicationBoundary"
+pattern = "document-reader"
+reason = "The publication metadata is read once and answers per target, so one target's absent field never blocks another."
+
+[[type]]
+name = "StaticAnalysis"
+pattern = "document-reader"
+reason = "The analyser correspondence is read once and either produces every row or names what was wrong with the document."
+
+[[type]]
+name = "SourcePolicy"
+pattern = "document-reader"
+reason = "The source policy is read once, and an excluded directory with no reason refuses the whole document."
+
+[[type]]
+name = "NullabilityPolicy"
+pattern = "document-reader"
+reason = "The nullability policy is read once, and a policy permitting the annotation package at runtime refuses the whole document."
+
+[[type]]
+name = "ApiShapePolicy"
+pattern = "document-reader"
+reason = "The shape policy is read once, and an exemption with no reason refuses the whole document."
+
+[[type]]
+name = "DesignPatternRegister"
+pattern = "document-reader"
+reason = "The register is read once and either produces every declared pattern or names what was wrong with the document."
+
+[[type]]
+name = "AgentContract"
+pattern = "document-reader"
+reason = "The contract's bytes are authenticated before a bound is parsed, and a refusal leaves no contract reachable at all."
+
+[[type]]
+name = "ContractLimit"
+pattern = "enumeration"
+reason = "Every bound is reached by naming it, so a bound that does not exist is a compilation failure rather than an absent value."
+
+[[type]]
+name = "MethodShapePolicy"
+pattern = "document-reader"
+reason = "Every ceiling is read from the policy document once, and a ceiling with no reason for its value refuses the whole document rather than defaulting."
+
+[[type]]
+name = "JavadocPolicy"
+pattern = "document-reader"
+reason = "The documentation policy is read once, and a policy that does not require what it says it requires refuses the whole document."
+
+[[type]]
+name = "AllocationPolicy"
+pattern = "document-reader"
+reason = "The allocation policy is read once, and a policy whose rule does not invert inside a sensitive path refuses the whole document, because declaring a path would then change nothing."
+
+[[type]]
+name = "AdobePracticePolicy"
+pattern = "document-reader"
+reason = "The practice policy is read once, and a policy that permits one of the practices it exists to refuse, or refuses a deprecation with no replacement named, refuses the whole document."
+
+[[type]]
+name = "CoverageFloor"
+pattern = "document-reader"
+reason = "The floor is read once, and an exclusion with no reason or one that excludes a package rather than a class refuses the whole document."
+
+[[type]]
+name = "PackageAnalysis"
+pattern = "document-reader"
+reason = "The analysis policy is read once, and a policy that lets the container analyser report rather than fail, or names a task with no reason, refuses the whole document."
+
+[[type]]
+name = "DependencyPolicy"
+pattern = "document-reader"
+reason = "The dependency set is read once, and an artifact resolved with no reason recorded refuses the whole document."
+
+[[type]]
+name = "QualityGate"
+pattern = "document-reader"
+reason = "The stage inventory is read once, and a stage with no reason or an inventory that declares no tier the gate runs refuses the whole document."
+
+[[type]]
+name = "AgentRoute"
+pattern = "value-object"
+reason = "A route is what it holds. Two routes with the same path, method, and media type are the same route, which is what lets the table hold one of them."
+
+[[type]]
+name = "AgentRouteTable"
+pattern = "document-reader"
+reason = "The committed route table is read once, and a route outside the prefix, a duplicate, or one with no plan that builds it refuses the whole table rather than being skipped."
+
+[[type]]
+name = "AdvertisedCapabilities"
+pattern = "value-object"
+reason = "The discovery document is what it says. Two agents advertising the same five fields are the same agent as far as a client is concerned, which is the whole point of the exchange."
+
+[[type]]
+name = "CapabilityServlet"
+pattern = "stateless-policy"
+reason = "A component is a singleton the container hands to every caller at once, so it holds nothing: everything it answers with it reads from the committed contract and the committed table at the moment it is asked."
+
+[[type]]
+name = "RepositoryAccess"
+pattern = "document-reader"
+reason = "The access policy is read once, and a grant with no reason or one outside the agent's own tree refuses the whole document rather than being argued about."
+
+[[type]]
+name = "AgentSession"
+pattern = "accessor"
+reason = "It answers with a session and changes nothing about who anybody is. There are exactly two ways to ask, and the absence of a third is the guarantee."
+
+[[type]]
+name = "ProcessRun"
+pattern = "value-object"
+reason = "One run of one command is what it did: the command, the status, and what it wrote. Two runs that did the same thing are the same result."
+
+[[type]]
+name = "ContainerHandle"
+pattern = "value-object"
+reason = "A handle is the container it names. It is a value rather than a lookup because a name can be taken by a replacement, and a cleanup that looked one up would stop something it never started."
+
+[[type]]
+name = "ContainerHarness"
+pattern = "accessor"
+reason = "It answers with containers and with what they wrote, and holds nothing between calls but the bounds it read once."
+
+[[type]]
+name = "ClusterHarness"
+pattern = "accessor"
+reason = "It answers with two nodes against one repository, and holds nothing between calls but the wrapper it starts them through."
+
+[[pattern]]
+name = "strategy"
+signature = "An interface whose implementations are all named in this register."
+reason = "Several ways of doing one thing, each named for what distinguishes it, so a caller written against the interface runs on any of them."
+
+[[type]]
+name = "InteropTier"
+pattern = "strategy"
+reason = "Two runtimes and a third that is one of them driven by the client's own executable. A scenario is written once against this and runs on any of them, which is the only reason the tiers can differ in what they prove rather than in how thoroughly they run."
+
+[[type]]
+name = "PublicSlingTier"
+pattern = "accessor"
+reason = "It answers with what a running instance said and holds only the handle that retains it."
+
+[[type]]
+name = "QuickstartTier"
+pattern = "accessor"
+reason = "It answers with what its preconditions are, and on any machine but its holder's it answers that they are not met."
+
+[[type]]
+name = "ScenarioInventory"
+pattern = "document-reader"
+reason = "One scenario file per scenario, read into a whole inventory or refused naming the file that was wrong. A partly-read inventory would silently pass a feature nothing covers, which is the one thing this check exists to refuse."
+
+[[type]]
+name = "ProductDocumentation"
+pattern = "document-reader"
+reason = "The rules a document is held to are read whole or refused, so a checklist half of which parsed can never be the one a review is judged against."
+
+[[type]]
+name = "TierRequests"
+pattern = "accessor"
+reason = "It holds one client for the life of a tier and never changes it. Everything it answers is an answer about a running instance rather than about itself, which is why a tier can be judged on what it installs and asks rather than on how a request is built."
+
+[[type]]
+name = "DigestValue"
+pattern = "value-object"
+reason = "A digest has no identity beyond the bytes it holds, and two of them holding the same bytes are the same digest. Holding it as a type that cannot be constructed from anything else is what stops an invalid digest existing to be compared."
+
+[[type]]
+name = "Digest"
+pattern = "stateless-policy"
+reason = "Taking a digest depends on nothing that has happened before, so the same content answers the same value whichever of the two ways it is read."
+
+[[type]]
+name = "CommittedResource"
+pattern = "document-reader"
+reason = "Bytes and the digest committed beside them are read together and handed over whole or refused, so there is no path on which somebody holds the bytes and the verdict separately."
+
+[[type]]
+name = "DocumentValue"
+pattern = "closed-value"
+reason = "Six shapes and no seventh. A model that could hold a non-integral number would be one that can hold a document the canonical form cannot write back, which is a disagreement discovered as a refused submission rather than as a failing vector."
+
+[[type]]
+name = "DocumentRefusal"
+pattern = "value-object"
+reason = "What was wrong and where reading stopped, which two refusals holding the same failure at the same position are the same report of."
+
+[[type]]
+name = "BoundedDocumentReader"
+pattern = "document-reader"
+reason = "A document is read whole or refused with a reason, and nothing partly read is reachable - which is the whole point of enforcing a bound as the bytes arrive rather than once they are in hand."
+
+[[type]]
+name = "CanonicalByteWriter"
+pattern = "stateless-policy"
+reason = "The same value writes to the same bytes whatever has happened before, which is the whole claim the client's four derived identity fields rest on."
+
+[[type]]
+name = "CanonicalRefusal"
+pattern = "value-object"
+reason = "What cannot be written and where, which two refusals naming the same failure at the same pointer are the same report of."
+
+[[type]]
+name = "CanonicalContractAuthority"
+pattern = "accessor"
+reason = "It answers what four steps have established about bytes it was given, and changes nothing. Each step's produced value has a private constructor, so the order is the compiler's rather than a convention."
+
+[[type]]
+name = "AuthenticationStep"
+pattern = "enumeration"
+reason = "Four steps and no fifth, so a caller can say which one failed by switching on it rather than by reading a message."
+
+[[type]]
+name = "CommandContractIdentity"
+pattern = "value-object"
+reason = "Five fields and no identity beyond them: two identities carrying the same five are the same command contract, which is the whole point of not identifying a command by its name."
+
+[[type]]
+name = "IdentityRefusal"
+pattern = "value-object"
+reason = "What was wrong and which of the five members it was wrong about, which two refusals naming the same pair are the same report of."
+
+[[type]]
+name = "EventStoreGeneration"
+pattern = "value-object"
+reason = "An incarnation of the store is the number it is, and two of them holding the same number are the same incarnation. Holding it as a type is what makes a decrease something a caller has to ask about rather than something a comparison forgets."
+
+[[type]]
+name = "AgentOperationIdentifier"
+pattern = "value-object"
+reason = "A name is the characters it is, and one that is not sixty-four lower-case hexadecimal characters cannot be constructed to be compared with one that is."
+
+[[type]]
+name = "OperationIdentity"
+pattern = "value-object"
+reason = "Four values that together mean one durable thing, and any one of them changing means a different durable thing rather than the same one described differently."
+
+[[type]]
+name = "DocumentProvenance"
+pattern = "value-object"
+reason = "What a document claims about the contracts it means, which two documents claiming the same three things claim identically. It is a claim rather than evidence, and the type says so where a reader meets it."
+
+[[type]]
+name = "SubmittedCommandDigest"
+pattern = "value-object"
+reason = "The key a submission means, which is the same value every time the same submission is derived - which is the whole reason a client that crashed and restarted is recognised rather than re-run."
+
+[[type]]
+name = "SubmissionBinding"
+pattern = "value-object"
+reason = "What a submission declares it will produce. Two bindings declaring the same three things are the same declaration, and a different one is different work."
+
+[[type]]
+name = "ArtifactManifestKind"
+pattern = "enumeration"
+reason = "Three kinds and no fourth, spelled the way the client spells them because these spellings are inside a digest both sides derive."
+
+[[type]]
+name = "AgentEnvelope"
+pattern = "value-object"
+reason = "Which contracts a document means and which operation it is about, which two documents saying the same two things say identically. There is no body on it, because a free-form body is where members nobody declared would travel."
+
+[[type]]
+name = "AgentError"
+pattern = "value-object"
+reason = "A stable code and the sentence that code carries. Two errors with the same code are the same refusal, which is what lets a caller match on the code rather than on prose."
+
+[[type]]
+name = "ErrorCode"
+pattern = "enumeration"
+reason = "A closed set a caller can switch on. A code outside it is refused rather than passed through, because an unknown code is one somebody handles by reading the message beside it."
+
+[[type]]
+name = "JobEventKind"
+pattern = "enumeration"
+reason = "Five kinds and no sixth, each carrying whether anything follows it. A client meeting a kind it did not know would have to guess whether it mattered, and both answers are wrong."
+
+[[type]]
+name = "EventSequence"
+pattern = "value-object"
+reason = "Where an event sits in a run of events, which two events at the same place are the same place of. A repeat and a decrease are different questions, and a bare number would answer neither."
+
+[[type]]
+name = "JobEvent"
+pattern = "value-object"
+reason = "One thing that happened to one job at one incarnation of the store. Two events with the same four members are the same event, which is what makes a re-delivery recognisable."
+
+[[type]]
+name = "JobSnapshot"
+pattern = "value-object"
+reason = "What the store holds about one job, in the very vocabulary the stream uses. Two snapshots with the same four members are the same record, which is what makes asking twice safe."
+
+[[type]]
+name = "CapabilityDocument"
+pattern = "accessor"
+reason = "The bytes one set of capabilities renders to, answered rather than changed. Ordering, duplicate refusal, and the document bound are decided once, where the bytes are made, rather than by whoever happens to call the route."
+
+[[type]]
+name = "ResultDelivery"
+pattern = "closed-value"
+reason = "Inline or as an artifact, with no third case and no state in which both are present - which is what makes 'the answer was truncated' a thing that cannot be represented rather than a thing that must be checked for."
+
+[[type]]
+name = "CommandResult"
+pattern = "value-object"
+reason = "The answer one command produced, which is the delivery it arrived by and nothing else."
+
+[[type]]
+name = "CommandFailure"
+pattern = "value-object"
+reason = "What a command did instead, in a category that states its own effect. Two failures in the same category are the same failure, and the effect is not a second opinion beside it."
+
+[[type]]
+name = "QueryDigest"
+pattern = "value-object"
+reason = "Which query a token belongs to, taken over the whole query. Two queries differing in anything that changes which rows come back are two digests, which is what stops a position in one result set resuming another."
+
+[[type]]
+name = "ContinuationState"
+pattern = "value-object"
+reason = "Where to resume, in full: partition, incarnation, query, position, and expiry. A position on its own would resume the wrong search."
+
+[[type]]
+name = "ContinuationToken"
+pattern = "value-object"
+reason = "What a token says and the digest binding it to a key this agent holds. Two tokens with the same state and the same integrity are the same token, and one with a changed state is not."
+
+[[type]]
+name = "ValidatingKey"
+pattern = "enumeration"
+reason = "Current or prior, reported rather than hidden, because validating under the prior key is the signal that a rotation is under way."
+
+[[type]]
+name = "KeyRing"
+pattern = "value-object"
+reason = "The keys an authority holds at one moment. Rotation answers a new ring rather than changing this one, so what a caller read is still what it read when it goes to write."
+
+[[type]]
+name = "KeyRingRefusal"
+pattern = "value-object"
+reason = "Why a ring could not be read, written, or rotated, which two refusals naming the same failure with the same detail are the same report of."
+
+[[type]]
+name = "ContinuationKeyAuthority"
+pattern = "strategy"
+reason = "One contract every deployment implements, whatever it is running on. A single instance is not permitted a cheaper version, because the guarantees would change the day somebody added a node."
+
+[[type]]
+name = "SchemaCorrespondence"
+pattern = "document-reader"
+reason = "The record of which schema describes which model is read whole or refused, so a check cannot run against half of it and report that the halves it read agreed."
+
+[[type]]
+name = "VectorInventory"
+pattern = "document-reader"
+reason = "The list of document kinds is read whole or refused, so a check cannot run against half of it and report that every kind it saw had a vector."
+
+[[type]]
+name = "StatePath"
+pattern = "value-object"
+reason = "Where a record lives, derived from what it is called. Two derivations from one identifier are the same path, which is what lets a caller holding only an identifier find its record after a restart."
+
+[[type]]
+name = "StateLayout"
+pattern = "document-reader"
+reason = "The declared tree is read whole or refused, so a check cannot compare half a layout with a whole initialisation script and report that they agree."
+
+[[type]]
+name = "ClaimByCreation"
+pattern = "stateless-policy"
+reason = "Claiming a path depends on nothing that has happened before: the writer whose commit lands first owns it, and every other writer is told so. Holding state here would be holding a lock, which is the thing this primitive exists instead of."
+
+[[type]]
+name = "CompareAndSet"
+pattern = "stateless-policy"
+reason = "A write that happens only against what the caller read needs nothing but what it was given, and a value remembered between calls is exactly the stale read this primitive refuses."
+
+[[type]]
+name = "ShardedCount"
+pattern = "stateless-policy"
+reason = "A total is read from the repository every time rather than carried, because a count somebody cached is a count an admission decision would be wrong about."
+
+[[type]]
+name = "WriteOutcome"
+pattern = "enumeration"
+reason = "Five answers and no ambiguity, so a caller that treats already-held as a failure is a caller the compiler can be pointed at."
+
+[[type]]
+name = "GenerationStore"
+pattern = "stateless-policy"
+reason = "Which incarnation a store is serving is read from the repository every time. A generation somebody cached is a generation a client would be answered from after a rebuild."
+
+[[type]]
+name = "RotationLease"
+pattern = "stateless-policy"
+reason = "Who may rotate is a question about what the repository holds now, not about what this process remembers taking."
+
+[[type]]
+name = "DefaultContinuationKeyAuthority"
+pattern = "accessor"
+reason = "The ring where every node can see it, answered rather than held: what it carries between calls is a session and a secure source, and neither is a copy of the ring."
+
+[[type]]
+name = "AccountedQuantity"
+pattern = "enumeration"
+reason = "Everything this agent counts, each carrying the two bounds it is counted against. A quantity with no bound would be a count nobody admits against, and the compiler is what keeps the two sets equal."
+
+[[type]]
+name = "CapacityLedger"
+pattern = "stateless-policy"
+reason = "Admission depends on what the repository holds now rather than on anything this process remembers. A cached total is a total two nodes would both admit against."
+
+[[type]]
+name = "OperationState"
+pattern = "enumeration"
+reason = "Four states with every permitted move declared as data. A chain of conditions is where the fourth case nobody wrote lives, and a matrix is something a reader can check."
+
+[[type]]
+name = "LogicalOperation"
+pattern = "value-object"
+reason = "What was submitted, by whom, against what, and when. Two records holding the same seven things are the same durable thing, which is what makes a resend converge rather than create a second one."
+
+[[type]]
+name = "OperationStore"
+pattern = "stateless-policy"
+reason = "A record is claimed at its own path and moved by compare-and-set from what the caller read. Anything remembered between calls would be a state a worker could act on after the record had moved."
+
+[[type]]
+name = "AdmissionOutcome"
+pattern = "closed-outcome"
+reason = "Taken, recognised, refused, or another piece of work wearing the same name. A caller that could not tell the third from the second would answer a conflicting submission from somebody else's record."
+
+[[type]]
+name = "SubmissionAdmission"
+pattern = "stateless-policy"
+reason = "What a submission means is decided from what the store holds now and what the request itself derives, never from anything remembered between requests - which is the whole reason a resend converges."
+
+[[type]]
+name = "PhysicalAttempt"
+pattern = "value-object"
+reason = "One delivery of one operation: which job, which node, and when. Two records of one delivery are the same fact, which is what lets a duplicate arrival collapse rather than count."
+
+[[type]]
+name = "Outbox"
+pattern = "stateless-policy"
+reason = "Whether a delivery has been seen is a question about what the store holds, and an attempt claimed at a path derived from the delivery's own name needs nothing remembered between calls."
+
+[[type]]
+name = "FenceHolder"
+pattern = "value-object"
+reason = "Who is executing and until when. The instant is what another worker reads to decide whether anybody is still there, because a worker that stopped cannot say so."
+
+[[type]]
+name = "FenceOutcome"
+pattern = "closed-outcome"
+reason = "Held, refused, lost, and contended are four answers rather than one no. An operator who cannot tell a handover from a busy store cannot tell what happened to the work."
+
+[[type]]
+name = "ExecutionFence"
+pattern = "stateless-policy"
+reason = "Whether a worker may still write is a question about what the store holds now. A fence remembered in a process is a fence that outlives the process losing it."
+
+[[type]]
+name = "CommandJobTopic"
+pattern = "stateless-policy"
+reason = "One topic and the queue values a deployment configures for it, read from the contract every time rather than held, so a value cannot be remembered from a build that declared another."
+
+[[type]]
+name = "JobEnqueue"
+pattern = "stateless-policy"
+reason = "Whether an operation may be handed to the job system is a question about what the store holds now: durable first, enqueued after, and nothing carried between the two."
+
+[[type]]
+name = "CommandJobConsumer"
+pattern = "stateless-policy"
+reason = "A delivery is decided against the store and the fence rather than against anything a node remembers, which is what makes the same delivery to two nodes safe."
+
+[[type]]
+name = "EventLedger"
+pattern = "stateless-policy"
+reason = "An append is decided against the tree it writes into rather than against anything remembered: what an operation holds is counted from the events themselves, so two nodes reading the same ledger reach the same answer."
+
+[[type]]
+name = "LedgerAdmission"
+pattern = "stateless-policy"
+reason = "The ledger's use of the one capacity authority, kept apart from the ledger so that a row and its bytes are taken together or not at all, and so that no second place counts anything."
+
+[[type]]
+name = "SnapshotStore"
+pattern = "stateless-policy"
+reason = "What is currently true is derived from the commit that made it true rather than from anything held: the snapshot moves inside the event's own commit, and the pass that checks the two agree folds the ledger every time rather than trusting a previous fold."
+
+[[type]]
+name = "SubscriptionRecord"
+pattern = "value-object"
+reason = "A subscription is what it holds: whose it is, which incarnation it follows, and how far it has been shown. How far is stored as how many events have been given away, so nothing stands in for absence."
+
+[[type]]
+name = "HighWaterMark"
+pattern = "stateless-policy"
+reason = "Where a subscriber has been shown to is decided against the store every time and moved only by compare-and-set, so two nodes serving one subscriber cannot both believe they moved it."
+
+[[type]]
+name = "SubscriptionLedger"
+pattern = "stateless-policy"
+reason = "Whether a subscription may be held is a question about what the store holds now and what its caller has already taken, answered through the one capacity authority rather than by anything remembered here."
+
+[[type]]
+name = "ReplayCursor"
+pattern = "value-object"
+reason = "Where a subscriber got to is the sequence and the incarnation together, because a sequence on its own reads as an early position in whatever store happens to be serving now."
+
+[[type]]
+name = "ReplayOutcome"
+pattern = "closed-outcome"
+reason = "Served, reset, and refused are three different things for a subscriber to do, and an empty list would be indistinguishable from having caught up."
+
+[[type]]
+name = "EventReplay"
+pattern = "stateless-policy"
+reason = "A replay is decided against the operation asked about and the events the store still holds, so what a cursor can reach is a property of the shape rather than of a check somebody wrote."
+
+[[type]]
+name = "ArtifactSlot"
+pattern = "value-object"
+reason = "A slot is a path segment, so what it may be spelled with is decided once, where the slot is read, rather than at every place one is used to build a path."
+
+[[type]]
+name = "ArtifactRecord"
+pattern = "value-object"
+reason = "How many bytes and what they digest to are the record rather than a description of it, so a reader can decide for itself whether the bytes it has are the ones this record is about."
+
+[[type]]
+name = "ArtifactStore"
+pattern = "stateless-policy"
+reason = "Room is taken from the declared size before a byte is read and the content, the count, and the digest are committed together, so what is reachable is always complete and nothing here remembers a transfer between calls."
+
+[[type]]
+name = "ExecutionOutcome"
+pattern = "value-object"
+reason = "What an execution ended as, with its answer as one of three separate types rather than a record with two halves and a flag, so a reference beside inline bytes is not a question anybody has to ask."
+
+[[type]]
+name = "TerminalCommit"
+pattern = "stateless-policy"
+reason = "The state, the answer, the terminal event, and the snapshot are four representations of one fact, decided against the store and written in one commit, with nothing carried between calls."
+
+[[type]]
+name = "RetainedUntil"
+pattern = "value-object"
+reason = "An instant that can only be made from a record, so a retention cannot be computed from a clock reading and quietly lengthen every time somebody asks about it."
+
+[[type]]
+name = "RetentionPolicy"
+pattern = "stateless-policy"
+reason = "How long each kind is kept is derived from the contract's minimum and the record's own request start every time, so a deployment cannot shorten a window a client was promised and nothing remembers a window between calls."
+
+[[type]]
+name = "SweepCursor"
+pattern = "value-object"
+reason = "Where a pass stopped, held as a bucket number so that advancing it is a compare-and-set and two sweeps cannot both believe they finished the same region."
+
+[[type]]
+name = "SweepReport"
+pattern = "value-object"
+reason = "Counts and positions and nothing that varies while the store does not, so two reports over one store state are byte-identical and a difference is a real change."
+
+[[type]]
+name = "MaintenanceSweep"
+pattern = "stateless-policy"
+reason = "What may be removed is decided against the record's own retention and the three things that can still be holding an artifact, read from the store on every pass rather than remembered between them."
+
+[[type]]
+name = "RecoveryDisposition"
+pattern = "enumeration"
+reason = "Seven answers about unfinished work, closed so that \"we do not know\" is something a client is told rather than something it infers from silence."
+
+[[type]]
+name = "RestartRecovery"
+pattern = "stateless-policy"
+reason = "What unfinished work is gets decided against the store on every pass, at startup and on the contract's interval, and nothing here starts anything: there is no caller's session at startup to start it under."
+
+[[type]]
+name = "RetainedGeneration"
+pattern = "value-object"
+reason = "An incarnation that is over, with the instant it stops being answered about, so a rotation can tell whether dropping it would take away something a client is still reading."
+
+[[type]]
+name = "GenerationRotation"
+pattern = "stateless-policy"
+reason = "Rotating is decided against the record and the retentions in it every time: how many prior incarnations are kept and how long each is answered about come from the contract and the store rather than from anything held here."
+
+[[type]]
+name = "CrashInjector"
+pattern = "accessor"
+reason = "It ends a container through the engine it was given and holds nothing but that engine and the bounds it drives it under. The seven points a process may be ended at are enumerated as a closed type beside it, so a report says which one broke."
+
+[[type]]
+name = "ShapeRefusal"
+pattern = "enumeration"
+reason = "Three ways a request can be the wrong shape, each with the protocol's own answer beside it, because a caller does something different about a path it cannot reach, a verb it may not use, and a body in a form nothing takes."
+
+[[type]]
+name = "RequestShape"
+pattern = "value-object"
+reason = "What a request is rather than what it carries: the path, the selectors, the extension, the suffix, the method, and the type of any body, so the one shape a route answers is decided before anything is read."
+
+[[type]]
+name = "AgentServlet"
+pattern = "template-method"
+reason = "The one base every route extends, deciding the shape of a request in a place a subclass cannot forget, and handing on only what is already for that route and no other spelling of it."
+
+[[type]]
+name = "CallerIdentity"
+pattern = "value-object"
+reason = "The name the platform established and nothing that proved it, so there is nowhere for a credential to be carried past the gate and nowhere for one to be logged."
+
+[[type]]
+name = "AuthenticationGate"
+pattern = "stateless-policy"
+reason = "Every route requires somebody in particular, decided from the platform's own answer each time, with no argument through which a route could be exempted."
+
+[[type]]
+name = "RouteAuthority"
+pattern = "enumeration"
+reason = "What each route requires, as one table compared against the committed routes in both directions, so a route added without a requirement fails the build rather than serving everybody."
+
+[[type]]
+name = "AuthorizationGate"
+pattern = "stateless-policy"
+reason = "Whether a caller may use this agent is decided from the groups an operator permitted and where the platform says the caller stands, every time, with the three ways a configuration can mean nobody kept apart."
+
+[[type]]
+name = "ForgeryProtection"
+pattern = "stateless-policy"
+reason = "Which routes carry a token and what happens to a request whose token the platform did not accept, with the three ways of not having one kept apart in this side's own record and answered identically on the wire."
+
+[[type]]
+name = "FramingPolicy"
+pattern = "value-object"
+reason = "How a request says how long its body is, with a length and a chunked encoding together refused rather than resolved, because resolving them is choosing which of two senders to believe."
+
+[[type]]
+name = "BoundedRequestBody"
+pattern = "stateless-policy"
+reason = "A body read as it arrives and refused at the byte that would cross the bound, because a limit checked after a body is collected is a limit on nothing."
+
+[[type]]
+name = "SubmissionResponse"
+pattern = "value-object"
+reason = "The nine members the client's own build knows and no tenth, every value taken from the record rather than from the request, because the client compares exactly these against what it sent."
+
+[[type]]
+name = "SubmitServlet"
+pattern = "accessor"
+reason = "The one route that starts work: it decides nothing that something else already decides, derives the key rather than believing the one it was sent, and runs an immediate command inside the caller's own request on that request's own session."
+
+[[type]]
+name = "OperationLookupServlet"
+pattern = "stateless-policy"
+reason = "What one operation has become, read from the store on the caller's own session, with \"not there yet\" and \"never there\" kept apart by the incarnation asked about rather than by a guess."
+
+[[type]]
+name = "PhysicalJobServlet"
+pattern = "stateless-policy"
+reason = "What the job system did with one operation's attempts, read out of that operation's own outbox rather than out of the queue, so nothing about a customer's instance leaves through this route."
+
+[[type]]
+name = "HighWaterServlet"
+pattern = "stateless-policy"
+reason = "How far a subscription has been served, read from the durable cursor at the moment of asking, with a subscription nobody has, one that was swept, and a cursor into another incarnation kept apart."
+
+[[type]]
+name = "StatusMapping"
+pattern = "document-reader"
+reason = "What each refusal becomes on the wire, read from the committed mapping with no default branch, so a category nobody wrote a row for cannot be rendered at all."
+
+[[type]]
+name = "RetryHint"
+pattern = "value-object"
+reason = "How long to wait, produced only for a refusal that waiting can fix and refused rather than clamped past the cap, so the two sides never disagree about when the next request is due."
+
+[[type]]
+name = "StatusMappingCoverage"
+pattern = "stateless-policy"
+reason = "The committed mapping and the declared categories compared in both directions on every build, because a category with no row and a row for no category are both mistakes and neither announces itself."
+
+[[type]]
+name = "IntakeSlotWrite"
+pattern = "stateless-policy"
+reason = "One declared payload written against what its own manifest said before it was sent, with nothing partial ever reachable and nothing charged twice for a retry."
+
+[[type]]
+name = "ArtifactIntakeServlet"
+pattern = "stateless-policy"
+reason = "Where a declared payload arrives, addressed by operation and slot rather than by a repository path, so the store decides where somebody else's bytes go and the caller does not."
+
+[[type]]
+name = "StreamRefusal"
+pattern = "enumeration"
+reason = "The four bounds that end a stream rather than shorten an event, because a truncated event is not a smaller event but an unparseable one."
+
+[[type]]
+name = "EventEncoder"
+pattern = "stateless-policy"
+reason = "One event as the bytes a decoder reads, with every bound checked against the whole event before a byte of it exists, so nothing partial is ever produced."
+
+[[type]]
+name = "StreamSession"
+pattern = "value-object"
+reason = "Whose stream it is, which incarnation it follows, and which operation it is about, decided once and carried everywhere. Filtering to one operation is a property of what a session is rather than of a check somewhere in the writing, which is what makes it hold for every ending and every resumption."
+
+[[type]]
+name = "StreamAdmission"
+pattern = "stateless-policy"
+reason = "How many streams this instance is already holding, asked of the one capacity authority rather than counted here. A bound counted in a second place is a second answer to how much of somebody's author this product takes."
+
+[[type]]
+name = "Heartbeat"
+pattern = "stateless-policy"
+reason = "The bytes that say only that the connection is alive, on the interval the contract declares. A stream that has stopped beating is a stream that has stopped, which the client cannot tell from a stream with nothing to say without them."
+
+[[type]]
+name = "SessionBound"
+pattern = "stateless-policy"
+reason = "When this side ends its own stream, which is before somebody else's gateway ends it at a moment nobody chose. The relation that keeps it resumable inside the client's own retry policy is arithmetic on the contract rather than a hope."
+
+[[type]]
+name = "ResetNotice"
+pattern = "stateless-policy"
+reason = "What a subscriber is told when its position cannot be honoured, carrying what to resynchronise from. A subscriber that jumped silently would believe it had seen everything."
+
+[[type]]
+name = "StreamResumption"
+pattern = "stateless-policy"
+reason = "Where a reconnecting subscriber picks up, read as an incarnation and a sequence together so a cursor from an earlier incarnation is recognised rather than misread as an early position."
+
+[[type]]
+name = "StreamTicker"
+pattern = "strategy"
+reason = "What time it is to a stream and how it waits, so a suite proving a heartbeat interval and a session bound advances time instead of sleeping through it. A suite that slept would prove what one machine did one afternoon."
+
+[[type]]
+name = "DefaultStreamTicker"
+pattern = "accessor"
+reason = "The clock a stream runs on when it is running on an instance rather than in a suite, holding nothing and answering the system's own time."
+
+[[type]]
+name = "StreamHandoff"
+pattern = "stateless-policy"
+reason = "Letting go of the request thread, which is the whole reason this route can exist: an author serves from a bounded pool of them, and a handful of synchronous subscribers is an author that has stopped serving anything at all."
+
+[[type]]
+name = "StreamExecutor"
+pattern = "stateless-policy"
+reason = "The threads a deployment's streams are written from, which are this bundle's own and bounded by the same number that bounds admission. One entry per stream on the platform's shared scheduler is this agent spending somebody else's capacity."
+
+[[type]]
+name = "StreamWriter"
+pattern = "value-object"
+reason = "Everything one stream is, held together: where its bytes go, whose session it reads under, whose stream it is, and what time it is. Every one of the four endings leaves through the same path, because an ending that skipped it would leak a room nobody would miss until an instance had run out of them."
+
+[[type]]
+name = "EventStreamServlet"
+pattern = "accessor"
+reason = "One subscriber's live view of one operation, refusing before it opens anything and holding nothing between requests but the bounded pool its streams are written from."
+
+[[type]]
+name = "TransferDeadlines"
+pattern = "stateless-policy"
+reason = "How long a transfer may be idle and how long it may take altogether, kept apart from a finite response's pair because an artifact is as large as the work that produced it and a transfer that is still moving is not a stalled one."
+
+[[type]]
+name = "ArtifactServlet"
+pattern = "accessor"
+reason = "A result too large to answer inline, addressed by operation and slot rather than by a repository path, with the count and the digest ahead of the bytes so a reader verifies rather than believes."
+
+[[type]]
+name = "RouteAlias"
+pattern = "value-object"
+reason = "A second path to one route, carried for a client that has not caught up, naming the version that asks for it and the correction that removes it — so the set has an end rather than becoming a surface nobody remembers deciding on."
+
+[[type]]
+name = "RouteAliasSwitch"
+pattern = "accessor"
+reason = "Which of the client's old spellings a deployment serves, which is none unless somebody said otherwise. It answers what is served and registers exactly those paths against the servlets their own routes already reach."
+
+[[type]]
+name = "RouteAliasCoverage"
+pattern = "accessor"
+reason = "Whether the second paths this side carries are the ones the client actually asks for, compared in both directions against constants read out of that repository rather than recalled."
+
+[[type]]
+name = "RedactionAudit"
+pattern = "accessor"
+reason = "One corpus scanned against everything that leaves: every body, every header, every log line and every piece of a stream. Auditing a route at a time as each is written is how one gets missed, and a hit names the route and the kind because \"something leaked\" is not a thing anybody can act on."
+
+[[type]]
+name = "ClientTier"
+pattern = "accessor"
+reason = "The sibling's own executable run against an instance this repository started, pinned by origin, exact commit, and digest, configured through the client's own profile mechanism and nothing else — so what is proved is the exchange a user would have, about the one commit a result names."
+
+[[type]]
+name = "NetworkDisruptor"
+pattern = "accessor"
+reason = "A connection severed at a named moment, at the boundary rather than inside either process, with the linger interval at zero so a reset arrives rather than a close — because an orderly close is something both sides can flush through, and what is being proved is what happens when nobody got an answer at all."
+
+[[type]]
+name = "AccessClass"
+pattern = "enumeration"
+reason = "Whether a command changes anything, spelled the same way in both halves of this product. What this side adds is enforcement rather than a second declaration: a read runs on a session that refuses to commit."
+
+[[type]]
+name = "ExecutionClass"
+pattern = "enumeration"
+reason = "Where a command runs, which is the same question as whose identity it runs under. Immediate needs no answer because the caller is making the request; deferred needs one nobody has given, so the class exists to make the first deferred command a decision rather than an inheritance."
+
+[[type]]
+name = "RegistryRow"
+pattern = "value-object"
+reason = "One command declared in a file of its own: the bound it answers under, the ways it may fail, whether it needs a key, how much room it may take, and where it runs. A handler that decided any of those for itself is a handler that could differ from the fortieth one."
+
+[[type]]
+name = "CommandRegistry"
+pattern = "accessor"
+reason = "Every command this build serves, read one file each and presented in wire order however the files were found — because a registry whose order followed a directory listing would be a discovery document that differed between two machines running the same commit."
+
+[[type]]
+name = "CommandHandler"
+pattern = "strategy"
+reason = "One command's own work, as one method taking what it may use and returning what it produced. No session, no service, no lifecycle callback to keep state in: everything else in this plan follows from that being true rather than intended."
+
+[[type]]
+name = "DispatchRefusal"
+pattern = "enumeration"
+reason = "The six ways a command cannot be dispatched, kept apart because each has a different fix — a row nobody runs, code nobody can reach, a coin toss between two handlers, a failure a client cannot name, a row describing a command that does not exist, and a contract this build does not hold."
+
+[[type]]
+name = "CommandDispatch"
+pattern = "accessor"
+reason = "Which handler runs one command, resolved only after the five-field identity has been verified, so the wrong version of a command running is not a thing that can happen here rather than one that has not happened yet."
+
+[[type]]
+name = "Budget"
+pattern = "value-object"
+reason = "What a command may spend, decided by its row or the contract rather than by the command, with one category per budget so a caller is told which thing ran out rather than that something did."
+
+[[type]]
+name = "ProgressSink"
+pattern = "accessor"
+reason = "Where a long command's progress goes, bounded by the same per-operation event count everything else is, because a chatty handler filling the ledger is a handler deciding how much of somebody's repository this product uses."
+
+[[type]]
+name = "ResolveResourcePathCommand"
+pattern = "value-object"
+reason = "Which request address a caller wants resolved and whether they want to see the rules. Separate from mapping because resolving happens under a request and mapping does not, an asymmetry the client's own two schemas declare."
+
+[[type]]
+name = "ResolveResourcePathResult"
+pattern = "stateless-policy"
+reason = "What a request address resolved to, taken apart the way the platform takes it apart, with an absent part left out rather than sent empty."
+
+[[type]]
+name = "ResolveResourcePathHandler"
+pattern = "accessor"
+reason = "Reports what the platform's own resolver did, including what it consumed while resolving, rather than re-deriving an answer that would be plausible and could differ from the instance."
+
+[[type]]
+name = "MapResourcePathCommand"
+pattern = "value-object"
+reason = "Which repository path publishes as what, and under which host. The optional authority is why this is not the mirror of resolving: one path publishes as one address per host the instance answers on."
+
+[[type]]
+name = "MapResourcePathResult"
+pattern = "stateless-policy"
+reason = "The path that was asked about beside the address it publishes as, so a caller can catch an answer that is right about some other path."
+
+[[type]]
+name = "MapResourcePathHandler"
+pattern = "accessor"
+reason = "The outward direction alone, kept apart from resolving because the two take different arguments and answer different documents."
+
+[[type]]
+name = "TraceDisclosure"
+pattern = "enumeration"
+reason = "Whether a translation says which rules it went through. Named rather than a bare boolean inside this build, though it crosses the wire as one: a parameter that is either true or false reads identically whichever it is."
+
+[[type]]
+name = "MappingKind"
+pattern = "enumeration"
+reason = "Which of the four sorts of rule one mapping entry is, which is indistinguishable from its pattern alone and produces completely different symptoms."
+
+[[type]]
+name = "ArtifactDescriptor"
+pattern = "stateless-policy"
+reason = "How a result points at bytes it did not carry, written once because the client declares one descriptor for every command that does. Two renderings of one document are two places for it to drift, and the day one spelled the digest differently a reader would silently stop verifying."
+
+[[type]]
+name = "UpdatePageCommand"
+pattern = "value-object"
+reason = "Which page to change and what to change about it, as two lists so a property in neither is left exactly as it was. The title is its own member because that is how the client sends it, and it is bounded as a page title rather than as a property string."
+
+[[type]]
+name = "UpdatePageResult"
+pattern = "stateless-policy"
+reason = "Which page was changed, and nothing else. What was written is what the caller asked to write, so echoing it back would repeat the request rather than report the outcome."
+
+[[type]]
+name = "UpdatePageHandler"
+pattern = "accessor"
+reason = "Both lists applied and committed together or neither. A property the repository will not let go of stops the whole update before the commit, because a caller told a removal succeeded will build on that and the property that silently stayed surfaces three commands later somewhere else."
+
+[[type]]
+name = "DeletePageCommand"
+pattern = "value-object"
+reason = "Which page to remove and what to do about the things pointing at it, with no default for the second: deleting a page other pages link to is sometimes right and sometimes the thing that breaks a site."
+
+[[type]]
+name = "DeletePageHandler"
+pattern = "accessor"
+reason = "The subtree counted before anything is removed, so a subtree past the contract's bound is refused with nothing gone rather than emptied part way. Under the refusing policy it says that something points at the page and leaves the list of what to the command whose job that is."
+
+[[type]]
+name = "MovePageCommand"
+pattern = "stateless-policy"
+reason = "Its members are its own and its reading is shared with the asset move, because moving a page and moving an asset are the same question about different things. A destination inside the source is refused there, once, being the mistake with the most confusing aftermath."
+
+[[type]]
+name = "MovePageResult"
+pattern = "stateless-policy"
+reason = "Where it went, where it came from, and how many links moved with it — the count being the part a caller could not work out and the one that tells them the scale of what happened."
+
+[[type]]
+name = "MovePageHandler"
+pattern = "accessor"
+reason = "References counted before the move rather than adjusted as they are found. A move that rewrote four hundred links and then hit the bound would leave a repository half pointing at each address, which is a state nobody can reason about."
+
+[[type]]
+name = "MutationAnswer"
+pattern = "stateless-policy"
+reason = "How a mutation's three answers reach the one dispatch understands, written once because twenty handlers do it and twenty copies is twenty places for the third answer to be flattened into the second."
+
+[[type]]
+name = "AssetPayload"
+pattern = "value-object"
+reason = "The bytes an asset is made of and what kind of file they are, with the type declared rather than sniffed: sniffing is a guess that is right most of the time, and an asset stored under the wrong type renders wrongly for everybody afterwards. Both sizes are checked, the encoded one first, because decoding something to find out it is too large is the work the first bound exists to avoid."
+
+[[type]]
+name = "CreateAssetFolderCommand"
+pattern = "value-object"
+reason = "Where a folder goes and what it is called, with the title separate from the name so a folder can be renamed for people without every asset inside it changing address."
+
+[[type]]
+name = "CreateAssetCommand"
+pattern = "value-object"
+reason = "The only mutation carrying content rather than a description of it. The payload is checked whole before anything is written, because an asset half written is a library with something in it nobody can open."
+
+[[type]]
+name = "UpdateAssetMetadataCommand"
+pattern = "value-object"
+reason = "The same two lists a page update carries, applied to an asset's metadata — where leaving an unnamed property alone matters more, because metadata is written by several things at once and a partial view would drop whatever the last workflow put there."
+
+[[type]]
+name = "DeleteAssetCommand"
+pattern = "value-object"
+reason = "Which asset to remove and what to do about the things pointing at it, with more force than for a page: an asset is referenced from places its owner has never seen."
+
+[[type]]
+name = "MoveAssetCommand"
+pattern = "stateless-policy"
+reason = "Its members are its own and its reading is shared with the page move, because moving a page and moving an asset are the same question about different things."
+
+[[type]]
+name = "CreateAssetFolderResult"
+pattern = "stateless-policy"
+reason = "Where the folder actually went."
+
+[[type]]
+name = "CreateAssetResult"
+pattern = "stateless-policy"
+reason = "Where the asset went and how large its original is, with no word about renditions: the platform generates those afterwards, and a caller told about one that does not exist yet would go looking and conclude the asset was broken."
+
+[[type]]
+name = "UpdateAssetMetadataResult"
+pattern = "stateless-policy"
+reason = "Which asset's metadata was changed."
+
+[[type]]
+name = "MoveAssetResult"
+pattern = "stateless-policy"
+reason = "Where it went, where it came from, and how many references moved with it — the count being what tells somebody whether they have just changed one page or four hundred."
+
+[[type]]
+name = "AssetHandlers"
+pattern = "stateless-policy"
+reason = "The categories the five asset commands report under, gathered once because a category spelled one way in a handler and another in a row is a caller told about a failure the other half has never heard of."
+
+[[type]]
+name = "AssetMutationHandler"
+pattern = "accessor"
+reason = "One handler for five commands, because what they share is everything that matters: each held to one commit, each refused before anything is written, each answering with the address it acted on. Which of the five it is comes from the kind it was built for rather than from an argument."
+
+[[type]]
+name = "MoveRequest"
+pattern = "value-object"
+reason = "Which thing to move, where to, and whether its links come — read once for the two commands that move something, so the refusal for a destination inside the source cannot come to mean two different things."
+
+[[type]]
+name = "RepositoryReach"
+pattern = "stateless-policy"
+reason = "How far a destructive change reaches, counted before any of it happens: a subtree counted afterwards is a subtree already gone, and a reference found afterwards is one already broken."
+
+[[type]]
+name = "ComponentParent"
+pattern = "closed-value"
+reason = "Where inside a page a component goes: the page's own content resource, or something nested named relative to it. One string with an empty value standing for the root would make \"the page itself\" and \"somebody forgot to say\" the same message."
+
+[[type]]
+name = "AddComponentCommand"
+pattern = "value-object"
+reason = "Which page a component goes in, where inside it, what it is called and what it is. It goes last; where exactly is the reorder command's question, so adding one never quietly moves the others."
+
+[[type]]
+name = "AddComponentHandler"
+pattern = "accessor"
+reason = "One component added last among its siblings in one commit, with a parent that cannot hold an order refused as itself — that is a fact about the page an author is working in and one they can act on, where a generic refusal is not."
+
+[[type]]
+name = "ComponentPathCommand"
+pattern = "value-object"
+reason = "The three commands that name one component and say what to do with it, read together because the naming is identical and only what follows differs. Three readers would be three chances for \"which component\" to drift apart."
+
+[[type]]
+name = "UpdateComponentCommand"
+pattern = "stateless-policy"
+reason = "Which component to change and what to change about it. Its members are its own and its reading is shared, because a model that claimed all three commands' members would claim members the client's schema for this one does not carry."
+
+[[type]]
+name = "DeleteComponentCommand"
+pattern = "stateless-policy"
+reason = "Which component to remove, and no reference policy: a component is part of a page rather than something other pages address, so the question the page and asset deletes must ask has no answer to give here."
+
+[[type]]
+name = "ReorderComponentCommand"
+pattern = "stateless-policy"
+reason = "Which component to move and where to, with the placement required — a reorder naming no place is a request to move something somewhere unspecified."
+
+[[type]]
+name = "ComponentPathHandler"
+pattern = "accessor"
+reason = "Changing, removing and reordering share everything but their last step, and which of the three it is comes from the shape the handler was built for rather than from an argument — so the three keep separate rows, failure sets and bounds."
+
+[[type]]
+name = "AddComponentResult"
+pattern = "stateless-policy"
+reason = "Where the component actually went, so a caller comparing it against the parent and name they sent catches the case where the repository put it somewhere else."
+
+[[type]]
+name = "UpdateComponentResult"
+pattern = "stateless-policy"
+reason = "Which component was changed, and nothing else: what was written is what the caller asked to write, so echoing it back would repeat the request rather than report the outcome."
+
+[[type]]
+name = "ReorderComponentResult"
+pattern = "stateless-policy"
+reason = "Which component moved and what it now sits behind, read back from the parent rather than re-derived from the request — and nothing at all where it is now first, an empty name being a different claim."
+
+[[type]]
+name = "CreatePageCommand"
+pattern = "value-object"
+reason = "Where a page goes, what it is called, what it is made from, and what to write on it at birth. The template is required and never inferred: a page made without one renders as nothing, which is worse than a refusal because a refusal is noticed the same minute."
+
+[[type]]
+name = "CreatePageResult"
+pattern = "stateless-policy"
+reason = "The address the page actually has rather than a yes. A caller comparing it against what they asked for catches a whole class of defect a boolean cannot."
+
+[[type]]
+name = "CreatePageHandler"
+pattern = "accessor"
+reason = "One page in one commit, through the caller's own counted session. It checks the template before anything is written and tells an unresolvable template from something that is there and is not one, because the first is a typo and the second is a misunderstanding."
+
+[[type]]
+name = "ReferencePolicy"
+pattern = "enumeration"
+reason = "What a destructive command does about the things that point at what it is removing, required on every one of them with no default. Deleting a page other pages link to is sometimes exactly right and sometimes catastrophic, and a default makes the catastrophic case the one somebody gets without having chosen it."
+
+[[type]]
+name = "PropertyValue"
+pattern = "closed-value"
+reason = "One value being written, stating whether it is one value or a list rather than having that read off its shape. A repository tells a property holding one value from one holding a list of one, and a caller who writes the second where the first was meant produces content that reads back differently through every tool."
+
+[[type]]
+name = "PropertyChange"
+pattern = "value-object"
+reason = "What to set and what to take away, as two lists, so a property in neither is left exactly as it was. Treating absence as removal destroys the rest of a node for a caller who sent a partial view; treating an empty value as removal makes an intentionally empty title impossible. A name in both is refused, because set-then-remove and remove-then-set disagree."
+
+[[type]]
+name = "ComponentPlacement"
+pattern = "closed-value"
+reason = "Where a reordered component ends up, said as a neighbour rather than an index — an index is a race with whoever else is editing the page. The end is a shape of its own, because \"at the end\" and \"before nothing in particular\" would otherwise be one message and only one of them is a caller who decided."
+
+[[type]]
+name = "MutationOutcome"
+pattern = "closed-outcome"
+reason = "It happened, it did not, or nobody knows. The third is a first-class answer rather than a kind of failure: a caller told it failed retries, and a retry of a mutation that landed is a second effect on somebody's repository."
+
+[[type]]
+name = "DeletedResourceResult"
+pattern = "stateless-policy"
+reason = "What every delete answers — what went, and how much of it there was. A caller who asked to delete one page and is told nine hundred nodes went with it has learned something they needed before the next one."
+
+[[type]]
+name = "CountingResolver"
+pattern = "accessor"
+reason = "The caller's own session with its commits counted, and the second one refused before it happens. One-commit atomicity is either a property of the machinery or a thing somebody remembered, and the second commit is the one nobody tests."
+
+[[type]]
+name = "SingleCommit"
+pattern = "stateless-policy"
+reason = "How many commits a command owes, read from its own registry row rather than from its package or its name. A row declaring a repository mutation owes exactly one; one declaring an admission or a platform control owes none, because what it changes is not the caller's repository."
+
+[[type]]
+name = "PropertyPredicate"
+pattern = "closed-value"
+reason = "What a search asks about one property, said structurally so no command ever takes query text — a string that reaches a query engine can address content the command was never pointed at. Three shapes rather than one with optional members, because the operator decides which members exist."
+
+[[type]]
+name = "PredicateOperator"
+pattern = "enumeration"
+reason = "The ten things a predicate can ask, each declaring what it takes beside a property, so an exists carrying a value and a less-than carrying none are both refused when they are read rather than guessed at."
+
+[[type]]
+name = "PropertyScalar"
+pattern = "value-object"
+reason = "One typed value a search compares against and a mutation writes, carrying its kind rather than having it inferred: \"1\" the string and 1 the number are two different questions, and unlike kinds never compare, so a mistyped predicate is a refusal instead of a silently empty result."
+
+[[type]]
+name = "ScalarKind"
+pattern = "enumeration"
+reason = "What kind of thing a compared value is, and whether that kind has an order. A path has none, so an ordered comparison naming one is refused rather than answered arbitrarily."
+
+[[type]]
+name = "RequestParts"
+pattern = "value-object"
+reason = "The parts of a request address the platform did not resolve with, taken out of the one record Sling keeps of them. A value with a factory because it is the part most likely to be wrong and the cheapest to prove: a selector nobody expected is the usual reason one link renders and another does not."
+
+[[type]]
+name = "StagingRooms"
+pattern = "strategy"
+reason = "Where a command that needs somewhere to work asks for it, once per run, so the handler holds the asking rather than a room. A handler holding a room works once and the next run finds a place somebody already took away."
+
+[[type]]
+name = "StagingArea"
+pattern = "accessor"
+reason = "A place to write and never a way to reach anywhere else: the framework chooses the directory, opens it, bounds it, resolves every name inside it, and gives it back however the command ended. It is the answer to the one pressure that would otherwise reopen session acquisition."
+
+[[type]]
+name = "CallerContext"
+pattern = "value-object"
+reason = "Everything a handler may reach, which is the caller's own resolver and the budgets it runs under — and nothing that yields a second resolver, a service, or a factory. A handler cannot obtain a session because there is nothing on it to obtain one from."
+
+[[type]]
+name = "ReadOnlyResolver"
+pattern = "accessor"
+reason = "What a read command is given, which cannot write whatever the handler does with it. A read handler that commits three frames down through a helper is the one that gets past review, so the refusal is in the resolver rather than in a rule about handlers — and the claim stays precise: it replaces nothing the caller owns."
+
+[[type]]
+name = "DeclaredQuery"
+pattern = "value-object"
+reason = "One query written down before it is issued — its shape, its roots, and the properties it filters on — so a build can check it against the indexes a deployment provides and run time can check it against the plan the instance really returns. A query that exists only as a string a handler builds is a query nobody can check."
+
+[[type]]
+name = "IndexCoverage"
+pattern = "accessor"
+reason = "Whether every query this product issues is answered from an index rather than by walking, compared against what each deployment row already provides — and whether anything shipped carries an index definition, which would change the shape of somebody else's repository as a side effect of installing an agent."
+
+[[type]]
+name = "ResultWindow"
+pattern = "closed-value"
+reason = "Which page a caller is asking for, as a closed two-shape value rather than a pair of numbers every enumerating command re-derives. One window for every such command, because a per-command notion of how much is a per-command chance to forget a bound. Its two shapes keep the distinction the client draws: a continuation says only where to resume, so a caller cannot widen a page it is half way through by restating a limit."
+
+[[type]]
+name = "ContinuationRefusal"
+pattern = "stateless-policy"
+reason = "The six ways a token fails, each mapped to the category the client declares and nowhere else. A switch over a closed enumeration with no default branch, so a seventh refusal stops the compiler rather than reaching a caller wearing whichever category happened to be the fallback."
+
+[[type]]
+name = "PagedQuery"
+pattern = "value-object"
+reason = "One page and the token that reaches the next, with the token issued only where rows remain so its absence is a definite end rather than an unknown one. It digests every argument but the window, because the window is how a caller asked for this page rather than part of what they asked about — and digesting it would make every token wrong for its own successor."
+
+[[type]]
+name = "ResultAssembly"
+pattern = "builder"
+reason = "A result measured and digested as it is built, so an overflow is known before the whole answer is held. The obvious version builds the answer, measures it, and publishes what turned out to be too large — but the answers that overflow are exactly the ones large enough to matter, and holding one whole to discover it should not have been held is how a read takes an author instance down. It reports the most it ever held so that claim is checkable rather than asserted."
+
+[[type]]
+name = "OverflowPublication"
+pattern = "stateless-policy"
+reason = "What becomes of a result that did not fit: an artifact with its count and digest, and a reference the caller fetches and verifies for itself. Room is taken before the command runs, because reserving afterwards spends the whole cost of a read to reach a failure that was knowable before it started; and a publication that fails carries no result at all, since a dangling reference turns one failure into two."
+
+[[type]]
+name = "CommandConformance"
+pattern = "stateless-policy"
+reason = "What makes a command exist, checked in one place so the sixty-fourth is as complete as the first. A handler that answers correctly and has no committed schema, no declared failure set, no vectors at its bounds and no interop scenario runs and does nothing else: nobody can tell what it accepts and nothing would notice if it stopped working. It reads the registry directory rather than a list written into it, because a list would be the shared file the registry exists to avoid, and reports every missing fact at once rather than the first."
+
+[[type]]
+name = "RepositoryValueKind"
+pattern = "enumeration"
+reason = "Every repository value type this build renders, named one by one with no default branch, so a type added to the repository's own set stops the build here rather than reaching a caller wearing whichever representation a fallback happened to use. A type it does not represent faithfully is refused by name: a value nobody can round-trip is worse than a value nobody received, because the caller cannot tell a coerced binary from a genuine string and writing it back writes something else."
+
+[[type]]
+name = "LoadContentCommand"
+pattern = "value-object"
+reason = "What one caller asked to load: an address and a depth, neither of which has a default. The two plausible defaults are a command that answers less than anybody wanted and a command that walks a repository, and a caller who inherits a depth has not chosen one."
+
+[[type]]
+name = "LoadContentResult"
+pattern = "stateless-policy"
+reason = "One subtree rendered to exactly the depth asked for, with the node budget counted across the whole walk rather than per branch — a per-branch budget is one a wide tree never reaches and a deep one reaches at once, which is a bound meaning something different for every shape of content."
+
+[[type]]
+name = "LoadContentHandler"
+pattern = "stateless-policy"
+reason = "The first command, reading through the caller's own read-only resolver and obtaining nothing. Content the caller may not see is answered as absent rather than as forbidden, because the two answers together tell them whether something exists at a path they have no right to look at."
+
+[[type]]
+name = "QueryPathsCommand"
+pattern = "value-object"
+reason = "A root, a node type, and which page is wanted. There is no continuation member beside the window: where a caller resumes they say so inside the window, because a command carrying both would have two places to say where to start and no rule for which wins."
+
+[[type]]
+name = "QueryPathsResult"
+pattern = "stateless-policy"
+reason = "Addresses and where to resume, and nothing else at all — no property, no type, no size. Stated as a property of the result type rather than a habit of whoever wrote the handler, because a result that already carried six harmless fields is one where a seventh goes unnoticed. It carries its own check for anything disclosed beyond an address, which this command's suite runs over a corpus whose nodes are full of values."
+
+[[type]]
+name = "QueryPathsHandler"
+pattern = "accessor"
+reason = "One declared query, filtering on a primary type and nothing else, which is the shape Oak's own node-type index answers on every supported deployment rather than by walking somebody's author instance. Results are ordered by path because two pages must agree on some total order and path is the only property this command may look at — an unordered query would let a caller read one address twice and another never with nothing to tell them."
+
+[[type]]
+name = "ListChildPagesCommand"
+pattern = "value-object"
+reason = "A parent and which window of its children is wanted. Navigating a site one level at a time is what an operator does most and what a query does worst, so this command is written as a read of a known node rather than a search for one."
+
+[[type]]
+name = "MatchMode"
+pattern = "enumeration"
+reason = "Whether a caller naming several things wants any of them or all of them, required rather than defaulted because the two answers are different populations and a migration planned against the wrong one is planned against somebody else's answer."
+
+[[type]]
+name = "PageListingResult"
+pattern = "stateless-policy"
+reason = "A list of pages, each an address and a title and nothing else, shared by the four commands that answer that shape — four copies of one document being four places for it to drift. An excerpt of what matched would be answering a content read nobody checked the caller could make. The order is the finding command's to choose and to state."
+
+[[type]]
+name = "ListChildPagesHandler"
+pattern = "accessor"
+reason = "It issues no query — not a cheap one, none — which is why this command appears in no row of the declared-query inventory and needs no index on anybody's deployment. A parent that is not a page and one that is not there share a category, because the client's closed set has one spelling for a root that cannot anchor a listing, and are told apart in what the caller is actually told to do next."
+
+[[type]]
+name = "FindPagesContainingPhraseCommand"
+pattern = "value-object"
+reason = "A phrase, a subtree, and which page of the matches. The phrase is bounded as it arrives because it comes from a caller who cannot know what it will match, and a refusal never repeats it back into a message that goes to a log."
+
+[[type]]
+name = "FindPagesContainingPhraseHandler"
+pattern = "accessor"
+reason = "Full-text search whose budget refuses rather than trims. A shortened list of matches is the one answer worse than none: the caller asked which pages contain a phrase and got a list of pages that contain it, so every page the search never reached looks like a page that does not. Nothing in a trimmed answer says otherwise. What comes back is an address and a title — an excerpt is content, and answering with content performs a read nobody checked this caller could make."
+
+[[type]]
+name = "FindPagesByTemplateCommand"
+pattern = "value-object"
+reason = "A template, a subtree, and which page of the matches. Both addresses are absolute paths and a relative one is refused as its own thing, because a template address that silently resolved against something would find the wrong pages and the caller is about to change every page it finds."
+
+[[type]]
+name = "FindPagesByTemplateHandler"
+pattern = "accessor"
+reason = "A root that is not there is refused; a root that is there and holds no matching page answers an empty list. The difference is the whole point: an empty answer to a mistyped root reads as this change affects nothing, the migration proceeds, and the pages that actually use the template are the ones nobody looked at."
+
+[[type]]
+name = "FindPagesUsingComponentsCommand"
+pattern = "value-object"
+reason = "Component types, a subtree, and which page of the matches. An empty type list is refused at construction rather than treated as any: a search for no component in particular is a walk of every node under the root, and match-everything is never what an empty list meant."
+
+[[type]]
+name = "FindPagesUsingComponentsHandler"
+pattern = "accessor"
+reason = "What matches is a node inside a page and what the caller wants is the page, so every match is folded up to its nearest page-typed ancestor — walked upward rather than asked for, because a component node knows its own resource type and nothing about pages, and a node inside a page inside another page belongs to the inner one."
+
+[[type]]
+name = "FindAssetsByMetadataCommand"
+pattern = "value-object"
+reason = "Metadata to match on, a subtree, and which page. A predicate outside the covered set is refused when the argument is read rather than part way through the walk that would otherwise have happened, so a caller learns their question is unanswerable at the moment they ask it — which is the only moment that answer is useful to them — and the refusal names what they can ask instead."
+
+[[type]]
+name = "FindAssetsByMetadataResult"
+pattern = "stateless-policy"
+reason = "The matching assets, each carrying the values of the predicates the caller themselves named and nothing else. Never the whole metadata node: a search that handed back every property a customer keeps on an asset would be a content read wearing a search's name, under a search's bound and a search's permissions."
+
+[[type]]
+name = "FindAssetsByMetadataHandler"
+pattern = "accessor"
+reason = "By the time it runs the question is known to be answerable, because an uncovered predicate was refused when the argument was read. That ordering is the point: a digital asset library is the largest thing in most repositories, and discovering half way through a walk that nothing indexed the property would mean the walk already happened."
+
+[[type]]
+name = "FindAssetsReferencedByPageCommand"
+pattern = "value-object"
+reason = "A page, the kinds of reference to look for, and which window. The kinds are stated rather than implied, because a caller who receives an empty answer needs to know what was actually looked at — an implied set would make that sentence mean different things in different versions of this build."
+
+[[type]]
+name = "FindAssetsReferencedByPageResult"
+pattern = "stateless-policy"
+reason = "The referenced assets, each once, with every distinct place it was referenced from. One asset because the decision a caller makes is about the asset; every place because the caller who decides it cannot be removed then has to go and look at them."
+
+[[type]]
+name = "FindAssetsReferencedByPageHandler"
+pattern = "accessor"
+reason = "It walks one page rather than searching, because a page's own subtree is small and known and the question never needed an index. A value's kind is decided by what the value is rather than by what was asked for: a bare asset path is a property reference and is never scanned as markup, or a caller asking only about markup would be told a plain property is one."
+
+[[type]]
+name = "ListAssetRenditionsCommand"
+pattern = "value-object"
+reason = "One asset and which window of its renditions. Renditions are where an asset's storage actually goes — an original can carry a dozen derived copies larger than itself — so this is the question an operator asks when a repository has grown."
+
+[[type]]
+name = "ListAssetRenditionsResult"
+pattern = "stateless-policy"
+reason = "Each rendition described by name, media type, size and where it is. No bytes, because an answer carrying the renditions would be the very thing it is measuring. The address is carried because the client's schema requires it and it discloses nothing: a rendition lives underneath the asset the caller named. The original is listed, since an operator totalling what an asset costs needs the largest thing in the total."
+
+[[type]]
+name = "ListAssetRenditionsHandler"
+pattern = "accessor"
+reason = "It reads the asset's own renditions node directly, because they are its children and there is nothing to search. An address that is not an asset and an asset with no renditions node are told apart: the first is somebody's mistake and they retype it, the second is a repository in a state the platform does not produce and somebody has to go and look at it."
+
+[[type]]
+name = "ReadContentFragmentCommand"
+pattern = "value-object"
+reason = "One fragment and which variation of it, the variation required and never defaulted: a fragment is a model, its elements and its variations, and reading one without saying which reads whichever somebody happened to make first. There is no result window either, because this answers one fragment rather than a list — which is why its failure set carries none of the continuation categories every paged command shares."
+
+[[type]]
+name = "ReadContentFragmentResult"
+pattern = "stateless-policy"
+reason = "The model, the variation read, and each element with its declared type and its value rendered by the very mapping the content loader uses. Sharing that mapping is what makes the two commands agree about a value by construction rather than by two implementations happening to agree for now."
+
+[[type]]
+name = "ReadContentFragmentHandler"
+pattern = "accessor"
+reason = "A fragment whose model cannot be resolved is refused rather than reported untyped: a caller receiving elements with no types reads values whose meaning they cannot recover — a date and a piece of text look identical once the type is gone — and writes them back as whatever they guessed. A missing variation and a missing fragment are two refusals because two different people make those mistakes, and the master variation is the data node itself rather than a child of it, which is how the platform stores it."
+
+[[type]]
+name = "DownloadContentPackageCommand"
+pattern = "value-object"
+reason = "A filter is the whole statement of what leaves an author instance, so every root says which way it points and none of it is written for the caller. The nearest root wins when they nest, which is what makes an exclusion inside an inclusion mean what a caller expects; a path under no root is outside, because anything the filter does not name is not in the package."
+
+[[type]]
+name = "DownloadContentPackageResult"
+pattern = "stateless-policy"
+reason = "A reference rather than the package, and the filter as the package was actually built rather than as it was asked for. A caller who cannot read part of a requested tree gets a package without that part, and a package that silently contained less than its filter claimed would be restored somewhere else as though it were complete."
+
+[[type]]
+name = "DownloadContentPackageHandler"
+pattern = "accessor"
+reason = "The one read that needs somewhere to work and is still a read: the staging is inside the agent's own tree through the framework's staging area, and everything in the package comes back through the caller's read-only resolver. The staging area is a constructor argument rather than a member of the caller context, because a context carries what every command has and all but one command has no room at all — which puts the distinction where the compiler can check it. Every node the filter selects is counted before anything is staged, because this runs inside its caller's own request and a build that cannot finish would hold their request thread until something else gave up."
+
+[[type]]
+name = "ListResourceMappingsCommand"
+pattern = "value-object"
+reason = "A window and no filter. Rules interact, so a filtered view of them shows some applying and hides the ones that would have applied first, and the reader draws a conclusion that is wrong about the very thing they were checking. A window says how much to read at once rather than which rules exist, which is why paging is offered and filtering is refused rather than ignored."
+
+[[type]]
+name = "ListResourceMappingsResult"
+pattern = "stateless-policy"
+reason = "The rules in application order with any credential removed rather than masked. A mask still answers questions — that one was there, how long it was, which entries have one — and the rule an operator came to read is the same rule without it, so what comes back is the address as somebody who never had the secret would have written it."
+
+[[type]]
+name = "ListResourceMappingsHandler"
+pattern = "accessor"
+reason = "Application order rather than declaration order, because the two differ and the difference is why somebody is reading: they have an address that resolved unexpectedly and want to know which rule got to it first. An inventory that cannot be read is refused rather than answered as empty, since a deployment with no mapping rules is an ordinary thing and a reader would have no reason to doubt the answer."
+
+[[type]]
+name = "SubtreeScope"
+pattern = "enumeration"
+reason = "The client carries this as a flag and this side reads it into two named values, for the same reason the reference adjustment on a move is read into two: `recursive` at a call site says nothing, and offering one page and offering ten thousand of them are not a true and a false apart."
+
+[[type]]
+name = "ReplicateContentCommand"
+pattern = "value-object"
+reason = "Both members required, the scope with no default, because the two answers differ by four orders of magnitude in what they do to a publish queue and a caller who meant one page and got their whole site offered has done something they cannot take back by asking again."
+
+[[type]]
+name = "ReplicateContentResult"
+pattern = "stateless-policy"
+reason = "One number, and every word of it is chosen. Admitted, not published: what happens on a publish instance happens where this side cannot see it. Items, not pages: the queue does not care what kind of thing is at each address. A count rather than a list, because a caller who wants to know where each one got to asks the queue commands, which can actually answer that. There is deliberately no member that could be read as a claim about publication — a result saying published would be the most useful-looking and most false thing this surface could say."
+
+[[type]]
+name = "ContentAdmission"
+pattern = "strategy"
+reason = "A seam that exists for a reason bigger than testing: the replication service is Adobe's and this bundle runs on plain Apache Sling, so everything about which items are offered — who may read them, how far the walk goes, what the bounds are — is decided on this side, and only the handing over happens across it. Three answers and not two, because an offer that left this process without an answer is not a failure and telling a caller it failed would have them offer the same subtree again."
+
+[[type]]
+name = "ReplicateContentHandler"
+pattern = "accessor"
+reason = "The one mutation that commits nothing: what it changes is a queue the platform owns rather than the caller's repository, and its registry row says so by declaring the admission's unknown outcome rather than the repository mutation's — which is what the one-commit wrapper reads to decide it owes none. Candidates are gathered through the caller's own session, so a caller offers exactly what they can read; a subtree they can only partly read is offered in part, and the count that comes back is the count of what was admitted rather than of what they asked about."
+
+[[type]]
+name = "FragmentElements"
+pattern = "value-object"
+reason = "Text, or a list of text, keyed by the element's own name, and nothing about what type that element is. The type belongs to the model that declares it, and a copy of it here would be a second answer to a question the model already answers - the day the two disagree is the day a fragment written through this agent opens with a field the editor has never heard of."
+
+[[type]]
+name = "FragmentPaths"
+pattern = "stateless-policy"
+reason = "The three members every fragment argument is made of, read once rather than six times. Six copies of the same three checks is six chances for one of them to drift a bound, and the drift that matters is the quiet direction: a reader that refuses at a smaller number than the published schema declares refuses something the caller was told they could send."
+
+[[type]]
+name = "FragmentHandlers"
+pattern = "stateless-policy"
+reason = "What a fragment is made of in a repository, and the categories the six report under. A category spelled one way in a handler and another in a registry row is a caller told about a failure the other half has never heard of, and a node name spelled one way here and another there is a fragment that reads back empty."
+
+[[type]]
+name = "FragmentResult"
+pattern = "stateless-policy"
+reason = "The address rather than a yes. A caller comparing what came back against what they asked for catches a name the repository altered and a parent that resolved somewhere they did not mean; a boolean catches neither."
+
+[[type]]
+name = "FragmentModel"
+pattern = "accessor"
+reason = "Which elements a model declares, read from the model rather than remembered, because the model is what the authoring tools read too. A declaration that cannot be found at all is refused rather than treated as permissive: treating it as permissive is how an element name with a typo in it becomes a property that sits in the repository forever, matching nothing and read by nobody."
+
+[[type]]
+name = "CreateContentFragmentCommand"
+pattern = "value-object"
+reason = "The model is required and never inferred, for the same reason a page's template is. A fragment made without a model is a node holding text that no authoring tool will open and no component will render - it exists and it is addressable, which is worse than a refusal, because a refusal is noticed the same minute."
+
+[[type]]
+name = "UpdateContentFragmentCommand"
+pattern = "value-object"
+reason = "A change naming no variation means the master one, which is the only variation every fragment has. A change naming one that is not there is refused rather than written to master, because writing somewhere other than where a caller said is how a translation ends up on the original."
+
+[[type]]
+name = "FragmentDeletion"
+pattern = "value-object"
+reason = "One reader for both kinds, because the argument is the same argument. The two commands stay separate everywhere it matters and share the one place where writing it twice would only give two chances to spell it differently. The policy has no default: a fragment is reused from places its author never sees, and choosing on their behalf what happens to those is not a default but a guess about somebody else's site."
+
+[[type]]
+name = "CreateExperienceFragmentCommand"
+pattern = "value-object"
+reason = "The variation's name is required, unlike a content fragment's, and the difference is not an inconsistency: a content fragment has a master variation whether anybody names it or not, and an experience fragment has none until one is made. There is no name this side could choose that would not be a guess about what the second variation will be called."
+
+[[type]]
+name = "CreateExperienceFragmentResult"
+pattern = "stateless-policy"
+reason = "Both addresses, because an experience fragment is not one thing. The fragment is a container and the variation is what actually renders, so a caller given only the container's address would address the container in the next command and find nothing to change."
+
+[[type]]
+name = "UpdateExperienceFragmentCommand"
+pattern = "value-object"
+reason = "The variation is addressed, not the fragment, because a caller changing the container would change nothing anybody sees. The same two lists a page update carries: a property named in neither is left as it was, so a caller who sent a partial view does not silently drop what the last edit put there."
+
+[[type]]
+name = "FragmentMutationHandler"
+pattern = "accessor"
+reason = "One handler for six because what they share is what matters: each is refused before anything is written where it cannot proceed, each is held to exactly one commit, and each answers with the address it acted on. Which of the six it is comes from the kind the handler was built for rather than from an argument, so the six keep separate rows, failure sets and bounds. Nothing here runs the platform's fragment API - what this writes is the node structure a fragment is made of, which is what the answer claims and nothing more."
+
+[[type]]
+name = "ReplicatorAdmission"
+pattern = "accessor"
+reason = "The one place this build talks to Adobe's replication service, and the only thing on this side of the seam is the handing over: which items are offered, who may read them, how far the walk goes and which bounds refuse are all decided in the Sling-only bundle. One address at a time because that is the shape of the service's own method, and a failure part-way through is reported as what was admitted before it stopped rather than as the whole offer failing - a queue is one of the few places where partial progress is genuinely recoverable, so reporting it honestly beats pretending an operation was atomic that the service does not make so."
+
+[[type]]
+name = "MutationCoverage"
+pattern = "stateless-policy"
+reason = "Selection is by what a registry row declares rather than by where its handler lives or what its access says. A suite that took every write row would demand a repository commit from a command that stops a bundle; one that took a package would stop selecting the day somebody moved a class. Which categories exist and which suite claims each are both read from committed files rather than written here, so the plan that adds a fourth kind of change adds two rows and no code - and an unclaimed row and a doubly-claimed row are two distinct findings, because a command proved by neither is exactly what happens when two suites each assume the other had it."
+
+[[type]]
+name = "ControlCapability"
+pattern = "enumeration"
+reason = "Grouped by what a deployment either provides or does not, rather than one capability per command. A deployment that keeps its configuration immutable keeps all of it immutable; there is no environment where updating a configuration works and deleting one does not, and splitting them would give an operator six places to get the same answer wrong."
+
+[[type]]
+name = "PlatformControl"
+pattern = "accessor"
+reason = "The second of two separate questions. Whether this caller may do something is decided by the group they are in, the same way for every command in this product; whether this deployment permits it at all has nothing to do with who is asking, and on an environment whose configuration is immutable the administrator is refused exactly as firmly as everybody else. Refusing is the whole feature: a change written through a running platform that does not persist it is worse than a refusal, because the platform accepts it, the answer says it worked, and it is gone by the next release - by which point the operator has built three things on believing it. The refusal names the deployment, so the answer says where rather than only no."
+
+[[type]]
+name = "ValueDisclosure"
+pattern = "stateless-policy"
+reason = "Which properties a configuration has and what one holds are two questions, and the first is almost always safe to answer while the second is not. Which are secret is the Meta Type Service's own answer rather than this build's, which is how it stays correct on a configuration nobody here has seen; a property the service says nothing about is redacted, because nobody-told-us and it-is-safe are not the same sentence and being wrong runs in one direction only. Redacted is not masked: a masked value has a length, it changes when the secret changes, and somebody comparing two answers learns from that, so a redacted property carries no value member at all."
+
+[[type]]
+name = "ConfigurationValue"
+pattern = "value-object"
+reason = "The type is carried rather than inferred, because a platform configuration is typed and the types are not recoverable from the values: 8080 written back as a string is a configuration that no longer starts a listener, and the failure appears at the next restart rather than at the write. The cardinality is carried for the same reason with a sharper edge - a single-valued property and an array of one are different properties to the service reading them."
+
+[[type]]
+name = "SuspensionState"
+pattern = "enumeration"
+reason = "One type for a workflow instance and a job queue alike, because it is one question and the two commands asking it would otherwise each grow their own answer. Named rather than two-valued: suspend(true) at a call site says nothing, and the reader has to go and find out which way round it is at exactly the moment they are deciding whether to stop somebody's production queue."
+
+[[type]]
+name = "AccountState"
+pattern = "enumeration"
+reason = "Named for the same reason the suspension state is, with more at stake: disabled(false) is a double negative in the one place a mistake locks somebody out of their own instance. The client carries it as a flag and this side reads it into a word. Disabling is not deleting - a disabled account keeps everything it owns and everything that points at it - which is why it is a state rather than a step on the way to removal."
+
+[[type]]
+name = "WorkflowInstanceState"
+pattern = "enumeration"
+reason = "A caller may ask for two of these and the platform may report any of five, and that asymmetry is why this is a separate type from the requested state: an instance that finished, was aborted, or went stale while the request was in flight is none of the things anybody can ask for, and one type covering both would either invent requests nobody can make or lose answers the platform actually gives. Which means a result is compared for agreement rather than for equality."
+
+[[type]]
+name = "ControlCapabilityCoverage"
+pattern = "stateless-policy"
+reason = "Compared in both directions, because each direction fails differently and both fail quietly. A command needing a capability no row declares is refused on every deployment there is, which from outside looks exactly like a command that does not work; a row declaring a capability no command needs is a claim that stopped being true when somebody removed the command, and it sits there being read as a promise. Every absence carries a reason, because a bare omission reads as nobody having thought about it - and an operator has to be able to tell that from a deliberate refusal."
+
+[[type]]
+name = "ConfigurationCatalogue"
+pattern = "strategy"
+reason = "A seam for the same reason the replication one is: what is on the other side is a platform service and everything worth arguing about is on this side. Reading a property's value and deciding whether to report it are separate calls on purpose - an implementation that returned values and left the deciding to its caller would have already read every password on the instance into this process's memory, and the only thing between that and a log line would be a caller who remembered."
+
+[[type]]
+name = "ConfigurationHandlers"
+pattern = "stateless-policy"
+reason = "The categories the four share, gathered where they can be compared against the client's published set in one place rather than four. A category spelled one way in a handler and another in a registry row is a caller told about a failure the other half has never heard of."
+
+[[type]]
+name = "FindConfigurationsCommand"
+pattern = "value-object"
+reason = "The only filter is a prefix on the identifier, and that is a decision rather than a limitation: every other way of narrowing this would mean reading values to decide what matches, which is the one thing a listing across a whole instance must not do. A prefix nobody sent means every configuration, which is the ordinary case - an operator exploring an environment they did not build starts by seeing what is there."
+
+[[type]]
+name = "FindConfigurationsResult"
+pattern = "stateless-policy"
+reason = "A count of property keys rather than the keys, and certainly not the values. A search is the one call somebody makes across a whole instance and its output is the one that ends up pasted into a ticket, so what it carries has to be safe to paste. The count is what an operator actually needs: it says which configuration somebody has customised, and they can then ask about that one."
+
+[[type]]
+name = "ConfigurationIdentifierCommand"
+pattern = "value-object"
+reason = "One reader for the command that reads a configuration and the one that removes it, because the argument is the same argument. The two stay separate everywhere it matters - their own rows, their own failure sets, and one passing through the control gate while the other does not - and share the one place where writing it twice would give two chances to spell the member differently."
+
+[[type]]
+name = "InspectConfigurationResult"
+pattern = "stateless-policy"
+reason = "Absence is an answer rather than a failure: a configuration that is not there means the service is running on its defaults, and an operator chasing behaviour they cannot explain very often finds the configuration they were told about was never applied. Every property carries the evidence, including the ones whose value is present, because somebody comparing two environments needs to know a value was reported because the platform described it as safe rather than because nobody checked."
+
+[[type]]
+name = "UpdateConfigurationCommand"
+pattern = "value-object"
+reason = "Two lists, so a property in neither is left exactly as it was: a configuration is written by a deployment, an installer and an operator at once, and a caller who sent a partial view and had the rest treated as removals would silently undo whatever the last of those did. Every assignment carries its own type and cardinality because neither is recoverable from the values, and getting either wrong produces a configuration that reads back fine and fails at the next restart - the failure and the cause hours apart."
+
+[[type]]
+name = "UpdateConfigurationResult"
+pattern = "stateless-policy"
+reason = "A count rather than the resulting configuration, and not out of laziness: answering with what the configuration now says would mean reading every value back, passwords included, through a command nobody would think to look at when auditing what discloses secrets."
+
+[[type]]
+name = "DeleteConfigurationResult"
+pattern = "stateless-policy"
+reason = "Whether what went was one instance of a factory or the configuration itself, because the distinction changes what just happened. Removing a factory instance leaves the others; removing a singleton returns that service to its defaults entirely, and an operator who thought they were doing the first has changed the behaviour of everything on the instance."
+
+[[type]]
+name = "ConfigurationHandler"
+pattern = "accessor"
+reason = "The control gate is asked before the argument is read on the two that write, deliberately: a caller on an environment that does not keep configuration changes should be told that, not told their assignments were malformed - the refusal they need is about where they are running, and telling them about a typo first sends them to fix the wrong thing. The two that read pass through no gate at all, because an environment whose configuration is immutable still answers questions about it and that is most of what an operator wants there."
+
+[[type]]
+name = "BundleState"
+pattern = "enumeration"
+reason = "Six values, and the two an operator most often confuses are the two that matter most: installed means the framework has the bundle and cannot satisfy what it needs, resolved means it can and has not started it. One is a missing dependency somebody has to supply; the other is usually a component that failed to activate. Reporting either as not running sends half of them to the wrong place."
+
+[[type]]
+name = "ComponentState"
+pattern = "enumeration"
+reason = "The one worth knowing is unsatisfied: the component is enabled, its bundle is running, and something it requires is not there. That is the state behind most of the it-is-installed-but-the-feature-does-not-work reports anybody files, and it is invisible from the bundle listing - which is exactly why this command exists beside that one."
+
+[[type]]
+name = "BundleInventory"
+pattern = "strategy"
+reason = "One seam for three commands because they are three questions about one framework, and an implementation that answered two of them from the framework and one from somewhere else would be answering about two different instants. What a bundle ended up in is reported rather than assumed: a bundle asked to start may end up resolved because one of its components would not activate, and a command that answered started because the request did not throw would be telling an operator the opposite of what they need."
+
+[[type]]
+name = "ListBundlesCommand"
+pattern = "value-object"
+reason = "Two filters, both narrowing by something the framework already knows. Naming no state means every state, which is right for the ordinary case: an operator who filtered to active would see nothing wrong with an instance whose problem is a bundle that never resolved."
+
+[[type]]
+name = "ListComponentsCommand"
+pattern = "value-object"
+reason = "The same two filters over the states a component has rather than the ones a bundle has. Those two sets look similar and are not the same question, so a bundle's state asked of a component is refused rather than matching nothing - a caller who misspelled one would otherwise receive an empty list and believe it."
+
+[[type]]
+name = "SetBundleStateCommand"
+pattern = "value-object"
+reason = "A transition rather than a target state: asking for active would be asking this side to work out how to get there and keep trying, while asking to start is one action with one answer. Refreshing is in the same set and is the dangerous one - it restarts every bundle wired to this one, which on an author instance can be most of them - so it is named explicitly rather than being something start quietly does."
+
+[[type]]
+name = "FrameworkResults"
+pattern = "stateless-policy"
+reason = "Nothing here carries a configuration value, a service property, or anything else a bundle holds. What a bundle is called, which version it is and what state it is in are facts about the deployment; what it has been configured with is a different question with its own command and its own disclosure rule, and merging the two would route around that rule."
+
+[[type]]
+name = "FrameworkHandler"
+pattern = "accessor"
+reason = "The listings pass through no gate: reading what is installed and what activated is the first thing anybody does on an instance they did not build, and a deployment that will not let a bundle be stopped still knows perfectly well which ones are running. The control passes through the gate before its argument is read, so a caller on a deployment whose bundle state comes from the deployed image is told that rather than told their transition was misspelled."
+
+[[type]]
+name = "WorkflowService"
+pattern = "strategy"
+reason = "Every call takes the caller's own session. A workflow started through this agent runs as work the platform carries out afterwards under its own identity, and it must only ever be started on a payload the caller could have changed themselves - otherwise this command is a way to make the platform do, in the background, exactly what the caller was refused in the foreground. Passing the session across the seam is what makes that checkable rather than intended."
+
+[[type]]
+name = "WorkflowHandlers"
+pattern = "stateless-policy"
+reason = "The categories the six share, gathered where they can be compared against the client's published set in one place rather than six."
+
+[[type]]
+name = "ListWorkflowModelsCommand"
+pattern = "value-object"
+reason = "The filter is on the title rather than the identifier, which is the one place in this plan where that is right: a model's identifier is a repository path nobody remembers, and its title is what appears in every screen anybody has seen it in. An operator asking whether the review workflow is deployed is asking about the title."
+
+[[type]]
+name = "StartWorkflowCommand"
+pattern = "value-object"
+reason = "The most powerful command on this surface, and it does not look like it. A workflow is work the platform carries out afterwards under an identity usually more privileged than the caller's, so a caller who cannot change a page but can start a workflow whose steps change it has changed it - and nothing in the audit trail says they did. The metadata is text by name and nothing else, because workflow metadata is read by steps somebody else wrote and a structured value would be a way to send them a document they did not expect."
+
+[[type]]
+name = "FindWorkflowInstancesCommand"
+pattern = "value-object"
+reason = "The states are required, and this is the one search in this plan where a required filter is right: an author instance that has been running a year holds hundreds of thousands of completed instances and a handful of running ones, every question anybody has is about the handful, and a search with no state would answer the year of history first."
+
+[[type]]
+name = "WorkflowInstanceCommand"
+pattern = "value-object"
+reason = "One reader for the command that reads an instance, the one that ends it and the one that holds it, because the identifier is read identically by all three and the third carries one member more. Reading it once is what keeps the bound the same on all three; three copies is three chances for one to accept an identifier the others refuse."
+
+[[type]]
+name = "WorkflowResults"
+pattern = "stateless-policy"
+reason = "No workflow variable appears anywhere, and that is a rule rather than an omission: a workflow's variables belong to whatever created it and routinely hold content, repository addresses and occasionally a token. What an operator needs is which model is running, on what, in what state, and who it is waiting for."
+
+[[type]]
+name = "WorkflowHandler"
+pattern = "accessor"
+reason = "The payload check is what this class is really for, and it asks the repository rather than a resource - the repository is the thing that holds the answer. It asks about writing rather than reading, because a workflow whose steps only read its payload is indistinguishable from one whose steps rewrite it: the model is somebody else's and its steps can do anything the platform can. A caller whose session cannot be obtained at all is refused, because no session means no permission was demonstrated."
+
+[[type]]
+name = "JobState"
+pattern = "enumeration"
+reason = "Six values, and the three an operator cares about are the ones meaning work did not happen: error is a job that failed and will be retried, cancelled is one that failed often enough that the platform stopped, dropped is one the platform discarded without running. They are told apart because the answers differ - the first waits, the second needs somebody, and the third means a queue was configured to throw work away."
+
+[[type]]
+name = "JobInventory"
+pattern = "strategy"
+reason = "A job's properties never cross this seam as values. They belong to whatever created the job - a replication agent, a workflow step, somebody's own service - and routinely carry content addresses and occasionally a credential. What crosses is the names, which is enough to tell an operator what kind of work a stuck job is, and no more."
+
+[[type]]
+name = "JobCommands"
+pattern = "stateless-policy"
+reason = "Three of the four arguments are one member each and the fourth is three, which is why they are read in one place: what they share is every bound they are held to, and four copies of the same three checks is four chances for one to drift. The search's states are required because a busy instance holds a great many jobs that succeeded and every question anybody has is about the few that did not."
+
+[[type]]
+name = "JobResults"
+pattern = "stateless-policy"
+reason = "The inspection carries property names and no values, and that asymmetry is the whole design: the names say what kind of work a stuck job is - one carrying path and agentId is a replication, one carrying model is a workflow - and that is enough to know where to look. The values are somebody else's content and occasionally somebody else's credential, and a command about a queue is not where either belongs."
+
+[[type]]
+name = "JobHandler"
+pattern = "accessor"
+reason = "The three that read pass through no gate: what-is-not-happening is the question an operator has on an environment they cannot change at all, and it is the one this surface answers best. Cancelling passes the gate and is the control with the least reversible effect in this plan - a cancelled job is work that will now never happen, and nothing in the platform remembers what it was going to do."
+
+[[type]]
+name = "PrincipalDirectory"
+pattern = "strategy"
+reason = "Every call takes the caller's own session, and here that is not a convenience but the entire access-control story: group membership is how every permission in this product is granted, so a caller who could add themselves to a group would have granted themselves everything that group can do. Doing it through their own session means the repository refuses exactly what it would have refused had they done it by hand. No credential crosses this seam in either direction - an agent that could set a password is an agent that can become anybody."
+
+[[type]]
+name = "PrincipalCommands"
+pattern = "stateless-policy"
+reason = "Read in one place because the identifier is the same identifier in all eight and its bound is the thing that must not drift: an identifier one command accepts and another refuses is a caller who can make a user they cannot then change. No member here is a password and none can be - the properties a creation carries are the ordinary property vocabulary this build already has, and the repository's own credential storage is not reachable through it."
+
+[[type]]
+name = "PrincipalResults"
+pattern = "stateless-policy"
+reason = "No credential appears in any of the eight, and there is no member one could travel in. A membership change says whether it needed to do anything, because a caller granting a permission has to know whether they granted it or found it already there - those are different sentences in an audit and the second is often the surprising half of an investigation. Granting answers already-a-member and withdrawing answers was-a-member, two members rather than one, because the two commands ask opposite questions and the sentence has to be true rather than merely consistent."
+
+[[type]]
+name = "PrincipalHandler"
+pattern = "accessor"
+reason = "Seven of the eight pass the control gate and the listing does not: reading who is in a group is how somebody works out why a person can do something they should not be able to, and refusing that on a deployment that will not let memberships change would refuse the investigation along with the change. All eight act through the caller's own session, so this agent grants nothing the caller could not have granted by hand."
+
+[[type]]
+name = "ReplicationInventory"
+pattern = "strategy"
+reason = "A transport address never crosses this seam. An agent's transport is a URL, and a URL to a publish instance very frequently carries the credential it authenticates with - which means a listing of agents is one of the easiest places in an author instance to collect passwords. What an operator actually needs is which agent, whether it is on, whether its queue is stuck and how much is in it, and none of those is the address."
+
+[[type]]
+name = "AgentCommands"
+pattern = "stateless-policy"
+reason = "An agent identifier is the same identifier in all five, so it is read once. The one command with a member of its own is the flush, and that member is the whole reason it is safe to offer: a queue that filled up between reading it and emptying it would otherwise lose work the caller never saw."
+
+[[type]]
+name = "AgentResults"
+pattern = "stateless-policy"
+reason = "No transport address appears anywhere and there is no member one could travel in. Whether the agent is on and whether its queue is stuck are separate members because they are the two different reasons nothing is being replicated, and they have different fixes. Where the configuration is held is carried so an operator can go and read it under the repository's own access control rather than through this."
+
+[[type]]
+name = "AgentHandler"
+pattern = "accessor"
+reason = "The three that read pass no control gate, because the deployment that will not let a queue be flushed is exactly the one where an operator most needs to see why it is stuck. The flush carries an expected entry count, which is the one guard in this plan that stops a genuinely bad outcome: naming the count they saw means the platform either finds what the caller expected or refuses."
+
+[[type]]
+name = "RegistryCompleteness"
+pattern = "stateless-policy"
+reason = "A command one side holds and the other does not is a refused submission in production, and this is the cheapest possible place to find it. Compared field by field rather than row by row because the fixes differ: a disagreeing access class is a permission decision somebody has to make, a disagreeing key requirement is a resend that will have a second effect, and a disagreeing result bound is an answer one half will refuse. Read from the client's own published documents rather than from a table kept beside them, because two copies would be two things to keep current and the one nobody remembered would be the one this gate believed."
+
+[[type]]
+name = "CommandReference"
+pattern = "stateless-policy"
+reason = "A reference maintained by hand beside a registry is wrong within a month - not because anybody is careless, but because the registry changes in a commit that has nothing to do with documentation and nobody reading that commit thinks about the table. Generating it means the two cannot disagree, and checking the rendering on every build means the generation cannot be skipped. What it cannot decide - whether the summaries are accurate and whether the prose is worth reading - is recorded as a review checklist rather than as a check that pretends to, because a check that claimed to judge prose would be believed."
+
+[[type]]
+name = "PlatformCoverage"
+pattern = "stateless-policy"
+reason = "Three things have to hold together and each fails silently on its own: a control nothing gates would run on the environment that discards the change, a gated command missing from the mapping passes a gate with no rule behind it, and an unclaimed category means nothing proves what the thirty have in common. Enumerated from the registry rather than from a list, so the plan that adds a thirty-first control is covered without editing this - which is the only way a coverage check stays true. A gated command need not be a platform control: users and groups live in the caller's own repository, so the seven that change them commit and still pass a gate a deployment may refuse."
+
+[[type]]
+name = "ConfigurationCatalogues"
+pattern = "strategy"
+reason = "A handler holds this rather than a catalogue, for the same reason the one command that needs somewhere to work holds a room-opener rather than a room: a view onto a platform service is something a run has, not something a handler owns. Holding the service itself would mean every run through that handler shared whatever state the implementation kept - which is fine today, because none of them keeps any, and is exactly the kind of thing that stops being fine without anybody noticing."
+
+[[type]]
+name = "PrincipalDirectories"
+pattern = "strategy"
+reason = "Held by a handler rather than the directory itself, for the same reason a run opens its own staging room rather than sharing one. A directory is something a run has; a handler that owned one would be a handler through which every run shared whatever the implementation kept."
+
+[[type]]
+name = "OverlayAudit"
+pattern = "stateless-policy"
+reason = "Adobe's extension points are meant to be added to. A package that writes a node over one the platform ships works perfectly on the day it is installed and stops working on the day the platform changes the resource underneath - an upgrade, months later, done by somebody who has never heard of this product. Two things are checked and they fail differently: an overlay appears at upgrade and a filter reaching outside the declared roots appears at uninstall, and an operator experiencing either has no reason to suspect this. A directory carrying nothing of its own is not a written node, because reaching a leaf inside an extension point means the tree between has to exist in the source and carries no content."
+
+[[type]]
+name = "FrontEndFootprint"
+pattern = "stateless-policy"
+reason = "A front-end pipeline is a second dependency graph: its own licences, its own advisories, its own upgrade cadence and its own lock file that nobody in a Java review reads. Several hundred packages to render four tables would undo the compatibility argument the whole repository rests on. The bound is deliberately crude - a count of scripts and stylesheets and a refusal of any manifest a package manager reads - because a more nuanced rule is a rule somebody argues with and a count is a number that either went up or did not."
+
+[[type]]
+name = "ConsoleAuthority"
+pattern = "stateless-policy"
+reason = "A console is a servlet, an authenticated user and a permitted group - exactly like a route, and deliberately so: a second answer to may-this-person is a second thing to keep in step with the first, and the day they disagree one of them is wrong in a direction nobody planned. What differs is what a person is shown: a tool nobody may use is better not advertised, because an entry that appears and refuses when clicked teaches an operator that this product is broken while one that is not there teaches them nothing, which is what there is to teach."
+
+[[type]]
+name = "ConsolePage"
+pattern = "value-object"
+reason = "The total is an explicit unknown rather than a zero where the store cannot cheaply produce one, and that distinction is the whole reason this type exists: a console showing zero of zero when it means here-are-twenty-and-nobody-counted-the-rest teaches an operator that their instance is idle, which is the most misleading thing a diagnostic screen can say. The window is clamped rather than refused, because a console is not a protocol - a person who asked for more rows than one page carries has made no mistake worth an error message."
+
+[[type]]
+name = "ConsoleDataSource"
+pattern = "protection-proxy"
+reason = "The order is the point and it is structural rather than remembered. The stores live where no person's session reaches them, so the reading happens as the service user - which means the read cannot also be what decides whether the read should happen. If a screen could reach its store before the authority answered, the service user's reach would be the access control, and the service user can reach everything. A screen is handed to this rather than inheriting from it, which is what makes the order unskippable: an inherited method can be overridden, and a screen that was given nothing but a chance to produce rows has nothing to override. Nothing here returns a store, a session, or anything a store is reachable through."
+
+[[type]]
+name = "OperationRow"
+pattern = "value-object"
+reason = "Four columns and no more. An operator scanning this list is looking for the one row that is wrong, and every column that is not part of telling a wrong row from a right one makes that harder rather than easier - a table wide enough to answer every question is a table nobody reads to answer any of them."
+
+[[type]]
+name = "OperationListDataSource"
+pattern = "accessor"
+reason = "Newest first, because the question that brings somebody here is almost always about something that just happened: an oldest-first list is correct and useless, since the row they want is on the last page. What the store cannot cheaply count it does not pretend to - a generation holding a million operations has a total nobody should pay for on the way to reading twenty rows."
+
+[[type]]
+name = "OperationDetail"
+pattern = "value-object"
+reason = "The reason the console exists: somebody has an identifier and a question, and the answer is spread across four stores only this repository knows how to read. Every part that is not there is explicitly absent rather than empty, because an operation with no artifacts and one whose artifacts were swept are different situations with different answers. The node that made each attempt matters more than it looks: four attempts on four nodes is a cluster passing work around, and four on one node is a command that keeps failing."
+
+[[type]]
+name = "OperationDetailDataSource"
+pattern = "accessor"
+reason = "Assembled from a single view of the stores rather than from four separate reads, and that is not an optimisation: four reads taken a moment apart can show an event the snapshot has not accounted for - a page saying the operation succeeded above a list whose last line is a failure - and somebody reading that has no way to tell which half is stale."
+
+[[type]]
+name = "MaintenanceDataSource"
+pattern = "accessor"
+reason = "Every number here is one somebody only wants once and always urgently: which generation this instance is on after a rotation, how much of the allotted capacity is in use, and when the sweep last ran. None of it is visible from the content, none is in a log, and an operator who does not know it exists has no way to ask. A sweep that has never run says so rather than showing an instant of nought, which reads as nineteen-seventy and sends somebody looking for a clock problem."
+
+[[type]]
+name = "ArtifactLink"
+pattern = "stateless-policy"
+reason = "Never a repository path. The stores live where no person's session reaches them, so a path would be either useless or - if it worked - a way to read the agent's own storage through a console link. The route already decides who may fetch what and already reports a count and a digest. A swept artifact is shown as expired rather than linked, because a link that fails when clicked teaches an operator that downloads are broken when what actually happened is that their own retention did what they configured it to do."
+
+[[type]]
+name = "TailSubscription"
+pattern = "stateless-policy"
+reason = "The same route a client follows rather than a second stream. A console watching its own would be a second implementation of the hardest thing in this repository - resumption, ordering, heartbeats and the bound on how long one may stay open - and the day the two disagree, the operator's console and the caller's client are showing different accounts of the same operation and neither knows. An operation that ended is offered nothing rather than a stream that opens and immediately closes, because that would spend the instance's bounded stream budget on saying nothing."
+
+[[type]]
+name = "AgentHealth"
+pattern = "stateless-policy"
+reason = "One verdict and one sentence, and the sentence is the whole value: an operator reading a dashboard is deciding whether to act, and capacity-exceeded tells them less than nothing while naming the counts and the last sweep tells them what to do next without opening anything. Six separate checks rather than one aggregate, because an aggregate answers something-is-wrong and every one of these has a different somebody-to-fix-it. A check that could not run is told apart from one that found a problem, because a dashboard conflating them has operators chasing a store that is fine."
+
+[[type]]
+name = "UpgradeTier"
+pattern = "stateless-policy"
+reason = "A fresh install proves nothing about an upgrade, and an upgrade is what every real deployment does - so the previous release is installed, populated, and this one installed over it rather than beside it. Before the first release there is nothing to upgrade from and this says so as a value rather than as a special case in the code, because a suite that quietly passed on that would be reporting an upgrade it never performed."
+
+[[type]]
+name = "AcceptanceMatrix"
+pattern = "document-reader"
+reason = "A row does not become supported because the code compiled; it becomes supported when a tier ran against it, and until then it is declared and unproved - a more useful thing to publish than a claim nobody tested and a less embarrassing one than a claim somebody finds out is false. Three of the properties are the deployment's rather than this build's, and a row whose own ingress has never been watched passing a stream is unproved however well streaming works here, because what sits between a client and this agent on that row is not something this repository can test."
+
+[[type]]
+name = "LiveAuthorTier"
+pattern = "stateless-policy"
+reason = "One run against one author is evidence about that author and about nothing else, and the report says so - because the thing that turns a useful observation into a false claim is somebody quoting it later as evidence about a deployment row. The enabling flag is checked before the configuration is read, because a command that parsed a configuration and then decided whether it was allowed to would be a command that had already done something on the way to deciding."
+
+[[type]]
+name = "WorkflowPolicy"
+pattern = "stateless-policy"
+reason = "Every workflow runs with credentials on somebody else's machine, which is a different kind of thing from the rest of this repository. Read structurally because the difference between a value and a place is structural: an action reference in a comment explaining why references are pinned is not a reference, and a permission named in a job is not the same as one named at the workflow. A text search cannot tell either apart, and a rule that could not would be a rule nobody could document."
+
+[[type]]
+name = "ReleaseArtifacts"
+pattern = "document-reader"
+reason = "A release is a claim: these bytes, built from this source. What makes the first half checkable by somebody who was not there is that the archives are deterministic - so what is asserted at build time is that the source still says so, because the day somebody removes the declared timestamp every rebuild differs and nobody finds out until a release."
+
+[[type]]
+name = "BillOfMaterials"
+pattern = "stateless-policy"
+reason = "What a release contains and what it binds to without containing are two different claims and both are worth publishing. The second is the one worth stating loudly: this product embeds nothing, so a list naming only what is inside the archives would say the release depends on nothing, which is true about the archive and false about the software. Generated rather than maintained, because a list maintained beside something stops matching it and the first thing it stops matching is whatever somebody added in a hurry."
+
+[[type]]
+name = "PublicationAuthority"
+pattern = "stateless-policy"
+reason = "Publishing is a claim to a namespace somebody verified, under an identity somebody holds a key for, from a repository somebody owns, and none of the three is inferable from a directory name. Every absent field is named at once rather than the first, because somebody about to release wants the list rather than one line of it per attempt - and a boundary that reported one thing at a time is one somebody works around by guessing."
+
+[[type]]
+name = "CentralPrerequisites"
+pattern = "document-reader"
+reason = "A release refused remotely is one somebody works out the reason for from whatever the portal said; a release refused here names all of it at once, offline, before anything was built. The prerequisites are data rather than lore in a script so somebody can compare them with the registry's own published requirements, because a script that happened to check nine things is a script nobody can audit against anything."
+
+[[type]]
+name = "AdvisoryGate"
+pattern = "document-reader"
+reason = "There is deliberately no timestamp and no freshness claim: a snapshot's author chooses both, so neither authenticates anything, and the pin carries no key one could be written in - a field that cannot exist cannot be trusted. Three refusals kept apart because they are three different things to do next, and none of them checks a single artifact, because checking against a snapshot nobody authenticated is checking against whatever happens to be on the machine."
+
+[[type]]
+name = "WireCompatibility"
+pattern = "stateless-policy"
+reason = "A protocol change nobody noticed is a client that stops working, and the moment it is cheap to notice is the moment it is introduced. Byte-exact rather than structural, deliberately: two documents that mean the same thing and are not the same bytes are two different digests, and the five-field identity is a comparison of digests - so a structurally equivalent change is exactly the change that breaks a client while looking like it changed nothing."
+
+[[type]]
+name = "PlatformFloor"
+pattern = "accessor"
+reason = "Bound to the deployment matrix rather than written separately, so raising the floor is a change to the matrix - and a floor written down twice is two numbers that disagree quietly for as long as nobody compares them. Releases are compared as numbers rather than as text, because as text twelve is older than six point five and the floor would be the wrong row."
+
+[[type]]
+name = "EscalationSurface"
+pattern = "stateless-policy"
+reason = "The directions that seem likely are the ones that were already thought about, so these come from the architecture and the surface comes from the built packages and the registry rather than a list - the surface somebody forgets to add to a list is the one nobody attacks. The strongest of the rules needs no guard at all: there is no impersonation call anywhere in either bundle, and a guard can be got round while an absence cannot."
+
+[[type]]
+name = "InjectionAudit"
+pattern = "document-reader"
+reason = "The strongest answer this product has to query injection is that it has no query: every search walks resources through the caller's own resolver, so there is no statement for a value to break out of. Read over parsed source rather than matched, because a statement named in a comment is somebody explaining why there are none and a string concatenated into a call is somebody building one, and only a parser can tell them apart."
+
+[[type]]
+name = "ExposureSurface"
+pattern = "stateless-policy"
+reason = "Two audits already cover the two places anybody thinks of. What is left is the four that leave without anybody watching - a log line, an event down a stream, a stored artifact, and a property this agent wrote - and the rule that a kind nothing holds is a kind reporting clean because it was never in the room. The place names are spelled the way the route audit spells them, because two audits that named one place differently would each believe the other covered it."
+
+[[type]]
+name = "ClockUsagePolicy"
+pattern = "document-reader"
+reason = "Two sources with two purposes and neither used for the other's, held apart by parsing rather than by convention. A wall clock is read for an instant that goes on the wire, because a client comparing it with its own has to be comparing the same kind of thing, and it is corrected - which is why nothing measures a duration by subtracting two readings of it. A monotonic source measures every duration and its value means nothing on its own, which is why no instant is read from it. Naming either in a comment is not using it, so every rule reads source with its comments removed."
+
+[[type]]
+name = "RepositoryFaultInjector"
+pattern = "stateless-policy"
+reason = "A commit that fails, one that conflicts, one refused because there is no room, and a session that went away are four different claims about what a write did, and code that treated any two alike would recover wrongly for one. Injected rather than waited for: three of the four are rare enough that a suite waiting for them would never run them, and rare is exactly what makes a recovery path the least-exercised code in a product."
+
+[[type]]
+name = "PlatformFaultInjector"
+pattern = "stateless-policy"
+reason = "A category no fault can produce is a category that does not exist, however carefully its schema was written - so the unknown outcome every control command declares is either reachable here or it is a sentence in a document. A rejection and a throw are deliberately one answer, because a caller who could tell them apart would be reading this product's opinion of somebody else's exception and acting on it."
+
+[[type]]
+name = "ClockDisruptor"
+pattern = "stateless-policy"
+reason = "Every comparison of two instants, each carrying which way being wrong is safe, because the property is never about accuracy: a decision may be conservative and may never be wrong. The disruptions are the three a real deployment produces - two machines never synchronised, a virtual machine suspended, and a time service correcting a clock - and the backward correction is the one nobody plans for."
+
+[[type]]
+name = "FuzzTargetInventory"
+pattern = "document-reader"
+reason = "A fuzzer that fetches is a gate whose result depends on a remote server, and a corpus that regenerates is a gate that finds different things on different days, so both are pinned and this reads the pinning. Both directions are checked because both go wrong, and the corpus check is the one worth having: a target with no corpus runs, reports nothing, and looks exactly like a target that found nothing."
+
+[[type]]
+name = "ConsoleSurface"
+pattern = "stateless-policy"
+reason = "The surface is derived from the package rather than listed, so a page somebody adds next year is covered by the proof the day it is added rather than on the day somebody remembers to add a line - and for the resource that gets forgotten, that day is never. Everything on it reads: a console that could change something would be a second way to do what the routes do, with a second authorization story and a second audit trail, and the first thing that differs between two of those is the thing nobody tests."
+
+[[type]]
+name = "ConsoleAccessibility"
+pattern = "stateless-policy"
+reason = "Retrofitting either a translation or an accessible name is far more expensive than doing it once, and a console with five pages is exactly the size where it is still cheap. Granite renders on the server, so both are decidable from the committed markup rather than from a browser - which is what makes this a build check rather than a pass somebody does before one release and not the next. The literal rule is the one that keeps the rest true: a dictionary is complete only while nothing bypasses it, and what bypasses it is always one string somebody typed in a hurry."
+
+[[type]]
+name = "LogStatementPolicy"
+pattern = "document-reader"
+reason = "Three findings rather than one, because reaching for a logger, formatting a message, and interpolating something the corpus covers are three different mistakes made by three different people, and a single finding would send all of them to read the same paragraph. Every rule reads source with its comments removed, so the paragraph explaining why a form is refused may name the form."
+
+[[type]]
+name = "StateTreeHealthCheck"
+pattern = "stateless-policy"
+reason = "The tree is made by a deployment's own initialisation script and written into by this bundle, so a difference between the two is something neither side notices alone - it surfaces later as a write that fails for the one caller who needed it, or as a read that succeeds for one who should not have made it. The first difference is named rather than counted, because three-entries-differ sends somebody to compare two lists by hand while naming the entry says which way the mistake runs."
+
+[[type]]
+name = "ContinuationAuthorityHealthCheck"
+pattern = "accessor"
+reason = "Performed rather than inspected, because the case that matters is an authority that is present and unusable: a ring whose key is there, whose record reads, and whose token nothing accepts. Inspecting it answers that everything is where it should be, which is what the operator could already see. Performing it is a write and a read against a shared record, so it holds its answer for the interval the contract declares and says when it was last performed - a dashboard and a monitor both polling is the ordinary case, and the instant the sentence carries is the instant it was true, so a held answer is never mistaken for a fresh one."
+
+[[type]]
+name = "CapacityHealthCheck"
+pattern = "stateless-policy"
+reason = "Capacity is refused at the moment it is reached, which is the moment a caller's work stops and the least useful moment for an operator to first hear about it. Reported as a number beside its bound it is something somebody can watch approaching, and every count is named rather than only the ones that are over - well-within-every-bound and one-away-from-three-of-them are the same verdict and very different situations."
+
+[[type]]
+name = "DeploymentRowHealthCheck"
+pattern = "stateless-policy"
+reason = "Running on a row nobody claimed is not a failure and is the first thing worth knowing when something does not work, so it is reported as itself rather than as a failure of whatever noticed it. A platform no row describes is likewise not this instance's to decide: that is a row somebody has to add and prove."
+
+[[type]]
+name = "RouteRegistrationHealthCheck"
+pattern = "stateless-policy"
+reason = "The check that catches the failure nothing else can see. A path-bound servlet registers only for prefixes the servlet resolver permits; a deployment whose operator narrowed that list years ago has an agent that installs, activates and answers nothing, which from every other angle looks like nothing being installed. So the answer names the permitted prefixes rather than only the missing route - an operator reading no-route-is-registered goes looking at this product, and one reading the prefixes knows which configuration to open."
+
+[[type]]
+name = "QueryCoverageHealthCheck"
+pattern = "stateless-policy"
+reason = "The other silent one. A query is cheap while the index covering it exists, and whether it exists is a property of the customer's repository rather than of this build: an index somebody removed, or one that never got rebuilt after a restore, turns a command that answered in milliseconds into one that walks the repository. Nothing fails; everything gets slow, and the slowness gets attributed to whatever else changed that week."
+
+[[type]]
+name = "LogEvent"
+pattern = "value-object"
+reason = "The operation is a field of its own rather than one of the named ones, because it is the field that makes a line findable: somebody with a console row searches for it, and somebody with a line pastes it into the console. Fields rather than a formatted sentence, because a sentence is a place where somebody concatenates a value - and the values that get concatenated into log lines are the ones somebody had in hand, which on a failure path is the caller's own content."
+
+[[type]]
+name = "AgentLog"
+pattern = "stateless-policy"
+reason = "Two rules and both are about what does not reach the line. A field the redaction corpus covers is replaced by a note that it was withheld, reusing the corpus rather than growing a second idea of what a secret looks like. And a message past the bound is refused rather than truncated, because half a log line is the half somebody quotes and the missing half is reliably the interesting one - refusing is safe here in a way it is not elsewhere, since a line that does not get written is a line nobody misreads."
+
+[[type]]
+name = "BuildIdentityDataSource"
+pattern = "accessor"
+reason = "The first question anybody asks in a support conversation and the one nobody can answer from outside: an operator can see that a bundle is active, but not which commit it was built from, which contract digest it authenticated, or whether this build claims the deployment it is running on. A row this build does not claim is shown as unclaimed rather than hidden - running somewhere unclaimed is not a failure, but it is the first thing worth knowing when something does not work."
+
+[[type]]
+name = "RetentionDataSource"
+pattern = "accessor"
+reason = "Retention is the setting that is invisible until the day somebody goes looking for an operation that is gone. What is retained is shown separately from what the next sweep would take, because the two answer different questions: an operator deciding whether to raise a window wants the first, and one wondering whether the sweep is running at all wants the second."

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "load-content-as-json"
+kind = "command"
+feature = "load_content_as_json"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.LoadContentScenario"
+reason = "The first command, asked for on a running instance through the route a caller actually uses. What this proves that no unit suite can: that the command is registered on a real Sling runtime rather than merely written, that its argument reaches it through the transport intact, and that a submission missing the operation key its own registry row requires is refused before anything runs — the key rule being read from the row rather than restated here, which is the point of having the row."

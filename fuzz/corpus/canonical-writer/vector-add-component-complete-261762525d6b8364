@@ -1,0 +1,1 @@
+{"component_name":"teaser","content_parent":"root/container","page_path":"/content/site/article","properties":{"text":{"cardinality":"single","value":{"type":"string","value":"Hello"}}},"resource_type":"site/components/teaser"}

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "console-render"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ConsoleRenderScenario"
+reason = "Granite renders on the server, so this console's markup is fully determined by a response a test can assert over HTTP - which is why there is no browser driver here, and why there is no class of flakiness that comes with one. What this proves that no unit suite can is that a driven workload appears on the pages as the stores hold it, that a failed operation shows its category and a running one a live lease, and that every rendered value equals what the corresponding route answers, so the console and the machine-readable surface cannot disagree."

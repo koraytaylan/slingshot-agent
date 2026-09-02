@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Authenticates the pinned fuzzing tool against the digest recorded beside it.
+#
+# This command reaches nothing. It looks at the file the repository says it holds and compares its
+# bytes with what was recorded when the tool was prepared. Three refusals, kept distinct because
+# they are three different conversations: nobody has prepared it, the file is not there, and the
+# file is there and is not the one this repository pinned. No target runs after any of them.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly TOOL_FILE="${REPOSITORY_ROOT}/support/fuzzing-tool.toml"
+readonly EXIT_USAGE=2
+readonly EXIT_NOT_PREPARED=3
+readonly EXIT_ABSENT=4
+readonly EXIT_NOT_PINNED=5
+
+if [[ $# -ne 0 ]]; then
+    printf 'verify_fuzzing_tool takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+read -r held_at recorded_digest prepare_command < <(python3 - "${TOOL_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+held_at = digest = prepare = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("held_at = "):
+        held_at = stripped.split('"')[1]
+    elif stripped.startswith("digest = "):
+        digest = stripped.split('"')[1]
+    elif stripped.startswith("prepare = "):
+        prepare = stripped.split('"')[1]
+print("%s %s %s" % (held_at, digest or "-", prepare))
+PYTHON
+)
+
+if [[ "${recorded_digest}" == "-" ]]; then
+    printf 'not prepared: no digest is recorded for the fuzzing tool. Run %s.\n' \
+        "${prepare_command}" >&2
+    exit "${EXIT_NOT_PREPARED}"
+fi
+
+if [[ ! -f "${REPOSITORY_ROOT}/${held_at}" ]]; then
+    printf 'not present: %s is not here. Run %s.\n' "${held_at}" "${prepare_command}" >&2
+    exit "${EXIT_ABSENT}"
+fi
+
+present_digest="sha256:$(sha256sum "${REPOSITORY_ROOT}/${held_at}" | cut -d' ' -f1)"
+if [[ "${present_digest}" != "${recorded_digest}" ]]; then
+    printf 'not the pinned tool: %s holds %s and %s was recorded. Run %s.\n' \
+        "${held_at}" "${present_digest}" "${recorded_digest}" "${prepare_command}" >&2
+    exit "${EXIT_NOT_PINNED}"
+fi
+
+printf 'The fuzzing tool at %s is the one recorded for it.\n' "${held_at}"

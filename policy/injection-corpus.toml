@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The closed set of attack shapes every caller-supplied value is driven through.
+#
+# Every value a caller supplies eventually becomes part of a query, an address, or a repository
+# name. Those are three grammars with three different escapes, and a value that is safe in one is
+# frequently not safe in another - which is why the shapes are grouped by the grammar they attack
+# rather than by what they look like.
+#
+# The set is closed. A shape somebody adds without driving it through anything is a category nobody
+# exercises; a member driven through nothing is a place nobody attacked. Both are refused.
+#
+# The strongest answer this product has to the first grammar is that it does not have one: nothing
+# here builds a query statement at all. Every search walks resources through the caller's own
+# resolver, so there is no statement for a value to break out of - and the audit beside this file is
+# what keeps that true rather than a thing that happened to be true when it was written.
+
+[corpus]
+reason = "Five grammars, and there is no sixth. Each names what it attacks rather than what it looks like, because the same three characters mean different things in a query, a path, and a node name."
+
+[[shape]]
+grammar = "query"
+value = "' or '1'='1"
+attacks = "a statement built by concatenation, where a quote ends the value and the rest is read as grammar"
+reason = "The oldest one. It matters here only because it must never matter: nothing in this build constructs a statement, and this is what proves it the day somebody does."
+
+[[shape]]
+grammar = "query"
+value = "] union select * from [nt:base"
+attacks = "the repository's own query grammar rather than a relational one"
+reason = "The version of the above that a repository query language would actually accept, so the shape is the one that would work rather than the one that reads as an attack."
+
+[[shape]]
+grammar = "path"
+value = "../.."
+attacks = "a root by climbing out of it"
+reason = "The plainest traversal, and the one every check is written against first."
+
+[[shape]]
+grammar = "path"
+value = "%2e%2e%2f"
+attacks = "a root by climbing out of it after one decoding"
+reason = "The one that gets past a check written against the plain spelling, which is why the check is applied after decoding rather than before."
+
+[[shape]]
+grammar = "path"
+value = "%252e%252e%252f"
+attacks = "a root by climbing out of it after two decodings"
+reason = "The one that gets past a check applied after exactly one decoding, which is the fix somebody applies to the shape above."
+
+[[shape]]
+grammar = "path"
+value = "//content//site"
+attacks = "a root by a separator the reader might collapse and the repository might not"
+reason = "A doubled separator is one segment to one reader and two to another, and a check that disagrees with the resolver about where a path points is a check about a different path."
+
+[[shape]]
+grammar = "name"
+value = "a:name"
+attacks = "a repository name by using the character that separates a namespace from a local name"
+reason = "A colon in a node name is a namespace prefix to the repository, so a caller who supplies one is choosing a namespace rather than a name."
+
+[[shape]]
+grammar = "name"
+value = "a[2]"
+attacks = "a repository name by using the same-name-sibling index"
+reason = "Square brackets in a name address a sibling rather than name one, so a caller supplying them addresses something rather than creating it."
+
+[[shape]]
+grammar = "expression"
+value = "${anything}"
+attacks = "a template that something later interpolates"
+reason = "A value that reaches a template is a value that runs. Nothing here interpolates, and this is what keeps that true."
+
+[[shape]]
+grammar = "expression"
+value = "#{anything}"
+attacks = "the other template delimiter, which a different library reads"
+reason = "Refused separately because the library somebody adds later is the one whose delimiter nobody wrote a shape for."
+
+[[shape]]
+grammar = "control"
+value = "a b"
+attacks = "a reader that stops at a terminator the layer beneath it respects"
+reason = "A value that is one string to this side and two to the layer beneath is how a check passes on the part before the terminator and the rest is used."
+
+[[shape]]
+grammar = "control"
+value = "a\nb"
+attacks = "a line-oriented surface by adding a line"
+reason = "A newline in a value is a second log line, a second header, or a second event, and the second one is the one somebody wrote."

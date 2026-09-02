@@ -1,0 +1,9 @@
+[[pattern]]
+name = "accessor"
+signature = "A final class whose every field is final and which declares no setter."
+reason = "Something that answers questions about state it was given."
+
+[[type]]
+name = "Something"
+pattern = "a-label-nobody-gave-a-signature"
+reason = "A row naming a pattern the vocabulary does not hold."

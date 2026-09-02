@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "inspect-replication-agent"
+kind = "command"
+feature = "inspect_replication_agent"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.InspectReplicationAgentScenario"
+reason = "Whether the agent is on and whether its queue is stuck, which are the two different reasons nothing is being replicated. What this proves that no unit suite can is that a real agent's configuration answers both without the address."

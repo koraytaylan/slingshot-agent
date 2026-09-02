@@ -1,0 +1,25 @@
+[matrix]
+recorded_by = "scripts/release_acceptance"
+reason = "a fixture"
+
+[[row]]
+deployment = "aem-cloud-service"
+arrival = "a fixture"
+tier = "a"
+scenarios = ["nothing-like-this"]
+instance = "https://author.example"
+observed_at = "2026-09-02"
+ingress_streaming_observed = true
+clustered_arrangement_exercised = false
+reason = "a fixture"
+
+[[row]]
+deployment = "aem-6-5-lts"
+arrival = "a fixture"
+tier = ""
+scenarios = []
+instance = ""
+observed_at = ""
+ingress_streaming_observed = false
+clustered_arrangement_exercised = false
+reason = "a fixture"

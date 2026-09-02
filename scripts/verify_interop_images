@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Authenticates the pinned interoperability images against the digests recorded beside them.
+#
+# This command reaches nothing. It asks the local container engine what it already holds and
+# compares that with what was recorded when the images were prepared. An image that is absent, or
+# one whose digest differs, is a refusal naming the preparation command rather than a pull.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly IMAGE_FILE="${REPOSITORY_ROOT}/support/interop-images.toml"
+readonly ENGINE="podman"
+readonly PREPARE_COMMAND="scripts/prepare_interop_images"
+readonly EXIT_USAGE=2
+readonly EXIT_ABSENT=3
+
+if [[ $# -ne 0 ]]; then
+    printf 'verify_interop_images takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+absent_count=0
+checked_count=0
+
+while IFS='|' read -r reference recorded_digest; do
+    checked_count=$((checked_count + 1))
+    if [[ -z "${recorded_digest}" ]]; then
+        printf 'not prepared: %s has no recorded digest. Run %s.\n' \
+            "${reference}" "${PREPARE_COMMAND}" >&2
+        absent_count=$((absent_count + 1))
+        continue
+    fi
+    if ! present_digest="$("${ENGINE}" image inspect --format '{{.Digest}}' "${reference}" 2>/dev/null)"; then
+        printf 'not present: %s is not held by this engine. Run %s.\n' \
+            "${reference}" "${PREPARE_COMMAND}" >&2
+        absent_count=$((absent_count + 1))
+        continue
+    fi
+    if [[ "${present_digest}" != "${recorded_digest}" ]]; then
+        printf 'not the pinned image: %s holds %s and %s was recorded. Run %s.\n' \
+            "${reference}" "${present_digest}" "${recorded_digest}" "${PREPARE_COMMAND}" >&2
+        absent_count=$((absent_count + 1))
+        continue
+    fi
+done < <(python3 - "${IMAGE_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+registry = repository = tag = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("registry = "):
+        registry = stripped.split('"')[1]
+    elif stripped.startswith("repository = "):
+        repository = stripped.split('"')[1]
+    elif stripped.startswith("tag = "):
+        tag = stripped.split('"')[1]
+    elif stripped.startswith("digest = "):
+        print("%s/%s:%s|%s" % (registry, repository, tag, stripped.split('"')[1]))
+PYTHON
+)
+
+while IFS='|' read -r name identifier; do
+    checked_count=$((checked_count + 1))
+    if [[ -z "${identifier}" ]]; then
+        printf 'not built: %s has no recorded identifier. Run %s.\n' \
+            "${name}" "${PREPARE_COMMAND}" >&2
+        absent_count=$((absent_count + 1))
+        continue
+    fi
+    if ! present_identifier="$("${ENGINE}" image inspect --format '{{.Id}}' "${name}" 2>/dev/null)"; then
+        printf 'not present: %s is not held by this engine. Run %s.\n' \
+            "${name}" "${PREPARE_COMMAND}" >&2
+        absent_count=$((absent_count + 1))
+        continue
+    fi
+    if [[ "${present_identifier}" != "${identifier}" ]]; then
+        printf 'not the built image: %s holds %s and %s was recorded. Run %s.\n' \
+            "${name}" "${present_identifier}" "${identifier}" "${PREPARE_COMMAND}" >&2
+        absent_count=$((absent_count + 1))
+    fi
+done < <(python3 - "${IMAGE_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+name = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("name = "):
+        name = stripped.split('"')[1]
+    elif stripped.startswith("identifier = "):
+        print("%s|%s" % (name, stripped.split('"')[1]))
+PYTHON
+)
+
+if [[ "${absent_count}" -ne 0 ]]; then
+    printf '\n%s of %s pinned images are not the ones recorded. Run %s.\n' \
+        "${absent_count}" "${checked_count}" "${PREPARE_COMMAND}" >&2
+    exit "${EXIT_ABSENT}"
+fi
+
+printf 'Every one of the %s pinned and built images is the one recorded for it.\n' \
+    "${checked_count}"

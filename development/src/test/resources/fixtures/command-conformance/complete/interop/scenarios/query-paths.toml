@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "query-paths"
+kind = "command"
+feature = "query_paths"
+tier = "a"
+runner = "rs.slingshot.agent.interop.tier.QueryPathsScenario"
+reason = "The command answered on a running instance, which is the fact nothing else reveals."

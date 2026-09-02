@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Which platform control each command needs before it may do anything.
+#
+# A command here is refused on a deployment whose row does not provide its control, before it
+# reaches the platform at all. The mapping lives in a file rather than in each handler because it is
+# compared against the deployment matrix in both directions: a command needing a control no row
+# declares would be refused everywhere, which from outside looks exactly like a command that does
+# not work, and a control no command needs is a promise about this product that stopped being true.
+#
+# Read commands are not here. Asking what a configuration holds is not a control, and a deployment
+# whose configuration is immutable still answers questions about it — that is most of what an
+# operator wants from an environment they cannot change.
+
+[[control]]
+command = "update_open_service_gateway_initiative_configuration"
+capability = "configuration_change"
+reason = "Writing a configuration through the running platform. On a deployment that does not persist it the write is accepted, the answer says it worked, and it is gone by the next release."
+[[control]]
+command = "delete_open_service_gateway_initiative_configuration"
+capability = "configuration_change"
+reason = "Removing a configuration through the running platform, which the next deployment puts back — leaving an operator who watched it disappear believing it is gone."
+[[control]]
+command = "set_open_service_gateway_initiative_bundle_state"
+capability = "bundle_lifecycle"
+reason = "Starting, stopping or refreshing a bundle. Where the deployed image decides bundle state, this lasts until the next container replaces it, which is a change with a lifetime nobody can predict."
+[[control]]
+command = "start_workflow"
+capability = "workflow_control"
+reason = "Starting a workflow on a payload, which is work the platform will carry out afterwards whether or not anybody is watching."
+[[control]]
+command = "terminate_workflow_instance"
+capability = "workflow_control"
+reason = "Ending a running workflow instance before it finishes."
+[[control]]
+command = "set_workflow_instance_suspension"
+capability = "workflow_control"
+reason = "Holding a running instance or letting it go again."
+[[control]]
+command = "query_paths"
+capability = "job_control"
+reason = "Cancelling work the platform is holding for later, which is work that will now never happen."
+[[control]]
+command = "create_user"
+capability = "principal_administration"
+reason = "Making an account somebody can sign in with."
+[[control]]
+command = "create_group"
+capability = "principal_administration"
+reason = "Making a group, which is how every permission in this product is granted."
+[[control]]
+command = "update_user_profile"
+capability = "principal_administration"
+reason = "Changing what is recorded about an account."
+[[control]]
+command = "set_user_disabled"
+capability = "principal_administration"
+reason = "Turning an account off or on, which is the one change that locks somebody out of their own instance."
+[[control]]
+command = "delete_authorizable"
+capability = "principal_administration"
+reason = "Removing an account or a group, which is the change nothing undoes."
+[[control]]
+command = "add_group_member"
+capability = "principal_administration"
+reason = "Granting a membership, which grants everything the group can do."
+[[control]]
+command = "remove_group_member"
+capability = "principal_administration"
+reason = "Taking a membership away, which takes everything the group can do with it."
+[[control]]
+command = "flush_replication_queue"
+capability = "replication_control"
+reason = "Emptying a replication queue, which discards work somebody expected to happen."
+[[control]]
+command = "retry_replication_queue_entry"
+capability = "replication_control"
+reason = "Offering a stuck entry to the queue again."

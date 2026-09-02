@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[review]
+document = "docs/DOCUMENTATION_REVIEW.md"
+reason = "A fixture, which exists to be refused."
+
+[[checked]]
+rule = "unfinished-work"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "planning-heading"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "unknown-route"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "undocumented-route"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "unknown-tier-command"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "undocumented-tier-command"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "rule-with-no-stage"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "unknown-stage"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "unknown-policy"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "undocumented-policy"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "unanswered-review-question"
+reason = "A fixture rule."
+
+[[checked]]
+rule = "sunshine"
+reason = "A fixture rule."
+
+[[reviewed]]
+id = "accuracy"
+question = "A fixture question?"
+reason = "A fixture reason."
+

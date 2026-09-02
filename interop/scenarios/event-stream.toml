@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "event-stream"
+kind = "route"
+feature = "events"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.EventStreamScenario"
+reason = "The one route that stays open, asked for on an instance where nothing is subscribed. What that proves is the half a unit suite cannot: that every refusal is an ordinary response which arrives and ends, rather than a connection held open while the caller waits for a stream that is never coming — on an author, a held connection is one of a bounded number of request threads spent on a subscriber that was already refused. It also proves the route answers no other spelling of itself and no other method, which is what keeps the stream's own policy from applying to only some of the ways in."

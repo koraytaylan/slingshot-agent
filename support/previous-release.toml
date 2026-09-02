@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The release an upgrade is proved from, pinned by version and artifact digest.
+#
+# A fresh install proves nothing about an upgrade, and an upgrade is what every real deployment
+# does. So the compatibility suite installs the pinned release, populates its store with records of
+# every kind, and installs the current release over it - rather than beside it.
+#
+# There is an explicit absent value rather than a special case in the code. Before the first
+# release there is nothing to upgrade from, and a suite that quietly passed on that would be a suite
+# reporting an upgrade it never performed. It reports the absence instead, which is a different
+# sentence and the true one.
+
+[previous]
+version = ""
+artifact_digest = ""
+held_at = "compatibility/previous-release"
+reason = "The last release a customer could be running. An upgrade is proved from the release before this one rather than from an arbitrary older one, because that is the upgrade a deployment actually performs and the one whose store shape is known."
+
+[[populated]]
+kind = "operations at every state"
+reason = "A record in flight across an upgrade is the one that has to reach a disposition afterwards rather than staying wherever it was when the bundle was replaced."
+
+[[populated]]
+kind = "an operation awaiting its declared intake"
+reason = "The one shape that spans two requests. Its remaining slots have to be acceptable after the upgrade, and it has to be startable once they are, or a caller's half-uploaded work is stranded by a deployment."
+
+[[populated]]
+kind = "events"
+reason = "The ledger the snapshot is the fold of. If the fold changes across an upgrade, the cheap answer and the true answer stop agreeing."
+
+[[populated]]
+kind = "artifacts"
+reason = "Bytes with a count and a digest recorded beside them. An upgrade that could not read one back is a result a caller was told to fetch and cannot."
+
+[[populated]]
+kind = "partly-filled intake slots"
+reason = "Room reserved and not yet filled, which is the state a caller is in between two requests and the one an upgrade is most likely to lose."
+
+[[populated]]
+kind = "subscriptions"
+reason = "A cursor a client resumes from. One that did not survive is a client that silently starts again from the beginning or from nowhere."
+
+[[populated]]
+kind = "per-caller capacity counters"
+reason = "Counters that have to equal contents afterwards, in total and for each caller. A counter that survived while its contents did not is capacity refused for work that is not there."
+
+[[populated]]
+kind = "a key ring"
+reason = "The keys continuation tokens are signed with. A token issued before an upgrade has to validate after it, until its own expiry and not one moment past."

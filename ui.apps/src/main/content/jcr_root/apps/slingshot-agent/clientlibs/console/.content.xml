@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<!--
+  One client library, hand written, depending on what the platform already ships and on nothing
+  else. There is no package manager, no bundler and no framework anywhere in this repository, and
+  the check beside this file is what keeps it that way: a front-end pipeline is a second dependency
+  graph with its own licences and its own advisories, and adding one to render four tables would
+  undo the compatibility argument everything else here rests on.
+-->
+<jcr:root xmlns:jcr="http://www.jcp.org/jcr/1.0" xmlns:cq="http://www.day.com/jcr/cq/1.0"
+          jcr:primaryType="cq:ClientLibraryFolder"
+          categories="[slingshot.agent.console]"
+          dependencies="[coralui3,granite.ui.coral.foundation]"/>

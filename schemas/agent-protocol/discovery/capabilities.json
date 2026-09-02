@@ -1,0 +1,37 @@
+{
+    "$id": "urn:slingshot:agent:discovery:capabilities:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "What an agent says it is, answered before a client sends it anything. Each thing that can differ is a separate member, because a transport disagreement, a command-contract disagreement, and a store that was rebuilt have three different fixes. This side commits the schema; the client's own discovery reads the same five members.",
+    "properties": {
+        "agent_event_store_generation": {
+            "minimum": 1,
+            "type": "integer"
+        },
+        "canonical_json_contract_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+        },
+        "command_contracts": {
+            "items": {
+                "$ref": "urn:slingshot:agent:identity:command-contract:1"
+            },
+            "type": "array"
+        },
+        "continuation_authority_ready": {
+            "type": "boolean"
+        },
+        "transport_contract_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+        }
+    },
+    "required": [
+        "agent_event_store_generation",
+        "canonical_json_contract_digest",
+        "command_contracts",
+        "continuation_authority_ready",
+        "transport_contract_digest"
+    ],
+    "type": "object"
+}

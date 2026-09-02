@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<!--
+  This file is empty and stays empty. A filtered finding is a finding that outlived the situation it
+  was filtered for, and the static-analysis policy refuses a non-empty exclusion set.
+-->
+<FindBugsFilter/>

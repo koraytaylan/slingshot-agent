@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Where allocation is cheap, and where it is not.
+#
+# Garbage collection makes allocation cheap, not free, and this code runs inside somebody else's
+# author instance sharing a heap with their content. Waste here is not a benchmark number; it is a
+# customer's instance pausing.
+#
+# Two rules that look opposed and are not. A stream is the right way to express a transformation
+# over a collection, and a hand-rolled indexed loop doing the same thing is worse in every respect.
+# But a stream in a path that runs per byte or per event allocates a pipeline and a capture each
+# time round, and there a loop is correct. So the sensitive paths are declared, and the rule inverts
+# inside them.
+
+[outside_sensitive_paths]
+indexed_loops_permitted = false
+streams_permitted = true
+reason = "A transformation over a collection says what it is when it is written as one. An indexed loop doing the same thing states an iteration order nobody needed and an index nobody reads."
+
+[inside_sensitive_paths]
+indexed_loops_permitted = false
+streams_permitted = false
+reason = "A pipeline and a capture per unit of input is an allocation per unit of input, and a path that runs per byte or per event has as many of those as there are bytes or events."
+
+# The paths a stream is refused inside. Each names a method that runs per unit of input, with the
+# reason it is sensitive. The check holds both directions: a row naming a method that does not exist
+# fails, and the rules above invert exactly where a row says they do and nowhere else.
+#
+# The four paths the architecture names - the bounded document reader, the canonical byte writer,
+# the event encoder, and the digest input - arrive with Plans 0002, 0003, and 0004, and each arrives
+# with its own row here. What is already here are the three readers that run per character or per
+# byte of something somebody else wrote.
+
+[[sensitive_path]]
+type = "BuiltArtifact"
+method = "readUnsigned"
+reason = "It runs per byte of a class file's header, and every produced artifact is read class by class."
+
+[[sensitive_path]]
+type = "ImportedPackages"
+method = "splitOutsideQuotes"
+reason = "It runs per character of a manifest header, and a header carries one clause per imported package."
+
+[[sensitive_path]]
+type = "LicenceHeaders"
+method = "hashCommentIn"
+reason = "It runs per character of every line of every policy and support document this repository holds." 
+
+# Copies. A copy of something the type system already proves immutable allocates for nothing, and a
+# copy returned where the source is owned and stable is an allocation per call for a guarantee an
+# unmodifiable view already gives.
+[copies]
+defensive_copy_of_immutable_permitted = false
+copy_where_a_view_would_do_permitted = false
+reason = "Both allocate to state something that is already true. A view states it and allocates a wrapper once."

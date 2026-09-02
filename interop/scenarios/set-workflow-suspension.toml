@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "set-workflow-suspension"
+kind = "command"
+feature = "set_workflow_instance_suspension"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.SetWorkflowSuspensionScenario"
+reason = "The command whose request and answer are deliberately different types: a caller may ask for two states and the platform may report five, because an instance can finish while the request is in flight. What this proves that no unit suite can is that a real engine's own answer is one of the five."

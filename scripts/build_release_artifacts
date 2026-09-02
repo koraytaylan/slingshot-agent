@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Builds everything a release consists of, and records what each one hashes to.
+#
+# Offline, out of the verified cache, like every other build here. Every archive is deterministic by
+# construction: entry order is fixed, every entry carries the timestamp the source declares, and
+# nothing environment-dependent goes in - so two builds of one source produce two identical
+# archives, and a difference between them is a real difference.
+#
+# It records what was produced rather than checking against digests somebody typed. The digests
+# somebody typed are the ones that get updated to whatever came out.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
+readonly INVENTORY="${REPOSITORY_ROOT}/support/release-artifacts.toml"
+readonly EXIT_USAGE=2
+readonly EXIT_MISSING=3
+
+if [[ $# -ne 0 ]]; then
+    printf 'build_release_artifacts takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+"${REPOSITORY_ROOT}/mvnw" --offline --batch-mode --no-transfer-progress \
+    -Dmaven.repo.local="${CACHE_DIRECTORY}" \
+    -f "${REPOSITORY_ROOT}/pom.xml" \
+    -DskipTests -Djacoco.skip=true \
+    package
+
+missing=0
+while read -r file; do
+    if [[ ! -f "${REPOSITORY_ROOT}/${file}" ]]; then
+        printf 'not produced: %s\n' "${file}" >&2
+        missing=$((missing + 1))
+    fi
+done < <(python3 - "${INVENTORY}" <<'PYTHON'
+import pathlib
+import sys
+
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("file = "):
+        print(stripped.split('"')[1])
+PYTHON
+)
+
+if [[ "${missing}" -ne 0 ]]; then
+    printf '\n%s declared artifacts were not produced.\n' "${missing}" >&2
+    exit "${EXIT_MISSING}"
+fi
+
+python3 - "${INVENTORY}" "${REPOSITORY_ROOT}" <<'PYTHON'
+import hashlib
+import pathlib
+import sys
+
+inventory = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+lines = inventory.read_text().splitlines(True)
+current = ""
+for index, line in enumerate(lines):
+    stripped = line.strip()
+    if stripped.startswith("file = "):
+        current = stripped.split('"')[1]
+    elif stripped.startswith("digest = ") and current:
+        digest = hashlib.sha256((root / current).read_bytes()).hexdigest()
+        lines[index] = 'digest = "sha256:%s"\n' % digest
+        current = ""
+inventory.write_text("".join(lines))
+PYTHON
+
+printf 'Recorded a digest for every declared artifact.\n'

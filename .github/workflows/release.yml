@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# One built set, published to both targets, with one job saying what the bytes are.
+#
+# Built once rather than once per target. Two builds are two sets of bytes, and two sets of bytes
+# published under one version is the disagreement nobody notices until somebody compares them - so
+# the same artifacts go to both places and their digests are compared before either does.
+#
+# Held to the same policy the other two workflows are, with no exception for being a release. A
+# release workflow is the one that runs with the most credentials and the one somebody is most
+# tempted to make an exception for.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: the release to build
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  build:
+    name: build the release set
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: check out the source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: set up the declared runtime
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: refuse a release whose preconditions are unmet
+        run: ./mvnw --offline --batch-mode --no-transfer-progress -Dmaven.repo.local=.dependency-cache test -Dtest=PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am
+      - name: prepare the locked dependency cache
+        run: scripts/prepare_locked_dependency_cache
+      - name: build the release artifacts
+        run: scripts/build_release_artifacts
+      - name: prove two builds of this source agree
+        run: scripts/verify_release_artifacts
+      - name: keep the built set
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-set
+          path: support/release-artifacts.toml
+
+  attest:
+    name: say what the bytes are
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The one job that holds this, and it holds no write access to anything it could be describing.
+    permissions:
+      attestations: write
+      id-token: write
+    steps:
+      - name: take the built set
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-set
+      - name: produce build provenance for every artifact
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with:
+          subject-path: support/release-artifacts.toml

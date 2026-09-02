@@ -1,0 +1,1 @@
+{"category": ["malformed", "integrity_invalid", "wrong_target", "wrong_query", "wrong_generation", "expired"], "source": "crates/slingshot-agent-protocol/src/continuation_token.rs", "note": "The client refuses a token in this fixed precedence; this side reports the same set, so a failure crosses the wire as the category the caller expects."}

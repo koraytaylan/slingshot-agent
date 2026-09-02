@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Pulls the pinned interoperability images and records the content digest of each.
+#
+# THIS COMMAND REACHES THE NETWORK. It is one of the two in this repository that does, and it says
+# so above and again when it runs. The gate never invokes it: what the gate needs prepared it
+# verifies rather than acquires, because an image the gate fetched would be a gate whose result
+# depended on a registry after all.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly IMAGE_FILE="${REPOSITORY_ROOT}/support/interop-images.toml"
+readonly ENGINE="podman"
+readonly EXIT_USAGE=2
+
+if [[ $# -ne 0 ]]; then
+    printf 'prepare_interop_images takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+printf 'This command reaches the network. It pulls the images declared in %s\n' "${IMAGE_FILE}"
+printf 'and records the content digest of each one back into that file.\n\n'
+
+while IFS= read -r reference; do
+    printf 'pulling %s\n' "${reference}"
+    "${ENGINE}" pull --quiet "${reference}" > /dev/null
+    digest="$("${ENGINE}" image inspect --format '{{.Digest}}' "${reference}")"
+    printf '  %s\n' "${digest}"
+    python3 - "${IMAGE_FILE}" "${reference}" "${digest}" <<'PYTHON'
+import pathlib
+import sys
+
+document, reference, digest = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+registry, repository_and_tag = reference.split("/", 1)
+repository, tag = repository_and_tag.rsplit(":", 1)
+lines = document.read_text().splitlines(keepends=True)
+inside = False
+for index, line in enumerate(lines):
+    if line.startswith("repository = "):
+        inside = line.strip() == 'repository = "%s"' % repository
+    if inside and line.startswith("digest = "):
+        lines[index] = 'digest = "%s"\n' % digest
+        inside = False
+document.write_text("".join(lines))
+PYTHON
+done < <(python3 - "${IMAGE_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+registry = repository = tag = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("registry = "):
+        registry = stripped.split('"')[1]
+    elif stripped.startswith("repository = "):
+        repository = stripped.split('"')[1]
+    elif stripped.startswith("tag = "):
+        tag = stripped.split('"')[1]
+        print("%s/%s:%s" % (registry, repository, tag))
+PYTHON
+)
+
+# The images this repository builds for a tier, from the pinned ones above.
+while IFS='|' read -r name containerfile bases; do
+    printf '\nbuilding %s from %s\n' "${name}" "${containerfile}"
+    build_arguments=()
+    for base in ${bases}; do
+        case "${base}" in
+            *eclipse-temurin*) build_arguments+=(--build-arg "JAVA_IMAGE=${base}") ;;
+            *) build_arguments+=(--build-arg "SLING_IMAGE=${base}") ;;
+        esac
+    done
+    "${ENGINE}" build --quiet --tag "${name}" \
+        "${build_arguments[@]}" \
+        --file "${REPOSITORY_ROOT}/${containerfile}" \
+        "${REPOSITORY_ROOT}" > /dev/null
+    identifier="$("${ENGINE}" image inspect --format '{{.Id}}' "${name}")"
+    printf '  %s\n' "${identifier}"
+    python3 - "${IMAGE_FILE}" "${name}" "${identifier}" <<'PYTHON'
+import pathlib
+import sys
+
+document, name, identifier = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+lines = document.read_text().splitlines(keepends=True)
+inside = False
+for index, line in enumerate(lines):
+    if line.startswith("name = "):
+        inside = line.strip() == 'name = "%s"' % name
+    if inside and line.startswith("identifier = "):
+        lines[index] = 'identifier = "%s"\n' % identifier
+        inside = False
+document.write_text("".join(lines))
+PYTHON
+done < <(python3 - "${IMAGE_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+name = containerfile = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("name = "):
+        name = stripped.split('"')[1]
+    elif stripped.startswith("containerfile = "):
+        containerfile = stripped.split('"')[1]
+    elif stripped.startswith("base_images = "):
+        bases = " ".join(part for part in stripped.split('"')[1::2])
+        print("%s|%s|%s" % (name, containerfile, bases))
+PYTHON
+)
+
+printf '\nRecorded every pinned image digest in %s.\n' "${IMAGE_FILE}"

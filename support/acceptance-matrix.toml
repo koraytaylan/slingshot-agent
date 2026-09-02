@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What actually ran against each deployment row, and what is therefore proved about it.
+#
+# A row does not become supported because the code compiled. It becomes supported when a tier
+# actually ran against it, and until then it is declared and unproved - which is a more useful thing
+# to publish than a claim nobody tested, and a less embarrassing one than a claim somebody finds out
+# is false.
+#
+# The evidence is recorded by the run rather than written by hand. Every field below that names what
+# happened is empty until `scripts/release_acceptance` observes it, and the check refuses evidence
+# that names a scenario, a tier, or a row that does not exist - as well as evidence recorded against
+# one row from a run on another.
+#
+# Three of the properties per row are the deployment's rather than this build's, and they are
+# recorded separately for that reason: how the artifact arrives, whether the row's own ingress has
+# been watched passing an unbuffered event stream, and whether a clustered arrangement was
+# exercised. A row whose streaming has never been watched arrive is streaming that is declared and
+# unproved, however well it works here.
+
+[matrix]
+recorded_by = "scripts/release_acceptance"
+reason = "One entry per deployment row, with the evidence that ran against it. The row set equals the deployment matrix's in both directions, so a row added there without evidence appears here as unproved rather than not appearing at all."
+
+[[row]]
+deployment = "aem-cloud-service"
+arrival = "embedded in the customer's own container package and deployed through their pipeline, because /apps is immutable on this row"
+tier = ""
+scenarios = []
+instance = ""
+observed_at = ""
+ingress_streaming_observed = false
+clustered_arrangement_exercised = false
+reason = "The row this product is built for. Nothing has run against it here: it needs an environment somebody provisions, and until one has, everything about it is declared and unproved."
+
+[[row]]
+deployment = "aem-6-5-lts"
+arrival = "installed as a content package by hand or through the package manager, because this row permits writing to /apps"
+tier = ""
+scenarios = []
+instance = ""
+observed_at = ""
+ingress_streaming_observed = false
+clustered_arrangement_exercised = false
+reason = "The other supported row. It needs a quickstart licensed to its holder, which this repository never fetches, so evidence for it can only come from somebody who has one."

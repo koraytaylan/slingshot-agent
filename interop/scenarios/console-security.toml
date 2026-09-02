@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "console-security"
+kind = "property"
+feature = "redaction-corpus"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ConsoleSecurityScenario"
+reason = "The console is where this repository's security model meets a person's browser session for the first time, and a data source is a servlet like any other. What this proves that no unit suite can is that a running instance treats it like one: the whole surface derived from the built package rather than from a list, every resource refused identically to a route for a non-member and for nobody, no corpus value in any state including the empty and the broken ones, and no selector, extension or suffix reaching past the authority."

@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What a type in this repository may be called, and what shape it may have.
+#
+# A type called SomethingImpl tells a reader that somebody needed a second name and reached for the
+# first suffix available. It says nothing about what the type is, it pairs one-to-one with an
+# interface that then had no reason to exist, and it has survived in Java for two decades purely by
+# inertia. So no type name here ends in Impl, anywhere, including on a nested and on a
+# package-private type.
+#
+# An interface with exactly one implementation this repository provides names that implementation
+# Default followed by the interface's own name. An interface with several names each for what
+# distinguishes it, and none of them Default - because a default among equals is a decision nobody
+# made.
+
+[naming]
+forbidden_suffix = "Impl"
+sole_implementation_prefix = "Default"
+
+[visibility]
+# No field is visible outside the type that owns it. A constant is data with a name rather than
+# state, and the exemption below says so.
+public_fields_permitted = false
+
+[immutability]
+# Every field is final unless a row below records why it cannot be.
+non_final_fields_permitted = false
+
+[[exemption]]
+rule = "public-field"
+kind = "static-final-constant"
+reason = "A static final field is data with a name rather than state a caller could change. What the rule exists to prevent is a type whose state anybody can reach; a named constant has no state."
+
+[[exemption]]
+rule = "extension-point"
+kind = "sealed-type"
+reason = "A sealed type's permits clause is its extension points, written where the compiler checks them, which is a stronger statement than any prose could make."
+
+[[exemption]]
+rule = "extension-point"
+kind = "record-or-enumeration"
+reason = "A record and an enumeration are implicitly final and cannot be extended at all."
+
+[[exemption]]
+rule = "extension-point"
+kind = "annotation"
+reason = "An annotation declaration cannot be extended either, and the one this repository declares exists so that an operator sees a configuration in their own console with the reason it is there. Requiring it to declare extension points would be requiring a statement about something the language already forbids."
+
+[[exemption]]
+rule = "extension-point"
+kind = "interface"
+reason = "An interface is its own extension point: every method it declares is one, written where the compiler checks it. What needs deciding about an interface is who may implement it and what those implementations are called, and the implementation-naming rule decides exactly that."
+
+[[exemption]]
+rule = "sole-implementation-naming"
+kind = "foreign-interface"
+reason = "An interface somebody else declared carries its own naming, and a type implementing it is named for what it is here rather than for the interface's spelling."
+
+[[exemption]]
+rule = "sole-implementation-naming"
+kind = "functional-interface"
+reason = "A type annotated @FunctionalInterface is its author saying many implementations are expected, including ones written as lambdas that have no name to give. Naming the first one after the interface would be recording as a permanent fact something that is true only until the second arrives - and for the handler interface every one of the sixty-four commands is a second, each named for the command it runs rather than for the interface they share."

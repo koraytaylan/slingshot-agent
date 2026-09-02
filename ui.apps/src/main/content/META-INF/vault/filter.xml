@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<!--
+  Exactly the one root this package writes, and no rule that would remove anything outside it.
+  It is a subtree of the product root rather than the root itself, because the configuration package
+  writes its own subtree beside this one: two packages whose filters overlap install in an order
+  nobody chose, and whichever goes second removes what the first wrote - on somebody else's instance
+  rather than here. The product root itself is the structure package's to declare.
+-->
+<workspaceFilter version="1.0">
+    <filter root="/apps/slingshot-agent/application"/>
+    <filter root="/apps/slingshot-agent/content"/>
+    <filter root="/apps/slingshot-agent/clientlibs"/>
+    <filter root="/apps/slingshot-agent/i18n"/>
+    <!--
+      The one leaf this package writes under Adobe's own tools navigation. The rule is the leaf and
+      not its parent on purpose: a rule reaching the parent would remove every other product's
+      entry on uninstall, on somebody else's instance rather than here.
+    -->
+    <filter root="/apps/cq/core/content/nav/tools/slingshot-agent"/>
+</workspaceFilter>

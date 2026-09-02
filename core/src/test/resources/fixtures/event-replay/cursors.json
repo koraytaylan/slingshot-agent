@@ -1,0 +1,10 @@
+{
+  "at-the-second-event": "1:1",
+  "before-everything": "1:0",
+  "past-the-newest": "1:3",
+  "another-generation": "2:1",
+  "before-the-first-generation": "0:0",
+  "not-two-parts": "1",
+  "not-numbers": "one:two",
+  "negative-sequence": "1:-1"
+}

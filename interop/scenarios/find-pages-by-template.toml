@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "find-pages-by-template"
+kind = "command"
+feature = "find_pages_by_template"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.FindPagesByTemplateScenario"
+reason = "The question behind most migrations, on a running instance. What this proves that no unit suite can: that the command is registered on a real Sling runtime, that the query it declares is covered by a platform-provided index on every deployment row, and that this build ships no index of its own to make that true — an index is an operator's decision rather than a side effect of installing an agent."

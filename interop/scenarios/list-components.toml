@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "list-components"
+kind = "command"
+feature = "list_open_service_gateway_initiative_components"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ListComponentsScenario"
+reason = "The listing that shows what the bundle listing cannot: a component whose requirement is missing inside a bundle the framework reports as active. What this proves that no unit suite can is that the component runtime is actually reachable on a real instance, which is the one thing a mock cannot say."

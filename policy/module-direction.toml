@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The module diagram, made executable.
+#
+# The two-bundle split is the whole reason a public interoperability tier is possible: everything in
+# `core` resolves against a plain Apache Sling runtime, so the transport, the store, the canonical
+# bytes, and the execution framework are proved on an image anybody can pull. That property survives
+# exactly as long as somebody is checking that `core` still compiles with no Adobe artifact on its
+# path, which is a check and not a habit.
+#
+# Every edge a module may have is a row here, with the scope it may use. An edge the reactor
+# resolves and this file does not name is refused, and so is a row nothing resolves.
+
+[[module]]
+name = "core"
+artifact = "slingshot-agent-core"
+kind = "bundle"
+
+[[module]]
+name = "aem"
+artifact = "slingshot-agent-aem"
+kind = "bundle"
+
+[[module]]
+name = "ui.apps.structure"
+artifact = "slingshot-agent-ui.apps.structure"
+kind = "content-package"
+
+[[module]]
+name = "ui.apps"
+artifact = "slingshot-agent-ui.apps"
+kind = "content-package"
+
+[[module]]
+name = "ui.config"
+artifact = "slingshot-agent-ui.config"
+kind = "content-package"
+
+[[module]]
+name = "all"
+artifact = "slingshot-agent-all"
+kind = "content-package"
+
+[[module]]
+name = "development"
+artifact = "slingshot-agent-development"
+kind = "tooling"
+
+[[module]]
+name = "interop"
+artifact = "slingshot-agent-interop"
+kind = "tooling"
+
+# The only edge between two product modules. It is provided rather than embedded: the aem bundle
+# resolves core's exported packages at runtime and carries none of them inside itself.
+[[edge]]
+from = "aem"
+to = "core"
+scope = "provided"
+reason = "The command handlers that need Adobe's own interfaces call the execution framework, the store, and the canonical bytes, all of which live in the Sling-only bundle."
+
+# The tooling modules read what the product modules produce, in that direction and at that scope
+# alone. A policy check reads a produced archive and an interoperability scenario drives real types,
+# so the edge is real; the reverse edge does not exist and is refused by name.
+[[edge]]
+from = "development"
+to = "core"
+scope = "test"
+reason = "The repository policy checks read the Sling-only bundle's produced archive, its manifest, and its class files."
+
+[[edge]]
+from = "development"
+to = "aem"
+scope = "test"
+reason = "The repository policy checks read the Adobe bundle's produced archive, its manifest, and its class files."
+
+[[edge]]
+from = "interop"
+to = "core"
+scope = "test"
+reason = "An interoperability scenario drives the Sling-only bundle's own types against an installed instance."
+
+[[edge]]
+from = "interop"
+to = "aem"
+scope = "test"
+reason = "An interoperability scenario drives the Adobe bundle's own types against an installed instance on the tier that has them."
+
+
+# The container's own edges. A container package is the one module whose whole purpose is to carry
+# the others, so it is the one module allowed to depend on all of them - and it takes each at
+# provided scope, because what it carries it embeds rather than resolves.
+[[edge]]
+from = "all"
+to = "core"
+scope = "provided"
+reason = "The container carries the Sling-only bundle, which is what installs the routes and the store on an author."
+
+[[edge]]
+from = "all"
+to = "aem"
+scope = "provided"
+reason = "The container carries the Adobe bundle, which is what installs the command handlers that need Adobe's own interfaces."
+
+[[edge]]
+from = "all"
+to = "ui.apps"
+scope = "provided"
+reason = "The container carries the application package, which is what installs the console resources and the client library."
+
+[[edge]]
+from = "all"
+to = "ui.config"
+scope = "provided"
+reason = "The container carries the configuration package, which is what installs the service user mapping and the repository initialisation script."
+
+[[edge]]
+from = "all"
+to = "ui.apps.structure"
+scope = "provided"
+reason = "The container reads the structure package to know which roots its contents may write. It does not carry it: a structure package declares roots and holds nothing, so installing one would install an empty package whose filter overlaps everything that writes."
+
+[[edge]]
+from = "ui.apps"
+to = "ui.apps.structure"
+scope = "provided"
+reason = "The application package writes inside a root the structure package declares, and says so rather than assuming the root exists."
+
+[[edge]]
+from = "ui.config"
+to = "ui.apps.structure"
+scope = "provided"
+reason = "The configuration package writes inside a root the structure package declares, and says so rather than assuming the root exists."
+
+# Package namespaces no module of a given kind may have on its resolved compile classpath. The
+# Sling-only bundle is the one this matters for: an Adobe artifact reaching its classpath is how the
+# public tier stops being possible, quietly, in a commit nobody read closely.
+[[forbidden_namespace]]
+module = "core"
+namespace = "com.day.cq"
+reason = "The Sling-only bundle is proved on a public Apache Sling image that carries no Adobe package at all."
+
+[[forbidden_namespace]]
+module = "core"
+namespace = "com.adobe"
+reason = "The Sling-only bundle is proved on a public Apache Sling image that carries no Adobe package at all."

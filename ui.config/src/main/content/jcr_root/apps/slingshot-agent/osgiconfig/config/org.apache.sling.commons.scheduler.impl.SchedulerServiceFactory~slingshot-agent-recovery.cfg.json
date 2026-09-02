@@ -1,0 +1,6 @@
+{
+  "scheduler.name": "slingshot-agent-restart-recovery",
+  "scheduler.period": 60,
+  "scheduler.concurrent": false,
+  "scheduler.runOn": "LEADER"
+}

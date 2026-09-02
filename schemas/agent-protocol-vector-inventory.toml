@@ -1,0 +1,361 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every document kind, and the rule that none of them may exist without a vector.
+#
+# A vector is what makes a disagreement between two implementations a failing test in whichever
+# one changed, rather than a refused submission in production two weeks later. That only works if
+# a document kind cannot exist without one, which is what this inventory is for: every kind here
+# needs a vector that is accepted and a vector that is refused, and every bound a model reads
+# needs one at the bound and one past it.
+
+[[kind]]
+name = "capabilities"
+schema = "schemas/agent-protocol/discovery/capabilities.json"
+reason = "What this agent says it is, which a client reads before it sends anything."
+
+[[kind]]
+name = "command-contract"
+schema = "schemas/agent-protocol/identity/command-contract.json"
+reason = "The five fields that say which command contract a submission means."
+
+[[kind]]
+name = "continuation-state"
+schema = "schemas/agent-protocol/continuation/state.json"
+reason = "Where a continuation token says to resume."
+
+[[kind]]
+name = "continuation-token"
+schema = "schemas/agent-protocol/continuation/token.json"
+reason = "A token as it crosses the wire."
+
+[[kind]]
+name = "envelope"
+schema = "schemas/agent-protocol/common/envelope.json"
+reason = "The two halves every agent document carries before it carries anything of its own."
+
+[[kind]]
+name = "error"
+schema = "schemas/agent-protocol/common/error.json"
+reason = "The one shape a refusal has."
+
+[[kind]]
+name = "job-event"
+schema = "schemas/agent-protocol/job/event.json"
+reason = "One thing the agent says happened to one job."
+
+[[kind]]
+name = "job-failure"
+schema = "schemas/agent-protocol/job/failure.json"
+reason = "What a command did instead of producing an answer."
+
+[[kind]]
+name = "job-result"
+schema = "schemas/agent-protocol/job/result.json"
+reason = "The answer one command produced, inline or as an artifact."
+
+[[kind]]
+name = "job-snapshot"
+schema = "schemas/agent-protocol/job/snapshot.json"
+reason = "What the store holds about one job."
+
+[[kind]]
+name = "operation"
+schema = "schemas/agent-protocol/identity/operation.json"
+reason = "Which operation, at which incarnation, against which target, at which revision."
+
+[[kind]]
+name = "provenance"
+schema = "schemas/agent-protocol/common/provenance.json"
+reason = "What a document claims about the contracts it means."
+
+[[kind]]
+name = "load-content-as-json-argument"
+schema = "schemas/agent-protocol/command/load_content_as_json-arguments.json"
+reason = "What one caller asked to load: an address and a depth, neither of which this command chooses for them."
+
+[[kind]]
+name = "query-paths-argument"
+schema = "schemas/agent-protocol/command/query_paths-arguments.json"
+reason = "One subtree, one primary node type, and which page of the addresses is wanted."
+
+[[kind]]
+name = "list-child-pages-argument"
+schema = "schemas/agent-protocol/command/list_child_pages-arguments.json"
+reason = "One page whose immediate children are wanted, and which window of them."
+
+[[kind]]
+name = "find-pages-containing-phrase-argument"
+schema = "schemas/agent-protocol/command/find_pages_containing_phrase-arguments.json"
+reason = "A phrase to look for, a subtree to look in, and which page of the matches is wanted."
+
+[[kind]]
+name = "find-pages-by-template-argument"
+schema = "schemas/agent-protocol/command/find_pages_by_template-arguments.json"
+reason = "A template whose pages are wanted, a subtree to look in, and which page of the matches."
+
+[[kind]]
+name = "find-pages-using-components-argument"
+schema = "schemas/agent-protocol/command/find_pages_using_components-arguments.json"
+reason = "Component types to look for, a subtree to look in, and which page of the matches."
+
+[[kind]]
+name = "find-assets-by-metadata-argument"
+schema = "schemas/agent-protocol/command/find_assets_by_metadata-arguments.json"
+reason = "A subtree to look in, whichever narrowings the caller sends — tags, formats, a size range, property predicates — and which page of the matches."
+
+[[kind]]
+name = "find-assets-referenced-by-page-argument"
+schema = "schemas/agent-protocol/command/find_assets_referenced_by_page-arguments.json"
+reason = "A page whose asset references are wanted, and which window of them."
+
+[[kind]]
+name = "list-asset-renditions-argument"
+schema = "schemas/agent-protocol/command/list_asset_renditions-arguments.json"
+reason = "One asset whose renditions are wanted, and which window of them."
+
+[[kind]]
+name = "read-content-fragment-argument"
+schema = "schemas/agent-protocol/command/read_content_fragment-arguments.json"
+reason = "One fragment and which of its variations to read; the variation has no default."
+
+[[kind]]
+name = "download-content-package-argument"
+schema = "schemas/agent-protocol/command/download_content_package-arguments.json"
+reason = "The filter roots each saying whether it is in or out, and the profile to build to."
+
+[[kind]]
+name = "resolve-resource-path-argument"
+schema = "schemas/agent-protocol/command/resolve_resource_path-arguments.json"
+reason = "One address to translate in the resolving direction."
+
+[[kind]]
+name = "map-resource-path-argument"
+schema = "schemas/agent-protocol/command/map_resource_path-arguments.json"
+reason = "One address to translate in the mapping direction."
+
+[[kind]]
+name = "list-resource-mappings-argument"
+schema = "schemas/agent-protocol/command/list_resource_mappings-arguments.json"
+reason = "Which window of the resolution rules is wanted; there is no filter."
+
+[[kind]]
+name = "create-page-argument"
+schema = "schemas/agent-protocol/command/create_page-arguments.json"
+reason = "Where a page goes, what it is called and what it is made from, with whatever is written on it at birth."
+
+[[kind]]
+name = "update-page-argument"
+schema = "schemas/agent-protocol/command/update_page-arguments.json"
+reason = "Which page to change, what to write on it and what to take away."
+
+[[kind]]
+name = "delete-page-argument"
+schema = "schemas/agent-protocol/command/delete_page-arguments.json"
+reason = "Which page to remove, and what to do about the things pointing at it."
+
+[[kind]]
+name = "move-page-argument"
+schema = "schemas/agent-protocol/command/move_page-arguments.json"
+reason = "Which page to move, where to, and whether its links come too."
+
+[[kind]]
+name = "add-component-argument"
+schema = "schemas/agent-protocol/command/add_component-arguments.json"
+reason = "Which page a component goes in, where inside it, what it is called and what it is."
+
+[[kind]]
+name = "update-component-argument"
+schema = "schemas/agent-protocol/command/update_component-arguments.json"
+reason = "Which component to change, what to write on it and what to take away."
+
+[[kind]]
+name = "delete-component-argument"
+schema = "schemas/agent-protocol/command/delete_component-arguments.json"
+reason = "Which component to remove."
+
+[[kind]]
+name = "reorder-component-argument"
+schema = "schemas/agent-protocol/command/reorder_component-arguments.json"
+reason = "Which component to move among its siblings, and where to."
+
+[[kind]]
+name = "create-asset-folder-argument"
+schema = "schemas/agent-protocol/command/create_asset_folder-arguments.json"
+reason = "Where a folder goes in a digital asset library and what it is called."
+
+[[kind]]
+name = "create-asset-argument"
+schema = "schemas/agent-protocol/command/create_asset-arguments.json"
+reason = "Where an asset goes, what it is called, what is in it and what is known about it."
+
+[[kind]]
+name = "update-asset-metadata-argument"
+schema = "schemas/agent-protocol/command/update_asset_metadata-arguments.json"
+reason = "Which asset's metadata to change, what to write and what to take away."
+
+[[kind]]
+name = "delete-asset-argument"
+schema = "schemas/agent-protocol/command/delete_asset-arguments.json"
+reason = "Which asset to remove, and what to do about the things pointing at it."
+
+[[kind]]
+name = "move-asset-argument"
+schema = "schemas/agent-protocol/command/move_asset-arguments.json"
+reason = "Which asset to move, where to, and whether its references come too."
+
+[[kind]]
+name = "create-content-fragment-argument"
+schema = "schemas/agent-protocol/command/create_content_fragment-arguments.json"
+reason = "Where a content fragment goes, which model declares it, and what its elements are."
+[[kind]]
+name = "update-content-fragment-argument"
+schema = "schemas/agent-protocol/command/update_content_fragment-arguments.json"
+reason = "Which fragment and variation to change, and what to set."
+[[kind]]
+name = "delete-content-fragment-argument"
+schema = "schemas/agent-protocol/command/delete_content_fragment-arguments.json"
+reason = "Which content fragment to remove, and what to do about its references."
+[[kind]]
+name = "create-experience-fragment-argument"
+schema = "schemas/agent-protocol/command/create_experience_fragment-arguments.json"
+reason = "Where an experience fragment goes and what its first variation is made from."
+[[kind]]
+name = "update-experience-fragment-argument"
+schema = "schemas/agent-protocol/command/update_experience_fragment-arguments.json"
+reason = "Which variation to change, what to write on it and what to take away."
+[[kind]]
+name = "delete-experience-fragment-argument"
+schema = "schemas/agent-protocol/command/delete_experience_fragment-arguments.json"
+reason = "Which experience fragment to remove, and what to do about its references."
+
+[[kind]]
+name = "replicate-content-argument"
+schema = "schemas/agent-protocol/command/replicate_content-arguments.json"
+reason = "One address to offer to replication, and whether what is beneath it comes too."
+
+[[kind]]
+name = "find-configurations-argument"
+schema = "schemas/agent-protocol/command/find_open_service_gateway_initiative_configurations-arguments.json"
+reason = "Which configurations to list and which page of them."
+[[kind]]
+name = "inspect-configuration-argument"
+schema = "schemas/agent-protocol/command/inspect_open_service_gateway_initiative_configuration-arguments.json"
+reason = "One configuration to read."
+[[kind]]
+name = "update-configuration-argument"
+schema = "schemas/agent-protocol/command/update_open_service_gateway_initiative_configuration-arguments.json"
+reason = "Which configuration to change and what to set on it."
+[[kind]]
+name = "delete-configuration-argument"
+schema = "schemas/agent-protocol/command/delete_open_service_gateway_initiative_configuration-arguments.json"
+reason = "One configuration to remove."
+
+[[kind]]
+name = "list-bundles-argument"
+schema = "schemas/agent-protocol/command/list_open_service_gateway_initiative_bundles-arguments.json"
+reason = "Which bundles to list and which page of them."
+[[kind]]
+name = "list-components-argument"
+schema = "schemas/agent-protocol/command/list_open_service_gateway_initiative_components-arguments.json"
+reason = "Which components to list and which page of them."
+[[kind]]
+name = "set-bundle-state-argument"
+schema = "schemas/agent-protocol/command/set_open_service_gateway_initiative_bundle_state-arguments.json"
+reason = "Which bundle to act on and what to do to it."
+
+[[kind]]
+name = "list-workflow-models-argument"
+schema = "schemas/agent-protocol/command/list_workflow_models-arguments.json"
+reason = "Which workflow models to list and which page of them."
+[[kind]]
+name = "start-workflow-argument"
+schema = "schemas/agent-protocol/command/start_workflow-arguments.json"
+reason = "Which workflow to start and on what."
+[[kind]]
+name = "find-workflow-instances-argument"
+schema = "schemas/agent-protocol/command/find_workflow_instances-arguments.json"
+reason = "Which workflow instances to find and which page of them."
+[[kind]]
+name = "inspect-workflow-instance-argument"
+schema = "schemas/agent-protocol/command/inspect_workflow_instance-arguments.json"
+reason = "One workflow instance to read."
+[[kind]]
+name = "terminate-workflow-instance-argument"
+schema = "schemas/agent-protocol/command/terminate_workflow_instance-arguments.json"
+reason = "One workflow instance to end."
+[[kind]]
+name = "set-workflow-suspension-argument"
+schema = "schemas/agent-protocol/command/set_workflow_instance_suspension-arguments.json"
+reason = "One workflow instance and which of the two states to put it in."
+
+[[kind]]
+name = "list-sling-job-queues-argument"
+schema = "schemas/agent-protocol/command/list_sling_job_queues-arguments.json"
+reason = "Which page of the job queues is wanted."
+[[kind]]
+name = "find-sling-jobs-argument"
+schema = "schemas/agent-protocol/command/find_sling_jobs-arguments.json"
+reason = "Which jobs to find and which page of them."
+[[kind]]
+name = "inspect-sling-job-argument"
+schema = "schemas/agent-protocol/command/inspect_sling_job-arguments.json"
+reason = "One job to read."
+[[kind]]
+name = "cancel-sling-job-argument"
+schema = "schemas/agent-protocol/command/cancel_sling_job-arguments.json"
+reason = "One job to cancel."
+
+[[kind]]
+name = "create-user-argument"
+schema = "schemas/agent-protocol/command/create_user-arguments.json"
+reason = "Which user to make and what to record on it."
+[[kind]]
+name = "create-group-argument"
+schema = "schemas/agent-protocol/command/create_group-arguments.json"
+reason = "Which group to make and what to record on it."
+[[kind]]
+name = "update-user-profile-argument"
+schema = "schemas/agent-protocol/command/update_user_profile-arguments.json"
+reason = "Which user to change and what to record about them."
+[[kind]]
+name = "set-user-disabled-argument"
+schema = "schemas/agent-protocol/command/set_user_disabled-arguments.json"
+reason = "Which account to turn off or on."
+[[kind]]
+name = "delete-authorizable-argument"
+schema = "schemas/agent-protocol/command/delete_authorizable-arguments.json"
+reason = "Which user or group to remove and what the caller believes it is."
+[[kind]]
+name = "add-group-member-argument"
+schema = "schemas/agent-protocol/command/add_group_member-arguments.json"
+reason = "Which group and which authorizable to put in it."
+[[kind]]
+name = "remove-group-member-argument"
+schema = "schemas/agent-protocol/command/remove_group_member-arguments.json"
+reason = "Which group and which authorizable to take out of it."
+[[kind]]
+name = "list-group-members-argument"
+schema = "schemas/agent-protocol/command/list_group_members-arguments.json"
+reason = "Which group to list and how far the listing looks."
+
+[[kind]]
+name = "list-replication-agents-argument"
+schema = "schemas/agent-protocol/command/list_replication_agents-arguments.json"
+reason = "Which page of the replication agents is wanted."
+[[kind]]
+name = "inspect-replication-agent-argument"
+schema = "schemas/agent-protocol/command/inspect_replication_agent-arguments.json"
+reason = "One replication agent to read."
+[[kind]]
+name = "inspect-replication-queue-argument"
+schema = "schemas/agent-protocol/command/inspect_replication_queue-arguments.json"
+reason = "One agent's queue and which page of it."
+[[kind]]
+name = "flush-replication-queue-argument"
+schema = "schemas/agent-protocol/command/flush_replication_queue-arguments.json"
+reason = "Which queue to empty and how much the caller expects to be in it."
+[[kind]]
+name = "retry-replication-queue-entry-argument"
+schema = "schemas/agent-protocol/command/retry_replication_queue_entry-arguments.json"
+reason = "Which stuck entry to offer to its queue again."

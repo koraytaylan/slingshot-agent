@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "platform-floor"
+kind = "property"
+feature = "imported-packages"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.PlatformFloorScenario"
+reason = "The floor is bound to the deployment rows rather than written separately, so raising it is a change to the matrix. What this proves that no unit suite can is that a running instance at the oldest supported row resolves every package these bundles import - because an imported-package range is a claim about somebody else's platform, and the only way to check a claim about a platform is to start one."

@@ -1,0 +1,256 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The gate, stage by stage, in the order it runs them.
+#
+# `scripts/quality` takes no argument and fetches nothing. What it needs prepared - the locked
+# dependency cache and the pinned interoperability images - it verifies rather than acquires, and
+# refuses with the preparation command named when either is absent. A gate that quietly fetched a
+# missing input would be a gate whose result depended on a remote server after all, which is the
+# thing this whole arrangement exists to prevent.
+#
+# The stage list is checked against the script in both directions: a stage declared and not run, or
+# run and not declared, fails.
+
+[[stage]]
+name = "locked-dependency-cache"
+command = "scripts/verify_locked_dependency_cache"
+reason = "Everything after this resolves out of the cache. Verifying it first means a later failure is about the code rather than about what happened to be on the machine."
+
+[[stage]]
+name = "pinned-interop-images"
+command = "scripts/verify_interop_images"
+reason = "The public tier runs on an image pinned by digest. Verifying it before anything runs means the tier's result is about the product rather than about which tag the registry answered with today."
+
+[[stage]]
+name = "formatting"
+command = "mvn checkstyle:check -pl core,aem,development,interop"
+reason = "Whitespace, indentation, import order, and line length, decided before anything else so a diff never carries a formatting change nobody asked for."
+
+[[stage]]
+name = "compilation"
+command = "mvn compile -pl core,aem,development,interop"
+reason = "The four modules that carry Java. A content package is assembled rather than compiled, and asking for one before the reactor has produced it is how a gate that never ran with a clean cache passes. Every warning is an error, everywhere. A warning that survives a build is one nobody will read."
+
+[[stage]]
+name = "static-analysis"
+command = "mvn compile pmd:check spotbugs:check -pl core,aem,development,interop"
+reason = "The source-pattern and bug-pattern analysers, each failing at its first finding, so a later scan has nothing left to report."
+
+[[stage]]
+name = "source-policy"
+command = "mvn test -Dtest=SourcePolicyTest -pl development -am"
+reason = "The rules about this repository that no off-the-shelf analyser has: names spelled in full, no second declaration of a contract bound, and the file-length ceiling."
+
+[[stage]]
+name = "nullability"
+command = "mvn test -Dtest=NullabilityPolicyTest -pl development -am"
+reason = "No method accepts a null argument or returns a null value, and absence is a type."
+
+[[stage]]
+name = "api-shape"
+command = "mvn test -Dtest=ApiShapePolicyTest -pl development -am"
+reason = "No type named for the fact that a second name was needed, and every declared pattern held to its own structural signature."
+
+[[stage]]
+name = "method-shape"
+command = "mvn test -Dtest=MethodShapePolicyTest -pl development -am"
+reason = "Nesting as the primary ceiling, because the complexity number is the symptom and the nesting is the cause."
+
+[[stage]]
+name = "documentation"
+command = "mvn test -Dtest=JavadocPolicyTest -pl development -am"
+reason = "The falsifiable half of documentation, decided; the rest recorded as a reader's checklist rather than pretended at."
+
+[[stage]]
+name = "allocation"
+command = "mvn test -Dtest=AllocationPolicyTest -pl development -am"
+reason = "Streams everywhere except the declared allocation-sensitive paths, where they are refused."
+
+[[stage]]
+name = "adobe-practice"
+command = "mvn test -Dtest=AdobePracticePolicyTest -pl development -am"
+reason = "The handful of practices that decide whether this survives the next platform upgrade."
+
+[[stage]]
+name = "tests-and-coverage-floor"
+command = "mvn verify"
+reason = "Every test in the reactor with the coverage floor enforced per module and per class, so a feature that arrived with no scenario fails rather than lowering an average."
+
+[[stage]]
+name = "package-analysis"
+command = "mvn verify -pl all -am -DskipTests -Djacoco.skip=true"
+reason = "Adobe's own container analyser and the FileVault validators, run here rather than in somebody else's pipeline."
+
+[[stage]]
+name = "dependency-policy"
+command = "mvn test -Dtest=DependencyPolicyTest -pl development -am"
+reason = "Every artifact this build resolves, at an exact version, at a scope no product module may embed from."
+
+[[stage]]
+name = "imported-package-footprint"
+command = "mvn test -Dtest=ImportedPackagesTest -pl development -am"
+reason = "The complete set of packages each bundle imports, compared with the policy in both directions, read from the built manifest."
+
+[[stage]]
+name = "module-direction"
+command = "mvn test -Dtest=ModuleDirectionTest -pl development -am"
+reason = "The two-bundle split, which is the whole reason a public interoperability tier is possible at all."
+
+[[stage]]
+name = "status-mapping-coverage"
+command = "mvn test -Dtest=StatusMappingCoverageTest -pl development -am"
+reason = "A category with no row is a refusal this agent cannot render at all, and a row for no category is a status somebody chose for something that no longer exists. Both read as decisions and neither announces itself, so the two sets are compared on every build."
+
+[[stage]]
+name = "interop-coverage"
+command = "mvn test -Dtest=ScenarioInventoryTest -pl development -am"
+reason = "Every feature that is served brings its own scenario. The comparison reads the registrations in the product's own sources rather than a list kept beside them, so the day a route starts being answered with nothing proving it on a running instance is the day this refuses and names it."
+
+[[stage]]
+name = "command-conformance"
+command = "mvn test -Dtest=CommandConformanceTest -pl development -am"
+reason = "A command exists when six things are true: committed schemas at the digests its row states, a typed model agreeing with them, a declared failure set, vectors at and past every bound, and an interop scenario naming it. Checked here because five of the six are visible the moment somebody looks for them and the sixth is not: a command with no scenario answers correctly in every unit suite and is the one nothing would notice had stopped working. The whole registry is compared against the client's own published table in both directions, so a command one side holds and the other does not is seen here rather than discovered by a refused submission."
+
+[[stage]]
+name = "mutation-coverage"
+command = "mvn test -Dtest=MutationCoverageTest -pl development -am"
+reason = "Every command that changes something outside itself is proved by exactly one cross-cutting suite. A command's own scenario proves that command; what no per-command scenario can catch is the twentieth behaving unlike the first nineteen, and something has to say which suite owns that. Selection is by what a row declares rather than by where its handler lives, so a row claimed by nobody and a row claimed by two are both found here rather than being a command nothing proves because two suites each assumed the other had it."
+
+[[stage]]
+name = "control-capability"
+command = "mvn test -Dtest=ControlCapabilityCoverageTest -pl development -am"
+reason = "Every deployment says what it does and does not permit, with a reason for every refusal, and every control a command needs is one some deployment declares. Checked in both directions because each fails quietly: a command needing a capability nobody declares is refused everywhere, which looks exactly like a command that does not work, and a capability nobody needs is a promise about this product that stopped being true."
+
+[[stage]]
+name = "registry-completeness"
+command = "mvn test -Dtest=RegistryCompletenessTest -pl development -am"
+reason = "This registry and the client's published table are the same sixty-four rows, field for field. A command one side holds and the other does not is a refused submission in production, and this is the cheapest possible place to find it. Compared field by field rather than row by row because the fixes differ: a disagreeing access class is a permission decision, a disagreeing key requirement is a resend with a second effect, and a disagreeing result bound is an answer one half will refuse."
+
+[[stage]]
+name = "command-reference"
+command = "mvn test -Dtest=CommandReferenceTest -pl development -am"
+reason = "The rendered reference is the registry. A reference maintained beside a registry is wrong within a month — not through carelessness, but because the registry changes in a commit that has nothing to do with documentation. Generating it means the two cannot disagree; checking it here means the generation cannot be skipped."
+
+[[stage]]
+name = "platform-coverage"
+command = "mvn test -Dtest=PlatformCoverageTest -pl development -am"
+reason = "Every command that changes the platform is gated by a capability some deployment can refuse, and claimed by exactly one cross-cutting suite. A control nothing gates is a control that runs on the environment that will discard the change and reports that it worked."
+
+[[stage]]
+name = "overlay-audit"
+command = "mvn test -Dtest=OverlayAuditTest -pl development -am"
+reason = "Nothing this product writes sits on top of a resource the platform provides, and no filter rule reaches outside the roots the structure package declares. The two fail at different times and neither points at this product: an overlay breaks at an upgrade months later, and a wide filter removes somebody else's content at uninstall."
+
+[[stage]]
+name = "fuzz-target-inventory"
+command = "mvn test -Dtest=FuzzTargetInventoryTest -pl development -am"
+reason = "Every declared fuzz target exists, is declared, and has a committed corpus. The corpus half is the one worth having: a target with no corpus runs, reports nothing, and looks exactly like a target that found nothing, which is the failure a fuzzing suite is most likely to have and least likely to notice."
+
+[[stage]]
+name = "parser-and-token-fuzzing"
+command = "mvn test -Dtest=ParserFuzzTest,TokenStreamFuzzTest,CommandArgumentFuzzTest -pl development -am"
+reason = "Every place bytes somebody else produced become values here, driven over its committed corpus and a seeded run of mutations of it. This is the half that costs nothing and therefore never stops running; the coverage-guided tool runs the same targets over the same corpus for very much longer and is pinned and verified separately."
+
+[[stage]]
+name = "state-machine-properties"
+command = "mvn test -Dtest=StateMachinePropertyTest -pl development -am"
+reason = "Four sentences carry the entire one-effect argument, asked over seeded generated sequences with every counterexample shrunk and recorded. Each is also shown to be capable of failing against a deliberately broken mechanism, because a property that cannot fail is a sentence rather than a check."
+
+[[stage]]
+name = "acceptance-and-present-state"
+command = "mvn test -Dtest=AcceptanceMatrixTest,PresentStateTest -pl development -am"
+reason = "A deployment row does not become supported because the code compiled, and a document does not stay true because it was true once. The matrix binds every row to the evidence that actually ran against it and renders a row with none as declared and unproved; the documents are compared with the committed source of every fact they claim, in both directions."
+
+[[stage]]
+name = "workflow-policy"
+command = "mvn test -Dtest=WorkflowPolicyTest,InteropWorkflowTest,ReleaseWorkflowTest -pl development -am"
+reason = "Every workflow runs with credentials on somebody else's machine. Four rules, each a way of stopping being true quietly: an action that moves under a tag its owner controls, a permission granted once and inherited forever, a checkout token left on the runner, and an expression interpolated into a shell by a workflow that reads perfectly well."
+
+[[stage]]
+name = "release-contract"
+command = "mvn test -Dtest=ReleaseArtifactsTest,BillOfMaterialsTest,PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am"
+reason = "A release is a claim: these bytes, from this source, doing what this documentation says. The archives are deterministic so the first half is checkable by somebody who was not there; the components list says what the release binds to as well as what it contains, because this product embeds nothing; and publication stays refused, with every absent field named at once, until an owner supplies what only they can."
+
+[[stage]]
+name = "advisory-gate"
+command = "mvn test -Dtest=AdvisoryGateTest -pl development -am"
+reason = "The advisory snapshot is authenticated offline before anything is checked against it, and there is deliberately no timestamp and no freshness claim: a snapshot's author chooses those values, so neither authenticates anything and a gate reporting freshness would be reporting something it cannot check."
+
+[[stage]]
+name = "wire-compatibility"
+command = "mvn test -Dtest=WireCompatibilityTest -pl development -am"
+reason = "A protocol change nobody noticed is a client that stops working, and the moment it is cheap to notice is the moment it is introduced. Byte-exact rather than structural, because two documents that mean the same thing and are not the same bytes are two different digests."
+
+[[stage]]
+name = "platform-floor"
+command = "mvn test -Dtest=PlatformFloorTest -pl development -am"
+reason = "The oldest platform this build runs on, derived from the deployment rows rather than written separately - so raising it is a change to the matrix, which is already what the bytecode contract and the imported-package footprint check against."
+
+[[stage]]
+name = "escalation-surface"
+command = "mvn test -Dtest=EscalationSurfaceTest -pl development -am"
+reason = "This runs inside somebody else's author with a service user in the same process as their content, which is the shape of a privilege escalation. No way to run as somebody else exists in either bundle, every command does what its access class says, and the one command with room to work obtains no session - because a scratch directory is exactly where a read grows into a write."
+
+[[stage]]
+name = "injection-audit"
+command = "mvn test -Dtest=InjectionAuditTest -pl development -am"
+reason = "Nothing here builds a query statement at all, so there is no grammar for a caller's value to break out of. The audit is what keeps that true rather than a thing that happened to be true when somebody wrote it, and it reads parsed source so a statement named in a comment is not a statement."
+
+[[stage]]
+name = "exposure-surface"
+command = "mvn test -Dtest=ExposureSurfaceTest -pl development -am"
+reason = "Six places a value leaves, of which four leave without anybody watching, and every corpus kind planted somewhere the surface passes through. A kind nothing holds is a category that reports clean because it was never in the room."
+
+[[stage]]
+name = "clock-usage-policy"
+command = "mvn test -Dtest=ClockUsagePolicyTest -pl development -am"
+reason = "Two clocks with two purposes, and neither used for the other's. A duration measured by subtracting two wall-clock readings is a bound a time service can extend or cut short, and neither is something a client could be told about: from the outside both look like the connection behaving oddly."
+
+[[stage]]
+name = "console-surface"
+command = "mvn test -Dtest=ConsoleSurfaceTest -pl development -am"
+reason = "Every console page and data source is carried by the package, answered by a screen, read-only, and described - with the surface derived from the package rather than from a list, so the resource somebody forgets is covered anyway."
+
+[[stage]]
+name = "console-accessibility"
+command = "mvn test -Dtest=ConsoleAccessibilityTest -pl development -am"
+reason = "Every console string comes from the dictionary, every control has a name, every table associates its headers with its cells, and no control is reachable only by hovering. All of it is decidable from server-rendered markup, and all of it is far cheaper now than after somebody has written the fifth page."
+
+[[stage]]
+name = "log-statement-policy"
+command = "mvn test -Dtest=LogStatementPolicyTest -pl development -am"
+reason = "Every line goes through the one writer, which is where the operation identifier is attached and where the redaction corpus is applied. A line written past it is findable by nobody and redacted by nothing, and the three ways of writing one past it are three different mistakes."
+
+[[stage]]
+name = "front-end-footprint"
+command = "mvn test -Dtest=FrontEndFootprintTest -pl development -am"
+reason = "One script, one stylesheet, and no package manager anywhere. A front-end pipeline is a second dependency graph with its own licences, advisories and upgrade cadence, and adding one to render four tables would undo the compatibility argument the rest of this repository rests on."
+
+[[stage]]
+name = "public-interop-tier"
+command = "mvn verify -pl interop -am -DskipTests -Djacoco.skip=true"
+reason = "The tier that installs the container package into a real Sling runtime and asks it questions. It needs nothing licensed and runs on any machine."
+
+# The tiers this gate does not run, and the exact command that runs each. A passing gate is not a
+# complete one, and the gate says so at the end rather than leaving somebody to assume otherwise.
+[[tier]]
+name = "a"
+title = "public Apache Sling"
+run_by_the_gate = true
+command = "scripts/quality"
+reason = "It needs nothing licensed, runs on any machine and in continuous integration, and proves everything that does not touch an Adobe interface."
+
+[[tier]]
+name = "b"
+title = "owner-supplied Adobe quickstart"
+run_by_the_gate = false
+command = "scripts/interop_quickstart_tier"
+reason = "It needs a quickstart jar licensed to its holder, which is never committed, never cached, never published, and never fetched. A gate that needed it is a gate most contributors could not run."
+
+[[tier]]
+name = "c"
+title = "sibling client end to end"
+run_by_the_gate = false
+command = "scripts/interop_client_tier"
+reason = "It is the only tier that proves the two halves of the protocol speak to one another, and its failures are cross-repository defects rather than local ones."

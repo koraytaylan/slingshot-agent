@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Binds an owner's review to the exact snapshot digest they reviewed.
+#
+# A review of "the advisories" is a claim. A review bound to a digest is evidence, and it stops
+# being evidence the moment the bytes change - which is the whole point, because an advisory set
+# that moved between the review and the release is a set nobody reviewed.
+#
+# It records what is there rather than taking a digest as an argument. Somebody who could type the
+# digest could type a different one.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly PIN_FILE="${REPOSITORY_ROOT}/compatibility/advisory-database.toml"
+readonly REVIEW_FILE="${REPOSITORY_ROOT}/compatibility/advisory-owner-review.toml"
+readonly EXIT_USAGE=2
+readonly EXIT_NOT_FETCHED=3
+
+if [[ $# -ne 1 ]]; then
+    printf 'record_advisory_owner_review takes exactly one argument: what the owner decided.\n' >&2
+    printf 'For example: record_advisory_owner_review "no advisory affects a declared artifact"\n' >&2
+    exit "${EXIT_USAGE}"
+fi
+
+readonly DECISION="$1"
+
+digest="$(python3 - "${PIN_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    if line.strip().startswith("content_digest = "):
+        print(line.strip().split('"')[1])
+        break
+PYTHON
+)"
+
+if [[ -z "${digest}" ]]; then
+    printf 'no snapshot has been fetched, so there is nothing to review. Run %s.\n' \
+        "scripts/checkout_pinned_advisory_database" >&2
+    exit "${EXIT_NOT_FETCHED}"
+fi
+
+cat > "${REVIEW_FILE}" <<REVIEW
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# One owner's review, bound to the exact snapshot they reviewed.
+#
+# Recorded by scripts/record_advisory_owner_review rather than written by hand. It stops being
+# evidence the moment the snapshot's bytes change, which is what makes it evidence at all.
+
+[review]
+snapshot_digest = "${digest}"
+decision = "${DECISION}"
+REVIEW
+
+printf 'Recorded a review of %s.\n' "${digest}"

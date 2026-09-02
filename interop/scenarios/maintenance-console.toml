@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "maintenance-console"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.MaintenanceConsoleScenario"
+reason = "Every number here is one somebody only wants once and always urgently, and none of it is visible from the content or from a log. What this proves that no unit suite can is that the screen exists where an operator is already looking rather than in a document they would have to be told about."

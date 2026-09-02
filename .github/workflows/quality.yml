@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The gate, run where everybody can see it, and nothing else.
+#
+# One step after checkout and setup, with no additional command and no option. A workflow that ran
+# the gate and then a few more things would be a workflow whose result is not the gate's result, and
+# the whole point of an argument-free gate is that it means the same thing everywhere.
+name: quality
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Nothing at the workflow level. Every job declares what it needs, so a job added later starts from
+# nothing rather than from whatever the workflow happened to grant.
+permissions: {}
+
+jobs:
+  gate:
+    name: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: check out the source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          # The token this checkout used is not left on the runner. A later step that wanted it
+          # would be a later step nobody granted it to.
+          persist-credentials: false
+      - name: set up the declared runtime
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: prepare the locked dependency cache
+        run: scripts/prepare_locked_dependency_cache
+      - name: prepare the pinned interoperability images
+        run: scripts/prepare_interop_images
+      - name: run the gate
+        run: scripts/quality

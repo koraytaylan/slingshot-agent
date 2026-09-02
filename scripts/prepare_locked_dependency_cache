@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Resolves exactly the declared dependency set into a repository-local cache and records what it
+# fetched.
+#
+# THIS COMMAND REACHES THE NETWORK. It is one of the two in this repository that does, and it says
+# so above and again when it runs. The gate never invokes it: what the gate needs prepared it
+# verifies rather than acquires, because a gate that quietly fetched a missing input would be a gate
+# whose result depended on a remote server after all.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
+readonly RECORD_FILE="${REPOSITORY_ROOT}/support/locked-dependency-cache.toml"
+readonly POLICY_FILE="${REPOSITORY_ROOT}/policy/dependencies.toml"
+readonly EXIT_USAGE=2
+
+if [[ $# -ne 0 ]]; then
+    printf 'prepare_locked_dependency_cache takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+printf 'This command reaches the network. It resolves the set declared in %s\n' "${POLICY_FILE}"
+printf 'into %s and records each artifact digest in %s.\n\n' "${CACHE_DIRECTORY}" "${RECORD_FILE}"
+
+mkdir -p "${CACHE_DIRECTORY}"
+
+# Acquiring is all this does. The analysers are turned off here on purpose: what the gate decides is
+# decided by the gate, over a cache this command has already made complete, and a preparation that
+# also gated would be a preparation that could fail for a reason that has nothing to do with whether
+# the cache is complete. The tests do run, because a test framework resolves its own provider at the
+# moment it runs, and a cache prepared without running them would be missing exactly that.
+"${REPOSITORY_ROOT}/mvnw" --batch-mode --no-transfer-progress \
+    -Dmaven.repo.local="${CACHE_DIRECTORY}" \
+    -Dcheckstyle.skip=true \
+    -Dpmd.skip=true \
+    -Dspotbugs.skip=true \
+    -Djacoco.skip=true \
+    -Dmaven.javadoc.skip=true \
+    -f "${REPOSITORY_ROOT}/pom.xml" \
+    dependency:go-offline verify
+
+{
+    printf '# SPDX-License-Identifier: MIT OR Apache-2.0\n'
+    printf '# Copyright 2026 Koray Taylan Davgana\n\n'
+    printf '# What the locked dependency cache holds, and the digest of every artifact in it.\n'
+    printf '#\n'
+    printf '# Written by scripts/prepare_locked_dependency_cache, which reaches the network, and read\n'
+    printf '# by scripts/verify_locked_dependency_cache, which does not. What verification establishes\n'
+    printf '# is that the cache is the one prepared for this declared set, unchanged since - and not\n'
+    printf '# that the bytes were trustworthy when they were fetched. Nothing offline can establish\n'
+    printf '# the second, and a command that implied it did would be worse than one that says so.\n\n'
+    printf 'prepared = "%s"\n\n' "$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+    while IFS= read -r artifact; do
+        printf '[[artifact]]\npath = "%s"\ndigest = "%s"\n\n' \
+            "${artifact#"${CACHE_DIRECTORY}/"}" \
+            "$(sha256sum "${artifact}" | cut -d' ' -f1)"
+    done < <(find "${CACHE_DIRECTORY}" -type f \( -name '*.jar' -o -name '*.pom' \) | sort)
+} > "${RECORD_FILE}"
+
+printf '\nRecorded %s artifacts in %s.\n' \
+    "$(grep -c '^\[\[artifact\]\]' "${RECORD_FILE}")" "${RECORD_FILE}"

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "inspect-configuration"
+kind = "command"
+feature = "inspect_open_service_gateway_initiative_configuration"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.InspectConfigurationScenario"
+reason = "The command whose whole discipline is what it does not say. What this proves that no unit suite can: that it is registered on a real runtime, that its row refuses an operation key, and that the redaction corpus finds no configuration value in anything it answers on an instance that has one."

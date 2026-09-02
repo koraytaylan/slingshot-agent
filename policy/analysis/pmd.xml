@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<ruleset name="slingshot-agent"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+  <description>
+    The maintainability half of the correspondence in policy/static-analysis.toml: the design,
+    unused-declaration, and error-prone patterns a scan would otherwise raise as smells. The
+    complexity and nesting ceilings are the method-shape policy's and are not declared twice here.
+  </description>
+
+  <rule ref="category/java/bestpractices.xml">
+    <exclude name="GuardLogStatement"/>
+    <exclude name="JUnitTestContainsTooManyAsserts"/>
+    <exclude name="JUnitTestsShouldIncludeAssert"/>
+    <exclude name="UnitTestContainsTooManyAsserts"/>
+    <exclude name="UnitTestShouldIncludeAssert"/>
+    <exclude name="UnitTestAssertionsShouldIncludeMessage"/>
+    <exclude name="AvoidReassigningLoopVariables"/>
+  </rule>
+
+  <rule ref="category/java/errorprone.xml">
+    <exclude name="AvoidLiteralsInIfCondition"/>
+    <exclude name="AvoidDuplicateLiterals"/>
+    <exclude name="MissingSerialVersionUID"/>
+    <exclude name="AvoidFieldNameMatchingMethodName"/>
+    <exclude name="TestClassWithoutTestCases"/>
+  </rule>
+
+  <rule ref="category/java/design.xml">
+    <exclude name="LawOfDemeter"/>
+    <exclude name="CyclomaticComplexity"/>
+    <exclude name="NPathComplexity"/>
+    <exclude name="CognitiveComplexity"/>
+    <exclude name="NcssCount"/>
+    <exclude name="ExcessiveImports"/>
+    <exclude name="TooManyMethods"/>
+    <exclude name="TooManyFields"/>
+    <exclude name="ExcessivePublicCount"/>
+    <exclude name="DataClass"/>
+    <exclude name="LoosePackageCoupling"/>
+    <exclude name="GodClass"/>
+    <exclude name="AvoidCatchingGenericException"/>
+    <exclude name="ExcessiveParameterList"/>
+    <exclude name="CouplingBetweenObjects"/>
+  </rule>
+
+  <rule ref="category/java/multithreading.xml">
+    <!--
+      The interoperability harness starts processes and waits for them. That is what a harness is
+      for, and the rule is about a web application sharing a container's thread pool.
+    -->
+    <exclude name="DoNotUseThreads"/>
+    <!--
+      A map built inside one method and handed out immutably is not shared state, and this rule
+      cannot tell the two apart. Every place this repository does share state across threads is
+      a store operation decided by a conditional write, not by a map.
+    -->
+    <exclude name="UseConcurrentHashMap"/>
+  </rule>
+
+  <rule ref="category/java/performance.xml">
+    <exclude name="AvoidInstantiatingObjectsInLoops"/>
+  </rule>
+</ruleset>

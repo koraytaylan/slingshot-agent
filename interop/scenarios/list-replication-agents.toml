@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "list-replication-agents"
+kind = "command"
+feature = "list_replication_agents"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ListReplicationAgentsScenario"
+reason = "The first place anybody looks when a page has been published and is not there. What this proves that no unit suite can is that the redaction corpus finds no transport address in what a real instance answers — an agent's transport is a URL and a URL to a publish instance very frequently carries the credential it authenticates with."

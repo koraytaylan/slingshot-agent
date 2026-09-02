@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "find-workflow-instances"
+kind = "command"
+feature = "find_workflow_instances"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.FindWorkflowInstancesScenario"
+reason = "The search whose states are required, because an author instance holds a year of completed history and every question is about the handful that have not finished. What this proves that no unit suite can is that the engine answers a real query."

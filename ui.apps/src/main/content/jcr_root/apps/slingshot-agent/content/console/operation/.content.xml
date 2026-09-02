@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<!--
+  The page somebody reaches with an identifier and a question. Four stores are read under one view
+  and rendered here: what was submitted, what happened, what physically ran and on which node, who
+  holds the lease and until when, and what was published.
+
+  The tail is the one thing on this page a server cannot render, because the operation may not have
+  finished. It carries the operation in an attribute the console's one script reads, and that script
+  follows the same route a client follows - a second stream would be a second implementation of
+  resumption, ordering and heartbeats, and the day the two disagree the operator and the caller are
+  reading different accounts of the same operation.
+-->
+<jcr:root xmlns:jcr="http://www.jcp.org/jcr/1.0" xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:granite="http://www.adobe.com/jcr/granite/1.0"
+          jcr:primaryType="nt:unstructured"
+          jcr:title="slingshot.agent.console.operation.title"
+          sling:resourceType="granite/ui/components/shell/page">
+    <head jcr:primaryType="nt:unstructured">
+        <clientlibs jcr:primaryType="nt:unstructured"
+                    sling:resourceType="granite/ui/components/coral/foundation/includeclientlibs"
+                    categories="[slingshot.agent.console]"/>
+    </head>
+    <title jcr:primaryType="nt:unstructured"
+           sling:resourceType="granite/ui/components/coral/foundation/text"
+           text="slingshot.agent.console.operation.title"/>
+    <content jcr:primaryType="nt:unstructured"
+             sling:resourceType="granite/ui/components/coral/foundation/container">
+        <items jcr:primaryType="nt:unstructured">
+            <detail jcr:primaryType="nt:unstructured"
+                      sling:resourceType="granite/ui/components/coral/foundation/table"
+                      granite:id="slingshot-agent-operation-detail"
+                      jcr:title="slingshot.agent.console.operation.title"
+                      granite:label="slingshot.agent.console.operation.title"
+                      emptyText="slingshot.agent.console.operation.empty"
+                      selectionMode="none">
+                <datasource jcr:primaryType="nt:unstructured"
+                            sling:resourceType="slingshot-agent/datasource/operation"/>
+                <columns jcr:primaryType="nt:unstructured">
+                    <operation jcr:primaryType="nt:unstructured"
+                               jcr:title="slingshot.agent.console.column.operation"/>
+                    <command jcr:primaryType="nt:unstructured"
+                             jcr:title="slingshot.agent.console.column.command"/>
+                    <state jcr:primaryType="nt:unstructured"
+                           jcr:title="slingshot.agent.console.column.state"/>
+                    <started jcr:primaryType="nt:unstructured"
+                             jcr:title="slingshot.agent.console.column.started"/>
+                </columns>
+            </detail>
+            <tail jcr:primaryType="nt:unstructured"
+                  sling:resourceType="granite/ui/components/coral/foundation/container"
+                  granite:label="slingshot.agent.console.tail.title"
+                  granite:class="slingshot-agent-tail"/>
+        </items>
+    </content>
+</jcr:root>

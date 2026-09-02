@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "repository-access"
+kind = "property"
+feature = "repository-access"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.RepositoryAccessScenario"
+reason = "What the agent's own identity may do is the property every access-control claim in this product rests on, and a policy file cannot prove it. The declared grants and the ones a repository created out of the committed configuration are compared in both directions on a running instance, and the three paths the policy refuses are asserted to hold nothing for that principal - because default-deny is what makes cannot-write-content true, and an entry granting it is the one way that would stop being so."

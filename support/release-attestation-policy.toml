@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Which job in a release may say what these bytes are, and what it may not also be able to do.
+#
+# Build provenance is a statement that these exact bytes came out of this exact source through this
+# exact workflow. It is worth something only while the thing making the statement could not also
+# have changed what it is describing - so exactly one job holds the permission, and that job holds
+# no write access to content.
+#
+# Two jobs holding it is not twice as much provenance. It is a second place the statement can be
+# made from, and the whole value of the statement is that there is one.
+
+[attestation]
+job = "attest"
+permission = "attestations"
+reason = "One job, named, so a job added later does not inherit the ability to say what a byte is. Attestation is a statement about something else, and a statement made by the thing it is about is not a statement."
+
+[[refused_beside_attestation]]
+permission = "contents"
+access = "write"
+reason = "A job that can both change the content and say what the content is can say anything. This is the pair that makes provenance worthless, and it is refused rather than reviewed."
+
+[[refused_beside_attestation]]
+permission = "packages"
+access = "write"
+reason = "The same pair, one distribution target along. A job that publishes and attests is a job whose attestation covers whatever it decided to publish."
+
+[[target]]
+id = "maven-central"
+reason = "A customer project that depends on this container package. Its artifacts are signed and their digests are recorded, so what is attached to the release and what is sent here can be compared."
+
+[[target]]
+id = "release-asset"
+reason = "An operator installing by hand. The same bytes, from the same built set, so the two targets can never diverge unnoticed."

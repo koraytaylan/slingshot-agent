@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "remove-group-member"
+kind = "command"
+feature = "remove_group_member"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.RemoveGroupMemberScenario"
+reason = "Taking a membership away takes everything the group can do with it. What this proves that no unit suite can is that the answer says whether the membership was there, which is the sentence an audit needs."

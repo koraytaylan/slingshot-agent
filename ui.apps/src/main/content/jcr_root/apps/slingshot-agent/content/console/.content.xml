@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<!--
+  The console shell, rendered by Granite's own page component from properties rather than by a
+  template this product wrote. Everything visible is a Granite component configured here; the only
+  thing this product ships that a browser runs is one hand-written client library, and the check
+  beside it refuses a second.
+
+  A front-end pipeline would be a second dependency graph with its own licences, its own advisories
+  and its own upgrade cadence. Several hundred packages to render four tables would undo the
+  compatibility argument the whole repository rests on.
+-->
+<jcr:root xmlns:jcr="http://www.jcp.org/jcr/1.0" xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:granite="http://www.adobe.com/jcr/granite/1.0"
+          jcr:primaryType="nt:unstructured"
+          jcr:title="slingshot.agent.console.title"
+          sling:resourceType="granite/ui/components/shell/page">
+    <head jcr:primaryType="nt:unstructured">
+        <clientlibs jcr:primaryType="nt:unstructured"
+                    sling:resourceType="granite/ui/components/coral/foundation/includeclientlibs"
+                    categories="[slingshot.agent.console]"/>
+    </head>
+    <title jcr:primaryType="nt:unstructured"
+           sling:resourceType="granite/ui/components/coral/foundation/text"
+           text="slingshot.agent.console.title"/>
+    <content jcr:primaryType="nt:unstructured"
+             sling:resourceType="granite/ui/components/coral/foundation/container">
+        <items jcr:primaryType="nt:unstructured">
+            <operations jcr:primaryType="nt:unstructured"
+                        sling:resourceType="granite/ui/components/coral/foundation/table"
+                        granite:id="slingshot-agent-operations"
+                        jcr:title="slingshot.agent.console.title"
+                        granite:label="slingshot.agent.console.title"
+                        emptyText="slingshot.agent.console.operations.empty"
+                        selectionMode="none">
+                <datasource jcr:primaryType="nt:unstructured"
+                            sling:resourceType="slingshot-agent/datasource/operations"/>
+                <columns jcr:primaryType="nt:unstructured">
+                    <operation jcr:primaryType="nt:unstructured"
+                               jcr:title="slingshot.agent.console.column.operation"/>
+                    <command jcr:primaryType="nt:unstructured"
+                             jcr:title="slingshot.agent.console.column.command"/>
+                    <state jcr:primaryType="nt:unstructured"
+                           jcr:title="slingshot.agent.console.column.state"/>
+                    <started jcr:primaryType="nt:unstructured"
+                             jcr:title="slingshot.agent.console.column.started"/>
+                </columns>
+            </operations>
+        </items>
+    </content>
+</jcr:root>

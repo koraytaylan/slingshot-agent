@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every package either bundle imports, with the range it accepts and who provides it.
+#
+# A bundle's compatibility is exactly the set of packages it imports and the ranges it accepts.
+# Leaving that set to whatever the build tool inferred means nobody chose it, and nobody will
+# notice the day it grows. So the set is data: a manifest importing a package with no row fails,
+# and a row nothing imports fails.
+#
+# Nothing arrives inside either artifact. No private-package, embedding, or class-path instruction
+# appears in a bundle, and the check reads the produced manifest rather than the build
+# configuration, so a dependency that reached the jar fails the gate rather than shipping.
+#
+# Every row must be provided by every deployment in `support/deployments.toml`. An import that only
+# some supported deployment offers is a decision somebody makes in writing, in this file, or it is
+# not made at all.
+
+# Packages the Java runtime itself provides. Every supported deployment declares a Java runtime at
+# or above the release level this repository compiles to, so these need no row of their own; what
+# they need is for that cross-check to exist, and it does.
+[[runtime_namespace]]
+namespace = "java."
+reason = "The Java runtime every deployment row declares provides these, and the deployment matrix already refuses a row whose runtime is below the release level this repository compiles to."
+
+# Packages that may sit inside a bundle without arriving from somewhere else: this repository's own.
+[[own_namespace]]
+namespace = "rs.slingshot.agent"
+reason = "A bundle's own packages are the bundle. Anything else appearing as a private package arrived from another artifact, which is what the embedding rules refuse."
+
+[[package]]
+name = "org.apache.sling.api"
+range = "[2.27,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts", "aem-4-2"]
+reason = "A fixture row."
+
+[[package]]
+name = "javax.jcr"
+range = "[2.0,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "A fixture row."

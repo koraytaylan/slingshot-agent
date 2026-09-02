@@ -1,0 +1,14 @@
+[matrix]
+recorded_by = "scripts/release_acceptance"
+reason = "a fixture"
+
+[[row]]
+deployment = "nothing-like-this"
+arrival = "a fixture"
+tier = "a"
+scenarios = ["create-page"]
+instance = "https://author.example"
+observed_at = "2026-09-02"
+ingress_streaming_observed = true
+clustered_arrangement_exercised = false
+reason = "a fixture"

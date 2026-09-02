@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every query this product issues, and the index each deployment row already provides for it.
+#
+# Adobe Experience Manager answers a query either from an index or by walking the repository, and
+# walking it is how a single command takes an author instance down. So no command here may traverse:
+# every query is declared as data, checked against the indexes below at build time, and checked
+# again against the plan the instance in front of it actually returns before a node is examined.
+#
+# The two checks are different claims and both are needed. This file is what a deployment row was
+# declared to provide; the plan is what the instance really has. A customer can remove an index, and
+# a Cloud Service environment's index set is theirs to change — so the run-time check is the only
+# version of this a customer's author is protected by, and a disagreement between the two is
+# reported as itself rather than as a query defect.
+#
+# This product ships no index definition. A custom index lives outside /apps, changes the shape of
+# somebody else's repository, and is an operator's decision rather than a side effect of installing
+# an agent — so a command that would need one does not ship.
+
+[coverage]
+reason = "One row per query and one per index a deployment row provides, compared in both directions. A query no row covers fails the build naming the query and the deployment rows that cannot answer it."
+
+# The indexes every supported deployment already provides, out of the box, with the properties each
+# one covers. Nothing here is created by this product.
+
+[[index]]
+name = "nodetype"
+deployment = "aem-cloud-service"
+covers = ["jcr:primaryType"]
+reason = "Oak's own node-type index, which every repository has. A query restricted to a primary type is answered from it."
+
+[[index]]
+name = "nodetype"
+deployment = "aem-6-5-lts"
+covers = ["jcr:primaryType"]
+reason = "The same index on the other supported row."
+
+[[index]]
+name = "cqPageLucene"
+deployment = "aem-cloud-service"
+covers = ["jcr:primaryType", "jcr:content/cq:template", "jcr:content/jcr:title", "jcr:content/jcr:description"]
+reason = "Adobe's own page index, provided by the product. Finding pages by template or by phrase is answered from it, and a deployment that removed it would be answered by the run-time plan check rather than by this file."
+
+[[index]]
+name = "cqPageLucene"
+deployment = "aem-6-5-lts"
+covers = ["jcr:primaryType", "jcr:content/cq:template", "jcr:content/jcr:title", "jcr:content/jcr:description"]
+reason = "The same index on the other supported row."
+
+[[index]]
+name = "slingResourceType"
+deployment = "aem-cloud-service"
+covers = ["sling:resourceType"]
+reason = "Adobe's own property index on the resource type, shipped with the product. Finding the pages that use a component is answered from it; without it the same question is a walk of every node under the root, which is why the query that asks it is checked against this row rather than trusted."
+
+[[index]]
+name = "slingResourceType"
+deployment = "aem-6-5-lts"
+covers = ["sling:resourceType"]
+reason = "The same index on the other supported row."
+
+[[index]]
+name = "damAssetLucene"
+deployment = "aem-cloud-service"
+covers = ["jcr:primaryType", "jcr:content/metadata/dc:title", "jcr:content/metadata/dc:format", "jcr:content/metadata/dc:description"]
+reason = "Adobe's own asset index. Finding assets by metadata is answered from it."
+
+[[index]]
+name = "damAssetLucene"
+deployment = "aem-6-5-lts"
+covers = ["jcr:primaryType", "jcr:content/metadata/dc:title", "jcr:content/metadata/dc:format", "jcr:content/metadata/dc:description"]
+reason = "The same index on the other supported row."
+
+# Every query a handler may issue. The list is empty until the first read command lands: a build
+# with no commands issues no queries, and a check that refused that would be a check nobody could
+# have written before the commands existed.
+
+# Every query this product issues, written down before it is issued. A query that exists only as a
+# string a handler builds is a query nobody can check against the indexes a deployment provides.
+
+[[query]]
+name = "query-paths-by-type"
+roots = ["/content"]
+properties = ["jcr:primaryType"]
+issued_by = "query_paths"
+reason = "One subtree, one primary type, addresses only. The query filters on jcr:primaryType and on nothing else, which is what makes it answerable from Oak's own node-type index on every supported deployment rather than by walking the repository — and walking it is how one command takes an author instance down. The property predicates a caller may also send are not part of this query: they are applied to the rows it returns, bounded by the caller's examination budget, which is what lets a caller ask about a property nobody indexed without that question becoming a repository walk."
+
+[[query]]
+name = "find-pages-containing-phrase"
+roots = ["/content"]
+properties = ["jcr:primaryType", "jcr:content/jcr:title", "jcr:content/jcr:description"]
+issued_by = "find_pages_containing_phrase"
+reason = "A phrase against a page's title and description, restricted to one subtree. Exactly the properties Adobe's own page index covers and no others: a search over every string a page carries cannot be answered from that index, and would walk somebody's repository instead. The phrase comes from a caller who cannot know what it matches, so this is the query that most needs an index behind it — which means it is the query that must not ask for more than one can answer."
+
+[[query]]
+name = "find-pages-by-template"
+roots = ["/content"]
+properties = ["jcr:primaryType", "jcr:content/cq:template"]
+issued_by = "find_pages_by_template"
+reason = "Which pages use one template, under one subtree. The template property is one Adobe's own page index covers on every supported deployment, which is why this question has an answer that does not walk the repository — and the person asking it is about to change every page in the answer, so producing that list must not itself be the thing that takes the instance down."
+
+[[query]]
+name = "find-pages-using-components"
+roots = ["/content"]
+properties = ["sling:resourceType"]
+issued_by = "find_pages_using_components"
+reason = "Which nodes carry one of these component resource types, under one subtree. It filters on the resource type and on nothing else, because that is what one index can answer: a query naming two properties no single index covers is answered by walking, whatever the union of the indexes happens to contain. What makes a match into a page happens after the query, by folding each match up to its nearest page-typed ancestor. A search with no type at all would be a walk of everything under the root, which is why an empty list is refused at construction."
+
+[[query]]
+name = "find-assets-by-metadata"
+roots = ["/content/dam"]
+properties = ["jcr:primaryType"]
+issued_by = "find_assets_by_metadata"
+reason = "Assets under one subtree, which the query finds by their node type alone and Adobe's own asset index answers. Every narrowing a caller sends — tags, media formats, a size range, and the shared property predicates — is a filter over the rows that query returned rather than part of it, bounded by the caller's examination budget. That split is what lets a caller ask about a property nobody indexed: the cost is one property read per candidate under the subtree they named, rather than a query no index covers."

@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The advisory snapshot every declared artifact is checked against, pinned exactly.
+#
+# There is deliberately no timestamp here and no freshness claim anywhere. A snapshot's author
+# chooses those values, so neither of them authenticates anything - and a gate reporting freshness
+# would be reporting something it cannot check. What this file says is which exact bytes were
+# reviewed, and what the gate says is whether those are the bytes it read.
+#
+# The file carries no key for a date, and a document that adds one is refused as an unknown key
+# rather than believed. That is the enforcement: a field that cannot exist cannot be trusted.
+#
+# Fetching the snapshot is a separate command that says it is reaching the network. The gate reaches
+# nothing: it authenticates what is here and refuses with the fetch command named when it is absent,
+# for the same reason nothing else the gate needs is acquired at gate time.
+
+[snapshot]
+origin = "https://github.com/github/advisory-database"
+commit = ""
+content_digest = ""
+held_at = "compatibility/advisory-database"
+checkout = "scripts/checkout_pinned_advisory_database"
+reason = "One published advisory set, at one commit, reviewed by an owner as those exact bytes. An advisory set that moved between the review and the gate is a set nobody reviewed."
+
+[review]
+record = "scripts/record_advisory_owner_review"
+held_at = "compatibility/advisory-owner-review.toml"
+reason = "An owner's review is bound to the snapshot's own digest rather than to its name, so a review survives exactly as long as the bytes it was of. A release whose snapshot has no matching review is refused, because 'somebody looked at the advisories' is a claim and a digest is evidence."
+
+[[checked_scope]]
+scope = "compile"
+reason = "What the bundles are built against and what they resolve at run time."
+
+[[checked_scope]]
+scope = "provided"
+reason = "What the platform provides and this build compiles against. Provided is not absent: a vulnerable class the platform supplies is one this product calls."
+
+[[checked_scope]]
+scope = "test"
+reason = "Test code is code that runs, on somebody's machine and in continuous integration, and a build-time dependency with a problem is a problem in the place that has the credentials."

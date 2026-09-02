@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "concurrent-write"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service"]
+runner = "rs.slingshot.agent.interop.harness.ConcurrentWriteScenario"
+reason = "Claim-by-creation rests on a repository doing one thing when two nodes ask for the same path at once, and a single instance cannot exhibit it - one process racing itself proves the process. Two nodes against one shared document store is the arrangement a customer's author actually is, and this is where the assumption either holds or is found not to."

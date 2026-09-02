@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Runs the registry's read commands against one real author, when somebody explicitly asks.
+#
+# It refuses before reading a byte of configuration unless the enabling flag is given, so reaching
+# somebody's author is never something that happens because a script ran. And it refuses against an
+# instance whose owner has not acknowledged it, because an address in a configuration file is not
+# permission.
+#
+# What it runs comes from the registry: exactly the rows classified as replacing nothing. A command
+# reclassified later changes what runs without anybody editing this, which is the difference between
+# a derived set and a list somebody has to remember.
+#
+# What it produces is an observation of one unattested instance. It is not evidence about a
+# deployment row, the report says so, and the acceptance matrix refuses to take it as one.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly LIVE_FILE="${REPOSITORY_ROOT}/support/live-author.toml"
+readonly REGISTRY="${REPOSITORY_ROOT}/policy/commands"
+readonly ENABLING_FLAG="--yes-run-against-a-real-author"
+readonly EXIT_NOT_ASKED=2
+readonly EXIT_NOT_ACKNOWLEDGED=3
+
+# Before anything is read. A command that parsed a configuration and then decided whether it was
+# allowed to would be a command that had already done something on the way to deciding.
+if [[ $# -ne 1 || "$1" != "${ENABLING_FLAG}" ]]; then
+    printf 'verify_live_author reaches a real author instance and does not do so by default.\n' >&2
+    printf 'Run it as: scripts/verify_live_author %s\n' "${ENABLING_FLAG}" >&2
+    exit "${EXIT_NOT_ASKED}"
+fi
+
+read -r address acknowledged < <(python3 - "${LIVE_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+address = ""
+acknowledged = "false"
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("address = "):
+        address = stripped.split('"')[1]
+    elif stripped.startswith("acknowledged = "):
+        acknowledged = stripped.split("=")[1].strip()
+print("%s %s" % (address or "-", acknowledged))
+PYTHON
+)
+
+if [[ "${acknowledged}" != "true" || "${address}" == "-" ]]; then
+    printf 'not acknowledged: no instance is named and acknowledged in %s.\n' \
+        "support/live-author.toml" >&2
+    printf 'An operator has to set `address` to their instance and `acknowledged` to true after\n' >&2
+    printf 'reading what will be run against it. An address is not permission.\n' >&2
+    exit "${EXIT_NOT_ACKNOWLEDGED}"
+fi
+
+printf 'This is an observation of one unattested instance at %s.\n' "${address}"
+printf 'It is not evidence about a deployment row, and the acceptance matrix refuses it as one.\n'
+printf '\nThe commands it runs, derived from the registry rather than listed here:\n'
+python3 - "${REGISTRY}" <<'PYTHON'
+import pathlib
+import sys
+
+for row in sorted(pathlib.Path(sys.argv[1]).glob("*.toml")):
+    text = row.read_text()
+    if 'access = "read"' in text:
+        print("  %s" % row.stem)
+PYTHON

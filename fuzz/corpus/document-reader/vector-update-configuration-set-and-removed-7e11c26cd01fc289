@@ -1,0 +1,1 @@
+{"assignments":{"service.port":{"cardinality":"scalar","type":"integer","value":"9090"}},"persistent_identifier":"rs.slingshot.Service","removed_property_keys":["service.port"]}

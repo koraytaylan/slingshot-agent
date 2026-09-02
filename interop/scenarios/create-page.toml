@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "create-page"
+kind = "command"
+feature = "create_page"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.CreatePageScenario"
+reason = "The first command that writes, on a running instance. What this proves that no unit suite can: that a command whose row requires an operation key is refused when a submission carries none, that the row's own requirement is read rather than restated here, and that the write surface is reachable through the transport at all — which is the half of a mutation that a repository test cannot see."

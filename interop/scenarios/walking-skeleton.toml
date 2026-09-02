@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# One scenario per file rather than one shared list.
+#
+# A plan that adds sixty scenarios would otherwise serialise sixty tasks behind one inventory, and a
+# shared list is exactly the kind of bottleneck a footprint rule turns into a queue.
+
+[scenario]
+id = "walking-skeleton"
+kind = "route"
+feature = "capabilities"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.WalkingSkeletonScenario"
+reason = "The first thing that has to be true: the package installs, the bundle resolves, and the one route this commit serves answers the document the client's own discovery already expects. Everything later in this repository is a claim about software running inside somebody else's instance, and this is the first commit where that sentence has a running instance behind it."

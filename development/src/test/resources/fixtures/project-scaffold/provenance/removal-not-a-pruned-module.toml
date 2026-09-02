@@ -1,0 +1,29 @@
+[archetype]
+group = "com.adobe.aem"
+artifact = "aem-project-archetype"
+version = "57"
+generated = "2026-09-01"
+
+[archetype.properties]
+appId = "slingshot-agent"
+
+[wrapper]
+maven = "3.9.16"
+distribution = "only-script"
+wrapper = "3.3.4"
+
+[[removed_module]]
+name = "ui.frontend"
+reason = "No author-facing single-page application."
+
+[[removed_module]]
+name = "ui.content"
+reason = "No mutable content root."
+
+[[removed_module]]
+name = "reporting"
+reason = "No claim about anybody's publish tier."
+
+[[removed_module]]
+name = "ui.tests"
+reason = "No browser driver."

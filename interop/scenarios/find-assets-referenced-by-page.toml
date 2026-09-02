@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "find-assets-referenced-by-page"
+kind = "command"
+feature = "find_assets_referenced_by_page"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.FindAssetsReferencedByPageScenario"
+reason = "What a page references, on a running instance. What this proves that no unit suite can: that the command is registered on a real Sling runtime, and that it declares its own three page failures rather than the shared root-anchor pair — a caller who names one page is told whether it is absent, unreadable, or not a page, and each of those leads somewhere different."

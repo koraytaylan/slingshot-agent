@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "list-child-pages"
+kind = "command"
+feature = "list_child_pages"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ListChildPagesScenario"
+reason = "The operation an operator performs most, on a running instance. What this proves that no unit suite can: that the command is registered on a real Sling runtime, and that it appears in no row of the declared-query inventory — which is the check that it reads the repository rather than searching it, and therefore needs no index on anybody's deployment."

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "route-alias"
+kind = "property"
+feature = "client-route-constants"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.RouteAliasScenario"
+reason = "What a customer actually receives. The client's old spellings under /libs are declared and shipped off, and the only place that can be proved rather than asserted is an instance running the packages this build produces: every alias path answers as a path nobody serves, and every canonical route still answers. A unit suite can prove the switch; only a running instance can prove what the shipped configuration does with it."
