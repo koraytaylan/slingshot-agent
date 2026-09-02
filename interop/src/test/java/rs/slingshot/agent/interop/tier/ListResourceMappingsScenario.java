@@ -95,6 +95,53 @@ final class ListResourceMappingsScenario {
                 "the result schema declares a member a credential could travel in: " + result);
     }
 
+    @Test
+    @DisplayName("this command's row refuses an operation key, and a write beside it requires one")
+    void therowsDifferAboutOperationKeys() {
+        assertTrue(row(COMMAND).contains("operation_key = \"refused\""),
+                "this command's row no longer refuses an operation key, and a read nobody can"
+                        + " repeat differently needs nothing to hold it to one attempt");
+        assertTrue(row("create_page").contains("operation_key = \"required\""),
+                "a command that refuses a key and one that requires one no longer differ, which"
+                        + " is the whole reason the rule is read from the row rather than from the"
+                        + " access class");
+    }
+
+    @Test
+    @DisplayName("this command's row declares no unknown outcome, because a read changes nothing")
+    void therowDeclaresNoUnknownOutcome() {
+        assertTrue(!row(COMMAND).contains("outcome_unknown"),
+                "a read declares an outcome nobody knows, and a read that changes nothing has no"
+                        + " half-way state for anybody to be unsure about");
+    }
+
+    @Test
+    @DisplayName("this build ships no index definition, because an index is an operator's decision")
+    void thisbuildShipsNoIndexDefinition() {
+        assertTrue(!installed().contains("oak:index"),
+                "this build ships an index definition. An index lives outside /apps, changes the"
+                        + " shape of somebody else's repository, and is an operator's decision"
+                        + " rather than a side effect of installing an agent.");
+    }
+
+    @Test
+    @DisplayName("the route that starts work refuses a caller who authenticated as nobody")
+    void therouteRefusesNobody() {
+        assertEquals(UNAUTHENTICATED,
+                requests.postAsNobody(tier.address() + SUBMIT, "{}", "application/json")
+                        .statusCode(),
+                "work was started for a caller who presented no identity");
+    }
+
+    @Test
+    @DisplayName("a submission this build cannot read is refused before anything runs")
+    void asubmissionThisBuildCannotReadIsRefused() {
+        assertEquals(REFUSED, requests.postAsAuthenticatedUser(tier.address() + SUBMIT,
+                        "{\"command_wire_name\":\"" + COMMAND + "\"}", "application/json")
+                .statusCode(),
+                "a submission carrying nothing but a name was accepted");
+    }
+
     private static String installed() {
         final java.nio.file.Path packages = REPOSITORY.resolve("ui.apps/src/main/content");
         if (!Files.isDirectory(packages)) {

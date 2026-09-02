@@ -123,10 +123,6 @@ final class NavigationScenario {
                 "work was started for a caller who presented no identity");
     }
 
-    private static String row(String command) {
-        return read(REPOSITORY.resolve("policy/commands/" + command + ".toml"));
-    }
-
     private static String read(Path file) {
         try {
             return Files.readString(file, StandardCharsets.UTF_8);
