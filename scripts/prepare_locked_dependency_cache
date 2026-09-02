@@ -30,17 +30,21 @@ printf 'into %s and records each artifact digest in %s.\n\n' "${CACHE_DIRECTORY}
 
 mkdir -p "${CACHE_DIRECTORY}"
 
-# Acquiring is all this does. The analysers are turned off here on purpose: what the gate decides is
-# decided by the gate, over a cache this command has already made complete, and a preparation that
-# also gated would be a preparation that could fail for a reason that has nothing to do with whether
-# the cache is complete.
+# Acquiring is all this does. The analysers run here and decide nothing: running them is how what
+# they resolve for themselves ends up in the cache - a report renderer reaches for its own skin at
+# the moment it renders, and a cache prepared without running it would be missing exactly that - and
+# turning off what they decide is how this stays a preparation. What the gate decides is decided by
+# the gate, over a cache this command has already made complete, and a preparation that also gated
+# would be a preparation that could fail for a reason that has nothing to do with whether the cache
+# is complete.
 resolve() {
     "${REPOSITORY_ROOT}/mvnw" --batch-mode --no-transfer-progress \
         -Dmaven.repo.local="${CACHE_DIRECTORY}" \
-        -Dcheckstyle.skip=true \
-        -Dpmd.skip=true \
-        -Dspotbugs.skip=true \
-        -Djacoco.skip=true \
+        -Dcheckstyle.failOnViolation=false \
+        -Dcheckstyle.failsOnError=false \
+        -Dpmd.failOnViolation=false \
+        -Dspotbugs.failOnError=false \
+        -Djacoco.haltOnFailure=false \
         -Dmaven.javadoc.skip=true \
         -f "${REPOSITORY_ROOT}/pom.xml" \
         "$@"
