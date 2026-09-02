@@ -107,7 +107,11 @@ final class PrivilegeEscalationScenario {
         List.of("core/src/main/java", "aem/src/main/java").forEach(tree -> {
             try (var sources = Files.walk(REPOSITORY.resolve(tree))) {
                 sources.filter(path -> String.valueOf(path.getFileName()).endsWith(".java"))
-                        .filter(path -> read(path).contains("impersonate"))
+                        // A call rather than the word. Both packages say in prose that nothing
+                        // here impersonates, and a check that read the word would refuse the
+                        // sentence that states the very absence it is checking for.
+                        .filter(path -> read(path).contains(".impersonate(")
+                                || read(path).contains("getImpersonation("))
                         .forEach(path -> found.add(REPOSITORY.relativize(path).toString()));
             } catch (final java.io.IOException unreadable) {
                 throw new java.io.UncheckedIOException(unreadable);

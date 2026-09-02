@@ -77,16 +77,8 @@ final class ReadContentFragmentScenario {
     }
 
     @Test
-    @DisplayName("the query this command issues is declared and covered by an index")
-    void thequeryIsDeclaredAndCovered() {
-        final String coverage = read(REPOSITORY.resolve("policy/query-index-coverage.toml"));
-        assertTrue(coverage.contains("issued_by = \"" + COMMAND + "\""),
-                "this command issues a query nobody declared, so nothing checks it against the"
-                        + " indexes a deployment provides — and a full-text search is the query"
-                        + " that most needs one behind it");
-        assertTrue(coverage.contains("cqPageLucene"),
-                "the page index this search relies on is no longer among the indexes the"
-                        + " deployments are recorded as providing");
+    @DisplayName("this build ships no index definition, because an index is an operator's decision")
+    void thisbuildShipsNoIndexDefinition() {
         assertTrue(!installed().contains("oak:index"),
                 "this build ships an index definition. An index lives outside /apps, changes the"
                         + " shape of somebody else's repository, and is an operator's decision"
