@@ -26,7 +26,9 @@ jobs:
   gate:
     name: gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # The gate reaches its own test suite now that the preparations stop failing, and that suite
+    # starts a container per interoperability scenario. Sixty minutes cancelled it mid-run.
+    timeout-minutes: 180
     permissions:
       contents: read
     steps:
