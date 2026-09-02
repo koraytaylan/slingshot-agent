@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "reorder-component"
+kind = "command"
+feature = "reorder_component"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ReorderComponentScenario"
+reason = "A command that changes what is inside a page, on a running instance. What this proves that no unit suite can: that its row requires an operation key and a submission carrying none is refused before anything runs, that the row declares the answer nobody knows so an interrupted commit is not reported as a failure, and that the write surface is reachable through the transport at all."

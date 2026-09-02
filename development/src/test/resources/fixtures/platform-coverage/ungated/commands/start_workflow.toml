@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "start_workflow"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: starting the same workflow twice is not starting it once, so the
+# caller supplies a key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["metadata_rejected", "model_invalid", "model_not_found", "payload_access_denied", "payload_not_found", "platform_control_outcome_unknown", "platform_control_rejected"]
+argument_schema_digest = "b7069f9f5510c53e21c5db98d0bb31ec3ff20ca5eb83887eb08e67e029a0aba0"
+result_schema_digest = "7cc8b6e00bb17a451d23e82fff2be655cb6ca75533feb1b7291af2d2671521e5"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

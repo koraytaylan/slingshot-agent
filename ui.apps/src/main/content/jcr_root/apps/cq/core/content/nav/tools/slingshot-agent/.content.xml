@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<!--
+  One leaf under Adobe's own tools navigation, added beside what is already there rather than
+  overlaid on top of it. The structure package declares this exact path and nothing above it, so
+  installing writes one node and uninstalling removes one node - an overlay that shadowed an Adobe
+  resource would work perfectly until the upgrade that changed the resource underneath it, which is
+  the worst possible time to find out.
+
+  The title is a dictionary key rather than a sentence. Granite translates a title it can find in a
+  dictionary and prints it verbatim when it cannot, so a literal here is a console that is English
+  for everybody forever and nobody notices until somebody asks.
+-->
+<jcr:root xmlns:jcr="http://www.jcp.org/jcr/1.0" xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          jcr:primaryType="nt:unstructured"
+          jcr:title="slingshot.agent.console.title"
+          jcr:description="slingshot.agent.console.description"
+          icon="gears"
+          href="/apps/slingshot-agent/content/console.html"/>

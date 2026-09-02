@@ -1,0 +1,138 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every package either bundle imports, with the range it accepts and who provides it.
+#
+# A bundle's compatibility is exactly the set of packages it imports and the ranges it accepts.
+# Leaving that set to whatever the build tool inferred means nobody chose it, and nobody will
+# notice the day it grows. So the set is data: a manifest importing a package with no row fails,
+# and a row nothing imports fails.
+#
+# Nothing arrives inside either artifact. No private-package, embedding, or class-path instruction
+# appears in a bundle, and the check reads the produced manifest rather than the build
+# configuration, so a dependency that reached the jar fails the gate rather than shipping.
+#
+# Every row must be provided by every deployment in `support/deployments.toml`. An import that only
+# some supported deployment offers is a decision somebody makes in writing, in this file, or it is
+# not made at all.
+
+# Packages the Java runtime itself provides. Every supported deployment declares a Java runtime at
+# or above the release level this repository compiles to, so these need no row of their own; what
+# they need is for that cross-check to exist, and it does.
+[[runtime_namespace]]
+namespace = "java."
+reason = "The Java runtime every deployment row declares provides these, and the deployment matrix already refuses a row whose runtime is below the release level this repository compiles to."
+
+# Packages that may sit inside a bundle without arriving from somewhere else: this repository's own.
+[[own_namespace]]
+namespace = "rs.slingshot.agent"
+reason = "A bundle's own packages are the bundle. Anything else appearing as a private package arrived from another artifact, which is what the embedding rules refuse."
+
+[[package]]
+name = "javax.jcr"
+range = "[2.0,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The repository itself. Everything durable this agent holds is a node it wrote through a session, and the two conditional-write primitives are about what this interface does when two writers meet."
+
+[[package]]
+name = "javax.jcr.nodetype"
+range = "[2.0,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The one failure a claim treats as its second outcome rather than as an error: a node type refusing a second node where one is already held."
+
+[[package]]
+name = "javax.servlet"
+range = "[3.1,4)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The servlet interfaces a Sling servlet is written against."
+
+[[package]]
+name = "org.osgi.framework"
+range = "[1.10,2)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The framework itself, which is how the one component that can register a second path to a servlet registers one — and how it takes it away again when the component goes. Nothing else in this bundle reaches it: a handler that could would be a handler that could reach every service there is."
+
+[[package]]
+name = "org.apache.sling.api"
+range = "[2.3,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The Sling request and response types every route this product serves is written against."
+
+[[package]]
+name = "org.apache.sling.api.request"
+range = "[2.5,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "What a request resolved to, which is the selectors, the extension, and the suffix a path-bound servlet is reached through — the spellings every route has to refuse before it reads anything."
+
+[[package]]
+name = "org.apache.sling.api.resource"
+range = "[2.13,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The resource abstraction, which is how the agent asks the platform who is making a request."
+
+[[package]]
+name = "org.apache.sling.api.wrappers"
+range = "[2.8,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "Sling's own resolver wrapper, which is what a read command's resolver is built on. Written by hand it would be forty delegating methods and one of them eventually wrong; the platform's own base delegates everything this does not deliberately refuse."
+
+[[package]]
+name = "org.apache.sling.api.servlets"
+range = "[2.3,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The safe-methods servlet base a read-only route is registered as."
+
+[[package]]
+name = "org.apache.jackrabbit.api"
+range = "[2.4,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The session extension that reaches a user manager. The range is the one every supported runtime provides rather than the one the compile-time artifact exports: Oak ships this package at a lower version than the standalone artifact, and a bundle that imported the higher one would resolve on nothing but the machine it was built on."
+
+[[package]]
+name = "org.apache.jackrabbit.api.security.user"
+range = "[2.4,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "Group membership, which is how an operator's decision about who may use this agent is answered by the repository rather than by the servlet container. The container can only say whether somebody is a member; only this can say that nothing is called that, which is the answer an operator who misspelled a group needs."
+
+# The Adobe-only bundle's own footprint. It is four packages and that is the point: everything this
+# bundle does is call one platform service, and every decision about what to call it with was made
+# on the other side of the seam it imports.
+
+[[package]]
+name = "com.day.cq.replication"
+range = "[6.16,7)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "Adobe's replication service, which is the one thing in this whole product that exists only on an Adobe runtime. Keeping it behind a seam is what lets every other command be proved on a plain Apache Sling image anybody can pull."
+
+[[package]]
+name = "javax.jcr"
+range = "[2.0,3)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The repository session the replication service acts through. It is the caller's own, borrowed from their resolver and never closed here, so a caller offers exactly what they could have offered by hand."
+
+[[package]]
+name = "org.apache.sling.api.resource"
+range = "[2.13,3)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The resolver the seam is handed, which is where the caller's own session comes from."
+
+[[package]]
+name = "rs.slingshot.agent.command.platform"
+range = "[1.0,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The seams the Sling-only bundle exports and this one implements — the only package it exports at all. An exported package is a promise, and this is the smallest one that makes the two-bundle split work: the interfaces state what a platform service does with none of the deciding that surrounds it, so the deciding stays where a public tier can prove it."

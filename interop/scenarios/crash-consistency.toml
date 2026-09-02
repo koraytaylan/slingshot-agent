@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "crash-consistency"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service"]
+runner = "rs.slingshot.agent.interop.harness.CrashConsistencyScenario"
+reason = "Every durability claim in this plan is about what survives a process ending between two steps, and a graceful stop proves the tidying works rather than the durability. This kills a node with the signal nothing can handle and reads what it committed from the node that is still up, across the shared document store - which is the arrangement a customer's author is, and the ground the crash points this plan enumerates all stand on."

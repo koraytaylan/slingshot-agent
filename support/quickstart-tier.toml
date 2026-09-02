@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The tier that needs a licensed input, and what the owner has to supply for it.
+#
+# The Adobe Experience Manager quickstart jar is licensed to its holder. It is never committed,
+# never cached in this repository, never published, and never fetched. Its absence refuses this tier
+# explicitly rather than skipping it, because a suite that quietly does not run is a suite reporting
+# success it did not earn.
+#
+# Everything here except the acknowledgement is a fact about the jar. The acknowledgement is a
+# statement only its holder can make, and this repository has no way to make it for them.
+
+[jar]
+# Where the owner puts their own jar. The path is inside the repository and ignored by version
+# control, so a jar that lands there is one somebody put there rather than one this build produced.
+path = ".quickstart/aem-quickstart.jar"
+digest = ""
+version = ""
+deployment = "aem-6-5-lts"
+reason = "The row this tier stands for. A quickstart is a self-managed or managed-services author, which is the deployment row that is not the one this product is built for - and running against it is what turns that row from a declaration into evidence."
+
+[acknowledgement]
+# Set by the owner, and by nobody else. This build cannot make this statement on anybody's behalf.
+acknowledged = false
+statement = ""
+reason = "The jar is licensed to whoever holds it. What this field records is that its holder knows this repository is about to build a container image from it locally, and that the image is never pushed and never written into the working tree."
+
+[image]
+# Built at run time from the owner's jar, never as a build artifact and never pushed.
+name = "localhost/slingshot-agent-quickstart:1"
+label = "rs.slingshot.agent.interop"
+reason = "Labelled so the harness's own leak check and the engine's list can find it. Built locally each run because an image containing somebody's licensed jar is not a thing this repository may keep, let alone publish."

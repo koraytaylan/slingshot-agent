@@ -1,0 +1,139 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The analysers every content package and the container are held to.
+#
+# Cloud Manager runs Adobe's own container analyser against a deployment before it accepts it, and a
+# finding there is a deployment that does not happen. Running the same analyser here means a finding
+# is something somebody sees on the machine that wrote it rather than in somebody else's pipeline.
+#
+# Beside it are the FileVault validators, which decide what a package writes and what it depends on.
+# Neither set may be disabled and neither may have a severity lowered: a validator switched off is a
+# property nobody is checking, and the whole point of a package gate is that the package is the only
+# thing a customer's instance ever sees.
+
+[container_analyser]
+artifact = "aemanalyser-maven-plugin"
+module = "all"
+fail_on_finding = true
+reason = "The container is the artifact a customer's own build embeds, and their pipeline is where a defect in it would otherwise surface."
+
+# The analyser tasks this build runs. A task named here and not run, or run and not named,
+# fails, so the set is one somebody chose rather than whichever set the plugin shipped with.
+
+[[analyser_task]]
+name = "aem-env-var"
+reason = "An environment variable a Cloud Service deployment does not set is a configuration value that is absent on the row this product is built for."
+
+[[analyser_task]]
+name = "aem-provider-type"
+reason = "A provider type implemented rather than consumed is an interface Adobe may change without it being a breaking change for anybody but whoever implemented it."
+
+[[analyser_task]]
+name = "api-regions"
+reason = "A package listed as exported and not actually exported is a promise to another bundle that nothing keeps."
+
+[[analyser_task]]
+name = "api-regions-check-order"
+reason = "Regions applied in the wrong order let a package resolve from a region it was not meant to reach."
+
+[[analyser_task]]
+name = "api-regions-crossfeature-dups"
+reason = "One package exported by two features is two versions of the same thing, and which one wins is not a decision anybody made."
+
+[[analyser_task]]
+name = "api-regions-exportsimports"
+reason = "An import from outside the platform's own public region is a dependency on something Adobe may move without telling anybody."
+
+[[analyser_task]]
+name = "artifact-rules"
+reason = "An artifact the platform refuses at the version declared is a deployment that stops before it starts."
+
+[[analyser_task]]
+name = "bundle-nativecode"
+reason = "Native code in a bundle is code that cannot run on a deployment whose architecture nobody checked."
+
+[[analyser_task]]
+name = "bundle-resources"
+reason = "A resource inside a bundle is a resource the repository does not have, and every claim this product makes about content is a claim about the repository."
+
+[[analyser_task]]
+name = "bundle-unversioned-packages"
+reason = "A package exported with no version is a package every consumer resolves against by accident."
+
+[[analyser_task]]
+name = "configuration-api"
+reason = "A configuration for a component that is not there is a setting nobody applies and nobody notices."
+
+[[analyser_task]]
+name = "configurations-basic"
+reason = "A configuration whose shape the component cannot read is a component that starts with defaults nobody chose."
+
+[[analyser_task]]
+name = "content-packages-validation"
+reason = "The packages inside the container are held to the same validators the packages themselves are, in the place a customer's build would find a defect in them."
+
+[[analyser_task]]
+name = "region-deprecated-api"
+reason = "An interface the platform has deprecated for its own region is one that stops being there at an upgrade nobody scheduled."
+
+[[analyser_task]]
+name = "repoinit"
+reason = "A repository initialisation script that does not parse is a service user that does not exist, and a service user that does not exist is an agent that cannot write its own state."
+
+[[analyser_task]]
+name = "repoinit-conflicts"
+reason = "Two scripts creating the same thing differently is a repository whose state depends on install order."
+
+[[analyser_task]]
+name = "requirements-capabilities"
+reason = "A bundle whose requirements nothing satisfies does not start, and an instance where it does not start is an instance where every route this product serves is absent."
+
+# The FileVault validators every content-package module runs. Each fails at its first finding.
+[[validator]]
+name = "jackrabbit-filter"
+reason = "A package writing outside the roots the structure package declares is a package that collides with somebody else's product, and the collision surfaces on their instance rather than here."
+
+[[validator]]
+name = "jackrabbit-packagetype"
+reason = "A package whose declared type does not match what it carries installs at the wrong point in a deployment, or on the wrong deployment altogether."
+
+[[validator]]
+name = "jackrabbit-nodetypes"
+reason = "A node type a package uses and does not declare is content the repository refuses on an instance that does not already carry it."
+
+[[validator]]
+name = "jackrabbit-accesscontrol"
+reason = "Access control in a package is a grant nobody reviewed, arriving with an install nobody expected it in."
+
+[[validator]]
+name = "jackrabbit-dependencies"
+reason = "A package that depends on another and does not say so installs in an order nobody chose."
+
+# The exact contents of the container, in the order they install. The container is empty in this
+# commit and the rows below are what fills it; the check holds both directions, so an embed with no
+# row and a row with no embed each fail.
+
+[[embedded]]
+artifact = "slingshot-agent-core"
+target = "/apps/slingshot-agent-packages/application/install.author"
+run_mode = ""
+order = 0
+
+[[embedded]]
+artifact = "slingshot-agent-aem"
+target = "/apps/slingshot-agent-packages/application/install.author"
+run_mode = ""
+order = 1
+
+[[embedded]]
+artifact = "slingshot-agent-ui.apps"
+target = "/apps/slingshot-agent-packages/application/install"
+run_mode = ""
+order = 2
+
+[[embedded]]
+artifact = "slingshot-agent-ui.config"
+target = "/apps/slingshot-agent-packages/application/install"
+run_mode = ""
+order = 3

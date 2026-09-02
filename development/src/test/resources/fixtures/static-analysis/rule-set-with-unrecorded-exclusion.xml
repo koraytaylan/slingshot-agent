@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="fixture" xmlns="http://pmd.sourceforge.net/ruleset/2.0.0">
+  <description>A rule set excluding a rule nobody recorded a reason for.</description>
+  <rule ref="category/java/design.xml">
+    <exclude name="NobodyRecordedThis"/>
+  </rule>
+</ruleset>

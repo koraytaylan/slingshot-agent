@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "platform-fault"
+kind = "property"
+feature = "control-capabilities"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.PlatformFaultScenario"
+reason = "The platform commands report what the platform said. What happens when it says nothing is what decides whether the unknown outcome is a real answer or a category nobody can reach - and a category no fault can produce does not exist, however carefully its schema was written. What this proves that no unit suite can is that a rejection and a throw are one answer to a caller, that a non-answer is bounded by the contract's own deadline, and that no fault leaves a held thread, a leaked session, an unreleased lease, or an occupied stream slot."

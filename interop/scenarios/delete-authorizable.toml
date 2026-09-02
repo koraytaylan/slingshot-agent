@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "delete-authorizable"
+kind = "command"
+feature = "delete_authorizable"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.DeleteAuthorizableScenario"
+reason = "The change nothing undoes, and the one that carries what the caller believes it is removing. What this proves that no unit suite can is that a real repository refuses a group that still holds members rather than cascading — which would take permissions from people who are not in the request."

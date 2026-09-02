@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Runs exactly one fuzz target, at the declared seed and iteration count, reaching nothing.
+#
+# One target per invocation, named, because a command that ran all of them would be a command
+# nobody could point at a finding with. The seed and the count come from the pinned declaration
+# rather than from an argument, so two people running the same target run the same thing: a run
+# somebody could shorten is a run whose result depends on how it was invoked.
+#
+# The tool is verified before anything runs. Absent, unprepared, or not the pinned bytes are three
+# refusals with three exit codes, and none of them runs a target - a fuzzing command that quietly
+# did nothing would be a suite reporting success it did not earn.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly TOOL_FILE="${REPOSITORY_ROOT}/support/fuzzing-tool.toml"
+readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
+readonly EXIT_USAGE=2
+readonly EXIT_UNKNOWN_TARGET=3
+
+# Only the rows under [[target]] are targets. The tool has a name too, and offering it as one would
+# send somebody to run a fuzzer against the fuzzer.
+declared_targets() {
+    python3 - "${TOOL_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+inside = False
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("[["):
+        inside = stripped == "[[target]]"
+    elif inside and stripped.startswith("name = "):
+        print("  " + stripped.split('"')[1])
+PYTHON
+}
+
+if [[ $# -ne 1 ]]; then
+    printf 'run_fuzz_target takes exactly one target name, and was given: %s\n' "$*" >&2
+    printf 'The declared targets are:\n' >&2
+    declared_targets >&2
+    exit "${EXIT_USAGE}"
+fi
+
+readonly TARGET="$1"
+
+read -r entry corpus seed iterations < <(python3 - "${TOOL_FILE}" "${TARGET}" <<'PYTHON'
+import pathlib
+import sys
+
+wanted = sys.argv[2]
+name = entry = corpus = ""
+found_entry = found_corpus = ""
+seed = iterations = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("name = "):
+        name = stripped.split('"')[1]
+    elif stripped.startswith("entry = "):
+        entry = stripped.split('"')[1]
+    elif stripped.startswith("corpus = "):
+        corpus = stripped.split('"')[1]
+        if name == wanted:
+            found_entry, found_corpus = entry, corpus
+    elif stripped.startswith("seed = "):
+        seed = stripped.split(" = ")[1]
+    elif stripped.startswith("iterations = "):
+        iterations = stripped.split(" = ")[1]
+print("%s %s %s %s" % (found_entry or "-", found_corpus or "-", seed, iterations))
+PYTHON
+)
+
+if [[ "${entry}" == "-" ]]; then
+    printf 'no target is declared as %s. The declared targets are:\n' "${TARGET}" >&2
+    declared_targets >&2
+    exit "${EXIT_UNKNOWN_TARGET}"
+fi
+
+"${REPOSITORY_ROOT}/scripts/verify_fuzzing_tool"
+
+read -r held_at < <(python3 - "${TOOL_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    if line.strip().startswith("held_at = "):
+        print(line.strip().split('"')[1])
+        break
+PYTHON
+)
+
+"${REPOSITORY_ROOT}/mvnw" --offline --batch-mode --no-transfer-progress \
+    -Dmaven.repo.local="${CACHE_DIRECTORY}" \
+    -f "${REPOSITORY_ROOT}/pom.xml" \
+    -pl development -am -Djacoco.skip=true test-compile -DskipTests
+
+exec java -cp "${REPOSITORY_ROOT}/${held_at}" \
+    com.code_intelligence.jazzer.Jazzer \
+    "--cp=${REPOSITORY_ROOT}/development/target/test-classes:${REPOSITORY_ROOT}/development/target/classes:${REPOSITORY_ROOT}/core/target/classes" \
+    "--target_class=${entry}" \
+    "-seed=${seed}" \
+    "-runs=${iterations}" \
+    "${REPOSITORY_ROOT}/${corpus}"

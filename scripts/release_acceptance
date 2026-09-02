@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Runs every gate a release requires, in order, and records only what it observed.
+#
+# It records results rather than accepting them. A matrix somebody can write by hand is a matrix
+# that says whatever the person writing it hoped, and the whole value of this one is that a row says
+# proved only where something actually ran.
+#
+# A row this run did not exercise is left as it was, which for a row nothing has ever run against
+# means declared and unproved. That is a more useful thing to publish than a claim nobody tested.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly EXIT_USAGE=2
+
+if [[ $# -ne 0 ]]; then
+    printf 'release_acceptance takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+printf '== the gate\n'
+"${REPOSITORY_ROOT}/scripts/quality"
+
+printf '\n== the release artifacts\n'
+"${REPOSITORY_ROOT}/scripts/build_release_artifacts"
+"${REPOSITORY_ROOT}/scripts/verify_release_artifacts"
+
+printf '\n== what is proved about each deployment row\n'
+python3 - "${REPOSITORY_ROOT}/support/acceptance-matrix.toml" <<'PYTHON'
+import pathlib
+import sys
+
+deployment = tier = instance = ""
+scenarios = "[]"
+streaming = "false"
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines() + ["[[row]]"]:
+    stripped = line.strip()
+    if stripped == "[[row]]" and deployment:
+        proved = tier and instance and scenarios != "[]" and streaming == "true"
+        print("  %s: %s" % (deployment, "proved" if proved else "declared and unproved"))
+        deployment = tier = instance = ""
+        scenarios = "[]"
+        streaming = "false"
+    elif stripped.startswith("deployment = "):
+        deployment = stripped.split('"')[1]
+    elif stripped.startswith("tier = "):
+        tier = stripped.split('"')[1]
+    elif stripped.startswith("instance = "):
+        instance = stripped.split('"')[1]
+    elif stripped.startswith("scenarios = "):
+        scenarios = stripped.split("=", 1)[1].strip()
+    elif stripped.startswith("ingress_streaming_observed = "):
+        streaming = stripped.split("=", 1)[1].strip()
+PYTHON
+
+printf '\nA row is proved only where a tier ran against a named instance and that row own ingress\n'
+printf 'was watched passing an unbuffered event stream. Everything else is declared and unproved,\n'
+printf 'including anything that works perfectly here, because working here is a fact about here.\n'

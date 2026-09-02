@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "operation-lookup"
+kind = "route"
+feature = "operation-lookup"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.OperationLookupScenario"
+reason = "The route the client's whole ambiguity story rests on. On a running instance holding no operations, every well-formed lookup is the not-there-yet answer and every unreadable identifier is a refusal - which is the distinction a client waits on rather than gives up on, proved where the platform's own resolution and authentication are in the way."

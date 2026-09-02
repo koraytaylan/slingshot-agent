@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<!--
+  Convention is decided here so that a later scan has no convention finding left to raise. Every
+  module fails the build at the first finding; nothing produces a report somebody reads later.
+-->
+<module name="Checker">
+  <property name="severity" value="error"/>
+  <property name="charset" value="UTF-8"/>
+  <property name="fileExtensions" value="java"/>
+
+  <module name="NewlineAtEndOfFile"/>
+  <module name="FileTabCharacter"/>
+  <module name="RegexpSingleline">
+    <property name="format" value="\s+$"/>
+    <property name="message" value="a line ends in whitespace"/>
+  </module>
+  <module name="LineLength">
+    <property name="max" value="110"/>
+    <property name="ignorePattern" value="^\s*\*\s*\{@link|^import |^\s*//\s*https?://"/>
+  </module>
+
+  <module name="TreeWalker">
+    <!-- Imports say exactly what a file uses. -->
+    <module name="UnusedImports"/>
+    <module name="RedundantImport"/>
+    <module name="AvoidStarImport"/>
+    <module name="IllegalImport"/>
+    <module name="CustomImportOrder">
+      <property name="customImportOrderRules"
+                value="STATIC###THIRD_PARTY_PACKAGE"/>
+      <property name="sortImportsInGroupAlphabetically" value="true"/>
+      <property name="separateLineBetweenGroups" value="true"/>
+    </module>
+
+    <!-- Naming. The source policy decides spelling; this decides form. -->
+    <module name="PackageName"/>
+    <module name="TypeName"/>
+    <module name="MemberName"/>
+    <module name="ParameterName"/>
+    <module name="LocalVariableName"/>
+    <module name="MethodName"/>
+    <module name="ConstantName"/>
+    <module name="RecordComponentName"/>
+    <module name="PatternVariableName"/>
+
+    <!-- Blocks and structure. -->
+    <module name="NeedBraces"/>
+    <module name="LeftCurly"/>
+    <module name="RightCurly"/>
+    <module name="EmptyBlock">
+      <property name="option" value="text"/>
+    </module>
+    <module name="EmptyStatement"/>
+    <module name="FallThrough"/>
+    <module name="MissingSwitchDefault"/>
+    <module name="DefaultComesLast"/>
+    <module name="OneStatementPerLine"/>
+    <module name="MultipleVariableDeclarations"/>
+    <module name="ArrayTypeStyle"/>
+    <module name="UpperEll"/>
+    <module name="ModifierOrder"/>
+    <module name="RedundantModifier"/>
+
+    <!-- Correctness the compiler does not decide. -->
+    <module name="EqualsHashCode"/>
+    <module name="CovariantEquals"/>
+    <module name="StringLiteralEquality"/>
+    <module name="NoClone"/>
+    <module name="NoFinalizer"/>
+    <module name="SuperClone"/>
+    <module name="IllegalThrows"/>
+    <module name="IllegalCatch"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="SimplifyBooleanReturn"/>
+    <module name="HiddenField">
+      <property name="ignoreConstructorParameter" value="true"/>
+      <property name="ignoreSetter" value="true"/>
+      <property name="ignoreAbstractMethods" value="true"/>
+    </module>
+
+    <!-- Whitespace, so a diff never carries a formatting change nobody asked for. -->
+    <module name="WhitespaceAfter"/>
+    <module name="WhitespaceAround">
+      <property name="allowEmptyConstructors" value="true"/>
+      <property name="allowEmptyMethods" value="true"/>
+      <property name="allowEmptyTypes" value="true"/>
+      <property name="allowEmptyLambdas" value="true"/>
+    </module>
+    <module name="NoWhitespaceBefore"/>
+    <module name="ParenPad"/>
+    <module name="TypecastParenPad"/>
+    <module name="GenericWhitespace"/>
+    <module name="MethodParamPad"/>
+    <module name="EmptyLineSeparator">
+      <property name="allowNoEmptyLineBetweenFields" value="true"/>
+      <property name="allowMultipleEmptyLinesInsideClassMembers" value="false"/>
+    </module>
+    <module name="Indentation">
+      <property name="basicOffset" value="4"/>
+      <property name="lineWrappingIndentation" value="8"/>
+      <property name="throwsIndent" value="8"/>
+      <property name="arrayInitIndent" value="4"/>
+    </module>
+  </module>
+</module>

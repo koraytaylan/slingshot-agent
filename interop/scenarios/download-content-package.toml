@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "download-content-package"
+kind = "command"
+feature = "download_content_package"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.DownloadContentPackageScenario"
+reason = "The one read that needs room to work, on a running instance. What this proves that no unit suite can: that the command is registered on a real Sling runtime, that its committed row is the only one in the registry declaring staging bytes — the single exception the framework said there would be exactly one of — and that it requires an operation key, because the repository can change between two identical requests and two packages are not one package."

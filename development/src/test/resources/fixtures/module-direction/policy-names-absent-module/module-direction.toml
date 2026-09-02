@@ -1,0 +1,32 @@
+[[module]]
+name = "core"
+artifact = "slingshot-agent-core"
+kind = "bundle"
+
+[[module]]
+name = "aem"
+artifact = "slingshot-agent-aem"
+kind = "bundle"
+
+[[module]]
+name = "development"
+artifact = "slingshot-agent-development"
+kind = "tooling"
+
+[[module]]
+name = "interop"
+artifact = "slingshot-agent-interop"
+kind = "tooling"
+
+[[edge]]
+from = "aem"
+to = "core"
+scope = "provided"
+reason = "a fixture edge"
+
+[[edge]]
+from = "development"
+to = "core"
+scope = "test"
+reason = "a fixture edge"
+

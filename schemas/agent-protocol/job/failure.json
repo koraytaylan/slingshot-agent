@@ -1,0 +1,32 @@
+{
+    "$id": "urn:slingshot:agent:job:failure:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "What a command did instead of producing an answer. Every category states whether the command changed anything, and one of the three values it may state is that nobody knows - which is the case a caller most needs to distinguish and the one most often flattened.",
+    "properties": {
+        "effect": {
+            "enum": [
+                "applied",
+                "none",
+                "unknown"
+            ]
+        },
+        "failure_category": {
+            "enum": [
+                "applied_then_failed",
+                "argument_rejected",
+                "budget_spent",
+                "conflict",
+                "interrupted",
+                "not_found",
+                "permission_denied",
+                "platform_failed",
+                "refused_before_starting"
+            ]
+        }
+    },
+    "required": [
+        "failure_category"
+    ],
+    "type": "object"
+}

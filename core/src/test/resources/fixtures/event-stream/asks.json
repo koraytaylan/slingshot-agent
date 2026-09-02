@@ -1,0 +1,32 @@
+{
+  "with-events-waiting": {
+    "daemon_subscription_identifier": "following-daemon-one",
+    "agent_operation_identifier": "c863ff802d468c34923e822b98fcc9b376fb21b441b34acc20d8dcb122fc4b55",
+    "agent_event_store_generation": 1
+  },
+  "with-nothing-waiting": {
+    "daemon_subscription_identifier": "following-daemon-one",
+    "agent_operation_identifier": "a19ed2ee34925f355308baa500923710c84b47b5ca6e860f6341528d5194dc84",
+    "agent_event_store_generation": 1
+  },
+  "on-an-unknown-subscription": {
+    "daemon_subscription_identifier": "a-subscription-nobody-took",
+    "agent_operation_identifier": "c863ff802d468c34923e822b98fcc9b376fb21b441b34acc20d8dcb122fc4b55",
+    "agent_event_store_generation": 1
+  },
+  "on-a-foreign-generation": {
+    "daemon_subscription_identifier": "following-daemon-one",
+    "agent_operation_identifier": "c863ff802d468c34923e822b98fcc9b376fb21b441b34acc20d8dcb122fc4b55",
+    "agent_event_store_generation": 7
+  },
+  "on-an-operation-this-caller-cannot-see": {
+    "daemon_subscription_identifier": "following-daemon-one",
+    "agent_operation_identifier": "97095a23389b9621d7339ec1161b29c8ee7ebde5add54f8410e8fe0c5c19e8e1",
+    "agent_event_store_generation": 1
+  },
+  "named-with-nonsense": {
+    "daemon_subscription_identifier": "a name with spaces",
+    "agent_operation_identifier": "not-an-identifier",
+    "agent_event_store_generation": 1
+  }
+}

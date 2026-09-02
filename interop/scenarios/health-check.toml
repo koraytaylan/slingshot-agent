@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "health-check"
+kind = "property"
+feature = "query-index-coverage"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.HealthCheckScenario"
+reason = "Two of the six checks exist because of how this fails on somebody else's instance rather than on ours: routes the servlet resolver's configuration never registered, and a declared query whose covering index that repository no longer has. Both are silent, both look like something else, and neither is visible anywhere but here. What this proves that no unit suite can is that the queries this policy declares are the ones a running instance is actually asked to plan, and that the tree the check compares against is the one the deployment's own initialisation creates rather than one this bundle wrote down twice."

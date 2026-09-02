@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What an owner has to supply before anything may be published, and what they have actually
+# supplied.
+#
+# A publishable group identifier is a claim to a namespace somebody has to have verified, and a
+# repository field is a claim about where the source is. Neither is inferred from a directory name.
+# The identifier `rs.slingshot` reverses `slingshot.rs`, a domain the owner holds, so the namespace
+# is verifiable — and verifiable is not verified. Holding a domain is a fact about the world; a
+# completed namespace verification is a fact about a registry that only the owner who did it can
+# report. The boundary gates on the second.
+#
+# Packaging an installable container is always allowed. Nothing here blocks a build, an install, or
+# an operator taking the artifact and putting it on an author. What it blocks is publication.
+
+[namespace]
+group = "rs.slingshot"
+domain = "slingshot.rs"
+# Set by an owner, after actually completing the registry's own verification, and by nobody else.
+verified = false
+verification_reference = ""
+
+[repository]
+url = ""
+connection = ""
+
+[developer]
+name = ""
+identifier = ""
+
+# What the Maven repository checks every artifact against. A signature is a claim that these bytes
+# came from whoever holds this key, and a registry that accepted an unsigned artifact would be
+# accepting a claim nobody made. The identity is the owner's; the key itself never appears here or
+# anywhere else in this repository.
+[signing]
+identity = ""
+public_key_fingerprint = ""
+
+# The artifact has two audiences, so there are two targets rather than one: a project that embeds
+# this container package in its own build, and an operator who installs it by hand. Each declares
+# its own preconditions, and a target whose preconditions are met is never blocked by another
+# target's absent ones.
+
+[[target]]
+id = "maven-central"
+audience = "A customer project that depends on this container package and embeds it in its own container, which is how a Cloud Service deployment reaches an author at all."
+requires_namespace_verification = true
+required_fields = ["repository.url", "repository.connection", "developer.name", "developer.identifier", "signing.identity", "signing.public_key_fingerprint"]
+
+[[target]]
+id = "release-asset"
+audience = "An operator who installs the container package by hand on a self-managed or managed-services author."
+requires_namespace_verification = false
+required_fields = ["repository.url"]

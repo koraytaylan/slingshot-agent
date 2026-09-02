@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "navigation"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.NavigationScenario"
+reason = "An operator who has just installed this looks under Tools, the way they look for anything else that was installed into their author. If nothing is there they conclude nothing was installed - and they are not wrong to. What this proves that no unit suite can: that the entry is written where Adobe's own extension point reads, that its target resolves, and that the filter removes the one node it created and nothing beside it."

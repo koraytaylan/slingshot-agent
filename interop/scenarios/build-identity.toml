@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "build-identity"
+kind = "property"
+feature = "client-route-constants"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.BuildIdentityScenario"
+reason = "An operator diagnosing a version disagreement has to read both sides, and this is the side nobody can see from outside: which commit, which two contract digests, which generation, and whether this build claims the row it is running on. What this proves that no unit suite can is that the digests the page renders are the ones the discovery route answers on a real instance, so a client comparing them is never told it is the one that is wrong."

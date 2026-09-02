@@ -1,0 +1,19 @@
+title = "accepted"
+count = 3
+strict = true
+
+[origin]
+name = "slingshot"
+
+[free]
+anything = "goes"
+so = "does this"
+
+[[row]]
+name = "first"
+reason = "because"
+colour = "red"
+
+[[row]]
+name = "second"
+reason = "also because"

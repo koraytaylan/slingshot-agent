@@ -1,0 +1,24 @@
+[[deployment]]
+id = "aem-cloud-service"
+product = "Adobe Experience Manager as a Cloud Service"
+java_runtime = 21
+sling_version = "12"
+oak_version = "1.78"
+clustered = true
+context_prefix = ""
+request_window_milliseconds = 60000
+interop_tier = "b"
+built_for = true
+
+[[deployment]]
+id = "aem-6-5-lts"
+product = "Adobe Experience Manager 6.5 Long Term Support"
+java_runtime = 21
+sling_version = "12"
+oak_version = "1.66"
+clustered = false
+context_prefix = ""
+request_window_milliseconds = 300000
+interop_tier = "b"
+built_for = false
+evidence = "a tier ran against it"

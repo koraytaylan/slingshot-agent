@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "list-sling-job-queues"
+kind = "command"
+feature = "list_sling_job_queues"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ListSlingJobQueuesScenario"
+reason = "Where an author instance's problems go to hide: replication that is not happening, workflows that never started, all of it a queue with something stuck in it and none of it visible from the content. What this proves that no unit suite can is that the job system is reachable on a real runtime and that the row refuses an operation key."

@@ -1,0 +1,17 @@
+/*
+ * SPDX-License-Identifier: MIT OR Apache-2.0
+ * Copyright 2026 Koray Taylan Davgana
+ *
+ * What the platform's own styling does not already do, which is very little. Every colour here is a
+ * Coral variable rather than a value, so a console that looks wrong after an upgrade looks wrong in
+ * the same way everything else does rather than in its own way.
+ */
+.slingshot-agent-tail {
+    font-family: var(--coral-fontfamily-code, monospace);
+    max-height: 24em;
+    overflow-y: auto;
+}
+
+.slingshot-agent-tail-ended {
+    opacity: 0.6;
+}

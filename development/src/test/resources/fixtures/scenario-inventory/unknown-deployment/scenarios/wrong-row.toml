@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "wrong-row"
+kind = "route"
+feature = "capabilities"
+tier = "a"
+deployments = ["aem-7-0"]
+runner = "rs.slingshot.agent.interop.tier.WalkingSkeletonScenario"
+reason = "A fixture, which exists to be accepted or refused rather than to be run."

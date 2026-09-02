@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "reorder_component"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: running it twice is not running it once, so the caller supplies a
+# key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["component_access_denied", "component_not_found", "mutation_outcome_unknown", "parent_not_orderable", "repository_commit_failed", "sibling_not_found"]
+argument_schema_digest = "69e22ae3092263c041688fe59fc57c3e03d4da50cf4938f51c1cecdf22133000"
+result_schema_digest = "f7828b5e22d922711a0da6e7e52ee6de62046bf41f78ad3c86a3c6f93f1399fa"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

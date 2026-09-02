@@ -1,0 +1,13 @@
+{
+    "$id": "urn:slingshot:agent:common:teleportation:1",
+    "additionalProperties": false,
+    "properties": {
+        "destination": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "destination"
+    ],
+    "type": "object"
+}

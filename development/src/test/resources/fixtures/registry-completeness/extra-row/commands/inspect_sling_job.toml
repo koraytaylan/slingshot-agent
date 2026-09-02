@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "inspect_sling_job"
+contract_version = "1.0.0"
+access = "read"
+
+# Intrinsically idempotent: reading twice is reading once, so a key is refused rather than stored —
+# an operation nobody can repeat differently needs nothing to hold it to one attempt.
+operation_key = "refused"
+
+result_bytes = 262144
+failure_categories = ["job_inventory_failed", "job_not_found", "result_budget_exceeded"]
+argument_schema_digest = "f897a58462860c8f8e1103ec2964c6485aa0f391eb5523df30bf80a22abf9217"
+result_schema_digest = "f046638811355f795e767489d6117a40d0d1780261acdf8205d8f18cacf5dffd"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

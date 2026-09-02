@@ -1,0 +1,8 @@
+[registry]
+name = "Maven Central"
+reason = "a fixture"
+
+[[prerequisite]]
+id = "nothing-like-this"
+element = "project.nothing_like_this"
+reason = "a fixture"

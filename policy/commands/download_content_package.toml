@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row. This is the one
+# command that declares room to work in: the staging is inside the agent's own tree, reached through
+# the framework's staging area, and it is still a read because it replaces nothing the caller owns.
+
+[command]
+wire_name = "download_content_package"
+contract_version = "1.0.0"
+access = "read"
+
+# Not intrinsically idempotent: the repository can change between two identical requests, so two
+# packages are not one package and the caller supplies a key.
+operation_key = "required"
+
+result_bytes = 1048576
+failure_categories = ["artifact_publication_failed", "artifact_publication_outcome_unknown", "evaluation_budget_exceeded", "filevault_filter_unrepresentable", "filevault_package_failed", "filevault_profile_unsupported", "pattern_rejected", "repository_read_failed", "root_access_denied", "root_not_found", "staging_cleanup_failed"]
+argument_schema_digest = "a0185592d20955b10986d323edd0758af24783249fba5555cdc69e49cecf2bcc"
+result_schema_digest = "640ff1ad40d6b5d9c581b0b153771af11f7dba9a5691bf5396a4b317dd0816da"
+contract_limits_digest = "a4d75953b0b52e9e2e110dd836f53f33bba3f2a28f42329f511b55143c12d9d5"
+
+# The room this command may take inside the agent's own tree while it works. Every other command
+# declares none; this is the exception task 1701 said there would be exactly one of.
+staging_bytes = 536870912
+
+execution = "immediate"
+
+# The client publishes one category this build cannot yet produce. It exists for an agent that
+# writes more than one package profile and can be asked for one it does not write; this build writes
+# exactly one and takes no profile argument, so nothing here can reach it. Declared anyway, because
+# the two halves agreeing about what a caller may be told is worth more than a set that is exactly
+# reachable — and said here rather than left as a silent difference between the two catalogues.
+unproduced_categories = ["filevault_profile_unsupported"]

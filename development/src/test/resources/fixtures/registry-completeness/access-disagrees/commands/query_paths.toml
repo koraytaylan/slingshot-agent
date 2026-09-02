@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row.
+
+[command]
+wire_name = "query_paths"
+contract_version = "1.0.0"
+access = "write"
+
+# The client classifies this command as intrinsically idempotent: asking the same subtree for the
+# same type twice is asking once, so a key would decide nothing and is refused. The command beside
+# it in this package requires one, which is why the rule is read from the client rather than
+# derived from the fact that both are reads.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
+argument_schema_digest = "10a0d10dcc0c9cccb25ebd074306231042bc82886c8d80bfb5e6723fdeb94c5c"
+result_schema_digest = "f4fce3d870747b7208a8d14081c00fac4724c129c1edcbd9ee9a6e06adca5691"
+contract_limits_digest = "c7f1218d8f79f883959be6004b7936718e8f6f68c1f428c7b3bd2d63eb30eb27"
+staging_bytes = 0
+execution = "immediate"

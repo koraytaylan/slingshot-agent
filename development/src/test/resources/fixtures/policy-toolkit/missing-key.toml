@@ -1,0 +1,17 @@
+title = "accepted"
+count = 3
+
+[origin]
+name = "slingshot"
+
+[free]
+anything = "goes"
+so = "does this"
+
+[[row]]
+name = "first"
+reason = "because"
+
+[[row]]
+name = "second"
+reason = "also because"

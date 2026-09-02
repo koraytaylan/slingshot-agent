@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "submission"
+kind = "route"
+feature = "submit"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.SubmissionScenario"
+reason = "The one route that starts work, asked for on a running instance: that it is registered at all, that the platform's own authentication reaches it, that a body arrives as bytes rather than as parameters, and that a refusal comes back as a status carrying nothing. What a running instance cannot add until a command exists is the work itself, and a submission naming work nothing here runs is refused before any record is written - which is the property that matters most while the command surface is still being built."

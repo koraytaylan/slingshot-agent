@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "repository-fault"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.RepositoryFaultScenario"
+reason = "Every durable guarantee here is a claim about what a commit does, and a commit that fails, one that conflicts, one refused because the store is full, and a session that went away are four different claims. Code that treated any two alike would recover wrongly for one. What this proves that no unit suite can is that all four are distinguishable on a real store, that each leaves a reachable disposition rather than a state nothing moves, and that a full store refuses admission rather than failing a write."

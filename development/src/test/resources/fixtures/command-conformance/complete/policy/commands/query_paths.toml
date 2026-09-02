@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[command]
+wire_name = "query_paths"
+semantic_contract_version = "1.0.0"
+access = "read"
+operation_key = "refused"
+result_bytes = 1048576
+failure_categories = ["argument_rejected", "not_found"]
+argument_schema_digest = "10a0d10dcc0c9cccb25ebd074306231042bc82886c8d80bfb5e6723fdeb94c5c"
+result_schema_digest = "f4fce3d870747b7208a8d14081c00fac4724c129c1edcbd9ee9a6e06adca5691"
+limits_digest = "0000000000000000000000000000000000000000000000000000000000000003"
+staging_bytes = 0
+execution_class = "immediate"

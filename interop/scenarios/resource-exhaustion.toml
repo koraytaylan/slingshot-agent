@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "resource-exhaustion"
+kind = "property"
+feature = "allocation"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ResourceExhaustionScenario"
+reason = "An author that has stopped serving is not distinguishable, from outside, from one that is gone. Every bound in this repository exists so a caller cannot produce that state. What this proves that no unit suite can is that each bound refuses at the contract's own value on a real instance while every other route still answers, that saturating the stream budget leaves request threads available, and that a second caller is served throughout every single-caller exhaustion."

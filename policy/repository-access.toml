@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Two kinds of access, and what each may reach.
+#
+# Confusing them is how an agent becomes a way to do things the caller could not do themselves. The
+# agent's own bookkeeping is the agent's, under a service user whose permissions are a list somebody
+# can read out loud. Anything the caller asked for runs as the caller, so the repository's own
+# access control is what decides it.
+#
+# The second sentence is only cheap because of a decision made elsewhere: a command executes inside
+# the request that submitted it, so the caller's session is the request's own and there is nothing
+# to obtain, borrow, or grant. An agent that executed later would have had to impersonate, and
+# impersonation is a standing privilege over other people's identities that somebody would then have
+# to justify. Not needing it is worth more than any amount of care in bounding it.
+
+[service_user]
+name = "slingshot-agent-state"
+home = "/home/users/system/slingshot-agent"
+reason = "One identity, for one purpose: the agent's own record of what it was asked to do and what happened. It is not an identity anything a caller submitted ever runs as."
+
+# Every subservice the agent maps to that user, and what each is for.
+[[subservice]]
+name = "state"
+reason = "The durable store: operations, events, snapshots, results, and artifacts, all of them under the agent's own tree."
+
+[[subservice]]
+name = "maintenance"
+reason = "The sweep and the recovery reconciliation, which read and collect what the store wrote. Separate from the store's own subservice so that a defect in one cannot reach the other's grants."
+
+# Exactly what the service user may do, and where. Every grant names a path and a reason; a grant
+# outside the agent's own tree is refused outright rather than argued about.
+[[grant]]
+path = "/var/slingshot-agent"
+privileges = ["jcr:read", "jcr:write", "jcr:nodeTypeManagement"]
+reason = "The agent's own tree, which is the only place it writes anything. Node type management is here because the store creates typed nodes and nothing else may."
+
+[[grant]]
+path = "/var/slingshot-agent"
+privileges = ["jcr:versionManagement"]
+reason = "Terminal commits are versioned so that a snapshot and the event that produced it can be read back together after a rotation."
+
+# Paths the service user must be refused, asserted on a running instance rather than assumed. These
+# are the three that would turn the agent into a way to do things a caller could not do themselves.
+[[refused_path]]
+path = "/content"
+reason = "Everything a caller asks about content happens as the caller. If the agent's own identity could write content, every access-control decision the repository makes about a caller would be one the agent could route around."
+
+[[refused_path]]
+path = "/apps"
+reason = "The application tree is immutable on the row this product is built for, and on every other row it is the deployment's rather than the agent's."
+
+[[refused_path]]
+path = "/home"
+reason = "Nothing this product does involves anybody's identity but its own. A service user that could write to the user tree is one that could grant itself anything."
+
+# Who may use the agent at all, which is a different question from what its own identity may reach.
+#
+# The arrangement is the Groovy Console's, which Adobe operators already recognise: the tool is
+# available to administrators and to nobody else until somebody deliberately says otherwise, and
+# what widens it is a configuration naming the groups that may use it. A default of
+# `administrators` is one an operator can verify their install with; a default of nobody is one they
+# cannot tell apart from a broken install; and a default of everybody is not a default at all.
+#
+# A configuration naming no group refuses every submission rather than admitting everybody, and one
+# naming a group that does not exist is refused naming it rather than silently admitting fewer
+# people than the operator believes they named.
+[permitted_groups]
+configuration = "rs.slingshot.agent.http.AuthorizationGate"
+property = "permitted.groups"
+shipped = ["administrators"]
+reason = "An administrator can verify a fresh install and nobody else can use it until an operator names a further group. The value ships in ui.config so that what a customer gets is what this file says, and the two are compared rather than assumed."

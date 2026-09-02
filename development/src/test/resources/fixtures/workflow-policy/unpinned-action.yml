@@ -1,0 +1,14 @@
+name: unpinned
+on:
+  push: {}
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: scripts/quality

@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The same values with one deadline shortened, so a suite proving what the deadline does can prove
+# it without waiting out the one an author instance actually needs. What the deadline IS is proved
+# against the committed file instead.
+#
+# Every value the interoperability harness uses, in one place.
+#
+# The harness drives the container engine rootlessly through a process wrapper this repository owns,
+# and takes no container-orchestration test dependency. That is the same decision the sibling made
+# about its own process harness, for the same two reasons: the harness is a thing every suite
+# depends on behaving, so it should be code somebody here can read; and a test dependency that
+# reaches a daemon socket brings an ambient requirement with it, which is the opposite of what a
+# hermetic tier is for.
+
+[engine]
+executable = "podman"
+reason = "Rootless by default and daemonless, so a tier needs no privileged socket and leaves nothing running as anybody but the person who started it."
+
+[timing]
+# One absolute deadline per start, polled at this interval. Nothing sleeps for a fixed span and
+# nothing asserts how long something took: a suite that measured duration would fail on a loaded
+# machine and pass on an idle one, which is a suite that reports the machine rather than the code.
+#
+# The deadline is five minutes because it has to cover the slowest thing any tier starts, which is
+# an Adobe Experience Manager quickstart on a machine that is already running the rest of a gate.
+# A deadline chosen for the fastest tier is one that reports the load rather than the product.
+readiness_deadline_milliseconds = 3000
+readiness_poll_interval_milliseconds = 500
+stop_grace_milliseconds = 10000
+
+[capture]
+# Output goes to a file, bounded. Holding a container's output in memory is how a suite that was
+# proving something about startup ends up proving something about the heap instead.
+maximum_captured_bytes = 4194304
+reason = "Four mebibytes is more than a startup produces and less than anything that would matter, and the bound is what stops a container that logs in a loop from deciding how this suite ends."
+
+# Every container this harness labels, so the leak check can find what it started and nothing else.
+[labels]
+harness = "rs.slingshot.agent.interop"
+reason = "A leak check that listed every container on the machine would fail on somebody else's work. This one lists only what this harness labelled."
+
+# Which pinned image plays which part. The images themselves, with their digests, are in
+# support/interop-images.toml: one file records what is pinned, and this one records what each
+# pinned thing is for, so neither has to restate the other.
+[roles]
+document_store = "docker.io/library/mongo:7"
+harness_probe = "docker.io/library/alpine:3"
+reason = "The document store is what makes two nodes one repository. The probe is what the harness proves itself against, so that an assertion about a readiness deadline does not wait for somebody else's runtime to boot."

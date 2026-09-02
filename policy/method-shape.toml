@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What shape a method in this repository may have.
+#
+# Complexity in a method is almost always nesting, and nesting is almost always a refusal that was
+# written as an else instead of as a return. A method that answers every question it cannot proceed
+# with, immediately, at the top, has one indentation level and reads as a list of conditions
+# followed by the work. One that nests has the work at the bottom, four levels in, where nobody
+# looks.
+#
+# So the primary ceiling here is nesting, and the complexity numbers sit beside it as the symptoms
+# they are. Every ceiling is written once, here, with the reason for the value rather than a number
+# somebody picked.
+
+[[ceiling]]
+name = "nesting-depth"
+value = 3
+reason = "Three is a conditional inside a loop inside a method - the deepest shape that still reads as one idea. A fourth level is always a refusal that was written as an else, or a second method that has not been extracted yet."
+
+[[ceiling]]
+name = "cyclomatic-complexity"
+value = 10
+reason = "The sibling repository's own ceiling, kept identical so the two halves of one product are held to one number. It is a symptom rather than a cause, which is why nesting is checked first."
+
+[[ceiling]]
+name = "cognitive-complexity"
+value = 15
+reason = "Cognitive complexity charges for nesting where cyclomatic complexity does not, so it rises faster than the number above on exactly the code this policy exists to refuse."
+
+[[ceiling]]
+name = "method-length"
+value = 60
+reason = "Sixty physical lines is about a screen. A method nobody can see at once is one whose early returns and late work are never read together."
+
+[[ceiling]]
+name = "parameter-count"
+value = 7
+reason = "Seven is the point past which a call site stops being readable without looking the signature up. A record carrying the arguments is the answer beyond it, and the closed key sets in this repository are exactly that."
+
+# A boolean carries a fact the agent observed, or a choice somebody made. The first has nothing for
+# a name to record; the second becomes a named two-valued type, because a call site reading
+# apply(true) tells a reader nothing and apply(ReferencePolicy.REFUSE) tells them everything - and
+# because neither answer was ever a safe default.
+[boolean]
+permitted_in_reported_fact = true
+permitted_in_choice = false
+reason = "A choice is a decision a caller made and a reader has to recover from the call site. A fact is something the agent looked at and is reporting, and there is no decision for a name to record."
+
+# Positions in which a boolean is a choice rather than a fact.
+[[choice_position]]
+kind = "method-parameter"
+reason = "A call site passing true says nothing about what was chosen."
+
+[[choice_position]]
+kind = "command-argument"
+reason = "A submitted argument is the caller's own decision, and the protocol document is where a reader recovers it."
+
+[[choice_position]]
+kind = "configuration-value"
+reason = "A configuration value is an operator's decision, and the configuration is where a reader recovers it."

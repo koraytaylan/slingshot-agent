@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The coverage floor, and what is excluded from it.
+#
+# A floor fails a build; a report produces a number. The difference is whether anybody acts on it,
+# and the answer for a report is eventually no.
+#
+# Both measures are enforced independently and both are enforced per module and per class, because
+# a module average hides a class nobody tested behind a class somebody tested twice.
+
+[minimums]
+# Written as whole percentages so the policy and the build state the same two values in the same
+# form. The build reads them as ratios from the aggregator, and the check refuses the day the two
+# disagree.
+line_percent = 80
+branch_percent = 70
+reason = "Eighty and seventy are where a shortfall means a feature arrived with no scenario rather than a line that is hard to reach. They are the numbers a new command has to meet, and the interoperability-coverage gate is what decides whether the scenario proves anything."
+
+# The modules the floor applies to. The two tooling modules are not among them: a floor on the
+# coverage of the checks would be a floor on how thoroughly the gate tests itself, which the gate
+# already answers by refusing a rule with no fixture.
+[[measured_module]]
+name = "core"
+reason = "The Sling-only bundle is the product, and every claim this repository makes about the protocol is a claim about it."
+
+[[measured_module]]
+name = "aem"
+reason = "The Adobe bundle is the product too, and the tier that observes it is the one that needs a licensed input, so its unit coverage carries more weight rather than less."
+
+[[measured_module]]
+name = "interop"
+reason = "The harness the whole interoperability argument rests on is code somebody here wrote, and a defect in it would report success nothing earned."
+
+# Nothing is excluded by default. Every exclusion names one class and the reason it is excluded; a
+# package-level exclusion is refused outright, because excluding in bulk is how a floor stops
+# meaning anything without anybody deciding that it should.
+
+[[exclusion]]
+class = "rs.slingshot.agent.contract.ContractLimit"
+reason = ""

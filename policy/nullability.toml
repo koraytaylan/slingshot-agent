@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Nothing in this repository accepts a null argument or returns a null value.
+#
+# That is not a convention to be careful about; it is a property a checker decides, and once it
+# holds, an entire category of defect and an entire category of defensive code both stop existing.
+#
+# Absence is modelled by a type. A closed outcome, an empty collection, or a return-only Optional -
+# never a null. Optional never appears in a parameter position, because it converts a caller's
+# simple decision into a wrapper they have to construct, and it never appears as a field, because a
+# field that may be absent is a type that has not been designed yet.
+
+[annotations]
+package = "org.jetbrains.annotations"
+not_null = "NotNull"
+nullable = "Nullable"
+not_null_by_default = "NotNullByDefault"
+unmodifiable = "Unmodifiable"
+
+# The two ways a member's nullness may be declared. Both are decidable and both are complete; what
+# is refused is a member whose nullness is declared in neither.
+[[permitted_form]]
+form = "member-annotation"
+reason = "The member carries the non-null annotation itself, which is the form a fixture and a reviewer can both see at the member."
+
+[[permitted_form]]
+form = "package-default"
+reason = "The package's own declaration carries the default for everything in it, so the contract is stated once where the package is declared rather than repeated on every member of it. A member that wanted to differ could not: the nullable annotation is refused outright."
+
+# What the language already decides, and what the enclosing type's own contract covers.
+[[exempt]]
+kind = "primitive"
+reason = "A primitive cannot be null. Annotating one states something the language already decides, and the checker refuses the redundant annotation rather than accepting it."
+
+[[exempt]]
+kind = "private-member"
+reason = "A private member's nullness is decided by the type that owns it, and that type's own contract is what the rule holds."
+
+[[exempt]]
+kind = "test-source"
+reason = "A test constructs the shapes the rules refuse, on purpose, and holding it to the rule it is proving would make the fixture and the check the same file."
+
+# The annotations must never reach either bundle's runtime footprint: they are retained in the class
+# file and not at runtime, so a bundle importing their package would fail to resolve on an instance
+# that does not carry them. The imported-package footprint check proves this from the manifest.
+[runtime]
+importable = false
+reason = "Class-file retention means the annotation is never read at runtime, so an import of its package would be a requirement nothing satisfies."

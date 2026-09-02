@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "storage-upgrade"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.StorageUpgradeScenario"
+reason = "A fresh install proves nothing about an upgrade, and an upgrade is what every real deployment does. What this proves that no unit suite can is that a store populated by the previous release is still readable record for record after this one is installed over it, that every invariant still holds, that a token issued before it still validates after, and that an operation in flight across the upgrade reaches a disposition rather than staying wherever it was when the bundle was replaced."

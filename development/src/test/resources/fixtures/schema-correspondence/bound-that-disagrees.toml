@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every committed schema, the typed model it describes, and the digest of its bytes.
+#
+# The schemas exist so a second implementation has something to read. They are not loaded at run
+# time and nothing validates against them: the typed model is the validator, and a second
+# validator with different bounds is precisely the failure this plan was built to avoid. What
+# keeps them honest is the check that reads this file rather than a habit.
+#
+# The digest of each schema is what a five-field identity's role-schema members are derived from,
+# so a schema that changed without its digest changing would be a build advertising a contract it
+# no longer holds.
+
+[[schema]]
+path = "schemas/agent-protocol/common/envelope.json"
+model = "core/src/main/java/rs/slingshot/agent/wire/AgentEnvelope.java"
+digest = "8b365a65f327f30cdc9f516017c323b38a0981045aa3cdaddc0b58c42199008c"
+reason = "One agent document's two required halves, which every document kind carries before it carries anything of its own."
+
+[[schema]]
+path = "schemas/agent-protocol/common/error.json"
+model = "core/src/main/java/rs/slingshot/agent/wire/AgentError.java"
+digest = "e39d23e5934747b8ebcfd0d43a440bbd48d7403c62318c9205ff3853f64ce0cb"
+reason = "The one shape a refusal has, with the closed code set this side commits."
+
+[[schema]]
+path = "schemas/agent-protocol/common/provenance.json"
+model = "core/src/main/java/rs/slingshot/agent/identity/DocumentProvenance.java"
+digest = "fee73e9dda927cdc1b65619fe50ce38a7c985131aee8c4daa5cc896b9a891598"
+reason = "What a document claims about the contracts it means."
+
+[[schema]]
+path = "schemas/agent-protocol/continuation/state.json"
+model = "core/src/main/java/rs/slingshot/agent/continuation/ContinuationState.java"
+digest = "b564d3c700dd550f621f3eee5a72187631da8bb3797b81e44dd65fc9905c1eb2"
+reason = "Where a continuation token says to resume."
+
+[[schema]]
+path = "schemas/agent-protocol/continuation/token.json"
+model = "core/src/main/java/rs/slingshot/agent/continuation/ContinuationToken.java"
+digest = "208e6575333c82e4d1a68a4b3eff3294c7c078db7813cda0d8a3246f93faf5a8"
+reason = "A token as it crosses the wire: what it says and the digest binding it to a key."
+
+[[schema]]
+path = "schemas/agent-protocol/discovery/capabilities.json"
+model = "core/src/main/java/rs/slingshot/agent/discovery/CapabilityDocument.java"
+digest = "58199c5a6adcb3e89b6240219434485cf54c7aa714a82e31c81c2803c47bd5fd"
+reason = "What this agent says it is, read before a client sends it anything."
+
+[[schema]]
+path = "schemas/agent-protocol/identity/command-contract.json"
+model = "core/src/main/java/rs/slingshot/agent/identity/CommandContractIdentity.java"
+digest = "677ebdff25f19cbc67b8a8825f1bd1a4f6f94fb0a62782a851c3794f342e3254"
+reason = "The five fields that say which command contract a submission means."
+
+[[schema]]
+path = "schemas/agent-protocol/identity/operation.json"
+model = "core/src/main/java/rs/slingshot/agent/identity/OperationIdentity.java"
+digest = "03d2764c80b614d4763d95a170b0b0452f2263156c0fcf2f6f8516d77dcb9c1b"
+reason = "Which operation, at which incarnation, against which target, at which revision."
+
+[[schema]]
+path = "schemas/agent-protocol/job/event.json"
+model = "core/src/main/java/rs/slingshot/agent/wire/JobEvent.java"
+digest = "4305883962b84c7e0bebfe92296b2e2ffee600d9cdfde228cf019d51ffa320fc"
+reason = "One thing the agent says happened to one job."
+
+[[schema]]
+path = "schemas/agent-protocol/job/failure.json"
+model = "core/src/main/java/rs/slingshot/agent/wire/CommandFailure.java"
+digest = "7d523dd5f046b03debb132c73ef5b190de53d2e917a2ac93b9d4ea6968f6af95"
+reason = "What a command did instead of producing an answer, and whether it had an effect."
+
+[[schema]]
+path = "schemas/agent-protocol/job/result.json"
+model = "core/src/main/java/rs/slingshot/agent/wire/ResultDelivery.java"
+digest = "0e667bb90f493555bfac0117c2b4064d8711d987a682e983ad9e737bca1b85f9"
+reason = "How an answer arrives: inline, or as an artifact to fetch."
+
+[[schema]]
+path = "schemas/agent-protocol/job/snapshot.json"
+model = "core/src/main/java/rs/slingshot/agent/wire/JobSnapshot.java"
+digest = "869543f8b91d2aff60d9c6ac5998e526eccf366eb904e16113feaf4f9978e836"
+reason = "What the store holds about one job, in the event document's own vocabulary."
+
+# Where a schema states a length and the model reads a bound, the two are the same number and
+# this says which. A bound written into a schema and a bound read from the contract that drifted
+# apart would be two implementations disagreeing about what fits.
+
+[[bound]]
+schema = "schemas/agent-protocol/common/error.json"
+member = "code"
+limit = "maximum_agent_error_code_bytes"
+
+[[bound]]
+schema = "schemas/agent-protocol/common/error.json"
+member = "message"
+limit = "maximum_agent_error_code_bytes"
+
+[[bound]]
+schema = "schemas/agent-protocol/identity/command-contract.json"
+member = "command_wire_name"
+limit = "maximum_command_wire_name_bytes"
+
+[[bound]]
+schema = "schemas/agent-protocol/identity/command-contract.json"
+member = "command_semantic_contract_version"
+limit = "maximum_command_semantic_contract_version_bytes"
+
+[[bound]]
+schema = "schemas/agent-protocol/identity/operation.json"
+member = "selected_environment_revision"
+limit = "maximum_selected_environment_revision_bytes"

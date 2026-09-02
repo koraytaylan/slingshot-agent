@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Fetches the pinned advisory snapshot, at the exact commit, and records what arrived.
+#
+# This command reaches the network and says so. It is the only one here that does, and it is never
+# run by the gate - the gate authenticates what this left behind and refuses with this command
+# named when it is absent, which is the same arrangement as the dependency cache and the pinned
+# images.
+#
+# It records the digest of what arrived rather than checking it against one somebody typed. A digest
+# somebody typed is a digest somebody typed; a digest this recorded is what the bytes on this
+# machine hash to, and every run after it is compared with exactly that.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly PIN_FILE="${REPOSITORY_ROOT}/compatibility/advisory-database.toml"
+readonly EXIT_USAGE=2
+readonly EXIT_NO_COMMIT=3
+
+if [[ $# -ne 0 ]]; then
+    printf 'checkout_pinned_advisory_database takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+read -r origin commit held_at < <(python3 - "${PIN_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+origin = commit = held_at = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("origin = "):
+        origin = stripped.split('"')[1]
+    elif stripped.startswith("commit = "):
+        commit = stripped.split('"')[1]
+    elif stripped.startswith("held_at = ") and not held_at:
+        held_at = stripped.split('"')[1]
+print("%s %s %s" % (origin, commit or "-", held_at))
+PYTHON
+)
+
+if [[ "${commit}" == "-" ]]; then
+    printf 'no commit is pinned. An owner chooses which snapshot this product is reviewed\n' >&2
+    printf 'against; this command fetches the one they chose and never one it chose itself.\n' >&2
+    exit "${EXIT_NO_COMMIT}"
+fi
+
+printf 'This command reaches %s. Nothing else in this repository does.\n' "${origin}"
+
+rm -rf "${REPOSITORY_ROOT:?}/${held_at}"
+git clone --quiet "${origin}" "${REPOSITORY_ROOT}/${held_at}"
+git -C "${REPOSITORY_ROOT}/${held_at}" checkout --quiet "${commit}"
+rm -rf "${REPOSITORY_ROOT}/${held_at}/.git"
+
+digest="sha256:$(cd "${REPOSITORY_ROOT}/${held_at}" && find . -type f -print0 \
+    | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+
+python3 - "${PIN_FILE}" "${digest}" <<'PYTHON'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text().splitlines(True)
+for index, line in enumerate(lines):
+    if line.startswith("content_digest = "):
+        lines[index] = 'content_digest = "%s"\n' % sys.argv[2]
+        break
+path.write_text("".join(lines))
+PYTHON
+
+printf 'Recorded %s for %s at %s.\n' "${digest}" "${held_at}" "${commit}"

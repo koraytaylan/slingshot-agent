@@ -1,0 +1,19 @@
+[[pattern]]
+name = "builder"
+signature = "Declares a build method returning the built type, and the built type declares no setter."
+reason = "A thing assembled over several statements and then closed cannot be half-built when somebody reads it."
+
+[[type]]
+name = "MutableBuilder"
+pattern = "builder"
+reason = "It assembles a thing over several statements."
+
+[[type]]
+name = "HalfBuilt"
+pattern = "accessor"
+reason = "It answers questions."
+
+[[pattern]]
+name = "accessor"
+signature = "A final class whose every field is final and which declares no setter."
+reason = "Something that answers questions about state it was given."

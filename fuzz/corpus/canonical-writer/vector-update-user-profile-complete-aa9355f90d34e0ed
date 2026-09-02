@@ -1,0 +1,1 @@
+{"authorizable_identifier":"jdoe","properties":{"profile/givenName":{"cardinality":"single","value":{"type":"string","value":"Jane"}}},"removed_property_names":["profile/aboutMe"]}

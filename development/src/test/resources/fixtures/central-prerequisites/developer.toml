@@ -1,0 +1,8 @@
+[registry]
+name = "Maven Central"
+reason = "a fixture"
+
+[[prerequisite]]
+id = "developer"
+element = "project.developers"
+reason = "a fixture"

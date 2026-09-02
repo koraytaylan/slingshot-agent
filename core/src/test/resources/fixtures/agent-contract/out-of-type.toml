@@ -1,0 +1,304 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every bound this agent is held to, in one place.
+#
+# The sibling repository learned this rule by breaking it: a limit written down twice is two things
+# that can disagree quietly, for as long as nobody compares them. So a value this file declares is
+# written down nowhere else in this repository, and the source policy refuses a constant named
+# after one of these bounds anywhere but here.
+#
+# The [transport] table is the client's own contract, reproduced byte-equivalently from
+# `policy/author-agent-transport-contract-1.json` in the sibling repository. Nothing here may
+# differ from it by so much as one value; a check compares them name by name against the sibling's
+# committed bytes carried in as a fixture. Where the client's own document declares one bound in
+# both its limits and its formulas, it is carried here once, because a bound written down twice
+# is the thing this file exists to prevent — and the check refuses the day the two disagree.
+#
+# The [agent] table is this side's own — the bounds the transport contract does not give, because
+# they are properties of the server's environment rather than of the protocol. A bound the
+# transport contract already carries is not repeated here; it is read from the transport table.
+#
+# `agent-contract.sha256` beside this file authenticates these bytes. The contract is not exposed
+# at all until the digest matches, so a bound nobody can authenticate is a bound nobody can read.
+
+[transport]
+artifact_transfer_idle_timeout_milliseconds = 15000
+artifact_transfer_total_timeout_milliseconds = 600000
+author_connect_timeout_milliseconds = 10000
+author_request_body_timeout_milliseconds = 30000
+author_response_header_timeout_milliseconds = 15000
+author_tls_timeout_milliseconds = 10000
+continuation_key_authority_timeout_milliseconds = 5000
+continuation_key_prior_retention_milliseconds = 960000
+continuation_key_rotation_lease_milliseconds = 30000
+finite_response_idle_timeout_milliseconds = 5000
+finite_response_total_timeout_milliseconds = 30000
+heartbeat_interval_milliseconds = 15000
+heartbeat_timeout_milliseconds = 45000
+maximum_agent_continuation_key_state_bytes = 431
+maximum_agent_inline_result_bytes = 1048576
+maximum_agent_operation_identifier_bytes = 96
+maximum_agent_protocol_document_bytes = 2097152
+maximum_author_agent_transport_contract_bytes = 65536
+maximum_author_response_head_bytes = 32768
+maximum_author_response_header_bytes = 8192
+maximum_author_response_header_count = 64
+maximum_automatic_retry_attempts = 8
+maximum_canonical_submission_bytes = 1310720
+maximum_continuation_key_authority_record_bytes = 768
+maximum_current_generation_active_subscription_bytes = 16777216
+maximum_current_generation_active_subscription_rows = 4096
+maximum_current_generation_artifact_bytes = 1099511627776
+maximum_current_generation_artifact_rows = 131072
+maximum_current_generation_event_bytes = 68719476736
+maximum_current_generation_event_rows = 16777216
+maximum_current_generation_operation_detail_bytes = 68719476736
+maximum_current_generation_operation_detail_rows = 65536
+maximum_current_generation_operation_reservation_bytes = 67108864
+maximum_current_generation_operation_reservation_rows = 65536
+maximum_current_generation_result_bytes = 68719476736
+maximum_current_generation_result_rows = 65536
+maximum_current_generation_snapshot_bytes = 68719476736
+maximum_current_generation_snapshot_rows = 65536
+maximum_daemon_subscription_identifier_bytes = 96
+maximum_finite_response_body_bytes = 2097152
+maximum_logical_outbox_attempts = 64
+maximum_operation_event_bytes = 1048576
+maximum_operation_event_rows = 256
+maximum_persisted_remaining_retention_milliseconds = 604800000
+maximum_physical_attempt_identifier_bytes = 96
+maximum_physical_sling_job_matches = 32
+maximum_prior_generation_artifact_bytes = 1099511627776
+maximum_prior_generation_artifact_rows = 2097152
+maximum_prior_generation_operation_detail_bytes = 1099511627776
+maximum_prior_generation_operation_detail_rows = 1048576
+maximum_prior_generation_result_bytes = 1099511627776
+maximum_prior_generation_result_rows = 1048576
+maximum_prior_generation_snapshot_bytes = 1099511627776
+maximum_prior_generation_snapshot_rows = 1048576
+maximum_prior_generations = 64
+maximum_route_query_bytes = "8192"
+maximum_server_sent_event_buffer_bytes = 2097152
+maximum_server_sent_event_bytes = 1048576
+maximum_server_sent_event_line_bytes = 65536
+maximum_sling_job_identifier_bytes = 1024
+minimum_artifact_retention_milliseconds = 3600000
+minimum_operation_detail_retention_milliseconds = 3600000
+minimum_result_retention_milliseconds = 3600000
+minimum_snapshot_retention_milliseconds = 3600000
+missing_operation_grace_milliseconds = 30000
+physical_job_lookup_timeout_milliseconds = 5000
+retry_after_cap_milliseconds = 60000
+retry_base_milliseconds = 250
+retry_jitter_cap_milliseconds = 30000
+worker_execution_lease_milliseconds = 30000
+worker_execution_lease_renewal_milliseconds = 10000
+
+# This side's own bounds.
+#
+# The event-stream session bound exists because an Adobe Experience Manager as a Cloud Service
+# author sits behind a gateway that ends a long request whether or not it is still moving, and it
+# serves from a bounded request-thread pool a held stream occupies. The transport contract gives
+# the client a heartbeat timeout and a bounded retry policy; what it cannot give is a maximum
+# session length, because that is a property of the server's environment. So the agent ends its own
+# streams first, at a bound it declares, and the client's existing resumption path carries the
+# subscription across.
+#
+# Every `maximum_caller_` bound is one caller's share of the total spelled the same way without it,
+# so no client can spend the whole store on everybody's behalf. A share above its own total is a
+# bound that never applies, and loading refuses one.
+
+[agent]
+clock_skew_allowance_milliseconds = 5000
+health_check_interval_milliseconds = 60000
+maintenance_sweep_work_bound_rows = 1024
+maximum_caller_concurrent_command_executions = 8
+maximum_caller_concurrent_event_streams = 8
+maximum_caller_current_generation_active_subscription_bytes = 1048576
+maximum_caller_current_generation_active_subscription_rows = 256
+maximum_caller_current_generation_artifact_bytes = 68719476736
+maximum_caller_current_generation_artifact_rows = 8192
+maximum_caller_current_generation_event_bytes = 4294967296
+maximum_caller_current_generation_event_rows = 1048576
+maximum_caller_current_generation_operation_detail_bytes = 4294967296
+maximum_caller_current_generation_operation_detail_rows = 4096
+maximum_caller_current_generation_operation_reservation_bytes = 4194304
+maximum_caller_current_generation_operation_reservation_rows = 4096
+maximum_caller_current_generation_result_bytes = 4294967296
+maximum_caller_current_generation_result_rows = 4096
+maximum_caller_current_generation_snapshot_bytes = 4294967296
+maximum_caller_current_generation_snapshot_rows = 4096
+maximum_command_execution_milliseconds = 25000
+maximum_concurrent_command_executions = 32
+maximum_concurrent_event_streams = 64
+maximum_console_page_rows = 200
+maximum_log_message_bytes = 4096
+maximum_agent_error_code_bytes = 64
+maximum_agent_error_message_bytes = 4096
+maximum_document_nesting_depth = 32
+maximum_document_object_members = 1024
+maximum_document_string_bytes = 65536
+maximum_event_stream_session_milliseconds = 45000
+maximum_request_body_bytes = 4194304
+maximum_request_start_skew_milliseconds = 300000
+maximum_selected_environment_revision_bytes = 256
+platform_call_deadline_milliseconds = 10000
+recovery_reconciliation_interval_milliseconds = 60000
+recovery_undetermined_margin_milliseconds = 15000
+# The [command] table is the client's own command contract, reproduced byte-equivalently
+# from `schemas/command-contract-limits-1.json` in the sibling repository. It bounds what a
+# command may be asked and what it may answer, which the transport contract does not speak about:
+# transport bounds one exchange, these bound one command inside it. Nothing here may be edited to
+# suit this side. A bound whose value differs from the client's is a protocol disagreement, and
+# the two halves would then refuse each other's perfectly well-formed work.
+#
+# A key may appear in both [transport] and [command] with two values, because they bound two
+# different things: the transport bound holds for an identifier travelling in an envelope, the
+# command bound for the same identifier supplied as an argument. The stricter one is not chosen
+# here; each is read where it applies.
+[command]
+continuation_token_lifetime_milliseconds = 900000
+default_load_depth = 2
+default_result_limit = 100
+maximum_adjusted_references = 100000
+maximum_agent_inline_loaded_document_bytes = 262144
+maximum_artifact_identifier_bytes = 128
+maximum_artifact_media_type_bytes = 128
+maximum_artifact_slot_bytes = 64
+maximum_artifact_suggested_file_name_bytes = 255
+maximum_asset_byte_length = 9223372036854775807
+maximum_asset_reference_paths = 128
+maximum_asset_tag_bytes = 512
+maximum_authorizable_disabled_reason_bytes = 1024
+maximum_authorizable_identifier_bytes = 255
+maximum_authorizable_intermediate_path_bytes = 1024
+maximum_bundle_states = 8
+maximum_bundle_symbolic_name_bytes = 512
+maximum_bundle_version_bytes = 128
+maximum_command_argument_bytes = 1048576
+maximum_command_description_bytes = 1024
+maximum_command_failure_categories = 32
+maximum_command_result_bytes = 1048576
+maximum_command_schema_bytes = 1048576
+maximum_command_schema_manifest_bytes = 1048576
+maximum_command_semantic_contract_version_bytes = 64
+maximum_command_semantic_contract_version_identifiers = 16
+maximum_command_semantic_contract_version_numeric_digits = 10
+maximum_command_title_bytes = 160
+maximum_command_wire_name_bytes = 96
+maximum_component_name_bytes = 128
+maximum_component_resource_type_bytes = 1024
+maximum_component_resource_type_segments = 64
+maximum_component_states = 8
+maximum_configuration_lookup_duration_milliseconds = 5000
+maximum_configuration_lookup_filter_bytes = 2064
+maximum_configuration_lookup_matches = 2
+maximum_configuration_persistent_identifier_bytes = 1024
+maximum_configuration_property_key_bytes = 1024
+maximum_configuration_scalar_string_bytes = 65536
+maximum_configuration_sequence_canonical_bytes = 524288
+maximum_configuration_sequence_items = 4096
+maximum_content_fragment_element_name_bytes = 255
+maximum_content_fragment_element_values = 256
+maximum_content_fragment_elements = 256
+maximum_content_fragment_variation_name_bytes = 255
+maximum_continuation_key_identifier_bytes = 128
+maximum_continuation_resume_key_canonical_bytes = 8192
+maximum_continuation_token_bytes = 16384
+maximum_continuation_token_clock_skew_milliseconds = 60000
+maximum_date_time_fraction_digits = 3
+maximum_decimal_bytes = 2050
+maximum_decimal_fraction_digits = 1024
+maximum_decimal_integer_digits = 1024
+maximum_declarative_service_component_name_bytes = 512
+maximum_deleted_nodes = 100000
+maximum_discovery_candidate_nodes = 100000
+maximum_discovery_criterion_evaluations = 2000000
+maximum_discovery_execution_duration_milliseconds = 30000
+maximum_discovery_property_bytes = 67108864
+maximum_discovery_property_values = 1000000
+maximum_discovery_result_bytes = 1048576
+maximum_experience_fragment_variation_name_bytes = 255
+maximum_inline_binary_decoded_bytes = 524288
+maximum_inline_binary_encoded_bytes = 699052
+maximum_inline_binary_media_type_bytes = 128
+maximum_inspected_configuration_properties = 512
+maximum_inspected_configuration_result_bytes = 1048576
+maximum_load_depth = 32
+maximum_load_document_bytes = 16777216
+maximum_load_property_bytes = 67108864
+maximum_load_property_values = 1000000
+maximum_load_resource_nodes = 50000
+maximum_load_traversal_duration_milliseconds = 30000
+maximum_loaded_content_artifact_bytes = 16777216
+maximum_media_format_bytes = 255
+maximum_mutation_properties = 256
+maximum_mutation_success_result_bytes = 16384
+maximum_operational_candidate_records = 100000
+maximum_operational_inspection_result_bytes = 262144
+maximum_operational_listing_result_bytes = 1048576
+maximum_package_archive_entries = 1000000
+maximum_package_candidate_paths = 100000
+maximum_package_exclusion_expressions = 256
+maximum_package_filter_document_bytes = 16777216
+maximum_package_inclusion_expressions = 256
+maximum_package_manifest_bytes = 16777216
+maximum_package_matcher_cells = 66049
+maximum_package_name_bytes = 128
+maximum_package_output_bytes = 536870912
+maximum_package_pattern_evaluations = 10000000
+maximum_package_roots = 64
+maximum_package_selected_paths = 100000
+maximum_package_selection_expression_bytes = 4096
+maximum_package_selection_expression_tokens = 256
+maximum_package_suggested_file_name_bytes = 132
+maximum_package_uncompressed_input_bytes = 1073741824
+maximum_page_name_bytes = 128
+maximum_page_title_bytes = 1024
+maximum_primary_node_type_name_bytes = 255
+maximum_property_name_bytes = 255
+maximum_property_predicate_values = 256
+maximum_property_predicates = 64
+maximum_property_string_bytes = 65536
+maximum_property_value_items = 1024
+maximum_relative_property_path_bytes = 4095
+maximum_removed_property_names = 256
+maximum_rendition_name_bytes = 255
+maximum_replication_admission_duration_milliseconds = 60000
+maximum_replication_agent_identifier_bytes = 128
+maximum_replication_candidate_paths = 10000
+maximum_replication_queue_entries = 100000
+maximum_replication_queue_entry_identifier_bytes = 256
+maximum_replication_result_bytes = 16384
+maximum_replication_traversal_duration_milliseconds = 30000
+maximum_repository_name_bytes = 255
+maximum_repository_path_bytes = 4096
+maximum_repository_path_segments = 256
+maximum_repository_property_path_bytes = 4096
+maximum_repository_reference_bytes = 512
+maximum_repository_relative_path_bytes = 4095
+maximum_repository_uniform_resource_identifier_bytes = 4096
+maximum_request_address_bytes = 4096
+maximum_requested_asset_tags = 256
+maximum_requested_component_resource_types = 256
+maximum_requested_media_formats = 256
+maximum_resolution_trace_entries = 64
+maximum_resource_mapping_pattern_bytes = 2048
+maximum_resource_mapping_replacements = 16
+maximum_result_limit = 1000
+maximum_result_offset = 1000000
+maximum_same_name_sibling_index = 2147483647
+maximum_search_phrase_bytes = 4096
+maximum_sling_job_identifier_bytes = 256
+maximum_sling_job_property_keys = 512
+maximum_sling_job_queue_name_bytes = 255
+maximum_sling_job_states = 8
+maximum_sling_job_topic_bytes = 512
+maximum_work_item_identifier_bytes = 1024
+maximum_workflow_comment_bytes = 4096
+maximum_workflow_instance_identifier_bytes = 1024
+maximum_workflow_instance_states = 8
+maximum_workflow_metadata_entries = 64
+maximum_workflow_model_identifier_bytes = 1024
+maximum_workflow_work_items = 256

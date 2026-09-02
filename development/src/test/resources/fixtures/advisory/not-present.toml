@@ -1,0 +1,16 @@
+[snapshot]
+origin = "https://github.com/github/advisory-database"
+commit = "0123456789abcdef0123456789abcdef01234567"
+content_digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+held_at = "compatibility/nothing-like-this"
+checkout = "scripts/checkout_pinned_advisory_database"
+reason = "a fixture"
+
+[review]
+record = "scripts/record_advisory_owner_review"
+held_at = "compatibility/advisory-owner-review.toml"
+reason = "a fixture"
+
+[[checked_scope]]
+scope = "compile"
+reason = "a fixture"

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Says which interoperability tiers did not run, and the exact command that runs each.
+#
+# Read from the gate's own tier inventory rather than written down here, so a tier added later is
+# reported without anybody editing this. A passing run is not a complete one, and the difference is
+# a sentence somebody has to be able to read rather than one they have to know.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly GATE_POLICY="${REPOSITORY_ROOT}/policy/quality-gate.toml"
+readonly EXIT_USAGE=2
+
+if [[ $# -ne 0 ]]; then
+    printf 'report_tiers_not_run takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+printf 'A passing run is not a complete one. These tiers did not run here:\n'
+python3 - "${GATE_POLICY}" <<'PYTHON'
+import pathlib
+import sys
+
+name = title = command = ""
+ran = "a"
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("name = "):
+        name = stripped.split('"')[1]
+    elif stripped.startswith("title = "):
+        title = stripped.split('"')[1]
+    elif stripped.startswith("command = "):
+        command = stripped.split('"')[1]
+        if title and name != ran:
+            print("  %s (%s): %s" % (name, title, command))
+        title = ""
+PYTHON

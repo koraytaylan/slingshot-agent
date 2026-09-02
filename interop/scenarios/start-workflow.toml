@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "start-workflow"
+kind = "command"
+feature = "start_workflow"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.StartWorkflowScenario"
+reason = "The most powerful command on this whole surface: a workflow runs afterwards under the platform's own identity, so starting one on content the caller cannot change would be a way to make a change they were refused. What this proves that no unit suite can is that the payload permission check runs against a real repository's own access control rather than against a fixture."

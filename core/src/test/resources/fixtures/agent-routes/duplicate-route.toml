@@ -1,0 +1,94 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every route this agent will ever serve, spelled once.
+#
+# The namespace is a decision rather than an inheritance. Adobe reserves /libs, and a third-party
+# servlet path in that namespace is a collision waiting for an upgrade to happen, even though a
+# path registration creates no node. So every route sits under /bin/slingshot/agent.
+#
+# The sibling repository disagrees with itself about this. Its production constants say
+# /libs/slingshot/agent/..., while its own simulator and its daemon suites say
+# /bin/slingshot/agent/...; the two also disagree about whether the lookup route is `operations` or
+# `snapshot` and whether the artifact route is singular or plural. This file pins one table. Plan
+# 0004 owns the compatibility aliases that let the shipped client reach it, and the record of what
+# has to change on the other side.
+#
+# A route with no owning plan is refused, because a route nobody has committed to building is a
+# path somebody would otherwise register and forget.
+
+[prefix]
+path = "/bin/slingshot/agent"
+reason = "Adobe reserves /libs. A path registration creates no node, so nothing collides today; what collides is the next upgrade, on somebody else's instance, for a reason nobody there can see."
+
+[[route]]
+name = "capabilities"
+path = "/bin/slingshot/agent/capabilities"
+method = "GET"
+media_type = "application/json"
+body_permitted = false
+owning_plan = "0001"
+reason = "Discovery. Its answer is already fully specified by the client that will call it, which makes it the one route worth serving first: answering it honestly with an empty command list is a more useful skeleton than answering a health check nobody consumes."
+
+[[route]]
+name = "capabilities"
+path = "/bin/slingshot/agent/submit"
+method = "POST"
+media_type = "application/json"
+body_permitted = true
+owning_plan = "0004"
+reason = "The one route that starts work. A submission carries a canonical command, and the agent derives its digest here rather than trusting the one it was sent."
+
+[[route]]
+name = "operation-lookup"
+path = "/bin/slingshot/agent/snapshot"
+method = "GET"
+media_type = "application/json"
+body_permitted = false
+owning_plan = "0004"
+reason = "What one logical operation has become. The client's own simulator spells it `snapshot` and its production constant spells it `operations`; this is the spelling the document it answers actually has."
+
+[[route]]
+name = "physical-job-lookup"
+path = "/bin/slingshot/agent/jobs"
+method = "GET"
+media_type = "application/json"
+body_permitted = false
+owning_plan = "0004"
+reason = "What the job system did with one physical attempt, which is a different question from what the logical operation became and is answered separately for that reason."
+
+[[route]]
+name = "subscription-high-water"
+path = "/bin/slingshot/agent/subscriptions/high-water"
+method = "POST"
+media_type = "application/json"
+body_permitted = true
+owning_plan = "0004"
+reason = "How far a following daemon has read. It is a write rather than a read because the agent records it, and retention is decided against it."
+
+[[route]]
+name = "events"
+path = "/bin/slingshot/agent/events"
+method = "GET"
+media_type = "text/event-stream"
+body_permitted = false
+owning_plan = "0004"
+reason = "The event stream. It is the only route that stays open, and the only one the agent ends itself before somebody else's gateway does."
+
+[[route]]
+name = "artifact-transfer"
+path = "/bin/slingshot/agent/artifact"
+method = "GET"
+media_type = "application/octet-stream"
+body_permitted = false
+owning_plan = "0004"
+reason = "A result too large to answer inline, served with an independently verifiable count and digest."
+
+[[route]]
+name = "artifact-intake"
+path = "/bin/slingshot/agent/artifact"
+method = "POST"
+media_type = "application/octet-stream"
+body_permitted = true
+owning_plan = "0004"
+reason = "Bytes arriving for a command that has not started yet, taken in against a manifest declared before a byte is sent, so a command never starts against a payload still arriving."

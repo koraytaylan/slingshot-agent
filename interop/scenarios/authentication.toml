@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "authentication"
+kind = "route"
+feature = "capabilities"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.AuthenticationScenario"
+reason = "Every route requires somebody in particular, including the discovery route somebody would most easily leave open on the grounds that it says so little. What a running instance adds to the unit suite is the answer a rejected caller actually receives: this asks as nobody and as somebody the platform will not accept, and requires the two answers to be identical byte for byte, because the difference between them is what tells an attacker which names exist."

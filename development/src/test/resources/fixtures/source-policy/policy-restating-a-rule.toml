@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The rules about this repository's source that no off-the-shelf analyser has.
+#
+# Every falsifiable rule the source policy decides reads its values from here, so a limit exists
+# once. What it cannot decide is a review checklist at the end of this file rather than a rule it
+# pretends to have.
+#
+# The complexity and nesting ceilings are deliberately not here. They belong to the method-shape
+# policy, and a value declared in two policies is exactly the defect this repository refuses.
+
+format = "slingshot.agent.source-policy/1"
+
+[limits]
+# The largest physical line count of any repository-owned code file, whether Java, a build
+# manifest, a policy document, or an executable script.
+maximum_code_file_lines = 1000
+
+# The smallest numeric literal the checker attributes meaning to. Zero and one are intrinsic
+# identity and index values and carry no operational meaning. A literal that is already data with a
+# name - the initialiser of a named constant, an enumeration discriminant, an array literal, or an
+# index position - is data laid out as data and is not examined.
+smallest_meaningful_literal = 2
+
+# The smallest contract bound the second-declaration rule compares a bare literal against. Below
+# this a value is as likely to be a structural quantity - a bit width, a small count, a field
+# position - as a restatement of a bound, and a rule that cannot tell those apart is a rule that
+# reports the wrong thing. The named form of the rule carries no such threshold, and it is the form
+# that catches a second declaration somebody actually meant: a constant named after a bound.
+second_declaration_minimum_value = 1000
+
+[contract]
+# The package that owns the agent contract. Everywhere else asks it for a bound by name; a constant
+# named after one, or a literal equal to one, is a second declaration that can drift quietly.
+owning_package = "rs.slingshot.agent.contract"
+document = "support/agent-contract.toml"
+
+# Directories the scan does not enter, each with a reason.
+[[excluded_directory]]
+path = "docs/plans"
+reason = "Planning prose is intentionally prospective and is a Makina input rather than source this product ships."
+
+[[excluded_directory]]
+path = "target"
+reason = "Build output is not repository-owned source."
+
+[[excluded_directory]]
+path = ".git"
+reason = "Version-control state is not repository-owned source."
+
+[[excluded_directory]]
+path = "fixtures"
+reason = "A fixture is a deliberately broken sample the checker is proved against rather than source it governs."
+
+# What this checker deliberately does not decide. Each entry is a question a reader answers, and an
+# assertion refuses a checker that so much as restates one of them as a rule - because restating a
+# question reads as a claim to have answered it.
+[[review_question]]
+question = "Whether a file-length ceiling of one thousand lines was respected."
+reason = "Spelling is structural and decidable; aptness is a judgement about the domain."
+
+[[review_question]]
+question = "Whether a named constant's name describes the quantity rather than the place it is used."
+reason = "That a value carries a name is decidable; that the name explains the value is not."
+
+[[review_question]]
+question = "Whether a file under the line ceiling holds one subject or several."
+reason = "A line count is a proxy. Whether the file is about one thing is a reader's judgement."
+
+[[review_question]]
+question = "Whether a value read from the contract is the right bound for what the code does with it."
+reason = "That a bound is read rather than restated is decidable; that it is the correct bound is a design question."
+
+[handlers]
+package = "rs/slingshot/agent/command"
+reason = "a fixture"
+
+[[refused_in_handlers]]
+symbol = "loginService"
+reason = "a fixture"
+
+[logging]
+writer = "AgentLog"
+package = "rs/slingshot/agent/log"
+reason = "a fixture"
+
+[[refused_logger]]
+symbol = "LoggerFactory"
+reason = "a fixture"
+
+[[refused_log_form]]
+form = "String.format"
+reason = "a fixture"
+
+[clocks]
+wall_clock = "System.currentTimeMillis"
+monotonic = "System.nanoTime"
+seam = "rs/slingshot/agent/stream"
+reason = "a fixture"
+
+[[duration_word]]
+word = "elapsed"
+reason = "a fixture"

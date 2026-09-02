@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every artifact this build resolves, chosen once.
+#
+# A dependency nobody chose is a dependency nobody will notice the day it grows, and an artifact
+# resolved at a range or at a snapshot is a build whose result depends on when it ran. So every row
+# names an exact version, the scope it may use, and the modules that may declare it - and the check
+# holds both directions, so an artifact with no row and a row nothing resolves each fail.
+#
+# No product module may resolve anything at compile or runtime scope. Everything a bundle needs at
+# runtime is provided by the deployment, which is what makes the imported-package footprint the
+# whole compatibility statement.
+
+[[artifact]]
+group = "org.example"
+name = "declared"
+version = "1.0.0-SNAPSHOT"
+scope = "provided"
+modules = ["core"]
+reason = "A fixture artifact, declared so the accepted set has one."

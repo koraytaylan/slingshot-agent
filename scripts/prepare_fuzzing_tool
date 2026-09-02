@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Fetches the pinned fuzzing tool once and records the digest of what arrived.
+#
+# This is the only command in this repository that fetches the tool, and it is never run by the
+# gate. That separation is the whole arrangement: preparation reaches a network and is somebody's
+# deliberate act; verification reaches nothing and is what every run afterwards is held to.
+#
+# It records what actually arrived rather than checking it against a digest written by hand. A
+# digest somebody typed is a digest somebody typed; a digest this recorded is what the bytes on this
+# machine hash to, and every run after it is compared with exactly that.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly TOOL_FILE="${REPOSITORY_ROOT}/support/fuzzing-tool.toml"
+readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
+readonly EXIT_USAGE=2
+readonly EXIT_UNRESOLVED=3
+
+if [[ $# -ne 0 ]]; then
+    printf 'prepare_fuzzing_tool takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+read -r coordinates held_at < <(python3 - "${TOOL_FILE}" <<'PYTHON'
+import pathlib
+import sys
+
+coordinates = held_at = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("coordinates = "):
+        coordinates = stripped.split('"')[1]
+    elif stripped.startswith("held_at = "):
+        held_at = stripped.split('"')[1]
+print("%s %s" % (coordinates, held_at))
+PYTHON
+)
+
+mkdir -p "$(dirname "${REPOSITORY_ROOT}/${held_at}")"
+
+if ! "${REPOSITORY_ROOT}/mvnw" --batch-mode --no-transfer-progress \
+        -Dmaven.repo.local="${CACHE_DIRECTORY}" \
+        org.apache.maven.plugins:maven-dependency-plugin:copy \
+        -Dartifact="${coordinates}" \
+        -DoutputDirectory="$(dirname "${REPOSITORY_ROOT}/${held_at}")" \
+        -Dmdep.stripVersion=false; then
+    printf 'not resolved: %s could not be fetched.\n' "${coordinates}" >&2
+    exit "${EXIT_UNRESOLVED}"
+fi
+
+digest="sha256:$(sha256sum "${REPOSITORY_ROOT}/${held_at}" | cut -d' ' -f1)"
+python3 - "${TOOL_FILE}" "${digest}" <<'PYTHON'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text().splitlines(True)
+for index, line in enumerate(lines):
+    if line.startswith("digest = "):
+        lines[index] = 'digest = "%s"\n' % sys.argv[2]
+        break
+path.write_text("".join(lines))
+PYTHON
+
+printf 'Recorded %s for %s.\n' "${digest}" "${held_at}"

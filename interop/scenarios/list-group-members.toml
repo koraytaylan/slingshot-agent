@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "list-group-members"
+kind = "command"
+feature = "list_group_members"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ListGroupMembersScenario"
+reason = "The one command in this package that passes no control gate, because reading who is in a group is how somebody works out why a person can do something they should not be able to — refusing that on a deployment that will not let memberships change would refuse the investigation along with the change."

@@ -1,0 +1,9 @@
+[[pattern]]
+name = "protection-proxy"
+signature = "A final class holding exactly one thing, offering exactly one public instance method."
+reason = "Something whose whole job is to decide whether the thing it holds may be reached at all."
+
+[[type]]
+name = "LeakyProxy"
+pattern = "protection-proxy"
+reason = "It decides whether what it holds may be reached."

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "operations-console"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.OperationsConsoleScenario"
+reason = "The screen somebody sees first. What this proves that no unit suite can: that it is one Granite page reading one data source, that it names no repository path, and that the instance it renders on refuses a caller who presented no identity."

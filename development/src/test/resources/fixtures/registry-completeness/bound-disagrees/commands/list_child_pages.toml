@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row.
+
+[command]
+wire_name = "list_child_pages"
+contract_version = "1.0.0"
+access = "read"
+
+# Intrinsically idempotent: asking one page for its children twice is asking once, so a key would
+# decide nothing.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
+argument_schema_digest = "84f1647a938d9a20b7bffb02d8645f09613e0c85ba52d7958b0e0d24dca47b01"
+result_schema_digest = "03a335cc9adb82f0663de79ab61a5a88bfc9859dae4d892d9c9f6ec945a82459"
+contract_limits_digest = "7e805c32610f449dbeb48658a37f9f3cedfda154b8d3d44a0a65e98cb79be70d"
+staging_bytes = 0
+execution = "immediate"

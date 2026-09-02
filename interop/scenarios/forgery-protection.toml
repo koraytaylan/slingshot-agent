@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "forgery-protection"
+kind = "property"
+feature = "repository-access"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ForgeryProtectionScenario"
+reason = "The referrer filter refuses a state-changing request before any servlet is reached, and it has exactly the shape of a command-line client: a program that sends no referrer at all. Discovering that as an unexplained refusal from a deployment nobody has changed is the most expensive way to learn it, so this asks a running instance what it does with a foreign referrer, with the instance's own, and with none, and holds the deployment guide to the answer."

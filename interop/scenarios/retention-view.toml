@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "retention-view"
+kind = "property"
+feature = "coverage"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.RetentionViewScenario"
+reason = "Capacity says how full a store is now and retention says when things leave, and an operator who can see one without the other cannot answer whether it will still be full tomorrow. What this proves that no unit suite can is that what the page says would be released is what a sweep on a running instance actually releases, and that the one case patience does not fix is named rather than left as a subtraction."

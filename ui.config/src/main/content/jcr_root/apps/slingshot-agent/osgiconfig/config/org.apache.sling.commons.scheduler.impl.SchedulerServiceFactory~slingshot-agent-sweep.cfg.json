@@ -1,0 +1,6 @@
+{
+  "scheduler.name": "slingshot-agent-maintenance-sweep",
+  "scheduler.expression": "0 */5 * * * ?",
+  "scheduler.concurrent": false,
+  "scheduler.runOn": "LEADER"
+}

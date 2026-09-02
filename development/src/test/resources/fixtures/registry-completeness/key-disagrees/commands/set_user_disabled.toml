@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "set_user_disabled"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: group membership is how every permission here is granted, so the
+# caller supplies a key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["authorizable_access_denied", "authorizable_kind_mismatch", "authorizable_not_found", "platform_control_outcome_unknown", "platform_control_rejected"]
+argument_schema_digest = "6ca69b1d3e1707b0b6ae09b2323a135ed578fd67ede9e88660a8b8d64e0438af"
+result_schema_digest = "1549ec5c6e553266fc68c86ef2e8f7b0fd7a1c9d41a4a71269e190c5e9a1c7f7"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

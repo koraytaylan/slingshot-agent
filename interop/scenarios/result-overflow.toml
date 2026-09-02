@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "result-overflow"
+kind = "route"
+feature = "artifact-transfer"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ResultOverflowScenario"
+reason = "A result too large to carry inline is fetched rather than truncated, and the route it is fetched on has to behave that way on a real runtime rather than in a unit suite. What this checks is the half a running instance can answer today: that the transfer route serves whole bytes and nothing else, that it reports a length a reader can trust before reading, and that a reader who checks what arrived against the count and digest the answer carried is able to. Producing an overflowing result needs a registered read command, which this build has none of; that half arrives with workstream 0018 and this plan's status records it rather than a row here claiming otherwise."

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "transport-disruption"
+kind = "property"
+feature = "agent-routes"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.TransportDisruptionScenario"
+reason = "The case that is neither success nor refusal: a request left and the answer did not come back, which is where a caller cannot tell whether the work ran. Every enumerated point is severed at the network boundary with a reset rather than a close, so nobody gets an orderly ending they can flush through, and the instance is required to survive all of them, keep answering identically, and leave no room occupied. Nothing in a unit suite can sever a real connection."

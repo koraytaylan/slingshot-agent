@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The handful of practices that decide whether this survives the next upgrade.
+#
+# Durability inside somebody else's author is mostly a matter of not doing a small number of things
+# that work today and stop working later. Each rule here is a practice Adobe or Apache Sling
+# documents, each has a version of this code that would pass every other check in this repository
+# and still be wrong, and each is structurally decidable.
+
+[resolver]
+# A resolver or session obtained and not closed on every path leaks a session per request, and a
+# close written in a trailing block is the one an early return skips.
+close_in_trailing_block_permitted = false
+reason = "The language's own resource management closes on every path including the one nobody wrote down. A trailing close is correct until somebody adds a guard clause above it."
+
+[repository_access]
+# The resource abstraction is preferred over direct repository access. Dropping a level is a
+# decision somebody records, not a habit.
+direct_access_permitted_without_reason = false
+reason = "A resource carries the mapping, the type, and the access control the platform decided; a node carries what the repository stores. An operation that genuinely needs the second says which operation and why."
+
+[component]
+# A declarative-services component is a singleton the container hands to everybody at once.
+mutable_instance_state_permitted = false
+manual_service_lookup_permitted = false
+synchronisation_permitted = false
+reason = "State on a component is shared by every caller at once; a manual lookup is a dependency the container cannot see and cannot deactivate; and synchronising on a component serialises every caller through one instance."
+
+# Members the platform declares deprecated. Every row names its replacement, and the check verifies
+# against the platform artifact itself that the member really is deprecated - so a row cannot
+# outlive the deprecation it describes, and cannot be added for something that is not one.
+[[deprecated_member]]
+type = "org.apache.sling.jcr.api.SlingRepository"
+member = "loginAdministrative"
+replacement = ""
+reason = "An administrative login is a session with power over every identity in the repository. Nothing in this product needs one: a command runs inside its caller's own request on that request's own session, and the agent's own bookkeeping runs as a service user whose grants are a list somebody can read out loud."
+
+[[deprecated_member]]
+type = "org.apache.sling.api.resource.ResourceResolverFactory"
+member = "getAdministrativeResourceResolver"
+replacement = "getServiceResourceResolver, with a subservice named in the service user mapping"
+reason = "The same standing privilege over other people's identities, reached through the resource abstraction instead of the repository."
+
+[[deprecated_member]]
+type = "org.apache.sling.settings.SlingSettingsService"
+member = "getSlingHome"
+replacement = "the run modes the service reports, or a configuration value an operator sets"
+reason = "A path on the instance's own disk is not a thing a Cloud Service deployment has, and code that reads one is code that works on a developer's machine and nowhere the product actually runs."
+
+[[deprecated_member]]
+type = "com.day.cq.wcm.api.PageManager"
+member = "getTemplate"
+replacement = "the template a page reports through its own content"
+reason = "The template registry moved when editable templates arrived, and the method that predates them answers about the half of the world that is left."
+
+[[deprecated_member]]
+type = "com.day.cq.replication.Replicator"
+member = "createContentFilterChain"
+replacement = "the replication configuration an operator sets on the agent"
+reason = "A filter chain assembled in code is a replication decision nobody can see from the console that is supposed to show it."

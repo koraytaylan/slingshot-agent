@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "platform-safety"
+kind = "property"
+feature = "mutation-safety"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.PlatformSafetyScenario"
+claims = ["platform_control_outcome_unknown"]
+reason = "Thirty commands reach past every guard the content plans relied on, and this proves what they all have in common. Every row declaring the platform control's own unknown outcome is enumerated from the registry rather than from a list written here, so a command added later is covered without editing this. It selects the way the mutation proof selects — by what a row declares — and claims its own category, which is what lets the partition check see the registry as fully covered without knowing this scenario exists."

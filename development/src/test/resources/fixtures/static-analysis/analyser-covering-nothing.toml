@@ -1,0 +1,331 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The analysers this build runs, and the correspondence that makes a later scan find nothing.
+#
+# The goal is a scan that has nothing left to report, and the way to reach it is to fail the build
+# on the same rules the scan would raise, before the scan ever runs. A finding only a server can see
+# is a finding nobody fixes on the day they wrote it.
+#
+# Every category a Sonar Java profile raises has a build-time counterpart here, and a category with
+# no covering analyser is refused. Every analyser fails at its first finding rather than producing a
+# report, over main sources and test sources alike.
+
+[[analyser]]
+id = "an-analyser-no-category-names"
+artifact = "maven-checkstyle-plugin"
+configuration = "policy/analysis/checkstyle.xml"
+fails_at_first_finding = true
+covers_test_sources = true
+
+[[analyser]]
+id = "checkstyle"
+artifact = "maven-checkstyle-plugin"
+configuration = "policy/analysis/checkstyle.xml"
+fails_at_first_finding = true
+covers_test_sources = true
+
+[[analyser]]
+id = "pmd"
+artifact = "maven-pmd-plugin"
+configuration = "policy/analysis/pmd.xml"
+fails_at_first_finding = true
+covers_test_sources = true
+
+[[analyser]]
+id = "spotbugs"
+artifact = "spotbugs-maven-plugin"
+configuration = "policy/analysis/spotbugs-exclude.xml"
+fails_at_first_finding = true
+covers_test_sources = true
+
+# One row per category a Sonar Java profile raises, naming the analyser that covers it here.
+[[category]]
+name = "bug"
+covered_by = "spotbugs"
+reason = "The bug-pattern analyser decides the same dataflow and contract defects a scan reports as bugs, at build time and on the machine that wrote them."
+
+[[category]]
+name = "vulnerability"
+covered_by = "spotbugs"
+reason = "The security plugin extends the bug-pattern analyser with the injection, cryptography, and deserialisation detectors a scan reports as vulnerabilities."
+
+[[category]]
+name = "security-hotspot"
+covered_by = "spotbugs"
+reason = "The security plugin's hotspot detectors fail the build rather than raising a question somebody answers later in a browser."
+
+[[category]]
+name = "maintainability"
+covered_by = "pmd"
+reason = "The source-pattern analyser decides the design, complexity, and unused-declaration smells a scan reports as maintainability findings."
+
+[[category]]
+name = "convention"
+covered_by = "checkstyle"
+reason = "Formatting, naming, import order, and file structure are decided by the convention analyser, so a scan's convention findings are already impossible."
+
+# Rules that overlap this repository's own code doctrine. They are enabled deliberately, so the
+# doctrine's own checkers are a second opinion on these rather than the only one.
+[[overlapping_rule]]
+analyser = "spotbugs"
+rule = "NP_NULL_ON_SOME_PATH"
+doctrine = "nullability"
+reason = "Dereference of a possibly-absent value is the defect the nullability contract exists to make impossible; two independent decisions on it are worth having."
+
+[[overlapping_rule]]
+analyser = "pmd"
+rule = "UnusedPrivateField"
+doctrine = "api-shape"
+reason = "An unused declaration is a member somebody stopped needing and nobody removed."
+
+[[overlapping_rule]]
+analyser = "spotbugs"
+rule = "OBL_UNSATISFIED_OBLIGATION"
+doctrine = "adobe-practice"
+reason = "A resource never closed is the defect the resolver-closing practice exists to prevent, and this catches the general form."
+
+[[overlapping_rule]]
+analyser = "pmd"
+rule = "SimplifiableTestAssertion"
+doctrine = "source-policy"
+reason = "A redundant condition is a claim the author did not mean to make."
+
+[[overlapping_rule]]
+analyser = "spotbugs"
+rule = "EQ_COMPARETO_USE_OBJECT_EQUALS"
+doctrine = "api-shape"
+reason = "Equality on a type with no value equality is the defect the value-object pattern signature exists to refuse."
+
+# The exclusion file is empty and must stay empty: a finding is fixed rather than filtered.
+[exclusions]
+file = "policy/analysis/spotbugs-exclude.xml"
+must_be_empty = true
+reason = "A filtered finding is a finding that outlived the situation it was filtered for, and Java has no annotation that stops applying when that situation ends."
+
+# Every way of switching a rule off in source, refused outright.
+[[suppression_form]]
+form = "@SuppressWarnings"
+reason = "The annotation states no reason and never stops applying."
+
+[[suppression_form]]
+form = "@SuppressFBWarnings"
+reason = "An analyser-specific suppression moves a finding out of the build and into nobody's view."
+
+[[suppression_form]]
+form = "SuppressWarnings"
+reason = "The bare name covers the fully qualified and the imported spelling alike."
+
+[[suppression_form]]
+form = "CHECKSTYLE:OFF"
+reason = "A comment that disables a rule is a rule that is not enforced."
+
+[[suppression_form]]
+form = "NOPMD"
+reason = "A comment that disables a rule is a rule that is not enforced."
+
+[[suppression_form]]
+form = "NOSONAR"
+reason = "A comment addressed to a scan is a finding somebody decided not to fix."
+
+# Rules this build deliberately does not run, each with the reason it is decided elsewhere or not
+# at all. An exclusion is data with a reason rather than a quiet edit to a rule set, and the
+# gate refuses an exclusion in the rule set that has no row here.
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "GuardLogStatement"
+scope = "every module"
+reason = "Logging is bounded by the structured-logging policy, which decides what may be logged rather than how cheaply."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "JUnitTestContainsTooManyAsserts"
+scope = "every module"
+reason = "A test that proves both sides of a boundary needs both assertions, and this repository requires exactly that."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "JUnitTestsShouldIncludeAssert"
+scope = "every module"
+reason = "Assertion presence is decided by the interoperability-coverage gate and the coverage floor, over features rather than over methods."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "UnitTestContainsTooManyAsserts"
+scope = "every module"
+reason = "A test that proves both sides of a boundary needs both assertions, and this repository requires exactly that."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "UnitTestShouldIncludeAssert"
+scope = "every module"
+reason = "Assertion presence is decided by the coverage floor, over features rather than over methods."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "UnitTestAssertionsShouldIncludeMessage"
+scope = "every module"
+reason = "A message is required where a failure would otherwise be unreadable, which is a reader's judgement rather than a count."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "AvoidReassigningLoopVariables"
+scope = "every module"
+reason = "The method-shape policy bounds nesting and refuses the shapes this rule is a proxy for."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "AvoidLiteralsInIfCondition"
+scope = "every module"
+reason = "A meaningful numeric value carries a name under the source policy, which decides this with the contract file rather than by literal position."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "AvoidDuplicateLiterals"
+scope = "every module"
+reason = "A repeated string in a policy checker names a rule or a key, and the second-declaration rule decides the values that actually matter."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "MissingSerialVersionUID"
+scope = "every module"
+reason = "Nothing in this repository is serialised by the platform's own serialisation."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "AvoidFieldNameMatchingMethodName"
+scope = "every module"
+reason = "A record component and its accessor share a name by construction, and records are the shape this repository prefers."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "TestClassWithoutTestCases"
+scope = "every module"
+reason = "A fixture class inside a test tree is a fixture, and the coverage floor decides what is proved."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "LawOfDemeter"
+scope = "every module"
+reason = "The build model this repository reads is somebody else's object graph, and reaching through it is what reading it means."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "CyclomaticComplexity"
+scope = "every module"
+reason = "The method-shape policy owns the complexity ceilings, and a value declared twice is the defect this repository exists to refuse."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "NPathComplexity"
+scope = "every module"
+reason = "The method-shape policy owns the complexity ceilings."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "CognitiveComplexity"
+scope = "every module"
+reason = "The method-shape policy owns the complexity ceilings."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "NcssCount"
+scope = "every module"
+reason = "The source policy owns the file-length ceiling and the method-shape policy owns the rest."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "ExcessiveImports"
+scope = "every module"
+reason = "An import is a dependency the imported-package footprint already decides, in the artifact rather than in the source."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "TooManyMethods"
+scope = "every module"
+reason = "A registry of sixty-four commands and a contract of ninety-six bounds are wide by design and shallow by construction."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "TooManyFields"
+scope = "every module"
+reason = "A document type with one field per declared key is the shape the closed key set requires."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "ExcessivePublicCount"
+scope = "every module"
+reason = "The application-programming-interface shape policy decides what may be public, one rule at a time."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "DataClass"
+scope = "every module"
+reason = "A record carrying a policy row is a value, and the pattern register declares it as one."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "LoosePackageCoupling"
+scope = "every module"
+reason = "Package coupling is decided by the module direction check over the resolved reactor."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "GodClass"
+scope = "every module"
+reason = "The metric is cohesion between fields, and a policy holder with no instance state has no fields to cohere around, so it scores the same however it is written. What this rule stands in for is decided by the source policy's file-length ceiling and the method-shape policy's nesting ceiling."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "AvoidCatchingGenericException"
+scope = "every module"
+reason = "The convention analyser refuses a caught generic exception, so deciding it twice would be two rules that can disagree."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "ExcessiveParameterList"
+scope = "every module"
+reason = "A record with one component per declared field is the shape the closed key set requires."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "CouplingBetweenObjects"
+scope = "every module"
+reason = "Coupling is decided by the module direction check over the resolved reactor rather than by a count of type references."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "UseConcurrentHashMap"
+scope = "every module"
+reason = "A map built inside one method and handed out immutably is not shared state, and this rule cannot tell the two apart."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "AvoidInstantiatingObjectsInLoops"
+scope = "every module"
+reason = "The allocation policy declares which paths are allocation-sensitive and inverts the stream rule inside them; everywhere else a clear allocation is preferred to a reused one."
+
+[[excluded_rule]]
+analyser = "pmd"
+rule = "DoNotUseThreads"
+scope = "every module"
+reason = "The rule is about a web application taking threads from a container's own pool. The interoperability harness is a process wrapper: waiting for something it started is what it exists to do, and the bounded deadline it waits under is declared in support/interop-harness.toml."
+
+[[excluded_rule]]
+analyser = "spotbugs"
+rule = "COMMAND_INJECTION"
+scope = "interop"
+reason = "The interoperability harness exists to start processes. Every command it builds is the engine name from a committed file, a fixed subcommand, and an identifier the engine itself produced; nothing a caller supplies reaches a shell, because nothing here uses one. The detector is there for the product, and the product starts no processes at all - a rule the module direction check makes true by construction, since neither bundle depends on this module."
+
+[[excluded_rule]]
+analyser = "spotbugs"
+rule = "PATH_TRAVERSAL_IN"
+scope = "interop"
+reason = "The only paths this module builds are temporary files it creates itself for a container's captured output. The same reasoning as above: this module never ships and never runs on anybody's instance."
+
+[[excluded_rule]]
+analyser = "spotbugs"
+rule = "DMI_HARDCODED_ABSOLUTE_FILENAME"
+scope = "interop"
+reason = "A suite that names a path to prove a handle holds it is naming data rather than reading a file. Where a suite actually writes something, it writes into a directory the test framework created for it."

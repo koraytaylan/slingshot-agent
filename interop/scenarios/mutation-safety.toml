@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "mutation-safety"
+kind = "property"
+feature = "mutation-safety"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.MutationSafetyScenario"
+claims = ["mutation_outcome_unknown", "admission_outcome_unknown"]
+reason = "Each command's own scenario proves that command. This proves what is only interesting across all of them, and it is the one that would catch the twentieth command quietly behaving unlike the first nineteen: every row that changes the caller's repository owes exactly one commit and declares the outcome nobody knows, every row that offers something to a machine this agent cannot observe owes none and declares its own, and no row declares two — which would be a command that has not decided what it is. It selects by what a row declares rather than by where its handler lives, because the registry grows and the next plan's commands change a platform that is not a repository."
