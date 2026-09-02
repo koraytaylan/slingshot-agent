@@ -60,6 +60,13 @@ final class ClusterHandoverScenario {
     /** How long the nodes are given to agree, which a document store does on an interval. */
     private static final int SETTLE_MILLISECONDS = 5000;
 
+    /**
+     * How many settles the surviving node is given to start serving again before that is the
+     * failure. A node whose peer was killed recovers a lease the document store still holds, and
+     * answers nothing useful while it does.
+     */
+    private static final int RECOVERY_ATTEMPTS = 24;
+
     private final TierRequests requests = TierRequests.open();
 
     private ClusterHarness cluster;
@@ -125,12 +132,26 @@ final class ClusterHandoverScenario {
 
     @Test
     @DisplayName("the surviving node still answers, and still refuses a caller who is nobody")
-    void thesurvivingNodeStillAnswers() {
+    void thesurvivingNodeStillAnswers() throws InterruptedException {
+        // Asked once it is serving again rather than the moment its peer died. The survivor is
+        // recovering a lease the document store still holds and answers 500 while it does, so
+        // asking straight away asks about the recovery — and what this is for is what the survivor
+        // answers, which is the same refusal it gave before anybody was killed.
+        assertTrue(servingAgain(nodes.first()),
+                "the surviving node never started serving again after its peer was killed, which"
+                        + " is the handover failing rather than the refusal changing");
         assertEquals(UNAUTHENTICATED,
                 requests.postAsNobody(nodes.first().address() + SUBMIT, "{}", "application/json")
                         .statusCode(),
                 "the surviving node either stopped answering or stopped refusing, and both are"
                         + " worse than the node that was killed");
+    }
+
+    private boolean servingAgain(ContainerHandle handle) throws InterruptedException {
+        for (int attempt = 0; attempt < RECOVERY_ATTEMPTS && !serving(handle); attempt++) {
+            Thread.sleep(SETTLE_MILLISECONDS);
+        }
+        return serving(handle);
     }
 
     private boolean serving(ContainerHandle handle) {
