@@ -39,10 +39,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: refuse a release whose preconditions are unmet
-        run: ./mvnw --offline --batch-mode --no-transfer-progress -Dmaven.repo.local=.dependency-cache test -Dtest=PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am
       - name: prepare the locked dependency cache
         run: scripts/prepare_locked_dependency_cache
+      - name: refuse a release whose preconditions are unmet
+        run: ./mvnw --offline --batch-mode --no-transfer-progress -Dmaven.repo.local=.dependency-cache test -Dtest=PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am
       - name: build the release artifacts
         run: scripts/build_release_artifacts
       - name: prove two builds of this source agree
@@ -67,6 +67,9 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: release-set
+          # Where the upload took it from. An artifact of one file carries that file alone, so
+          # without this it lands beside the checkout and the subject path below names nothing.
+          path: support
       - name: produce build provenance for every artifact
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
         with:
