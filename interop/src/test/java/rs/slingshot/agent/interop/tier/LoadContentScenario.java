@@ -72,9 +72,9 @@ final class LoadContentScenario {
         assertTrue(row.contains("operation_key = \"required\""),
                 "this command's row no longer requires an operation key, so what this scenario"
                         + " goes on to assert about a submission without one is about nothing");
-        assertTrue(row.contains("access_class = \"read\""),
+        assertTrue(row.contains("access = \"read\""),
                 "this command's row no longer calls it a read");
-        assertTrue(row.contains("execution_class = \"immediate\""),
+        assertTrue(row.contains("execution = \"immediate\""),
                 "this command's row no longer runs it inside its caller's own request");
     }
 

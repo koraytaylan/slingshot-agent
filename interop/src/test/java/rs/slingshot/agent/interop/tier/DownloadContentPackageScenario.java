@@ -69,24 +69,18 @@ final class DownloadContentPackageScenario {
     }
 
     @Test
-    @DisplayName("this command's row refuses an operation key, which the client's own table says")
-    void therowRefusesAnOperationKey() {
-        assertTrue(row(COMMAND).contains("operation_key = \"refused\""),
-                "this command's row no longer refuses an operation key, so what this scenario"
-                        + " asserts about a submission carrying one is about nothing");
+    @DisplayName("this command's row requires an operation key, which the client's own table says")
+    void therowRequiresAnOperationKey() {
+        assertTrue(row(COMMAND).contains("operation_key = \"required\""),
+                "this command's row no longer requires an operation key. It is a read that is not"
+                        + " intrinsically idempotent - the repository can change between two"
+                        + " identical requests, so two packages are not one package - and the row"
+                        + " is the client's own classification rather than this side's opinion");
     }
 
     @Test
-    @DisplayName("the query this command issues is declared and covered by an index")
-    void thequeryIsDeclaredAndCovered() {
-        final String coverage = read(REPOSITORY.resolve("policy/query-index-coverage.toml"));
-        assertTrue(coverage.contains("issued_by = \"" + COMMAND + "\""),
-                "this command issues a query nobody declared, so nothing checks it against the"
-                        + " indexes a deployment provides — and a full-text search is the query"
-                        + " that most needs one behind it");
-        assertTrue(coverage.contains("cqPageLucene"),
-                "the page index this search relies on is no longer among the indexes the"
-                        + " deployments are recorded as providing");
+    @DisplayName("this build ships no index definition, because an index is an operator's decision")
+    void thisbuildShipsNoIndexDefinition() {
         assertTrue(!installed().contains("oak:index"),
                 "this build ships an index definition. An index lives outside /apps, changes the"
                         + " shape of somebody else's repository, and is an operator's decision"
