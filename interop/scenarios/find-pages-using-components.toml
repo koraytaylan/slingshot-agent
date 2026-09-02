@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "find-pages-using-components"
+kind = "command"
+feature = "find_pages_using_components"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.FindPagesUsingComponentsScenario"
+reason = "The harder migration question on a running instance, where what matches is a node inside a page and what the caller wants is the page. What this proves that no unit suite can: that the command is registered on a real Sling runtime, and that its query is one the committed coverage policy answers from an index the platform already provides rather than by walking somebody's author instance."

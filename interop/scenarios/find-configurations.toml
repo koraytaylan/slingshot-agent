@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "find-configurations"
+kind = "command"
+feature = "find_open_service_gateway_initiative_configurations"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.FindConfigurationsScenario"
+reason = "A read that works on every deployment, including the one whose configuration cannot be changed at all — which is the deployment where knowing exactly what it says matters most. What this proves that no unit suite can: that the command is registered on a real runtime, that its row refuses an operation key because reading twice is reading once, and that the surface is reachable through the transport."

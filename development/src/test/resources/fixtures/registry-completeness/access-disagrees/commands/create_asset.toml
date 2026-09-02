@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "create_asset"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: running it twice is not running it once, so the caller supplies a
+# key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["media_type_unsupported", "mutation_outcome_unknown", "parent_access_denied", "parent_not_found", "payload_rejected", "payload_too_large", "repository_commit_failed", "target_already_exists"]
+argument_schema_digest = "099006916b1474f0523cca9c731ea7f78b8ec7d7281747dfcdf75d483119544d"
+result_schema_digest = "0e431327fa7795a496e031fe087f918f3b90393154b800990ba4f6dd8cb94717"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

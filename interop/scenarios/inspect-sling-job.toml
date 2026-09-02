@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "inspect-sling-job"
+kind = "command"
+feature = "inspect_sling_job"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.InspectSlingJobScenario"
+reason = "The one command that carries a job's property names, and never their values. What this proves that no unit suite can is that the redaction corpus finds nothing in what a real job system returns for a job created by something else entirely."

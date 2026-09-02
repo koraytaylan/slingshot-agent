@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "update-user-profile"
+kind = "command"
+feature = "update_user_profile"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.UpdateUserProfileScenario"
+reason = "Two lists, so a property in neither is left exactly as it was. What this proves that no unit suite can is that the repository's own refusal to release a protected property reaches the caller as the declared category rather than as a commit failure."

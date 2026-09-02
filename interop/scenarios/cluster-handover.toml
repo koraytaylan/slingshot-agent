@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "cluster-handover"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.harness.ClusterHandoverScenario"
+reason = "An author on the row this product is built for is not one machine: work moves, instances stop, and the repository underneath is shared. Every property about contention needs two nodes, because a single node cannot contend with itself in the way that matters. What this proves that no unit suite can is that a node killed outright while holding work leaves exactly one effect per committed admission, that the surviving node waits while a lease is live and takes it once after expiry, and that both nodes give byte-identical terminal answers."

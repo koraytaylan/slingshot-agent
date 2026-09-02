@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>rs.slingshot</groupId>
+    <artifactId>slingshot-agent-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>slingshot-agent-interop</artifactId>
+  <packaging>jar</packaging>
+  <name>Slingshot Agent Interoperability Harness</name>
+  <description>The Podman harness, the tier images, and the scenarios that install a package and observe
+    it. Produces no installable artifact.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-aem</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.tomlj</groupId>
+      <artifactId>tomlj</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains</groupId>
+      <artifactId>annotations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        The three detectors this module does not run, each recorded in policy/static-analysis.toml
+        with the reason. They are about a product that starts processes and reads paths a caller
+        chose; this module starts processes on purpose, on a developer's own machine, and ships
+        nowhere - which the module direction check makes true by construction.
+      -->
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <configuration>
+          <omitVisitors>CommandInjectionDetector,PathTraversalDetector,DumbMethods,FindReturnRef</omitVisitors>
+        </configuration>
+      </plugin>
+      <!--
+        This module holds no documentable type yet: its only source is the package declaration. The
+        documentation generator treats a source tree with no public type as an error rather than an
+        empty result, so it is skipped here until the first task that puts a type in this module.
+        The documentation policy still reads every source in it, including this package's own.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-install-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

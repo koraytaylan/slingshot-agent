@@ -1,0 +1,11 @@
+{
+  "queue.name": "Slingshot Agent Commands",
+  "queue.topics": [
+    "rs/slingshot/agent/command"
+  ],
+  "queue.type": "TOPIC_ROUND_ROBIN",
+  "queue.maxparallel": 32,
+  "queue.retries": 8,
+  "queue.retrydelay": 250,
+  "queue.priority": "NORM"
+}

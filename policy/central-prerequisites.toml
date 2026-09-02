@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Everything the Maven repository enforces before it will accept an artifact, as data.
+#
+# As data rather than as lore in a script, because the point is that somebody can compare this list
+# with the registry's own published requirements and see whether it is still the list. A script that
+# happened to check six things is a script nobody can audit against anything.
+#
+# Every one of these is checked here, offline, against the built artifacts and the resolved model,
+# and every failure is reported at once. A release refused remotely is a release somebody has to
+# work out the reason for from a rejection message; a release refused here names all of it.
+#
+# The signature is not checked here and cannot be. Signing happens with a key this repository never
+# holds, so what is checked is that the identity is declared and that the release workflow signs -
+# never that a particular artifact was signed by a key nobody here has.
+
+[registry]
+name = "Maven Central"
+reason = "The one registry this product publishes to, which is where a customer project's build resolves a dependency from."
+
+[[prerequisite]]
+id = "project-name"
+element = "project.name"
+reason = "A coordinate with no name is a row in somebody's dependency tree with nothing to read."
+
+[[prerequisite]]
+id = "project-description"
+element = "project.description"
+reason = "What it is, for the person who found it in a dependency tree and does not know why it is there."
+
+[[prerequisite]]
+id = "project-address"
+element = "project.url"
+reason = "Where to go to find out more, which is the difference between a dependency somebody can evaluate and one they can only accept."
+
+[[prerequisite]]
+id = "licence"
+element = "project.licenses"
+reason = "What somebody may do with it. An artifact with no declared licence is one a careful organisation cannot use at all."
+
+[[prerequisite]]
+id = "developer"
+element = "project.developers"
+reason = "Who to ask. A registry requires it and so does anybody who found a problem."
+
+[[prerequisite]]
+id = "source-control"
+element = "project.scm"
+reason = "Where the source is, derived from the declared repository rather than written twice, so a coordinate and its source cannot disagree."
+
+[[prerequisite]]
+id = "sources-archive"
+element = "artifact.sources"
+reason = "Every published module ships one. Somebody debugging inside their own author instance needs it rather more than the registry does."
+
+[[prerequisite]]
+id = "documentation-archive"
+element = "artifact.javadoc"
+reason = "Every published module ships one, generated under the same warnings-as-errors every other compilation here is."
+
+[[prerequisite]]
+id = "signature"
+element = "artifact.signature"
+reason = "Every artifact is signed by the declared identity. What is checkable here is that an identity is declared and that the release workflow signs; the key is never in this repository."
+
+[[prerequisite]]
+id = "released-version"
+element = "project.version"
+reason = "A snapshot is a version that means something different tomorrow, and a registry that accepted one would be accepting a promise rather than an artifact."

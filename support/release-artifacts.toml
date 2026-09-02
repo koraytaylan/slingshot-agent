@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every artifact a release consists of, and what each one hashes to.
+#
+# A release is a claim: these bytes, built from this source, doing what this documentation says. The
+# digests here are what makes the first part of that claim checkable by somebody who was not there -
+# they rebuild from the same source and compare, and a difference is a real difference rather than
+# an argument about build environments.
+#
+# The digests are recorded by the build command rather than written by hand, and they are empty
+# until it has run. An empty digest is an honest not-yet-built; a digest somebody typed is a digest
+# somebody typed.
+#
+# Every archive is deterministic, which is a property of how they are produced rather than a hope:
+# entry order is fixed, every entry's timestamp is the one the source declares, and nothing
+# environment-dependent goes in. The verification command rebuilds and compares entry by entry,
+# reporting the first that differs - because "the archives differ" sends somebody to look at
+# everything and "this entry differs" sends them to look at one thing.
+
+[build]
+command = "scripts/build_release_artifacts"
+verify = "scripts/verify_release_artifacts"
+reason = "Building and verifying are two commands because they are two acts: one produces bytes and one checks that producing them again produces the same bytes. A single command that did both would be a command that could only ever agree with itself."
+
+[[artifact]]
+name = "slingshot-agent-all"
+kind = "container-package"
+file = "all/target/slingshot-agent-all-0.1.0-SNAPSHOT.zip"
+digest = ""
+reason = "The one thing an operator installs. Everything else in this list is either inside it or is about it."
+
+[[artifact]]
+name = "slingshot-agent-core"
+kind = "bundle"
+file = "core/target/slingshot-agent-core-0.1.0-SNAPSHOT.jar"
+digest = ""
+reason = "The Sling-only bundle, published separately because a customer project may embed it in a container of its own."
+
+[[artifact]]
+name = "slingshot-agent-aem"
+kind = "bundle"
+file = "aem/target/slingshot-agent-aem-0.1.0-SNAPSHOT.jar"
+digest = ""
+reason = "The Adobe bundle, published for the same reason and separately because it resolves only on an Adobe runtime."
+
+[[artifact]]
+name = "slingshot-agent-core-sources"
+kind = "sources"
+file = "core/target/slingshot-agent-core-0.1.0-SNAPSHOT-sources.jar"
+digest = ""
+reason = "The registry requires a sources archive for every published module, and somebody debugging inside their own author instance requires it rather more."
+
+[[artifact]]
+name = "slingshot-agent-aem-sources"
+kind = "sources"
+file = "aem/target/slingshot-agent-aem-0.1.0-SNAPSHOT-sources.jar"
+digest = ""
+reason = "The same, for the other bundle."
+
+[[artifact]]
+name = "slingshot-agent-core-javadoc"
+kind = "documentation"
+file = "core/target/slingshot-agent-core-0.1.0-SNAPSHOT-javadoc.jar"
+digest = ""
+reason = "The registry requires it, and it is generated under the same warnings-as-errors every other compilation here is."
+
+[[artifact]]
+name = "slingshot-agent-aem-javadoc"
+kind = "documentation"
+file = "aem/target/slingshot-agent-aem-0.1.0-SNAPSHOT-javadoc.jar"
+digest = ""
+reason = "The same, for the other bundle."
+
+[[artifact]]
+name = "bill-of-materials"
+kind = "components"
+file = "all/target/slingshot-agent-all-0.1.0-SNAPSHOT.bom.json"
+digest = ""
+reason = "What the release contains and what it binds to at run time. It is in this list rather than beside it so that it is verified the way every other artifact is: a components list nobody checked is a components list."

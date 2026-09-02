@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Authenticates the locked dependency cache against the digests recorded beside it.
+#
+# This command reaches nothing. It does not fetch, it does not repair, and it does not consult an
+# ambient repository: it compares what is in the cache with what was recorded when the cache was
+# prepared.
+#
+# What that establishes is precise and worth stating plainly: the cache is the one prepared for this
+# declared set, unchanged since. It does NOT establish that the bytes were trustworthy when they
+# were fetched. Nothing offline can establish that, and a command that implied otherwise would be
+# worse than one that says so.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
+readonly RECORD_FILE="${REPOSITORY_ROOT}/support/locked-dependency-cache.toml"
+readonly PREPARE_COMMAND="scripts/prepare_locked_dependency_cache"
+readonly EXIT_USAGE=2
+readonly EXIT_ABSENT=3
+readonly EXIT_CHANGED=4
+
+if [[ $# -ne 0 ]]; then
+    printf 'verify_locked_dependency_cache takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+if [[ ! -f "${RECORD_FILE}" ]]; then
+    printf 'No cache has been prepared: %s is absent. Run %s.\n' \
+        "${RECORD_FILE}" "${PREPARE_COMMAND}" >&2
+    exit "${EXIT_ABSENT}"
+fi
+
+if [[ ! -d "${CACHE_DIRECTORY}" ]]; then
+    printf 'No cache has been prepared: %s is absent. Run %s.\n' \
+        "${CACHE_DIRECTORY}" "${PREPARE_COMMAND}" >&2
+    exit "${EXIT_ABSENT}"
+fi
+
+recorded_paths="$(mktemp)"
+present_paths="$(mktemp)"
+trap 'rm -f "${recorded_paths}" "${present_paths}"' EXIT
+
+missing_count=0
+changed_count=0
+
+while IFS= read -r line; do
+    case "${line}" in
+        path\ =\ *) recorded_path="${line#path = \"}"; recorded_path="${recorded_path%\"}" ;;
+        digest\ =\ *)
+            recorded_digest="${line#digest = \"}"; recorded_digest="${recorded_digest%\"}"
+            printf '%s\n' "${recorded_path}" >> "${recorded_paths}"
+            artifact="${CACHE_DIRECTORY}/${recorded_path}"
+            if [[ ! -f "${artifact}" ]]; then
+                printf 'absent from the cache: %s\n' "${recorded_path}" >&2
+                missing_count=$((missing_count + 1))
+                continue
+            fi
+            actual_digest="$(sha256sum "${artifact}" | cut -d' ' -f1)"
+            if [[ "${actual_digest}" != "${recorded_digest}" ]]; then
+                printf 'changed since it was prepared: %s\n' "${recorded_path}" >&2
+                changed_count=$((changed_count + 1))
+            fi
+            ;;
+        *) ;;
+    esac
+done < "${RECORD_FILE}"
+
+find "${CACHE_DIRECTORY}" -type f \( -name '*.jar' -o -name '*.pom' \) \
+    | sed "s|^${CACHE_DIRECTORY}/||" | sort > "${present_paths}"
+sort -o "${recorded_paths}" "${recorded_paths}"
+
+extra_count=0
+while IFS= read -r extra; do
+    printf 'in the cache and in no record: %s\n' "${extra}" >&2
+    extra_count=$((extra_count + 1))
+done < <(comm -23 "${present_paths}" "${recorded_paths}")
+
+if [[ "${missing_count}" -ne 0 || "${changed_count}" -ne 0 || "${extra_count}" -ne 0 ]]; then
+    printf '\nThe cache is not the one that was prepared: %s absent, %s changed, %s unrecorded.\n' \
+        "${missing_count}" "${changed_count}" "${extra_count}" >&2
+    printf 'Run %s to prepare it again.\n' "${PREPARE_COMMAND}" >&2
+    exit "${EXIT_CHANGED}"
+fi
+
+printf 'The cache is the one prepared for the declared set, unchanged.\n'
+printf 'That is what this establishes. It is not a claim about whether the bytes were\n'
+printf 'trustworthy when they were fetched, which nothing offline can establish.\n'

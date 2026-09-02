@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The public interoperability tier, run rootlessly on the hosted runner.
+#
+# What it needs prepared it prepares in its own steps, before the gate runs, so the gate itself
+# still fetches nothing. That separation is the whole arrangement: preparation is somebody's
+# deliberate act and verification is what every run afterwards is held to.
+#
+# The licensed tiers are not here and are not skipped. A suite that quietly did not run is a suite
+# reporting success it did not earn, so this says at the end which tiers did not run and the exact
+# command for each, read from the inventory rather than written in here.
+name: interop
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  public-tier:
+    name: public tier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: check out the source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: set up the declared runtime
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: prepare the locked dependency cache
+        run: scripts/prepare_locked_dependency_cache
+      - name: prepare the pinned interoperability images
+        run: scripts/prepare_interop_images
+      - name: run the public tier
+        run: ./mvnw --offline --batch-mode --no-transfer-progress -Dmaven.repo.local=.dependency-cache verify -pl interop -am
+      - name: refuse a container the harness left behind
+        run: scripts/verify_interop_images
+      - name: say which tiers did not run
+        run: scripts/report_tiers_not_run
+      - name: publish the captured output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: interop-output
+          path: interop/target/harness
+          if-no-files-found: ignore

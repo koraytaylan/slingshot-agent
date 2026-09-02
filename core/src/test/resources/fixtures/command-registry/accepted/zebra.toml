@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+wire_name = "list_child_pages"
+contract_version = "1"
+access = "read"
+operation_key = "refused"
+result_bytes = 65536
+failure_categories = ["not_found", "access_denied"]
+argument_schema_digest = "b9a49ec66b70abccd82b2f3639e9aecf88e3252a5cd85d3e677458d7f37cd001"
+result_schema_digest = "5a9992986a108ea8040bb03acd2ac088c523ae674475e8bb378924be341ee5d1"
+contract_limits_digest = "8a46fd6fc3d79d419361a7043d0365b6dfeb6b92da9e376450898ff88d9cea00"
+staging_bytes = 0
+execution = "immediate"
+reason = "A fixture row, which is what a well-formed one looks like."

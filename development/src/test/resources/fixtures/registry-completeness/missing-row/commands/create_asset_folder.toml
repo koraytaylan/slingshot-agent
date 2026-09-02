@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "create_asset_folder"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: running it twice is not running it once, so the caller supplies a
+# key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["mutation_outcome_unknown", "parent_access_denied", "parent_not_found", "property_rejected", "repository_commit_failed", "target_already_exists"]
+argument_schema_digest = "1bffc93da273f617302ce81897e3bb2ab2f8d00f49578164055d0d6309735a17"
+result_schema_digest = "81fe214dece03d3f0d9a199e54eef442cb4dee6aff79ada99d9e34503c121329"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

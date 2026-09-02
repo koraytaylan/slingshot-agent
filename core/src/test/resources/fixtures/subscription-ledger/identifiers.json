@@ -1,0 +1,9 @@
+{
+  "a-new-subscription": "following-daemon-one",
+  "a-resumed-subscription": "following-daemon-one",
+  "a-second-subscriber": "following-daemon-two",
+  "at-the-bound": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "past-the-bound": "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "not-a-name": "following daemon one",
+  "empty": ""
+}

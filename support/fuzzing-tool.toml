@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The coverage-guided fuzzing tool, pinned, and the targets it drives.
+#
+# A fuzzer that fetches is a gate whose result depends on a remote server, and a corpus that
+# regenerates is a gate that finds different things on different days. Both are pinned here for the
+# same reason the dependency cache and the interoperability images are: what the gate needs
+# prepared it verifies rather than acquires, and refuses with the preparation command named when it
+# is absent.
+#
+# The digest is recorded by the preparation command rather than written by hand. An empty digest is
+# an honest not-yet-prepared, and it is refused distinctly from a tool that is present with the
+# wrong bytes - the first is somebody who has not run the preparation, the second is somebody whose
+# copy is not the one this repository pinned, and they are two different conversations.
+#
+# Every target below is driven by `scripts/run_fuzz_target`, which takes exactly one target name,
+# runs it with the seed and iteration count declared here, and reaches nothing. The corpus beside
+# each target is committed: every input that has ever produced a finding stays in it permanently, so
+# a defect once found is a test rather than a memory.
+
+[tool]
+name = "jazzer"
+version = "0.24.0"
+coordinates = "com.code-intelligence:jazzer:0.24.0"
+file = "jazzer-0.24.0.jar"
+digest = ""
+prepare = "scripts/prepare_fuzzing_tool"
+held_at = "support/fuzzing/jazzer-0.24.0.jar"
+reason = "The coverage-guided fuzzer for the Java virtual machine. Coverage-guided rather than random because every one of these targets has a narrow accepting path behind a bounded reader, and a fuzzer with no feedback spends its whole budget being refused at the first byte."
+
+[run]
+seed = 20260902
+iterations = 65536
+reason = "One seed and one count, declared rather than passed, because a run somebody could shorten is a run whose result depends on how it was invoked. Two runs at this seed produce identical output, which is what makes a finding reproducible by somebody who was not there."
+
+[[target]]
+name = "document-reader"
+entry = "rs.slingshot.agent.development.fuzz.DocumentReaderTarget"
+corpus = "fuzz/corpus/document-reader"
+reason = "The bounded reader every protocol document arrives through. Its property is that any bytes at all produce either a typed value or a refusal naming a bound - never a partial value, never an unbounded allocation, and never an exception a caller would meet as a server fault."
+
+[[target]]
+name = "canonical-writer"
+entry = "rs.slingshot.agent.development.fuzz.CanonicalWriterTarget"
+corpus = "fuzz/corpus/canonical-writer"
+reason = "The other direction, and the one the five-field identity rests on: a value that writes to different bytes twice is a submission refused in production for no visible reason."
+
+[[target]]
+name = "request-body"
+entry = "rs.slingshot.agent.development.fuzz.RequestBodyTarget"
+corpus = "fuzz/corpus/request-body"
+reason = "The bounded body reader as the servlet uses it, including the framing and content-coding refusals, because that is where a hostile sender aims - and the intake stream, which is the one body that is bytes rather than a document and the one whose bound comes from a manifest a caller wrote."
+
+[[target]]
+name = "continuation-token"
+entry = "rs.slingshot.agent.development.fuzz.ContinuationTokenTarget"
+corpus = "fuzz/corpus/continuation-token"
+reason = "A forged token that validated would be a caller reading somebody else's results, so the property is stronger than well-formedness: nothing validates that was not issued under a key the authority holds, and every refusal is one of the six declared categories."
+
+[[target]]
+name = "resumption-identifier"
+entry = "rs.slingshot.agent.development.fuzz.ResumptionIdentifierTarget"
+corpus = "fuzz/corpus/resumption-identifier"
+reason = "The other value a caller supplies that decides where this side reads from. Nothing it can be shaped into reaches an event belonging to another operation, another subscription, or another generation."
+
+[[target]]
+name = "event-encoder"
+entry = "rs.slingshot.agent.development.fuzz.EventEncoderTarget"
+corpus = "fuzz/corpus/event-encoder"
+reason = "Every encoded event decodes back to the same event and no input produces output crossing a bound, because a stream that grew past its bound would be refused mid-flight by something that cannot say why."
+
+[[target]]
+name = "command-argument"
+entry = "rs.slingshot.agent.development.fuzz.CommandArgumentTarget"
+corpus = "fuzz/corpus/command-argument"
+reason = "Sixty-four argument shapes is sixty-four places a hostile or merely confused value arrives. The targets are derived from the registry directory rather than listed, so the sixty-fifth command is fuzzed on the day it lands."

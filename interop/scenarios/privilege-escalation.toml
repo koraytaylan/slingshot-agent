@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "privilege-escalation"
+kind = "property"
+feature = "repository-access"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.PrivilegeEscalationScenario"
+reason = "This runs inside somebody else's author, with a service user, in the same process as their content, which is the shape of a privilege escalation. What this proves that no unit suite can is that a running instance decides every content command by the caller's own repository access rather than by the service user's, that nothing reaches the agent's own state tree or its key ring through any route, alias, path spelling or console resource, and that the service user itself cannot write content - so widening the permitted groups changes who may call and never what this agent may do."

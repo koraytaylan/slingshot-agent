@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The deployments this product supports, and what each one provides.
+#
+# A row here is a declaration and not evidence. It appears in the table, it constrains the bytecode
+# target and the imported-package ranges every bundle is held to, and it carries no evidence until
+# an interoperability tier actually runs against it. That distinction is the sibling repository's
+# and it is kept here for the same reason: a row somebody wrote down is not a machine somebody ran.
+#
+# No row can declare itself proved. There is no field for it, and a document carrying one is
+# refused as an unknown key rather than believed.
+#
+# The request window is a fact about somebody else's environment: how long the gateway in front of
+# that deployment allows a request to run before it ends it, whether or not the request is still
+# moving. What this build does with the window — bounding how long a command may execute, and how
+# long an event stream may stay open — belongs to `agent-contract.toml`, not here.
+
+[[deployment]]
+id = "aem-cloud-service"
+product = "Adobe Experience Manager as a Cloud Service"
+java_runtime = 21
+sling_version = "12"
+oak_version = "1.78"
+clustered = true
+context_prefix = ""
+request_window_milliseconds = 20000
+interop_tier = "b"
+built_for = true
+
+[[deployment]]
+id = "aem-6-5-lts"
+product = "Adobe Experience Manager 6.5 Long Term Support"
+java_runtime = 21
+sling_version = "12"
+oak_version = "1.66"
+clustered = false
+context_prefix = ""
+request_window_milliseconds = 300000
+interop_tier = "b"
+built_for = false

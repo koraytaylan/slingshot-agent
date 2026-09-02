@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What the automation may act on, and what it may act as.
+#
+# A workflow runs with credentials scoped to wherever it happens to be running. That is a property
+# of the runner rather than a decision anybody made, so the decision is written here: this
+# automation acts on one repository and as one identity, and a workflow acting outside that is
+# refused rather than trusted for having been checked in.
+#
+# Empty until an owner supplies it, for the same reason the publication metadata is: naming a
+# repository is a claim about somebody's account, and no build should make one on its own.
+
+[repository]
+owner = ""
+name = ""
+reason = "The one repository this automation may act on. A workflow that ran against a fork with the same file would be a workflow acting somewhere nobody granted it."
+
+[[identity]]
+kind = "workflow-token"
+name = ""
+reason = "The identity a workflow acts as when it acts as itself. Named so that a change to it is somebody's decision rather than a default that moved."

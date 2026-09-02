@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "list_workflow_models"
+contract_version = "1.0.0"
+access = "read"
+
+# Intrinsically idempotent: reading twice is reading once, so a key is refused rather than stored —
+# an operation nobody can repeat differently needs nothing to hold it to one attempt.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "workflow_inventory_failed"]
+argument_schema_digest = "19d7b708d0eca21da00951ec737bd551086d516664297d8e68b7953bd6dd6eb6"
+result_schema_digest = "602830c1e5f8ca53dc2cd36dd9e7e3cacdd3b2874d6b682f38b19fe31a60af11"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

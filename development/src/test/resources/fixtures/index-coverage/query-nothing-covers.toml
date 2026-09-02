@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every query this product issues, and the index each deployment row already provides for it.
+#
+# Adobe Experience Manager answers a query either from an index or by walking the repository, and
+# walking it is how a single command takes an author instance down. So no command here may traverse:
+# every query is declared as data, checked against the indexes below at build time, and checked
+# again against the plan the instance in front of it actually returns before a node is examined.
+#
+# The two checks are different claims and both are needed. This file is what a deployment row was
+# declared to provide; the plan is what the instance really has. A customer can remove an index, and
+# a Cloud Service environment's index set is theirs to change — so the run-time check is the only
+# version of this a customer's author is protected by, and a disagreement between the two is
+# reported as itself rather than as a query defect.
+#
+# This product ships no index definition. A custom index lives outside /apps, changes the shape of
+# somebody else's repository, and is an operator's decision rather than a side effect of installing
+# an agent — so a command that would need one does not ship.
+
+[coverage]
+reason = "One row per query and one per index a deployment row provides, compared in both directions. A query no row covers fails the build naming the query and the deployment rows that cannot answer it."
+
+# The indexes every supported deployment already provides, out of the box, with the properties each
+# one covers. Nothing here is created by this product.
+
+[[index]]
+name = "nodetype"
+deployment = "aem-cloud-service"
+covers = ["jcr:primaryType"]
+reason = "Oak's own node-type index, which every repository has. A query restricted to a primary type is answered from it."
+
+[[index]]
+name = "nodetype"
+deployment = "aem-6-5-lts"
+covers = ["jcr:primaryType"]
+reason = "The same index on the other supported row."
+
+[[index]]
+name = "cqPageLucene"
+deployment = "aem-cloud-service"
+covers = ["jcr:primaryType", "jcr:content/cq:template", "jcr:content/jcr:title", "jcr:content/jcr:description"]
+reason = "Adobe's own page index, provided by the product. Finding pages by template or by phrase is answered from it, and a deployment that removed it would be answered by the run-time plan check rather than by this file."
+
+[[index]]
+name = "cqPageLucene"
+deployment = "aem-6-5-lts"
+covers = ["jcr:primaryType", "jcr:content/cq:template", "jcr:content/jcr:title", "jcr:content/jcr:description"]
+reason = "The same index on the other supported row."
+
+[[index]]
+name = "damAssetLucene"
+deployment = "aem-cloud-service"
+covers = ["jcr:primaryType", "jcr:content/metadata/dc:title", "jcr:content/metadata/dc:format", "jcr:content/metadata/dc:description"]
+reason = "Adobe's own asset index. Finding assets by metadata is answered from it."
+
+[[index]]
+name = "damAssetLucene"
+deployment = "aem-6-5-lts"
+covers = ["jcr:primaryType", "jcr:content/metadata/dc:title", "jcr:content/metadata/dc:format", "jcr:content/metadata/dc:description"]
+reason = "The same index on the other supported row."
+
+# Every query a handler may issue. The list is empty until the first read command lands: a build
+# with no commands issues no queries, and a check that refused that would be a check nobody could
+# have written before the commands existed.
+
+[[query]]
+name = "find_pages_by_colour"
+roots = ["/content"]
+properties = ["jcr:content/colour"]
+issued_by = "find_pages_by_colour"
+reason = "A fixture query filtering on a property no index covers."

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "inspect-replication-queue"
+kind = "command"
+feature = "inspect_replication_queue"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.InspectReplicationQueueScenario"
+reason = "Where the page that was published and is not there actually went. What this proves that no unit suite can is that a real queue's entries carry what they would do and why they last failed, and nothing about where they were being sent."

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row.
+
+[command]
+wire_name = "find_assets_by_metadata"
+contract_version = "1.0.0"
+access = "read"
+operation_key = "refused"
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
+argument_schema_digest = "0db3980580b897e9b29ad2af2d6ee1a3ef8b12bdebd031a72de4fb12b35177cf"
+result_schema_digest = "7594ec305844359651c26b1c441794a39007bf8d8e16a7e625ec8a42c7d2ee50"
+contract_limits_digest = "10cbf5d9b8959c0469772594d0ede2d58934d427bdba600cfa2a9c32cf09e250"
+staging_bytes = 0
+execution = "immediate"

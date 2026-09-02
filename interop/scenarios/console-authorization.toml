@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "console-authorization"
+kind = "property"
+feature = "repository-access"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ConsoleAuthorizationScenario"
+reason = "A console is a servlet, an authenticated user and a permitted group - exactly like a route, and held to the same requirement so the two cannot drift apart. What this proves that no unit suite can is that a real instance refuses a caller outside the permitted group on the console's own resources, not only on the routes."

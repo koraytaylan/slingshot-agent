@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "update-configuration"
+kind = "command"
+feature = "update_open_service_gateway_initiative_configuration"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.UpdateConfigurationScenario"
+reason = "A control a deployment may refuse outright. What this proves that no unit suite can: that its row requires an operation key, that it declares the platform control's own unknown outcome rather than the repository mutation's — it owes no repository commit at all — and that the write surface is reachable through the transport."

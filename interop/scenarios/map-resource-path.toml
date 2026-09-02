@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "map-resource-path"
+kind = "command"
+feature = "map_resource_path"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ResourceResolutionScenario"
+reason = "One direction of resource mapping on a running instance, which is where a wrong link on a published site comes from more often than anywhere else. What this proves that no unit suite can: that both commands are registered on a real Sling runtime, and that their rows differ in exactly the one way the two directions differ — only resolving takes a request address, so only resolving can refuse one."

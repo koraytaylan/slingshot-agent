@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>rs.slingshot.fixture</groupId>
+    <artifactId>direction-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+  <artifactId>slingshot-agent-aem</artifactId>
+  <packaging>jar</packaging>
+  <dependencies>
+    <dependency>
+      <groupId>rs.slingshot.fixture</groupId>
+      <artifactId>slingshot-agent-core</artifactId>
+      <version>1.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+</project>

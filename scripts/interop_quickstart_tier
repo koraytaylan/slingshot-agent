@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Runs the tier that needs a licensed input.
+#
+# It is not part of scripts/quality and never will be: a gate that needed a jar licensed to one
+# person is a gate most contributors could not run. What it does instead is refuse explicitly, with
+# what its holder should do about it, because a suite that quietly does not run is a suite reporting
+# success it did not earn.
+#
+# The quickstart jar is never committed, never cached in this repository, never published, and never
+# fetched. This command builds a container image from the owner's own copy, locally, each run.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly EXIT_USAGE=2
+
+if [[ $# -ne 0 ]]; then
+    printf 'interop_quickstart_tier takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+printf 'Running the owner-supplied quickstart tier.\n'
+printf 'The quickstart jar is licensed to its holder: this command never fetches one.\n\n'
+
+"${REPOSITORY_ROOT}/mvnw" --offline --batch-mode --no-transfer-progress \
+    -Dmaven.repo.local="${REPOSITORY_ROOT}/.dependency-cache" \
+    -f "${REPOSITORY_ROOT}/pom.xml" \
+    -pl interop -am -DskipTests=false \
+    -Dtest=QuickstartTierTest -Dsurefire.failIfNoSpecifiedTests=false \
+    test

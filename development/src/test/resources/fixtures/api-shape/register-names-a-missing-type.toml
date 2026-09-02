@@ -1,0 +1,151 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every significant type names the pattern it implements and why that pattern.
+#
+# A pattern that has to be declared with a reason is a pattern somebody chose; one that is merely
+# present is a pattern somebody copied. The checker verifies each declared pattern's own structural
+# signature, so a row is a claim the build can refuse rather than a comment.
+#
+# The vocabulary is closed. A pattern with no signature would be a label, and the register would
+# then be a place to write labels.
+
+[[pattern]]
+name = "value-object"
+signature = "A record, or a final class whose every field is final and which declares both equality and a hash."
+reason = "A value has no identity beyond what it holds, so two of them holding the same thing are the same thing."
+
+[[pattern]]
+name = "builder"
+signature = "Declares a build method returning the built type, and the built type declares no setter."
+reason = "A thing assembled over several statements and then closed cannot be half-built when somebody reads it."
+
+[[pattern]]
+name = "closed-outcome"
+signature = "A sealed interface whose permitted types are all records."
+reason = "An operation that can fail in more than one way answers which one, exhaustively, so a caller cannot forget a case the compiler knows about."
+
+[[pattern]]
+name = "stateless-policy"
+signature = "A final class with a private constructor and no instance field."
+reason = "A rule that holds no state answers the same way every time it is asked, and can be read without knowing what has happened before."
+
+[[pattern]]
+name = "document-reader"
+signature = "A final class declaring a static read method that answers a closed outcome declared beside it."
+reason = "Reading a document either produces the whole thing or names the one reason it did not, and a partly-populated document is never reachable."
+
+[[pattern]]
+name = "enumeration"
+signature = "An enumeration."
+reason = "A closed set of named values the compiler can check a switch against."
+
+[[pattern]]
+name = "accessor"
+signature = "A final class whose every field is final and which declares no setter."
+reason = "Something that answers questions about state it was given, and never changes it."
+
+[[type]]
+name = "PolicyFinding"
+pattern = "value-object"
+reason = "Two findings at the same file, line, rule, and symbol are the same finding, which is what lets a report hold one of them."
+
+[[type]]
+name = "PolicyReport"
+pattern = "accessor"
+reason = "A report is a set of findings in one order, answered rather than changed."
+
+[[type]]
+name = "PolicyDocument"
+pattern = "document-reader"
+reason = "Every policy and support file this repository has is loaded through it, and a refusal produces no document at all."
+
+[[type]]
+name = "ReactorModel"
+pattern = "accessor"
+reason = "It answers questions about the reactor the build resolved and changes nothing about it."
+
+[[type]]
+name = "BuiltArtifact"
+pattern = "accessor"
+reason = "It answers questions about bytes a build produced and changes nothing about them."
+
+[[type]]
+name = "RepositoryTree"
+pattern = "stateless-policy"
+reason = "Where the repository is and what a file holds are the same answers however often they are asked."
+
+[[type]]
+name = "BytecodeContract"
+pattern = "stateless-policy"
+reason = "The bytecode contract is one release level and a set of rules about it, with nothing to remember between calls."
+
+[[type]]
+name = "ProjectScaffold"
+pattern = "stateless-policy"
+reason = "The structure rules are decided from the reactor each time they are asked, with nothing carried between them."
+
+[[type]]
+name = "DeploymentMatrix"
+pattern = "document-reader"
+reason = "The matrix is read once and either produces every row or names the one row that was wrong."
+
+[[type]]
+name = "ModuleDirection"
+pattern = "document-reader"
+reason = "The module diagram is read once and either produces every edge or names what was wrong with the document."
+
+[[type]]
+name = "ImportedPackages"
+pattern = "document-reader"
+reason = "The footprint policy is read once and either produces every row or names what was wrong with the document."
+
+[[type]]
+name = "LicenceHeaders"
+pattern = "document-reader"
+reason = "The header policy is read once, and an exclusion with no reason refuses the whole document rather than being skipped."
+
+[[type]]
+name = "PublicationBoundary"
+pattern = "document-reader"
+reason = "The publication metadata is read once and answers per target, so one target's absent field never blocks another."
+
+[[type]]
+name = "StaticAnalysis"
+pattern = "document-reader"
+reason = "The analyser correspondence is read once and either produces every row or names what was wrong with the document."
+
+[[type]]
+name = "SourcePolicy"
+pattern = "document-reader"
+reason = "The source policy is read once, and an excluded directory with no reason refuses the whole document."
+
+[[type]]
+name = "NullabilityPolicy"
+pattern = "document-reader"
+reason = "The nullability policy is read once, and a policy permitting the annotation package at runtime refuses the whole document."
+
+[[type]]
+name = "ApiShapePolicy"
+pattern = "document-reader"
+reason = "The shape policy is read once, and an exemption with no reason refuses the whole document."
+
+[[type]]
+name = "DesignPatternRegister"
+pattern = "document-reader"
+reason = "The register is read once and either produces every declared pattern or names what was wrong with the document."
+
+[[type]]
+name = "AgentContract"
+pattern = "document-reader"
+reason = "The contract's bytes are authenticated before a bound is parsed, and a refusal leaves no contract reachable at all."
+
+[[type]]
+name = "ContractLimit"
+pattern = "enumeration"
+reason = "Every bound is reached by naming it, so a bound that does not exist is a compilation failure rather than an absent value."
+
+[[type]]
+name = "NothingLikeThis"
+pattern = "accessor"
+reason = "A row that outlived the type it named."

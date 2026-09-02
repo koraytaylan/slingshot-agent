@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "live-tail"
+kind = "property"
+feature = "agent-routes"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.LiveTailScenario"
+reason = "The one thing on this console a server cannot render, because the operation may not have finished. What this proves that no unit suite can is that it follows the same route a client follows - a second stream would be a second implementation of resumption, ordering and heartbeats, and the day the two disagree the operator and the caller are reading different accounts of the same operation."

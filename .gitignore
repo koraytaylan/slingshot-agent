@@ -10,6 +10,10 @@
 # Rust
 /target/
 
+# Java / Maven
+target/
+.flattened-pom.xml
+
 # JavaScript / TypeScript
 node_modules/
 
@@ -20,3 +24,10 @@ __pycache__/
 
 # OS noise
 .DS_Store
+.dependency-cache/
+.quickstart/
+
+# The sibling repository's own client executable, supplied by whoever runs the conformance tier.
+# It is never committed here, never cached, and never fetched: it is built from that repository at
+# the commit support/client-tier.toml names.
+/.client/

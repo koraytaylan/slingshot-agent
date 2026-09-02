@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "list_open_service_gateway_initiative_components"
+contract_version = "1.0.0"
+access = "read"
+
+# Intrinsically idempotent: reading twice is reading once, so a key is refused rather than stored —
+# an operation nobody can repeat differently needs nothing to hold it to one attempt.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["component_inventory_failed", "continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded"]
+argument_schema_digest = "97e79089ae5d5ffda146901cda6e95989b87eb7d259a1af1b2640aead5a00502"
+result_schema_digest = "f95695f4e0b3e543cc24b0f4fb829e94959576f9c68c7c32118aad02f812241b"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

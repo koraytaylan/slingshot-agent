@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "find-sling-jobs"
+kind = "command"
+feature = "find_sling_jobs"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.FindSlingJobsScenario"
+reason = "The search whose states are required, because a busy instance holds a great many jobs that succeeded and every question is about the few that did not. What this proves that no unit suite can is that a real job system answers the query and that no job property reaches the answer."

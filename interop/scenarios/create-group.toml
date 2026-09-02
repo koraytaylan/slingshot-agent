@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "create-group"
+kind = "command"
+feature = "create_group"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.CreateGroupScenario"
+reason = "A group is how every permission in this product is granted, including the permission to use this agent. What this proves that no unit suite can is that making one goes through the caller's own session, so a caller who could not make it by hand cannot make it here."

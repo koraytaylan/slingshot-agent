@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>rs.slingshot</groupId>
+    <artifactId>slingshot-agent-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>slingshot-agent-ui.apps.structure</artifactId>
+  <packaging>content-package</packaging>
+  <name>Slingshot Agent Repository Structure Package</name>
+  <description>The repository structure package declaring the roots the other packages may write.</description>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.jackrabbit</groupId>
+        <artifactId>filevault-package-maven-plugin</artifactId>
+        <extensions>true</extensions>
+        <configuration>
+          <group>rs.slingshot</group>
+          <packageType>container</packageType>
+          <allowIndexDefinitions>false</allowIndexDefinitions>
+          <validatorsSettings>
+            <jackrabbit-filter>
+              <options>
+                <severityForUncoveredAncestorNodes>error</severityForUncoveredAncestorNodes>
+                <validRoots>/,/libs,/apps,/etc,/var,/content,/conf,/home,/etc/packages,/apps/cq/core/content/nav/tools</validRoots>
+              </options>
+            </jackrabbit-filter>
+            <jackrabbit-packagetype>
+              <options>
+                <jcrInstallerNodePathRegex>.*/(install|config)(\.[^/]*)?/.*</jcrInstallerNodePathRegex>
+              </options>
+            </jackrabbit-packagetype>
+          </validatorsSettings>
+          <failOnDependencyErrors>true</failOnDependencyErrors>
+          <!--
+            The roots this product writes, declared once. Two rather than one because the tools
+            navigation entry has to sit where the platform's own extension point reads, and
+            declaring the exact leaf rather than its parent is what keeps this package from
+            colliding with any other product that also adds an entry there.
+          -->
+          <filters>
+            <filter>
+              <root>/apps/slingshot-agent</root>
+            </filter>
+            <filter>
+              <root>/apps/cq/core/content/nav/tools/slingshot-agent</root>
+            </filter>
+          </filters>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

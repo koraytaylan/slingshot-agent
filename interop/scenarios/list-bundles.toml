@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "list-bundles"
+kind = "command"
+feature = "list_open_service_gateway_initiative_bundles"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ListBundlesScenario"
+reason = "The first thing anybody does on an instance they did not build. What this proves that no unit suite can: that it is registered on a real runtime, that its row refuses an operation key because reading twice is reading once, and that the listing is reachable through the transport on a deployment that will not let a bundle be stopped at all."

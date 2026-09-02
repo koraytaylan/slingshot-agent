@@ -1,0 +1,44 @@
+{
+    "$id": "urn:slingshot:agent:job:result:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "The answer one command produced. An answer larger than the envelope allows is not truncated: it is published as an artifact and this document says where to fetch it and what it will digest to. A truncated answer is not a smaller answer, it is an unparseable one.",
+    "oneOf": [
+        {
+            "additionalProperties": false,
+            "properties": {
+                "delivery": {
+                    "const": "inline"
+                },
+                "inline_result": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "delivery",
+                "inline_result"
+            ]
+        },
+        {
+            "additionalProperties": false,
+            "properties": {
+                "artifact_byte_count": {
+                    "minimum": 0,
+                    "type": "integer"
+                },
+                "artifact_digest": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                },
+                "delivery": {
+                    "const": "artifact"
+                }
+            },
+            "required": [
+                "artifact_byte_count",
+                "artifact_digest",
+                "delivery"
+            ]
+        }
+    ],
+    "type": "object"
+}

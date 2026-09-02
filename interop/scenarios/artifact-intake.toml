@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "artifact-intake"
+kind = "route"
+feature = "artifact-intake"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ArtifactIntakeScenario"
+reason = "Bytes arriving for work nobody declared, on a real runtime. The instance is fresh, so nothing is waiting for a payload, and the property being exhibited is that such bytes are refused before any of them is stored and that the refusal says nothing about what this store does hold."

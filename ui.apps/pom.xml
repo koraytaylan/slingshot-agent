@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>rs.slingshot</groupId>
+    <artifactId>slingshot-agent-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>slingshot-agent-ui.apps</artifactId>
+  <packaging>content-package</packaging>
+  <name>Slingshot Agent Application Package</name>
+  <description>The immutable content package: console resources, overlays, client libraries.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-ui.apps.structure</artifactId>
+      <!--
+        The type is the packaging the structure module produces rather than the extension its file
+        happens to have. A dependency typed by the extension is one the reactor cannot satisfy: it
+        is looked for in a repository, which is why a build that had installed it once passed and a
+        clean one did not.
+      -->
+      <type>content-package</type>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.jackrabbit</groupId>
+        <artifactId>filevault-package-maven-plugin</artifactId>
+        <extensions>true</extensions>
+        <configuration>
+          <group>rs.slingshot</group>
+          <packageType>application</packageType>
+          <allowIndexDefinitions>false</allowIndexDefinitions>
+          <repositoryStructurePackages>
+            <repositoryStructurePackage>
+              <groupId>rs.slingshot</groupId>
+              <artifactId>slingshot-agent-ui.apps.structure</artifactId>
+            </repositoryStructurePackage>
+          </repositoryStructurePackages>
+          <validatorsSettings>
+            <jackrabbit-filter>
+              <options>
+                <severityForUncoveredAncestorNodes>error</severityForUncoveredAncestorNodes>
+                <validRoots>/,/libs,/apps,/etc,/var,/content,/conf,/home,/etc/packages,/apps/cq/core/content/nav/tools</validRoots>
+              </options>
+            </jackrabbit-filter>
+            <jackrabbit-packagetype>
+              <options>
+                <jcrInstallerNodePathRegex>.*/(install|config)(\.[^/]*)?/.*</jcrInstallerNodePathRegex>
+              </options>
+            </jackrabbit-packagetype>
+          </validatorsSettings>
+          <failOnDependencyErrors>true</failOnDependencyErrors>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

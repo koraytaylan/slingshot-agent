@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "read-content-fragment"
+kind = "command"
+feature = "read_content_fragment"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ReadContentFragmentScenario"
+reason = "One fragment in one named variation, on a running instance. What this proves that no unit suite can: that the command is registered on a real Sling runtime, that its committed row carries none of the continuation categories — it answers one fragment rather than a page of anything — and that its result bound is the inspection bound the client declares rather than the discovery bound every listing uses."

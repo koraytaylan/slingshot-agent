@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# How this project's skeleton was generated.
+#
+# This file is provenance, not configuration. Nothing reads it at build time; it exists so that
+# somebody can regenerate the same skeleton from the same inputs and see what was changed
+# afterwards. An archetype run nobody recorded is a project whose shape came from a version that
+# has since moved.
+
+[archetype]
+group = "com.adobe.aem"
+artifact = "aem-project-archetype"
+version = "57"
+generated = "2026-09-01"
+
+# Every property passed to the generation, exactly as it was passed.
+[archetype.properties]
+appTitle = "Slingshot Agent"
+appId = "slingshot-agent"
+groupId = "rs.slingshot"
+artifactId = "slingshot-agent"
+package = "rs.slingshot.agent"
+version = "0.1.0-SNAPSHOT"
+aemVersion = "cloud"
+sdkVersion = "2026.8.27830.20260820T160150Z-260700"
+frontendModule = "none"
+includeDispatcherConfig = "n"
+includeExamples = "n"
+includeErrorHandler = "n"
+includeCommons = "n"
+language = "en"
+country = "GB"
+singleCountry = "y"
+
+# The reactor is built by a version somebody chose rather than whichever one is on the machine.
+[wrapper]
+maven = "3.9.16"
+distribution = "only-script"
+wrapper = "3.3.4"
+
+# Modules the archetype generates that this product does not have. Each is removed with a reason,
+# and the structure assertion refuses their reappearance in the aggregator, in the container
+# package's embeds, or in any filter.
+[[removed_module]]
+name = "ui.frontend"
+reason = "The agent serves no author-facing single-page application. Plan 0008's consoles are server-rendered Granite pages with one hand-written client library and no package manager, bundler, or framework, so a front-end build would be a toolchain nothing produces output for."
+
+[[removed_module]]
+name = "ui.content"
+reason = "The agent writes no sample content and owns no mutable content root. Everything it installs is immutable application content under /apps/slingshot-agent, and everything it creates at runtime it creates under /var/slingshot-agent through its own service user."
+
+[[removed_module]]
+name = "dispatcher"
+reason = "The agent's routes are authenticated author-side routes reached through the customer's own deployment. This repository ships no dispatcher configuration because it makes no claim about anybody's publish tier or cache."
+
+[[removed_module]]
+name = "ui.tests"
+reason = "The user-interface test module drives a browser through an external test runner. Plan 0008 proves the consoles from server-rendered markup with no browser driver, and every runtime claim this repository makes is proved by the Podman interop harness it owns."

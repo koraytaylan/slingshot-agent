@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "update_user_profile"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: group membership is how every permission here is granted, so the
+# caller supplies a key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["authorizable_access_denied", "authorizable_kind_mismatch", "authorizable_not_found", "mutation_outcome_unknown", "property_not_removable", "property_rejected", "repository_commit_failed"]
+argument_schema_digest = "0831d9cf1c20b2f61ed41f76bbf8586c1c39b48fcc04d827f0271f7ee7dcc19a"
+result_schema_digest = "35d540914ada37e8f562cdadeb8a5fa25d19f21e6fabc4f3932d537cd8b70a90"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

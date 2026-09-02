@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "list-workflow-models"
+kind = "command"
+feature = "list_workflow_models"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ListWorkflowModelsScenario"
+reason = "What an operator asks first: is the workflow they were told about actually deployed here. What this proves that no unit suite can is that the workflow engine is reachable on a real runtime and that the row refuses an operation key."

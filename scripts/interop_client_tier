@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Runs the tier that proves the two halves of this product speak to one another.
+#
+# It is not part of scripts/quality and never will be: the client executable is built from the
+# sibling repository at a named commit, and a gate that needed somebody's local build of another
+# repository is a gate most contributors could not run. What it does instead is refuse explicitly,
+# with what its holder should do about it, because a suite that quietly does not run is a suite
+# reporting success it did not earn.
+#
+# A result from this tier is about exactly one client commit — the one support/client-tier.toml
+# names — and claims nothing about any other build. That is the whole point: its failures are
+# cross-repository defects rather than local ones.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly EXIT_USAGE=2
+
+if [[ $# -ne 0 ]]; then
+    printf 'interop_client_tier takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+printf 'Running the client conformance tier.\n'
+printf 'The client is built from the sibling repository: this command never fetches one.\n'
+printf 'It is pinned in support/client-tier.toml, and a result names that commit and no other.\n\n'
+
+"${REPOSITORY_ROOT}/mvnw" --offline --batch-mode --no-transfer-progress \
+    -Dmaven.repo.local="${REPOSITORY_ROOT}/.dependency-cache" \
+    -f "${REPOSITORY_ROOT}/pom.xml" \
+    -pl interop -am -DskipTests=false \
+    -Dtest=ClientConformanceScenario -Dsurefire.failIfNoSpecifiedTests=false \
+    -Dslingshot.repository.root="${REPOSITORY_ROOT}" \
+    test

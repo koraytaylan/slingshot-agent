@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>rs.slingshot</groupId>
+    <artifactId>slingshot-agent-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>slingshot-agent-all</artifactId>
+  <packaging>content-package</packaging>
+  <name>Slingshot Agent Container Package</name>
+  <description>The container package an operator installs, embedding the other five in a proven order.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-aem</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-ui.apps.structure</artifactId>
+      <type>content-package</type>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-ui.apps</artifactId>
+      <type>content-package</type>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-ui.config</artifactId>
+      <type>content-package</type>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+      <!--
+        Adobe's own container analyser, the one Cloud Manager runs before it accepts a deployment.
+        Running it here means a finding is something somebody sees on the machine that wrote it
+        rather than in somebody else's pipeline, and it fails the build rather than reporting.
+      -->
+      <plugin>
+        <groupId>com.adobe.aem</groupId>
+        <artifactId>aemanalyser-maven-plugin</artifactId>
+        <extensions>true</extensions>
+        <configuration>
+          <failOnAnalyserErrors>true</failOnAnalyserErrors>
+        </configuration>
+        <executions>
+          <execution>
+            <id>container-analysis</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>project-analyse</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.jackrabbit</groupId>
+        <artifactId>filevault-package-maven-plugin</artifactId>
+        <extensions>true</extensions>
+        <configuration>
+          <group>rs.slingshot</group>
+          <packageType>container</packageType>
+          <allowIndexDefinitions>false</allowIndexDefinitions>
+          <!--
+            What the container carries, where each part installs, and in what order. The structure
+            package first, because it declares the roots everything else writes; the two bundles
+            under the author run mode alone, because nothing this product does belongs on a publish
+            tier, and the application and configuration packages own disjoint subtrees of the product
+            root, so nothing about the result depends on which of them installs first.
+          -->
+          <embeddeds>
+            <embedded>
+              <groupId>rs.slingshot</groupId>
+              <artifactId>slingshot-agent-core</artifactId>
+              <target>/apps/slingshot-agent-packages/application/install.author</target>
+            </embedded>
+            <embedded>
+              <groupId>rs.slingshot</groupId>
+              <artifactId>slingshot-agent-aem</artifactId>
+              <target>/apps/slingshot-agent-packages/application/install.author</target>
+            </embedded>
+            <embedded>
+              <groupId>rs.slingshot</groupId>
+              <artifactId>slingshot-agent-ui.apps</artifactId>
+              <type>content-package</type>
+              <target>/apps/slingshot-agent-packages/application/install</target>
+            </embedded>
+            <embedded>
+              <groupId>rs.slingshot</groupId>
+              <artifactId>slingshot-agent-ui.config</artifactId>
+              <type>content-package</type>
+              <target>/apps/slingshot-agent-packages/application/install</target>
+            </embedded>
+          </embeddeds>
+          <validatorsSettings>
+            <jackrabbit-filter>
+              <options>
+                <severityForUncoveredAncestorNodes>error</severityForUncoveredAncestorNodes>
+                <validRoots>/,/libs,/apps,/etc,/var,/content,/conf,/home,/etc/packages,/apps/cq/core/content/nav/tools</validRoots>
+              </options>
+            </jackrabbit-filter>
+            <jackrabbit-packagetype>
+              <options>
+                <jcrInstallerNodePathRegex>.*/(install|config)(\.[^/]*)?/.*</jcrInstallerNodePathRegex>
+              </options>
+            </jackrabbit-packagetype>
+          </validatorsSettings>
+          <failOnDependencyErrors>true</failOnDependencyErrors>
+          <filters>
+            <filter>
+              <root>/apps/slingshot-agent-packages</root>
+            </filter>
+          </filters>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

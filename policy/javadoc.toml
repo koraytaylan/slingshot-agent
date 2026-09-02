@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What documentation this repository decides, and what it leaves to a reader.
+#
+# Self-explanatory code and thorough documentation are not alternatives. The code says what happens;
+# the documentation says what is guaranteed, what is refused, what the caller must hold, and why the
+# thing exists at all - and none of those is inferable from an implementation, because an
+# implementation is one way of satisfying a contract rather than the contract.
+#
+# So the rules here are about the falsifiable half. Whether prose is accurate or worth reading is a
+# reader's judgement and is a checklist at the end of this file rather than a rule pretending to
+# decide it.
+
+[required]
+# Every type and every member a caller outside the type can reach.
+types = true
+non_private_members = true
+parameters = true
+type_parameters = true
+declared_failures = true
+returns = true
+package_documentation = true
+
+# A summary that is the member's name with the spaces put back exists without saying anything. It
+# is the most common way documentation is present and useless, and it is decidable.
+[[refused_summary]]
+form = "restates-the-member-name"
+reason = "A summary that spells the member's own name back is documentation that exists and says nothing, and it is the shape a generator produces."
+
+[[refused_summary]]
+form = "empty-or-placeholder"
+reason = "An empty comment and a placeholder are both a promise nobody kept, and both read as documentation to a tool that only counts."
+
+# Inherited documentation is permitted only where the overriding member's contract is genuinely
+# identical rather than merely similar.
+[inheritance]
+permitted = true
+reason = "An override that narrows nothing, widens nothing, and declares no new failure has the same contract, and restating it would create a second place for it to drift."
+
+[[inheritance_refusal]]
+kind = "declares-a-failure"
+reason = "A member that can fail in a way its supertype cannot has a different contract, whatever the annotation says."
+
+# Paths the rules do not apply to, each with a reason.
+[[exclusion]]
+path = "src/test"
+reason = "A test's name and its display name are its documentation, and the assertion is its contract. Holding it to the same rule would put the same sentence in three places."
+
+[[exclusion]]
+path = "fixtures"
+reason = "A fixture is written to be accepted or refused by exactly one rule, and documentation completeness is not that rule."
+
+# What this checker deliberately does not decide.
+[[review_question]]
+question = "Whether the documentation describes the code in this commit rather than a plan for it."
+reason = "Presence is decidable; whether prose has kept up with the code is a reader's judgement."
+
+[[review_question]]
+question = "Whether every contract, invariant, side effect, and bound that applies is stated."
+reason = "That a parameter is described is decidable; that the description is the whole contract is not."
+
+[[review_question]]
+question = "Whether a comment narrates syntax the types and control flow already show."
+reason = "A checker cannot tell a restatement of the code from a statement about why the code is that way."
+
+[[review_question]]
+question = "Whether a comment exists wherever a constraint is not visible from the code."
+reason = "Deciding this would mean deciding which constraints are visible, which is the reader's own judgement."
+
+[[review_question]]
+question = "Whether a rendered failure message names what the caller can do about it."
+reason = "That a failure is described is decidable; that the description is actionable is not."

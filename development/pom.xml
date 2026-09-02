@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>rs.slingshot</groupId>
+    <artifactId>slingshot-agent-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>slingshot-agent-development</artifactId>
+  <packaging>jar</packaging>
+  <name>Slingshot Agent Repository Policy Checks</name>
+  <description>Every repository-policy check, and the toolkit they are all built on. Produces no
+    installable artifact.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-model</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven</groupId>
+      <artifactId>maven-model-builder</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.codehaus.plexus</groupId>
+      <artifactId>plexus-utils</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.tomlj</groupId>
+      <artifactId>tomlj</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.github.javaparser</groupId>
+      <artifactId>javaparser-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>rs.slingshot</groupId>
+      <artifactId>slingshot-agent-aem</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains</groupId>
+      <artifactId>annotations</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!--
+        This module holds the checks rather than the product. A floor on its coverage would be a
+        floor on how thoroughly the gate tests itself, which the gate already answers by refusing a
+        rule with no fixture.
+      -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-install-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

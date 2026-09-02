@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "physical-job-lookup"
+kind = "route"
+feature = "physical-job-lookup"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.PhysicalJobScenario"
+reason = "The attempts one operation recorded, answered from its own outbox rather than from the queue. What a running instance proves is that the answer discloses nothing about the instance's own job system - no queue, no topic, no address - which is what would otherwise turn a diagnostic route into a way to survey somebody's author."

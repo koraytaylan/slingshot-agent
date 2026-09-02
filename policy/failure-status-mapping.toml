@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What each refusal becomes on the wire, one row per category.
+#
+# A category with no row is a build failure rather than a default, because a default is a status
+# somebody would have chosen if they had thought about it and nobody did. The client already
+# classifies statuses into answered, rejected, conflict, retryable, and unvalidated, and each row
+# here is a decision about which of those a caller is put into.
+#
+# The retry hint is the part worth being careful about. A hint on a refusal that will never succeed
+# is an instruction to waste an author's request budget - so a row that is not retryable carries no
+# hint at all, and the rule that says so is checked rather than remembered.
+
+[[row]]
+category = "unauthenticated"
+status = 401
+retryable = false
+hint = false
+reason = "Nobody authenticated the request. Trying again changes nothing until the caller authenticates, and a hint would say otherwise."
+
+[[row]]
+category = "forbidden"
+status = 403
+retryable = false
+hint = false
+reason = "Somebody authenticated and is not permitted. Only an operator widening the permitted groups changes that, which is not something a client waits for."
+
+[[row]]
+category = "unknown_route"
+status = 404
+retryable = false
+hint = false
+reason = "This agent serves nothing at that address, and no amount of waiting makes it."
+
+[[row]]
+category = "method_not_permitted"
+status = 405
+retryable = false
+hint = false
+reason = "The route exists and answers another method. The fix is a different request rather than the same one later."
+
+[[row]]
+category = "document_refused"
+status = 400
+retryable = false
+hint = false
+reason = "The bytes are not a document this build reads under its declared bounds. They will not become one."
+
+[[row]]
+category = "contract_mismatch"
+status = 409
+retryable = false
+hint = false
+reason = "The document names contracts this build does not speak. A client that read the capability document knows this before it sends; one that did not has to read it now rather than retry."
+
+[[row]]
+category = "identity_incomplete"
+status = 400
+retryable = false
+hint = false
+reason = "The five-field identity is not complete. What is missing is missing on every resend of the same document."
+
+[[row]]
+category = "idempotency_key_mismatch"
+status = 409
+retryable = false
+hint = false
+reason = "The key sent is not the one this submission derives. A resend of the same submission derives the same key and mismatches again."
+
+[[row]]
+category = "execution_budget_spent"
+status = 504
+retryable = true
+hint = true
+reason = "The command reached the budget this deployment declares. The same work may fit on a quieter instance, so a client may try again - after the hint this side gives it."
+
+[[row]]
+category = "capacity_exhausted"
+status = 503
+retryable = true
+hint = true
+reason = "The store or this caller's share of it is full. Outstanding work finishing is exactly what makes room, so this is the refusal a hint is for."
+
+[[row]]
+category = "internal_refusal"
+status = 500
+retryable = true
+hint = true
+reason = "Something inside this agent failed. A client can do nothing about it except try later, and telling it how long to wait is the only useful thing this side can say."

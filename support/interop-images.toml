@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The container images the interoperability tiers run on, pinned by content digest.
+#
+# A tag moves. A digest does not, which is why the digest is what a tier is pinned to and the tag is
+# recorded only so somebody can see which one the digest came from. An image the gate needed and
+# fetched would be a gate whose result depended on a registry, so the gate verifies these are
+# already present and refuses with the preparation command named when one is not.
+#
+# The Adobe quickstart is not here and never will be. It is licensed to its holder: it is never
+# committed, never cached in this repository, never published, and never fetched. Tier B builds its
+# image locally from a jar the owner supplies, and refuses explicitly when that jar is absent rather
+# than skipping - a suite that quietly does not run is a suite reporting success it did not earn.
+
+[[image]]
+tier = "a"
+registry = "docker.io"
+repository = "apache/sling"
+tag = "12"
+digest = "sha256:228f3b3e284cf8bbc4685711aa09fdd87ded7b91f9214d68bef9e716b7b72b15"
+reason = "The published Apache Sling runtime, which the public tier's own image is built from. Everything in the Sling-only bundle resolves against Sling, so the whole protocol surface is proved with no licensed input at all."
+
+[[image]]
+tier = "harness"
+registry = "docker.io"
+repository = "library/mongo"
+tag = "7"
+digest = "sha256:76f1e3cc36f46a79f98f30736174fa0c55a2ba41d6ce860e4e551e3ffbcce009"
+reason = "The shared document store two nodes run against. An author on the row this product is built for is a cluster, and every property about contention - a lease two workers race for, a count two nodes advance, a key ring two nodes rotate - is one a single instance cannot exhibit at all."
+
+[[image]]
+tier = "harness"
+registry = "docker.io"
+repository = "library/alpine"
+tag = "3"
+digest = "sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f"
+reason = "The image the harness proves itself against. Proving a start, a readiness deadline, and a cleanup on the runtime a tier actually uses would make every harness assertion wait for that runtime to boot, which is how a suite about the harness turns into a suite about somebody else's startup time."
+
+[[image]]
+tier = "a"
+registry = "docker.io"
+repository = "library/eclipse-temurin"
+tag = "21-jre"
+digest = "sha256:d1d7f43094ea37e9ae77ea3ca40026bc1de1bf1dc2cad37b08d66b9a016a2ea6"
+reason = "The Java runtime every row in support/deployments.toml declares. The published Sling image carries an older one, and a bundle compiled to this release does not resolve on it at all, so a tier that used the published image unchanged would prove the product against a platform nobody this repository supports is running."
+
+# The image this repository builds for the public tier: the published Sling runtime with the
+# declared Java runtime layered in. It is built by the preparation command and verified - never
+# built - by the gate, for the same reason nothing else the gate needs is acquired at gate time.
+[[built_image]]
+tier = "a"
+name = "localhost/slingshot-agent-public-sling:1"
+containerfile = "interop/tier/public-sling/Containerfile"
+base_images = ["docker.io/library/eclipse-temurin:21-jre", "docker.io/apache/sling:12"]
+identifier = "ff13e800b67798f31d6cedf7a70c14c8066ae4ed8e10e61a055b5d200c202018"
+reason = "One image, built from two pinned ones, so the tier runs the product on the runtime its own deployment matrix declares rather than on whichever runtime somebody else's published image happened to carry."

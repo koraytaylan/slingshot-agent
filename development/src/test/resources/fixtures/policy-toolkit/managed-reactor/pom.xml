@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>rs.slingshot.fixture</groupId>
+  <artifactId>managed-reactor</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+  <modules>
+    <module>module</module>
+  </modules>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.example</groupId>
+        <artifactId>managed</artifactId>
+        <version>2.0.0</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>org.example</groupId>
+      <artifactId>inherited</artifactId>
+      <version>1.0.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The gate, stage by stage, in the order it runs them.
+#
+# `scripts/quality` takes no argument and fetches nothing. What it needs prepared - the locked
+# dependency cache and the pinned interoperability images - it verifies rather than acquires, and
+# refuses with the preparation command named when either is absent. A gate that quietly fetched a
+# missing input would be a gate whose result depended on a remote server after all, which is the
+# thing this whole arrangement exists to prevent.
+#
+# The stage list is checked against the script in both directions: a stage declared and not run, or
+# run and not declared, fails.
+
+[[stage]]
+name = "locked-dependency-cache"
+command = "scripts/verify_locked_dependency_cache"
+reason = "Everything after this resolves out of the cache. Verifying it first means a later failure is about the code rather than about what happened to be on the machine."
+
+[[stage]]
+name = "pinned-interop-images"
+command = "scripts/verify_interop_images"
+reason = "The public tier runs on an image pinned by digest. Verifying it before anything runs means the tier's result is about the product rather than about which tag the registry answered with today."
+
+[[stage]]
+name = "formatting"
+command = "mvn checkstyle:check"
+reason = "Whitespace, indentation, import order, and line length, decided before anything else so a diff never carries a formatting change nobody asked for."
+
+[[stage]]
+name = "compilation"
+command = "mvn compile"
+reason = "Every warning is an error, everywhere. A warning that survives a build is one nobody will read."
+
+[[stage]]
+name = "static-analysis"
+command = "mvn compile pmd:check spotbugs:check"
+reason = "The source-pattern and bug-pattern analysers, each failing at its first finding, so a later scan has nothing left to report."
+
+[[stage]]
+name = "source-policy"
+command = "mvn test -Dtest=SourcePolicyTest"
+reason = "The rules about this repository that no off-the-shelf analyser has: names spelled in full, no second declaration of a contract bound, and the file-length ceiling."
+
+[[stage]]
+name = "nullability"
+command = "mvn test -Dtest=NullabilityPolicyTest"
+reason = "No method accepts a null argument or returns a null value, and absence is a type."
+
+[[stage]]
+name = "api-shape"
+command = "mvn test -Dtest=ApiShapePolicyTest"
+reason = "No type named for the fact that a second name was needed, and every declared pattern held to its own structural signature."
+
+[[stage]]
+name = "method-shape"
+command = "mvn test -Dtest=MethodShapePolicyTest"
+reason = "Nesting as the primary ceiling, because the complexity number is the symptom and the nesting is the cause."
+
+[[stage]]
+name = "documentation"
+command = "mvn test -Dtest=JavadocPolicyTest"
+reason = "The falsifiable half of documentation, decided; the rest recorded as a reader's checklist rather than pretended at."
+
+[[stage]]
+name = "allocation"
+command = "mvn test -Dtest=AllocationPolicyTest"
+reason = "Streams everywhere except the declared allocation-sensitive paths, where they are refused."
+
+[[stage]]
+name = "adobe-practice"
+command = "mvn test -Dtest=AdobePracticePolicyTest"
+reason = "The handful of practices that decide whether this survives the next platform upgrade."
+
+[[stage]]
+name = "tests-and-coverage-floor"
+command = "mvn verify"
+reason = "Every test in the reactor with the coverage floor enforced per module and per class, so a feature that arrived with no scenario fails rather than lowering an average."
+
+[[stage]]
+name = "package-analysis"
+command = "mvn verify -pl all -am -DskipTests"
+reason = "Adobe's own container analyser and the FileVault validators, run here rather than in somebody else's pipeline."
+
+[[stage]]
+name = "dependency-policy"
+command = "mvn test -Dtest=DependencyPolicyTest"
+reason = "Every artifact this build resolves, at an exact version, at a scope no product module may embed from."
+
+[[stage]]
+name = "imported-package-footprint"
+command = "mvn test -Dtest=ImportedPackagesTest"
+reason = "The complete set of packages each bundle imports, compared with the policy in both directions, read from the built manifest."
+
+[[stage]]
+name = "module-direction"
+command = "mvn test -Dtest=ModuleDirectionTest"
+reason = "The two-bundle split, which is the whole reason a public interoperability tier is possible at all."
+
+[[stage]]
+name = "public-interop-tier"
+command = "mvn verify -pl interop -am -DskipTests"
+reason = "The tier that installs the container package into a real Sling runtime and asks it questions. It needs nothing licensed and runs on any machine."
+
+# The tiers this gate does not run, and the exact command that runs each. A passing gate is not a
+# complete one, and the gate says so at the end rather than leaving somebody to assume otherwise.
+[[stage]]
+name = "nobody-runs-this"
+command = "mvn nothing"
+reason = "A stage declared and never run."
+
+[[tier]]
+name = "a"
+title = "public Apache Sling"
+run_by_the_gate = true
+command = "scripts/quality"
+reason = "It needs nothing licensed, runs on any machine and in continuous integration, and proves everything that does not touch an Adobe interface."
+
+[[tier]]
+name = "b"
+title = "owner-supplied Adobe quickstart"
+run_by_the_gate = false
+command = "scripts/interop_quickstart_tier"
+reason = "It needs a quickstart jar licensed to its holder, which is never committed, never cached, never published, and never fetched. A gate that needed it is a gate most contributors could not run."
+
+[[tier]]
+name = "c"
+title = "sibling client end to end"
+run_by_the_gate = false
+command = "scripts/interop_client_tier"
+reason = "It is the only tier that proves the two halves of the protocol speak to one another, and its failures are cross-repository defects rather than local ones."

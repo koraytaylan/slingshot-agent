@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row. Its failure set is
+# its own rather than the shared root-anchor pair: a caller names one asset, and the client declares
+# three distinct ways that asset can fail to be one.
+
+[command]
+wire_name = "list_asset_renditions"
+contract_version = "1.0.0"
+access = "read"
+operation_key = "refused"
+result_bytes = 1048576
+failure_categories = ["asset_access_denied", "asset_invalid", "asset_not_found", "continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded"]
+argument_schema_digest = "3ab8235aba848d2486c1bc5a78eedae7d98edfa868478fd5c4dfb61b386dcce8"
+result_schema_digest = "1f17a47edefe39fee76c3e7124ed8ba98734af2b0b9ec157d5d7e9ebd3a82b9b"
+contract_limits_digest = "4401e4c6f46d5648d914b284a092a0d4d18a2d35220e7700e260444089447b53"
+staging_bytes = 0
+execution = "immediate"

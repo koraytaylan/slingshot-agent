@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every route constant the client repository actually declares, read out of it rather than recalled.
+#
+# This file is evidence. Each row names the file and the symbol the value came from, at the client
+# commit recorded below, so the alias set can be compared with what the client really asks for
+# instead of with what somebody remembers it asking for. A row nobody can find in that repository is
+# a row that fails, and a constant in that repository with no row here is a constant this side has
+# not looked at.
+#
+# The three spellings are the whole reason the file exists. The client's production code asks under
+# `/libs`; its own simulator and daemon suites ask under `/bin`; and the two disagree again about
+# `operations` against `snapshot` and `artifacts` against `artifact`. No single spelling is served
+# by everything that expects it, which is a thing to fix in the client and to carry, deliberately
+# and temporarily, here.
+
+[client]
+repository = "https://github.com/koraytaylan/slingshot"
+commit = "ee6013218f6213e3c0bce66b1b917522db1552d1"
+version = "0.1.0"
+reason = "The commit these constants were read at. A row is evidence about one commit and claims nothing about any other, the same way an interoperability tier names the client it ran against."
+
+[[constant]]
+symbol = "ARTIFACT_ROUTE"
+value = "/libs/slingshot/agent/artifacts"
+file = "crates/slingshot-agent-connection/src/artifact_download.rs"
+kind = "production"
+reason = "Where the client fetches a published artifact. It is under /libs and it is plural, and this side serves neither."
+
+[[constant]]
+symbol = "LOOKUP_ROUTE"
+value = "/libs/slingshot/agent/operations"
+file = "crates/slingshot-agent-connection/src/job_snapshot_reconciliation.rs"
+kind = "production"
+reason = "Where the client looks one logical operation up. This side calls the same thing a snapshot."
+
+[[constant]]
+symbol = "PHYSICAL_JOB_ROUTE"
+value = "/libs/slingshot/agent/jobs"
+file = "crates/slingshot-agent-connection/src/job_snapshot_reconciliation.rs"
+kind = "production"
+reason = "Where the client looks a physical Sling job up. The last segment agrees; the prefix does not."
+
+[[constant]]
+symbol = "HIGH_WATER_ROUTE"
+value = "/libs/slingshot/agent/subscriptions/high-water"
+file = "crates/slingshot-agent-connection/src/job_snapshot_reconciliation.rs"
+kind = "production"
+reason = "Where the client records how far a subscription has been served. The last two segments agree; the prefix does not."
+
+[[constant]]
+symbol = "EVENT_ROUTE"
+value = "/libs/slingshot/agent/events"
+file = "crates/slingshot-agent-connection/src/event_stream_reconnection.rs"
+kind = "production"
+reason = "Where the client opens an event stream. The last segment agrees; the prefix does not."
+
+[[constant]]
+symbol = "CAPABILITIES_ROUTE"
+value = "/bin/slingshot/agent/capabilities"
+file = "crates/slingshot-daemon/tests/author_agent_conformance.rs"
+kind = "suite"
+reason = "What the client's own conformance suite asks for, which is the spelling this side serves. Recorded so the disagreement between the client's production code and its own suite is written down rather than noticed twice."
+
+[[constant]]
+symbol = "SUBMIT_ROUTE"
+value = "/bin/slingshot/agent/submit"
+file = "crates/slingshot-daemon/tests/author_agent_conformance.rs"
+kind = "suite"
+reason = "What the client's own conformance suite submits to, which is the spelling this side serves."
+
+[[constant]]
+symbol = "SUBMIT_ROUTE"
+value = "/bin/slingshot/agent/submit"
+file = "crates/slingshot-daemon/tests/transport_disruption_proof.rs"
+kind = "suite"
+reason = "What the client's disruption proof submits to. The same spelling as the conformance suite and not the one its production code uses."
+
+[[constant]]
+symbol = "SIMULATED_ROUTES"
+value = "/bin/slingshot/agent/capabilities"
+file = "crates/slingshot-test-support/src/fake_author/script.rs"
+kind = "simulator"
+reason = "What the client's own fake author answers on. The simulator agrees with this side and with the client's suites, and disagrees with the client's production constants."
+
+[[constant]]
+symbol = "SIMULATED_ROUTES"
+value = "/bin/slingshot/agent/submit"
+file = "crates/slingshot-test-support/src/fake_author/script.rs"
+kind = "simulator"
+reason = "What the client's own fake author answers submissions on."
+
+[[constant]]
+symbol = "SIMULATED_ROUTES"
+value = "/bin/slingshot/agent/events"
+file = "crates/slingshot-test-support/src/fake_author/script.rs"
+kind = "simulator"
+reason = "What the client's own fake author streams events on."
+
+[[constant]]
+symbol = "SIMULATED_ROUTES"
+value = "/bin/slingshot/agent/snapshot"
+file = "crates/slingshot-test-support/src/fake_author/script.rs"
+kind = "simulator"
+reason = "What the client's own fake author answers a lookup on, spelled the way this side spells it and not the way the client's production constant does."
+
+[[constant]]
+symbol = "SIMULATED_ROUTES"
+value = "/bin/slingshot/agent/artifact"
+file = "crates/slingshot-test-support/src/fake_author/script.rs"
+kind = "simulator"
+reason = "What the client's own fake author serves an artifact on, singular, the way this side spells it and not the way the client's production constant does."
+
+[[constant]]
+symbol = "TELEPORT_ROUTE"
+value = "/libs/slingshot/agent/teleportation"
+file = "crates/slingshot-agent-connection/src/nowhere.rs"
+kind = "production"
+reason = "A constant the client declares and nothing on this side answers."

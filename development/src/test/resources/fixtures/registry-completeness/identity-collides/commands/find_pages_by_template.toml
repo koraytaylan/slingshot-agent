@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row.
+
+[command]
+wire_name = "find_pages_by_template"
+contract_version = "1.0.0"
+access = "read"
+operation_key = "refused"
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
+argument_schema_digest = "e94092a7302c90e2f77c71951e12a1a7273f5fbde11de9894163ef30bb731f6d"
+result_schema_digest = "414c0b1ddeef64a127eafa66630435736fbe5a6342f8b6d131b3e389756a47e1"
+contract_limits_digest = "e733dc66fffbce88b6148467d5f9bc14aff463cd07404d1dbff5048648827fd0"
+staging_bytes = 0
+execution = "immediate"

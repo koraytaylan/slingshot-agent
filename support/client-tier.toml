@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The tier that proves the two halves of this product speak to one another.
+#
+# It runs the sibling repository's own executable against an instance this repository started. That
+# makes it the only thing in either repository whose failures are cross-repository defects rather
+# than local ones — and the reason it names the exact client commit it ran against and claims
+# nothing about any other. A conformance result that said "the client works" would be a claim about
+# builds nobody ran.
+#
+# The executable is not committed here, never fetched, and never cached. Its absence refuses this
+# tier explicitly rather than skipping it, because a suite that quietly does not run is a suite
+# reporting success it did not earn.
+
+[client]
+origin = "https://github.com/koraytaylan/slingshot"
+commit = "ee6013218f6213e3c0bce66b1b917522db1552d1"
+reason = "The exact commit a result is about. A range or a version would be a claim about builds nobody ran; a commit is a claim somebody can reproduce."
+
+[executable]
+# Where the owner puts the client they built. The path is inside the repository and ignored by
+# version control, so an executable that lands there is one somebody put there rather than one this
+# build produced.
+path = ".client/slingshot"
+digest = ""
+reason = "A digest rather than a path alone, because 'the client at that path' is not a thing anybody can reproduce a month later. An empty digest is an owner who has not recorded what they built."
+
+[acknowledgement]
+# Set by the owner, and by nobody else. This build cannot make this statement on anybody's behalf.
+acknowledged = false
+statement = ""
+reason = "That the executable's holder knows this repository is about to run it against a container it started, with a configuration this repository writes into a scratch home directory. Nothing here can make that statement for them."
+
+[configuration]
+# The client's own profile mechanism and nothing else, so the exchange is the one a user would have.
+# The components and the directory name are the client's, read out of its own contract rather than
+# guessed: a tier that configured the client some other way would be proving a path no user takes.
+root_components = [".config", "slingshot"]
+profile_directory = "profiles"
+profile_name = "interoperability-tier"
+environment = "development"
+deployment = "adobe_experience_manager_6_5"
+reason = "A profile naming the address this repository's own tier is listening on, selected by the client's own selection document. The deployment is the one a local Sling instance stands for."

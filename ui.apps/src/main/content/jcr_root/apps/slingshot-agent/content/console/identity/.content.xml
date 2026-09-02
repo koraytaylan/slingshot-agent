@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<jcr:root xmlns:jcr="http://www.jcp.org/jcr/1.0" xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:granite="http://www.adobe.com/jcr/granite/1.0"
+          jcr:primaryType="nt:unstructured"
+          jcr:title="slingshot.agent.console.identity.title"
+          sling:resourceType="granite/ui/components/shell/page">
+    <head jcr:primaryType="nt:unstructured">
+        <clientlibs jcr:primaryType="nt:unstructured"
+                    sling:resourceType="granite/ui/components/coral/foundation/includeclientlibs"
+                    categories="[slingshot.agent.console]"/>
+    </head>
+    <title jcr:primaryType="nt:unstructured"
+           sling:resourceType="granite/ui/components/coral/foundation/text"
+           text="slingshot.agent.console.identity.title"/>
+    <content jcr:primaryType="nt:unstructured"
+             sling:resourceType="granite/ui/components/coral/foundation/container">
+        <items jcr:primaryType="nt:unstructured">
+            <readings jcr:primaryType="nt:unstructured"
+                      sling:resourceType="granite/ui/components/coral/foundation/table"
+                      granite:id="slingshot-agent-identity"
+                      jcr:title="slingshot.agent.console.identity.title"
+                      granite:label="slingshot.agent.console.identity.title"
+                      emptyText="slingshot.agent.console.identity.empty"
+                      selectionMode="none">
+                <datasource jcr:primaryType="nt:unstructured"
+                            sling:resourceType="slingshot-agent/datasource/identity"/>
+                <columns jcr:primaryType="nt:unstructured">
+                    <name jcr:primaryType="nt:unstructured"
+                          jcr:title="slingshot.agent.console.column.reading"/>
+                    <value jcr:primaryType="nt:unstructured"
+                           jcr:title="slingshot.agent.console.column.value"/>
+                </columns>
+            </readings>
+        </items>
+    </content>
+</jcr:root>

@@ -1,0 +1,5 @@
+{
+  "declared-and-chunked": "a length and a chunked encoding together",
+  "an-unrequested-coding": "gzip",
+  "no-framing-at-all": "neither a length nor chunks"
+}

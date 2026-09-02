@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "retry_replication_queue_entry"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: emptying a queue discards work somebody expected to happen, so the
+# caller supplies a key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["agent_access_denied", "agent_not_found", "entry_not_found", "platform_control_outcome_unknown", "platform_control_rejected"]
+argument_schema_digest = "dbedde18634b72fe73a3b58a2cbca6230dc377b2d71787b39107fe9c22e62674"
+result_schema_digest = "5e6de4e5c8ea3c8154ca72f3199e20f93057f411561b27da0c18276c427dd315"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

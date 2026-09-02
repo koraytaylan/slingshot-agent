@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[command]
+wire_name = "watched_write"
+contract_version = "1.0.0"
+access = "write"
+operation_key = "required"
+result_bytes = 16384
+failure_categories = ["mutation_outcome_unknown"]
+argument_schema_digest = "0000000000000000000000000000000000000000000000000000000000000000"
+result_schema_digest = "0000000000000000000000000000000000000000000000000000000000000000"
+contract_limits_digest = "0000000000000000000000000000000000000000000000000000000000000000"
+staging_bytes = 0
+execution = "immediate"

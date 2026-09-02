@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "clock-chaos"
+kind = "property"
+feature = "repository-access"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.harness.ClockChaosScenario"
+reason = "Every lease and every retention decision is a comparison of two instants, and the failure mode of a skewed clock is two nodes both believing they hold one lease. The property is always the same and never about accuracy: a decision may be conservative and may never be wrong. What this proves that no unit suite can is that under maximum declared skew, a pause, and a jump in either direction, no lease is doubly held, no token is honoured past its expiry, and no record is collected before its retention."

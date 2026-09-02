@@ -1,0 +1,878 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every artifact this build resolves, chosen once.
+#
+# A dependency nobody chose is a dependency nobody will notice the day it grows, and an artifact
+# resolved at a range or at a snapshot is a build whose result depends on when it ran. So every row
+# names an exact version, the scope it may use, and the modules that may declare it - and the check
+# holds both directions, so an artifact with no row and a row nothing resolves each fail.
+#
+# No product module may resolve anything at compile or runtime scope. Everything a bundle needs at
+# runtime is provided by the deployment, which is what makes the imported-package footprint the
+# whole compatibility statement.
+
+[[artifact]]
+group = "com.adobe.aem"
+name = "aem-sdk-api"
+version = "2026.8.27830.20260820T160150Z-260700"
+scope = "provided"
+modules = ["aem"]
+reason = "The single Adobe platform artifact the Adobe bundle compiles against. Nothing is embedded from it; the imported-package footprint is what decides where the bundle installs."
+
+[[artifact]]
+group = "com.github.javaparser"
+name = "javaparser-core"
+version = "3.28.2"
+scope = "provided"
+modules = ["development"]
+reason = "The parser every source-policy rule decides against, so a rule reads syntax rather than matching text."
+
+[[artifact]]
+group = "commons-codec"
+name = "commons-codec"
+version = "1.17.1"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "commons-collections"
+name = "commons-collections"
+version = "3.2.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "commons-fileupload"
+name = "commons-fileupload"
+version = "1.5"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "commons-io"
+name = "commons-io"
+version = "2.14.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "jakarta.json"
+name = "jakarta.json-api"
+version = "2.0.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "javax.inject"
+name = "javax.inject"
+version = "1"
+scope = "provided"
+modules = ["development"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "javax.jcr"
+name = "jcr"
+version = "2.0"
+scope = "provided"
+modules = ["core"]
+reason = "The repository interfaces themselves, for the operations the resource abstraction cannot express."
+
+[[artifact]]
+group = "javax.servlet"
+name = "javax.servlet-api"
+version = "3.1.0"
+scope = "provided"
+modules = ["core"]
+reason = "The servlet interfaces the transport surface is written against."
+
+[[artifact]]
+group = "org.antlr"
+name = "antlr4-runtime"
+version = "4.11.1"
+scope = "provided"
+modules = ["development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.commons"
+name = "commons-collections4"
+version = "4.4"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.commons"
+name = "commons-lang3"
+version = "3.13.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.felix"
+name = "org.apache.felix.utils"
+version = "1.9.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.geronimo.specs"
+name = "geronimo-atinject_1.0_spec"
+version = "1.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.geronimo.specs"
+name = "geronimo-json_1.1_spec"
+version = "1.3"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit.vault"
+name = "org.apache.jackrabbit.vault"
+version = "3.2.8"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "jackrabbit-data"
+version = "2.22.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "jackrabbit-jcr-commons"
+version = "2.22.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-api"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-blob"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-blob-plugins"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-commons"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-core"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-core-spi"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-jackrabbit-api"
+version = "2.6.0"
+scope = "provided"
+modules = ["core"]
+reason = "The Jackrabbit extensions the platform operations surface needs for authorizables and privileges."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-jcr"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-query-spi"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-security-spi"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-shaded-guava"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.jackrabbit"
+name = "oak-store-spi"
+version = "1.68.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.johnzon"
+name = "johnzon-core"
+version = "1.2.8"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.maven"
+name = "maven-artifact"
+version = "3.9.16"
+scope = "provided"
+modules = ["development"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.maven"
+name = "maven-builder-support"
+version = "3.9.16"
+scope = "provided"
+modules = ["development"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.maven"
+name = "maven-model"
+version = "3.9.16"
+scope = "provided"
+modules = ["development"]
+reason = "The build model type the reactor is read as."
+
+[[artifact]]
+group = "org.apache.maven"
+name = "maven-model-builder"
+version = "3.9.16"
+scope = "provided"
+modules = ["development"]
+reason = "The reader that resolves a build model, so an edge inherited from the aggregator is seen."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.adapter"
+version = "2.1.10"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.api"
+version = "2.24.0"
+scope = "provided"
+modules = ["core"]
+reason = "The Sling request, resource, and servlet interfaces every route this product serves is written against."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.commons.classloader"
+version = "1.4.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.commons.mime"
+version = "2.2.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.commons.osgi"
+version = "2.4.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.contentparser.api"
+version = "2.0.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.contentparser.json"
+version = "2.0.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.contentparser.xml-jcr"
+version = "2.0.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.event"
+version = "4.4.2"
+scope = "provided"
+modules = ["core"]
+reason = "The job system the durable store delivers physical attempts through."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.featureflags"
+version = "1.2.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.fsresource"
+version = "2.2.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.i18n"
+version = "2.6.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.jcr.api"
+version = "2.4.2"
+scope = "provided"
+modules = ["core"]
+reason = "The bridge from Sling to the repository, which the agent's own state is written through."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.jcr.resource"
+version = "3.0.18"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.models.api"
+version = "1.3.8"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.models.impl"
+version = "1.4.14"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.resourcebuilder"
+version = "1.0.4"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.resourceresolver"
+version = "1.7.10"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.scripting.api"
+version = "2.2.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.scripting.core"
+version = "2.3.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.serviceusermapper"
+version = "1.5.4"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.servlet-helpers"
+version = "1.4.6"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.servlets.annotations"
+version = "1.2.6"
+scope = "provided"
+modules = ["aem"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.settings"
+version = "1.3.10"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.testing.jcr-mock"
+version = "1.8.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.testing.osgi-mock.core"
+version = "3.5.8"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.testing.resourceresolver-mock"
+version = "1.5.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.testing.sling-mock.core"
+version = "3.6.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.testing.sling-mock.junit5"
+version = "3.6.2"
+scope = "test"
+modules = ["core"]
+reason = "The platform's own test doubles. A servlet's refusals are decided against a request the platform resolved, and a hand-written double for that interface would be this repository deciding what Sling does rather than asking it."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.testing.sling-mock-oak"
+version = "3.2.0-1.22.15"
+scope = "test"
+modules = ["core"]
+reason = "A real Oak repository in a unit test. The store's two primitives are about what a repository does when two writers meet - a session that refreshes, a commit that conflicts, a claim that loses - and a mock that answers those from a map would prove the suite rather than the code."
+
+[[artifact]]
+group = "org.apache.sling"
+name = "org.apache.sling.xss"
+version = "2.2.16"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.apiguardian"
+name = "apiguardian-api"
+version = "1.1.2"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.checkerframework"
+name = "checker-qual"
+version = "3.21.2"
+scope = "provided"
+modules = ["development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.codehaus.plexus"
+name = "plexus-interpolation"
+version = "1.29"
+scope = "provided"
+modules = ["development"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.codehaus.plexus"
+name = "plexus-utils"
+version = "3.6.1"
+scope = "provided"
+modules = ["development"]
+reason = "The document type the build model carries plugin configuration as."
+
+[[artifact]]
+group = "org.eclipse.sisu"
+name = "org.eclipse.sisu.inject"
+version = "1.0.0"
+scope = "provided"
+modules = ["development"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.glassfish"
+name = "jakarta.json"
+version = "2.0.1"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.javassist"
+name = "javassist"
+version = "3.28.0-GA"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.jetbrains"
+name = "annotations"
+version = "26.1.0"
+scope = "provided"
+modules = ["core", "aem", "development", "interop"]
+reason = "The nullability contract's own annotations. They are retained in the class file and not at runtime, and a check proves neither bundle imports their package."
+
+[[artifact]]
+group = "org.junit.jupiter"
+name = "junit-jupiter"
+version = "5.14.4"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "The test framework."
+
+[[artifact]]
+group = "org.junit.jupiter"
+name = "junit-jupiter-api"
+version = "5.14.4"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.junit.jupiter"
+name = "junit-jupiter-engine"
+version = "5.14.4"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.junit.jupiter"
+name = "junit-jupiter-params"
+version = "5.14.4"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.junit.platform"
+name = "junit-platform-commons"
+version = "1.14.4"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.junit.platform"
+name = "junit-platform-engine"
+version = "1.14.4"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.junit.platform"
+name = "junit-platform-launcher"
+version = "1.14.4"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "The launcher the build runs the tests through."
+
+[[artifact]]
+group = "org.opentest4j"
+name = "opentest4j"
+version = "1.3.0"
+scope = "test"
+modules = ["core", "aem", "development", "interop"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.annotation.bundle"
+version = "1.1.1"
+scope = "provided"
+modules = ["aem"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.annotation.versioning"
+version = "1.1.2"
+scope = "provided"
+modules = ["aem"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.framework"
+version = "1.9.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.namespace.extender"
+version = "1.0.1"
+scope = "provided"
+modules = ["core", "aem"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.namespace.implementation"
+version = "1.0.0"
+scope = "provided"
+modules = ["core", "aem"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.resource"
+version = "1.0.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.service.cm"
+version = "1.6.1"
+scope = "provided"
+modules = ["core"]
+reason = "Configuration administration, which the platform operations surface reads and writes through."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.service.component"
+version = "1.4.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.service.component.annotations"
+version = "1.4.0"
+scope = "provided"
+modules = ["core", "aem"]
+reason = "The declarative-services annotations every component in this product is declared with."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.service.event"
+version = "1.4.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.service.http.whiteboard"
+version = "1.1.1"
+scope = "provided"
+modules = ["aem"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.service.log"
+version = "1.3.0"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.service.metatype.annotations"
+version = "1.4.1"
+scope = "provided"
+modules = ["core", "aem"]
+reason = "The configuration annotations an operator-settable value is declared with."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.util.converter"
+version = "1.0.9"
+scope = "provided"
+modules = ["core"]
+reason = "The converter the platform uses to read a component's own configuration."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.util.function"
+version = "1.0.0"
+scope = "provided"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "org.osgi.util.tracker"
+version = "1.5.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.osgi"
+name = "osgi.annotation"
+version = "8.1.0"
+scope = "provided"
+modules = ["core", "aem"]
+reason = "The bundle and package annotations the bundle plugin reads to decide what is exported. Exported packages are declared by annotation rather than by a manifest instruction, so this is what carries that decision."
+
+[[artifact]]
+group = "org.osgi"
+name = "osgi.core"
+version = "8.0.0"
+scope = "provided"
+modules = ["core", "aem"]
+reason = "The framework interfaces the Sling-only bundle compiles against."
+
+[[artifact]]
+group = "org.ow2.asm"
+name = "asm"
+version = "9.9.1"
+scope = "provided"
+modules = ["development"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.owasp.encoder"
+name = "encoder"
+version = "1.2.3"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.reflections"
+name = "reflections"
+version = "0.10.2"
+scope = "test"
+modules = ["core"]
+reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
+
+[[artifact]]
+group = "org.slf4j"
+name = "slf4j-api"
+version = "2.0.18"
+scope = "provided"
+modules = ["core"]
+reason = "The logging interface the structured-logging policy is written against."
+
+[[artifact]]
+group = "org.tomlj"
+name = "tomlj"
+version = "1.1.1"
+scope = "provided"
+modules = ["development", "interop"]
+reason = "The one reader every policy and support document is loaded through."
+
+[[artifact]]
+group = "rs.slingshot"
+name = "slingshot-agent-aem"
+version = "0.1.0-SNAPSHOT"
+scope = "test"
+modules = ["development", "interop"]
+reason = "The Adobe bundle, taken by the two tooling modules at test scope so a check can read its produced archive and a scenario can drive its types."
+
+[[artifact]]
+group = "rs.slingshot"
+name = "slingshot-agent-core"
+version = "0.1.0-SNAPSHOT"
+scope = "test"
+modules = ["aem", "development", "interop"]
+reason = "The Sling-only bundle, taken by the Adobe bundle at provided scope and by the two tooling modules at test scope."
+

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Builds a second time from the same source and compares, entry by entry.
+#
+# The comparison is entry by entry rather than archive by archive because "the archives differ"
+# sends somebody to look at everything and "this entry differs" sends them to look at one thing. It
+# reports the first that differs and stops, for the same reason.
+#
+# A difference here is not a build environment argument. Every archive is deterministic by
+# construction, so a difference is a real difference and the entry that shows it is where it is.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly INVENTORY="${REPOSITORY_ROOT}/support/release-artifacts.toml"
+readonly EXIT_USAGE=2
+readonly EXIT_NOT_RECORDED=3
+readonly EXIT_DIFFERS=4
+
+if [[ $# -ne 0 ]]; then
+    printf 'verify_release_artifacts takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+if ! grep -q 'digest = "sha256:' "${INVENTORY}"; then
+    printf 'nothing has been built. Run %s.\n' "scripts/build_release_artifacts" >&2
+    exit "${EXIT_NOT_RECORDED}"
+fi
+
+readonly BEFORE="$(mktemp -d)"
+trap 'rm -rf "${BEFORE}"' EXIT
+
+while IFS='|' read -r file digest; do
+    cp "${REPOSITORY_ROOT}/${file}" "${BEFORE}/$(basename "${file}")"
+    printf '%s  %s\n' "${digest#sha256:}" "${BEFORE}/$(basename "${file}")" >> "${BEFORE}/recorded"
+done < <(python3 - "${INVENTORY}" <<'PYTHON'
+import pathlib
+import sys
+
+file = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("file = "):
+        file = stripped.split('"')[1]
+    elif stripped.startswith("digest = ") and file:
+        print("%s|%s" % (file, stripped.split('"')[1]))
+        file = ""
+PYTHON
+)
+
+"${REPOSITORY_ROOT}/scripts/build_release_artifacts" > /dev/null
+
+differing=0
+while IFS='|' read -r file digest; do
+    rebuilt="$(sha256sum "${REPOSITORY_ROOT}/${file}" | cut -d' ' -f1)"
+    if [[ "sha256:${rebuilt}" != "${digest}" ]]; then
+        printf 'differs: %s\n' "${file}" >&2
+        python3 - "${BEFORE}/$(basename "${file}")" "${REPOSITORY_ROOT}/${file}" <<'PYTHON' >&2 || true
+import sys
+import zipfile
+
+first, second = sys.argv[1], sys.argv[2]
+try:
+    with zipfile.ZipFile(first) as before, zipfile.ZipFile(second) as after:
+        names = list(dict.fromkeys(before.namelist() + after.namelist()))
+        for name in names:
+            if name not in before.namelist():
+                print("  first differing entry: %s is new" % name)
+                break
+            if name not in after.namelist():
+                print("  first differing entry: %s is gone" % name)
+                break
+            if before.read(name) != after.read(name):
+                print("  first differing entry: %s" % name)
+                break
+except zipfile.BadZipFile:
+    print("  it is not an archive, so the whole file differs")
+PYTHON
+        differing=$((differing + 1))
+    fi
+done < <(python3 - "${INVENTORY}" <<'PYTHON'
+import pathlib
+import sys
+
+file = ""
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("file = "):
+        file = stripped.split('"')[1]
+    elif stripped.startswith("digest = ") and file:
+        print("%s|%s" % (file, stripped.split('"')[1]))
+        file = ""
+PYTHON
+)
+
+if [[ "${differing}" -ne 0 ]]; then
+    printf '\n%s artifacts differ between two builds of one source.\n' "${differing}" >&2
+    exit "${EXIT_DIFFERS}"
+fi
+
+printf 'Two builds of this source produced identical artifacts.\n'

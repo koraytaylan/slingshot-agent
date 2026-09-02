@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "add_component"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: running it twice is not running it once, so the caller supplies a
+# key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["mutation_outcome_unknown", "page_invalid", "page_not_found", "parent_access_denied", "parent_not_found", "parent_not_orderable", "property_rejected", "repository_commit_failed", "target_already_exists"]
+argument_schema_digest = "4fe9ef2b13fa2d169657662aa58f28fabf5521ae2b35c7c69c81477846d8a0aa"
+result_schema_digest = "b22e54ab4064ef6f9bb2ee7c605e22521ff8901898e8c04b3dd329fcc6d724eb"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

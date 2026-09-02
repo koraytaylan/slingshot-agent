@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The gate. It takes no argument, fetches nothing, and writes nothing into the repository.
+#
+# What it needs prepared - the locked dependency cache and the pinned interoperability images - it
+# verifies rather than acquires, refusing with the preparation command named when either is absent.
+# A gate that quietly fetched a missing input would be a gate whose result depended on a remote
+# server after all, which is the thing this whole arrangement exists to prevent.
+#
+# The stage list below is checked against policy/quality-gate.toml in both directions, so a stage
+# that runs and is not declared, or is declared and does not run, fails.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
+readonly GATE_POLICY="${REPOSITORY_ROOT}/policy/quality-gate.toml"
+readonly EXIT_USAGE=2
+
+if [[ $# -ne 0 ]]; then
+    printf 'quality takes no argument, and was given: %s\n' "$*" >&2
+    printf 'It runs every stage every time, because a gate with a way to run less of it is a gate\n' >&2
+    printf 'whose result depends on how somebody invoked it.\n' >&2
+    exit "${EXIT_USAGE}"
+fi
+
+# Offline, out of the verified cache, for every stage that reaches the build.
+build() {
+    "${REPOSITORY_ROOT}/mvnw" --offline --batch-mode --no-transfer-progress \
+        -Dmaven.repo.local="${CACHE_DIRECTORY}" \
+        -f "${REPOSITORY_ROOT}/pom.xml" \
+        "$@"
+}
+
+stage() {
+    printf '\n== %s\n' "$1"
+    shift
+    "$@"
+}
+
+stage locked-dependency-cache "${REPOSITORY_ROOT}/scripts/verify_locked_dependency_cache"
+stage pinned-interop-images "${REPOSITORY_ROOT}/scripts/verify_interop_images"
+stage formatting build checkstyle:check -pl core,aem,development,interop
+stage compilation build compile -pl core,aem,development,interop
+stage static-analysis build compile pmd:check spotbugs:check -pl core,aem,development,interop
+stage source-policy build test -Dtest=SourcePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage nullability build test -Dtest=NullabilityPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage api-shape build test -Dtest=ApiShapePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage method-shape build test -Dtest=MethodShapePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage documentation build test -Dtest=JavadocPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage allocation build test -Dtest=AllocationPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage adobe-practice build test -Dtest=AdobePracticePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage tests-and-coverage-floor build verify
+stage package-analysis build verify -pl all -am -DskipTests -Djacoco.skip=true
+stage dependency-policy build test -Dtest=DependencyPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage imported-package-footprint build test -Dtest=ImportedPackagesTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage module-direction build test -Dtest=ModuleDirectionTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage status-mapping-coverage build test -Dtest=StatusMappingCoverageTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage interop-coverage build test -Dtest=ScenarioInventoryTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage command-conformance build test -Dtest=CommandConformanceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage mutation-coverage build test -Dtest=MutationCoverageTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage control-capability build test -Dtest=ControlCapabilityCoverageTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage registry-completeness build test -Dtest=RegistryCompletenessTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage command-reference build test -Dtest=CommandReferenceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage platform-coverage build test -Dtest=PlatformCoverageTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage overlay-audit build test -Dtest=OverlayAuditTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage fuzz-target-inventory build test -Dtest=FuzzTargetInventoryTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage parser-and-token-fuzzing build test -Dtest=ParserFuzzTest,TokenStreamFuzzTest,CommandArgumentFuzzTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage state-machine-properties build test -Dtest=StateMachinePropertyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage acceptance-and-present-state build test -Dtest=AcceptanceMatrixTest,PresentStateTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage workflow-policy build test -Dtest=WorkflowPolicyTest,InteropWorkflowTest,ReleaseWorkflowTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage release-contract build test -Dtest=ReleaseArtifactsTest,BillOfMaterialsTest,PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage advisory-gate build test -Dtest=AdvisoryGateTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage wire-compatibility build test -Dtest=WireCompatibilityTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage platform-floor build test -Dtest=PlatformFloorTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage escalation-surface build test -Dtest=EscalationSurfaceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage injection-audit build test -Dtest=InjectionAuditTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage exposure-surface build test -Dtest=ExposureSurfaceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage clock-usage-policy build test -Dtest=ClockUsagePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage console-surface build test -Dtest=ConsoleSurfaceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage console-accessibility build test -Dtest=ConsoleAccessibilityTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage log-statement-policy build test -Dtest=LogStatementPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage front-end-footprint build test -Dtest=FrontEndFootprintTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage public-interop-tier build verify -pl interop -am -DskipTests -Djacoco.skip=true
+
+printf '\n== gate passed\n'
+printf 'A passing gate is not a complete one. These tiers did not run here:\n'
+python3 - "${GATE_POLICY}" <<'PYTHON'
+import pathlib
+import sys
+
+name = title = command = ""
+runs_here = True
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("name = "):
+        name = stripped.split('"')[1]
+    elif stripped.startswith("title = "):
+        title = stripped.split('"')[1]
+    elif stripped.startswith("run_by_the_gate = "):
+        runs_here = stripped.endswith("true")
+    elif stripped.startswith("command = ") and not runs_here:
+        command = stripped.split('"')[1]
+        print("  tier %s, the %s tier: %s" % (name, title, command))
+        runs_here = True
+PYTHON

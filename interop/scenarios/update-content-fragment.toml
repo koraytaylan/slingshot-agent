@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "update-content-fragment"
+kind = "command"
+feature = "update_content_fragment"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.UpdateContentFragmentScenario"
+reason = "A command that changes one variation of a content fragment, on a running instance. What this proves that no unit suite can: that its row requires an operation key, that it declares the answer nobody knows rather than reporting an interrupted commit as a failure, and that the write surface is reachable through the transport at all."

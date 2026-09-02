@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row. This command answers
+# one fragment rather than a list, so the client marks it as no discovery and its failure set
+# carries none of the continuation categories every paged command shares.
+
+[command]
+wire_name = "read_content_fragment"
+contract_version = "1.0.0"
+access = "read"
+operation_key = "refused"
+result_bytes = 262144
+failure_categories = ["fragment_access_denied", "fragment_invalid", "fragment_not_found", "result_budget_exceeded", "variation_not_found"]
+argument_schema_digest = "243f599dc382469c6e51a6864ada83ed072b9180dd09e43b618c48b0e7dad732"
+result_schema_digest = "2346768e786aaa4278194c716509b14eb69d0488e3427997864e20f2db4826f0"
+contract_limits_digest = "6580db3b186fafd478b2486106f3c2cd488471d8cac02d0f4d5cfe07e5bb3b3c"
+staging_bytes = 0
+execution = "immediate"

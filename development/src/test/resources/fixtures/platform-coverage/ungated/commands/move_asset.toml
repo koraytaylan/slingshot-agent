@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "move_asset"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: running it twice is not running it once, so the caller supplies a
+# key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["destination_already_exists", "destination_inside_source", "destination_parent_not_found", "mutation_outcome_unknown", "reference_adjustment_budget_exceeded", "repository_commit_failed", "source_access_denied", "source_not_found"]
+argument_schema_digest = "4c2aea9ae5d69c0bdb31885144eb1a06e1165ae50bc3ef4e08c55fe33e96006e"
+result_schema_digest = "aaf47756aeaa9b8443b95b261f45d6afc4f19d0247faffd3ee587432d367113f"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

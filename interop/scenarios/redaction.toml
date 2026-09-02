@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "redaction"
+kind = "property"
+feature = "redaction-corpus"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.RedactionScenario"
+reason = "Every route the committed table declares, driven on a real instance with a planted value of every kind the corpus names in every place a caller can put one, and every body, every header and every line the instance wrote scanned for all of them. The log is half of it: a response goes to one caller, and a log line goes to an operator's console, a support bundle, and whatever ships logs off the instance. Nothing in a unit suite can produce a real container's log."

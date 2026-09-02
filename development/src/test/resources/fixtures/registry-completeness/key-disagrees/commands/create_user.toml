@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "create_user"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: group membership is how every permission here is granted, so the
+# caller supplies a key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["authorizable_access_denied", "authorizable_already_exists", "identifier_rejected", "intermediate_path_rejected", "mutation_outcome_unknown", "property_rejected", "repository_commit_failed"]
+argument_schema_digest = "66b5b862f6e369548120c38121acbf20f1098b7a93c17f90c8a0e87223ffd2b4"
+result_schema_digest = "15dfde3300c0f2955656d68898f2b642d48784a4be133883d6ebf3009d4bc381"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

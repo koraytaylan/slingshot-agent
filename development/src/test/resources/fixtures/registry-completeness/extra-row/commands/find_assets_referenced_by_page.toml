@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row. Its failure set is
+# its own rather than the shared root-anchor pair: this command is asked about one page a caller
+# named, and the client declares three distinct ways that page can fail to be one.
+
+[command]
+wire_name = "find_assets_referenced_by_page"
+contract_version = "1.0.0"
+access = "read"
+operation_key = "refused"
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "page_access_denied", "page_invalid", "page_not_found"]
+argument_schema_digest = "2d67976d970030a2e017221390bd208d47a8e6953fe65f497ec394421555f8ed"
+result_schema_digest = "92894692f981f72133a7f7919f51cb66c4d19a75413d1fc51e59f192bd56e9dd"
+contract_limits_digest = "1593f105f9c82b81e82350720e4c84569090c2086c50b326458f647975a5dee2"
+staging_bytes = 0
+execution = "immediate"

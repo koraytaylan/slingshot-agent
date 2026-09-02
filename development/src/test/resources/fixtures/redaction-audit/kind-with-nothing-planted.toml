@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The closed set of things that must never leave this agent in a response or a log.
+#
+# Auditing them one at a time as each route is written is how one gets missed. Auditing all of them
+# from one corpus is how none does: every route, every refusal, every log line and every piece of a
+# stream is scanned for every row here, and a hit names the route and the kind rather than saying
+# something leaked.
+#
+# Each row carries a planted value: a string distinctive enough that finding it anywhere in a
+# response means it came from here rather than from a coincidence. The audit refuses a kind with no
+# planted value, so a category cannot be declared and then never exercised, and it refuses a planted
+# value whose kind nobody declared, so the set stays closed.
+
+[corpus]
+reason = "Eight kinds, and there is no ninth. A kind somebody adds without a planted value is a category nobody exercises; a planted value with no kind is a string the audit would carry without anybody having decided it is a secret."
+
+[[secret]]
+kind = "credential"
+planted = "slingshot-planted-credential-9f2c41"
+held_where = "the Authorization header a caller sends, and any configuration that holds one"
+reason = "A password reaching a response is the whole failure. It arrives on every authenticated request this suite makes, so every route sees one."
+
+[[secret]]
+kind = "token"
+planted = "slingshot-planted-token-4a7e08"
+held_where = "the forgery token header, and a continuation token in a request"
+reason = "A token echoed back is a token somebody else can replay. It is a different kind from a credential because it is scoped and short-lived, and an operator reacts to the two differently."
+
+[[secret]]
+kind = "key"
+planted = "slingshot-planted-key-1d5b73"
+held_where = "the continuation key ring this agent signs with"
+reason = "A key in a response is every continuation token forgeable. Nothing may echo one, including an error that is trying to explain why a token did not verify."
+
+[[secret]]
+kind = "repository-path"
+planted = "/var/slingshot-agent"
+held_where = "every path this agent writes under"
+reason = "Where this agent keeps things is the map somebody needs to attack it directly, and it is the one value a refusal is most tempted to name — 'there is nothing at /var/slingshot-agent/...' is a sentence that writes itself."
+
+[[secret]]
+kind = "internal-name"
+planted = "rs.slingshot.agent"
+held_where = "every class and package this bundle carries"
+reason = "A class or package name in a response tells a caller what this is built out of and what versions to look up. It is also what a platform's own error page prints, which is why this product answers refusals itself."
+
+[[secret]]
+kind = "queue-or-topic"
+planted = "rs/slingshot/agent/command"
+held_where = "the job topic this agent's deferred work would be queued on"
+reason = "A queue name is a thing somebody else can post to. Naming it in a response is handing over the address of the work."
+
+[[secret]]
+kind = "transport-address"
+planted = "slingshot-planted-address-7c3e19.invalid"
+held_where = "any host or address this agent was configured to reach"
+reason = "An internal address in a response is a map of the network this instance sits in, which is not the caller's to have."
+

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "artifact-transfer"
+kind = "route"
+feature = "artifact-transfer"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ArtifactTransferScenario"
+reason = "A result too large to answer inline, asked for on an instance where no execution has produced one. What that proves is what a unit suite cannot: that the refusals a real caller meets are indistinguishable from one another, carry no body, and disclose nothing about where this agent keeps anything — a caller who could tell somebody else's operation from a slot nobody filled could ask which operations exist."

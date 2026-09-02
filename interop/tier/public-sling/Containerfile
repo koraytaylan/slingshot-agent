@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# The public tier's runtime: Apache Sling on the Java runtime the supported deployments provide.
+#
+# The published Sling image carries Java 17, and every row in support/deployments.toml declares Java
+# 21. A bundle compiled to 21 does not resolve on a 17 runtime at all - the execution-environment
+# requirement is unsatisfiable - so a tier that ran the published image would prove the product
+# against a platform nobody this repository supports is running.
+#
+# So this tier's image is the published one with the declared runtime layered in. Both halves are
+# pinned by digest, and the whole thing is built by scripts/prepare_interop_images rather than at
+# gate time, because a gate that built an image would be a gate that reached a registry.
+
+ARG JAVA_IMAGE
+ARG SLING_IMAGE
+
+FROM ${JAVA_IMAGE} AS runtime
+
+FROM ${SLING_IMAGE}
+
+COPY --from=runtime /opt/java/openjdk /opt/java21
+
+ENV JAVA_HOME=/opt/java21
+ENV PATH=/opt/java21/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+EXPOSE 8080

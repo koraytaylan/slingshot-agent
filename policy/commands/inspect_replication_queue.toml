@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "inspect_replication_queue"
+contract_version = "1.0.0"
+access = "read"
+
+# Intrinsically idempotent: reading twice is reading once, so a key is refused rather than stored —
+# an operation nobody can repeat differently needs nothing to hold it to one attempt.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["agent_access_denied", "agent_not_found", "continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "queue_inventory_failed"]
+argument_schema_digest = "7561ed424802b041a5df0aa5d3db27c849502acff4ed9f143d29f49b00d42c8c"
+result_schema_digest = "e06f4be09f77818f2b7ea53b9d3d21ae4f90a34e5f9e387abffc49bb9e1bdd28"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

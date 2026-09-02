@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row. A row that differs
+# from the client's is two halves of one protocol disagreeing about the same command, which the
+# conformance gate compares in both directions rather than leaving to a refused submission.
+
+[command]
+wire_name = "load_content_as_json"
+contract_version = "1.0.0"
+access = "read"
+
+# The client classifies this command as not intrinsically idempotent: the repository can change
+# between two identical reads, so two reads are not one operation and the caller supplies a key.
+# Reading and being idempotent are different questions, and this is the command that shows it.
+operation_key = "required"
+
+result_bytes = 1048576
+failure_categories = ["access_denied", "load_budget_exceeded", "not_found", "unsupported_repository_value"]
+argument_schema_digest = "82cbe64364aa44ce862a85a994002a079de6b1e4c039ca8a3aca925d4f08a500"
+result_schema_digest = "262be8b28689baec0aa5ad881065d258b537b19216f3aeffe8f29c5f4610b344"
+contract_limits_digest = "4d9db5be9b51a92205d7ff7e112cb991a72cfc50aaec633209e69dc8d96e5841"
+staging_bytes = 0
+execution = "immediate"

@@ -1,0 +1,36 @@
+{
+    "$id": "urn:slingshot:agent:common:error:1",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "A refusal the agent reports, with a stable code and a bounded message. The code set is closed and this side commits it: the client's own schema bounds the code and does not enumerate it, so every code here satisfies that schema and a code outside this set is refused before it reaches a caller.",
+    "properties": {
+        "code": {
+            "enum": [
+                "capacity_exhausted",
+                "contract_mismatch",
+                "document_refused",
+                "execution_budget_spent",
+                "forbidden",
+                "idempotency_key_mismatch",
+                "identity_incomplete",
+                "internal_refusal",
+                "method_not_permitted",
+                "unauthenticated",
+                "unknown_route"
+            ],
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+        },
+        "message": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+        }
+    },
+    "required": [
+        "code",
+        "message"
+    ],
+    "type": "object"
+}

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row. The two directions of
+# resource mapping keep separate rows because they take different arguments and can fail in
+# different ways: only resolving depends on the request it happens under, so only resolving can
+# refuse one.
+
+[command]
+wire_name = "map_resource_path"
+contract_version = "1.0.0"
+access = "read"
+operation_key = "refused"
+result_bytes = 262144
+failure_categories = ["resolution_budget_exceeded", "resolution_failed"]
+argument_schema_digest = "779fb77b5a2168d18e90e402616f51565cbb9a16ac6989ef3832b79e63134d3e"
+result_schema_digest = "ff31b2924b1996be1224edac084569b90b3e1693839d47b1ad85cc92cf89fcf8"
+contract_limits_digest = "f7d168289d9f40c8f56675a55cd837ff51f364c93a750ebaec3085c539c1580b"
+staging_bytes = 0
+execution = "immediate"

@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What kind of change each command makes, made executable.
+#
+# Every command that changes something outside itself declares exactly one of the categories below,
+# and that declaration is what says which cross-cutting proof owns it. Selecting by the declaration
+# rather than by a handler's package or a row's access is the whole point: a suite that took every
+# `write` row would demand a repository commit from a command that stops a bundle, and one that took
+# a package would stop selecting the day somebody moved a class.
+#
+# A category here with no scenario claiming it is not a failure — the plan that adds the category
+# and the plan that adds its proof may be different plans. A registry row declaring a category that
+# no scenario claims is a failure, because that command is then proved by nothing.
+#
+# Adding a fourth kind of change is two rows and no Java: one here, and a `claims` entry on the
+# scenario that proves it.
+
+[[outcome]]
+category = "mutation_outcome_unknown"
+changes = "the caller's own repository"
+commits = "one"
+reason = "A command that writes to the repository the caller can read. Exactly one commit on every path that succeeded, a byte-identical subtree after every refusal, and an interrupted commit reported as the outcome nobody knows rather than as a failure — because a caller told a write failed retries it, and a retry of a write that landed is a second effect on their repository."
+
+[[outcome]]
+category = "admission_outcome_unknown"
+changes = "a machine this agent cannot observe"
+commits = "none"
+reason = "A command that hands content to something outside this instance and reports what was admitted. It owes no commit at all: what it changed is a queue the platform owns. An offer this process never heard back about may well have been taken, so it says so rather than reporting a failure."
+
+[[outcome]]
+category = "platform_control_outcome_unknown"
+changes = "the platform this agent runs on"
+commits = "none"
+reason = "A command that changes a configuration, a bundle, or a service rather than content. It owes no repository commit, and an operation whose outcome nobody knows is its own answer for the same reason the other two have one. Declared here before the plan that builds these commands, so the partition is stated once rather than discovered twice."

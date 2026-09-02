@@ -1,0 +1,8 @@
+[registry]
+name = "Maven Central"
+reason = "a fixture"
+
+[[prerequisite]]
+id = "source-control"
+element = "project.scm"
+reason = "a fixture"

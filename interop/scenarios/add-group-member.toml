@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "add-group-member"
+kind = "command"
+feature = "add_group_member"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.AddGroupMemberScenario"
+reason = "Granting a membership grants everything the group can do. What this proves that no unit suite can: that it acts through the caller's own session so nobody can grant themselves what they were refused, and that a membership cycle is refused by the repository before the commit."

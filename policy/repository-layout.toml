@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Every node this agent writes, where it sits, and which of the two write primitives creates it.
+#
+# Every lookup this agent makes is a path derived from an identifier, and never a query. A query
+# needs an index, an index has to be current, and "the index had not caught up yet" is an
+# idempotency answer that is wrong rather than slow - the same submission would be admitted twice
+# because the first one was not visible yet.
+#
+# Nothing here is derived from a date, a counter, or anything else ambient. A caller holding only an
+# identifier - which is all a recovering client has - finds its record.
+
+[tree]
+root = "/var/slingshot-agent"
+reason = "The agent's own tree, which is the only place it writes anything and the only place its service user is granted."
+
+[buckets]
+# Two levels taken from the leading characters of an identifier, so no node grows wide enough for
+# Oak to degrade. Sixteen thousand operations spread over two levels of two hexadecimal characters
+# leave every bucket far below the ceiling; a flat tree of the same size leaves one node with
+# sixteen thousand children, which is where a document store starts reading a whole node to add one.
+depth = 2
+characters = 2
+child_ceiling = 4096
+reason = "Two levels of two hexadecimal characters is 65536 buckets, and an identifier is uniform enough over its leading characters that occupancy stays even. The ceiling is what a suite checks a corpus against rather than a number anybody has to trust."
+
+# Every node under the tree. `claim` is created by claim-by-creation, which is how one writer among
+# several wins; `set` is created and changed by compare-and-set; `initialisation` is created once by
+# the repository initialisation script and never by a request.
+[[node]]
+name = "generation"
+path = "generation"
+primitive = "set"
+holds = "Which incarnation of the event store this deployment is serving, which starts at one and never decreases."
+
+[[node]]
+name = "key-ring"
+path = "key-ring"
+primitive = "set"
+holds = "The continuation key ring: the key tokens are issued under and the one retained from before the last rotation."
+
+[[node]]
+name = "capacity"
+path = "capacity"
+primitive = "initialisation"
+holds = "The counters admission is decided against, in total and per submitting caller, each a set of compare-and-set shards."
+
+[[node]]
+name = "caller-capacity-root"
+path = "capacity/callers"
+primitive = "initialisation"
+holds = "The parent every submitting caller's counters are bucketed under, created at install so a first submission does not have to create the tree it is being counted in."
+
+[[node]]
+name = "subscriptions"
+path = "subscriptions"
+primitive = "initialisation"
+holds = "One record per live subscription, with the high-water mark a following daemon has read to."
+
+[[node]]
+name = "operations"
+path = "operations"
+primitive = "initialisation"
+holds = "Every logical operation, bucketed by its own identifier under the generation it belongs to."
+
+[[node]]
+name = "operation"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}"
+primitive = "claim"
+holds = "One logical operation, claimed by creating it: the writer that creates it is the one that owns it, and there is no second."
+
+[[node]]
+name = "outbox"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}/outbox"
+primitive = "claim"
+holds = "The physical attempts made for one logical operation, which is a different count from the operation itself."
+
+[[node]]
+name = "lease"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}/lease"
+primitive = "set"
+holds = "The fence a worker holds while it executes, renewed while it runs and never taken before it expires."
+
+[[node]]
+name = "events"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}/events"
+primitive = "claim"
+holds = "The append-only ledger of what happened to this operation, one node per event."
+
+[[node]]
+name = "snapshot"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}/snapshot"
+primitive = "set"
+holds = "What is currently true about this operation, written in the same commit as the event that makes it true."
+
+[[node]]
+name = "artifacts"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}/artifacts"
+primitive = "claim"
+holds = "The bytes an answer too large to carry inline was published as, each with its own count and digest committed before it is reachable."
+
+[[node]]
+name = "intake"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}/intake"
+primitive = "claim"
+holds = "The slots an inbound manifest declared, so a command never starts against a payload still arriving."
+
+[[node]]
+name = "caller-capacity"
+path = "capacity/callers/{bucket}/{bucket}/{caller}"
+primitive = "set"
+holds = "One submitting caller's share of the store, bucketed through the same derivation an operation is, so no client can spend the whole store on everybody's behalf."

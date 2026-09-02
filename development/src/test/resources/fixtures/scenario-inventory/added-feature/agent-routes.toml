@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[prefix]
+path = "/bin/slingshot/agent"
+reason = "A fixture prefix, which stands for the committed one."
+
+[[route]]
+name = "capabilities"
+path = "/bin/slingshot/agent/capabilities"
+method = "GET"
+media_type = "application/json"
+body_permitted = false
+owning_plan = "0001"
+reason = "The route this repository serves, which its own scenario covers."
+
+[[route]]
+name = "teleportation"
+path = "/bin/slingshot/agent/teleportation"
+method = "GET"
+media_type = "application/json"
+body_permitted = false
+owning_plan = "0001"
+reason = "A route that is served in this fixture and covered by nothing, which is the day this check has to refuse."

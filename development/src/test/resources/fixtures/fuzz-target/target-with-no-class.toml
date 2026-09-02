@@ -1,0 +1,20 @@
+[tool]
+name = "jazzer"
+version = "0.24.0"
+coordinates = "com.code-intelligence:jazzer:0.24.0"
+file = "jazzer-0.24.0.jar"
+digest = ""
+prepare = "scripts/prepare_fuzzing_tool"
+held_at = "support/fuzzing/jazzer-0.24.0.jar"
+reason = "a fixture"
+
+[run]
+seed = 1
+iterations = 1
+reason = "a fixture"
+
+[[target]]
+name = "nothing-like-this"
+entry = "rs.slingshot.agent.development.fuzz.NothingLikeThisTarget"
+corpus = "fuzz/corpus/nothing-like-this"
+reason = "a fixture"

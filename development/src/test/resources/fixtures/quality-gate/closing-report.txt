@@ -1,0 +1,4 @@
+== gate passed
+A passing gate is not a complete one. These tiers did not run here:
+  tier b, the owner-supplied Adobe quickstart tier: scripts/interop_quickstart_tier
+  tier c, the sibling client end to end tier: scripts/interop_client_tier

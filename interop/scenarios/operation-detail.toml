@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "operation-detail"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.OperationDetailScenario"
+reason = "The reason the console exists: four stores assembled into one answer. What this proves that no unit suite can is that the page is rendered by the platform's own components, reads one data source, and names no repository path."

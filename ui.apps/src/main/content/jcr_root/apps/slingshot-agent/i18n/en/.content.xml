@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<!--
+  Every string this console shows a person, in the language this repository is written in. It exists
+  from the first commit rather than being retrofitted, because retrofitting one means finding every
+  literal somebody wrote in between - and the ones nobody finds are the ones a reader in another
+  language meets.
+-->
+<jcr:root xmlns:jcr="http://www.jcp.org/jcr/1.0" xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:mix="http://www.jcp.org/jcr/mix/1.0"
+          jcr:primaryType="sling:Folder"
+          jcr:mixinTypes="[mix:language]"
+          jcr:language="en">
+    <slingshot.agent.console.title
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.title"
+        sling:message="Slingshot Agent"/>
+    <slingshot.agent.console.description
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.description"
+        sling:message="Operations this agent has run, and what the platform is holding for later"/>
+    <slingshot.agent.console.operation.title
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.operation.title"
+        sling:message="Operation"/>
+    <slingshot.agent.console.maintenance.title
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.maintenance.title"
+        sling:message="Maintenance"/>
+    <slingshot.agent.console.identity.title
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.identity.title"
+        sling:message="Build identity"/>
+    <slingshot.agent.console.retention.title
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.retention.title"
+        sling:message="Retention"/>
+    <slingshot.agent.console.column.operation
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.column.operation"
+        sling:message="Operation"/>
+    <slingshot.agent.console.column.command
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.column.command"
+        sling:message="Command"/>
+    <slingshot.agent.console.column.state
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.column.state"
+        sling:message="State"/>
+    <slingshot.agent.console.column.started
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.column.started"
+        sling:message="Started"/>
+    <slingshot.agent.console.column.reading
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.column.reading"
+        sling:message="Reading"/>
+    <slingshot.agent.console.column.value
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.column.value"
+        sling:message="Value"/>
+    <slingshot.agent.console.operations.empty
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.operations.empty"
+        sling:message="Nothing has been submitted to this agent yet"/>
+    <slingshot.agent.console.operation.empty
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.operation.empty"
+        sling:message="This operation is not here. It may have been collected by the retention sweep"/>
+    <slingshot.agent.console.maintenance.empty
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.maintenance.empty"
+        sling:message="The generation store could not be read, which is not the same as it being empty"/>
+    <slingshot.agent.console.identity.empty
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.identity.empty"
+        sling:message="This build could not say what it is, which is worth reporting"/>
+    <slingshot.agent.console.retention.empty
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.retention.empty"
+        sling:message="Nothing is retained, and nothing is waiting for the next sweep"/>
+    <slingshot.agent.console.tail.title
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.tail.title"
+        sling:message="Live events"/>
+    <slingshot.agent.console.denied
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.denied"
+        sling:message="You may not see this. That is different from there being nothing here"/>
+    <slingshot.agent.console.unreadable
+        jcr:primaryType="sling:MessageEntry"
+        sling:key="slingshot.agent.console.unreadable"
+        sling:message="This could not be read. That is different from there being nothing here"/>
+</jcr:root>

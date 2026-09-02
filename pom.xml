@@ -1,0 +1,735 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-License-Identifier: MIT OR Apache-2.0
+  Copyright 2026 Koray Taylan Davgana
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>rs.slingshot</groupId>
+  <artifactId>slingshot-agent-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>Slingshot Agent</name>
+  <description>The Adobe Experience Manager half of Slingshot: the agent that receives work over the
+    versioned transport, runs it against the author's own repository, and reports what happened.</description>
+
+  <licenses>
+    <!--
+      Stated once. A module declaring its own is refused: the two halves of one product offered
+      under different terms would be a defect nobody discovers until somebody tries to use both.
+    -->
+    <license>
+      <name>MIT OR Apache-2.0</name>
+      <url>https://spdx.org/licenses/</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <!--
+    The project address, who to ask, and where the source is. The registry requires all three, and
+    so does anybody who found this in a dependency tree and needs to work out why it is there.
+
+    Every one of them is empty until an owner supplies the same values in
+    support/publication-metadata.toml. A build that filled them in from a git remote would be
+    inferring a claim about somebody's account from wherever the repository happened to be cloned,
+    which is exactly the inference the publication boundary exists to refuse.
+  -->
+  <url>${publication.repository.url}</url>
+
+  <developers>
+    <developer>
+      <id>${publication.developer.identifier}</id>
+      <name>${publication.developer.name}</name>
+    </developer>
+  </developers>
+
+  <scm>
+    <!--
+      Derived from the declared repository rather than written twice, so a coordinate and the source
+      it names cannot disagree.
+    -->
+    <url>${publication.repository.url}</url>
+    <connection>${publication.repository.connection}</connection>
+    <developerConnection>${publication.repository.connection}</developerConnection>
+  </scm>
+
+  <modules>
+    <module>core</module>
+    <module>aem</module>
+    <module>ui.apps.structure</module>
+    <module>ui.apps</module>
+    <module>ui.config</module>
+    <module>all</module>
+    <module>development</module>
+    <module>interop</module>
+  </modules>
+
+  <properties>
+    <!-- The one bytecode contract. No module sets its own release, source, or target. -->
+    <maven.compiler.release>21</maven.compiler.release>
+
+    <!--
+      The instant every archive records for every entry it holds, so two builds of one source
+      produce two identical archives. Taken from the source rather than from the clock: a
+      timestamp read from the clock is the one value that guarantees a rebuild differs, and a
+      rebuild that differs is a release nobody can check.
+
+      It moves when a release moves, by somebody changing it, which is what makes it part of the
+      source rather than a property of the afternoon somebody built.
+    -->
+    <project.build.outputTimestamp>2026-09-02T00:00:00Z</project.build.outputTimestamp>
+
+    <!--
+      The coverage floor. Both minimums are declared here once and read by the build that enforces
+      them; policy/coverage.toml records the same two values as the policy they are, and the check
+      refuses the day the two disagree.
+    -->
+    <coverage.line.minimum>0.80</coverage.line.minimum>
+    <coverage.branch.minimum>0.70</coverage.branch.minimum>
+    <!--
+      Nothing is published while the owner-supplied publication metadata is absent. This is the
+      boundary in the form the build system expresses it; `support/publication-metadata.toml` is
+      where the decision is recorded and `PublicationBoundary` is what refuses with the absent
+      fields named. Packaging and installing an artifact stay allowed in every state.
+    -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+
+    <!--
+      What an owner supplies, mirrored here so the model can carry it. The values live in
+      support/publication-metadata.toml, which is where the decision is recorded and where the
+      boundary reads it; these are empty until somebody sets them there and here together, and the
+      publication boundary is what refuses in the meantime.
+    -->
+    <publication.repository.url></publication.repository.url>
+    <publication.repository.connection></publication.repository.connection>
+    <publication.developer.name></publication.developer.name>
+    <publication.developer.identifier></publication.developer.identifier>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!--
+      The Adobe platform artifact. It is the single provided artifact the `aem` bundle compiles
+      against, and nothing in `core` may reach it: `core` compiles against the open platform its
+      own row in `policy/module-direction.toml` allows, which is what makes the public
+      interoperability tier possible at all.
+    -->
+    <aem.sdk.api.version>2026.8.27830.20260820T160150Z-260700</aem.sdk.api.version>
+
+    <!--
+      The open platform the Sling-only bundle compiles against, at the oldest version any supported
+      deployment provides. Compiling against the oldest one is what makes the imported version
+      ranges satisfiable everywhere: a range that starts at a newer version excludes every
+      deployment carrying an older one, and the bundle then resolves nowhere it was meant to run.
+    -->
+    <osgi.core.version>8.0.0</osgi.core.version>
+    <osgi.configuration.admin.version>1.6.1</osgi.configuration.admin.version>
+    <osgi.converter.version>1.0.9</osgi.converter.version>
+    <sling.api.version>2.24.0</sling.api.version>
+    <sling.jcr.api.version>2.4.2</sling.jcr.api.version>
+    <sling.event.version>4.4.2</sling.event.version>
+    <jcr.version>2.0</jcr.version>
+    <jackrabbit.api.version>2.6.0</jackrabbit.api.version>
+    <servlet.api.version>3.1.0</servlet.api.version>
+    <slf4j.version>2.0.18</slf4j.version>
+
+    <!--
+      Build-time annotation artifacts. Their annotations are consumed by the bundle plugin and by
+      the nullability checker; none of them reaches a bundle manifest, which the imported-package
+      footprint check proves rather than assumes.
+    -->
+    <osgi.annotation.version>8.1.0</osgi.annotation.version>
+    <!--
+      The declarative-services annotations at the version the supported deployments actually carry.
+      A newer one generates a requirement for an extender those deployments do not provide, and the
+      bundle then resolves, starts, and quietly registers nothing - which is the failure mode this
+      whole interoperability tier exists to catch.
+    -->
+    <osgi.component.annotations.version>1.4.0</osgi.component.annotations.version>
+    <osgi.metatype.annotations.version>1.4.1</osgi.metatype.annotations.version>
+    <jetbrains.annotations.version>26.1.0</jetbrains.annotations.version>
+
+    <!-- Tooling artifacts. Test or build scope only; never a product dependency. -->
+    <tomlj.version>1.1.1</tomlj.version>
+    <javaparser.version>3.28.2</javaparser.version>
+    <sling.mock.version>3.6.2</sling.mock.version>
+    <sling.mock.oak.version>3.2.0-1.22.15</sling.mock.oak.version>
+    <junit.jupiter.version>5.14.4</junit.jupiter.version>
+    <junit.platform.version>1.14.4</junit.platform.version>
+    <maven.model.version>3.9.16</maven.model.version>
+    <plexus.utils.version>3.6.1</plexus.utils.version>
+
+    <!-- Build plugins. Every version is written here and nowhere else. -->
+    <maven.compiler.plugin.version>3.14.1</maven.compiler.plugin.version>
+    <maven.surefire.plugin.version>3.5.6</maven.surefire.plugin.version>
+    <maven.failsafe.plugin.version>3.5.6</maven.failsafe.plugin.version>
+    <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
+    <maven.resources.plugin.version>3.3.1</maven.resources.plugin.version>
+    <maven.install.plugin.version>3.1.4</maven.install.plugin.version>
+    <maven.deploy.plugin.version>3.1.4</maven.deploy.plugin.version>
+    <maven.dependency.plugin.version>3.9.0</maven.dependency.plugin.version>
+    <maven.javadoc.plugin.version>3.12.0</maven.javadoc.plugin.version>
+    <bnd.plugin.version>7.4.0</bnd.plugin.version>
+    <maven.checkstyle.plugin.version>3.6.0</maven.checkstyle.plugin.version>
+    <checkstyle.version>14.1.0</checkstyle.version>
+    <maven.pmd.plugin.version>3.28.0</maven.pmd.plugin.version>
+    <pmd.version>7.27.0</pmd.version>
+    <spotbugs.plugin.version>4.10.4.0</spotbugs.plugin.version>
+    <spotbugs.version>4.10.4</spotbugs.version>
+    <findsecbugs.version>1.14.0</findsecbugs.version>
+    <jacoco.plugin.version>0.8.15</jacoco.plugin.version>
+    <filevault.plugin.version>1.4.0</filevault.plugin.version>
+    <aemanalyser.plugin.version>1.7.4</aemanalyser.plugin.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Product: the single provided platform artifact. -->
+      <dependency>
+        <groupId>com.adobe.aem</groupId>
+        <artifactId>aem-sdk-api</artifactId>
+        <version>${aem.sdk.api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!-- The open platform every supported deployment carries, which `core` alone compiles against. -->
+      <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>osgi.core</artifactId>
+        <version>${osgi.core.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>org.osgi.service.cm</artifactId>
+        <version>${osgi.configuration.admin.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>org.osgi.util.converter</artifactId>
+        <version>${osgi.converter.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.sling</groupId>
+        <artifactId>org.apache.sling.api</artifactId>
+        <version>${sling.api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.sling</groupId>
+        <artifactId>org.apache.sling.jcr.api</artifactId>
+        <version>${sling.jcr.api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.sling</groupId>
+        <artifactId>org.apache.sling.event</artifactId>
+        <version>${sling.event.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>javax.jcr</groupId>
+        <artifactId>jcr</artifactId>
+        <version>${jcr.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.jackrabbit</groupId>
+        <artifactId>oak-jackrabbit-api</artifactId>
+        <version>${jackrabbit.api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>javax.servlet</groupId>
+        <artifactId>javax.servlet-api</artifactId>
+        <version>${servlet.api.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>${slf4j.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!--
+        The two product bundles as dependencies. The aem bundle takes core at provided scope and
+        never embeds it; the two tooling modules take both at test scope, because a policy check
+        reads a produced archive and an interop scenario drives real types. The reverse edge does
+        not exist and the module direction check refuses it.
+      -->
+      <dependency>
+        <groupId>rs.slingshot</groupId>
+        <artifactId>slingshot-agent-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>rs.slingshot</groupId>
+        <artifactId>slingshot-agent-aem</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>rs.slingshot</groupId>
+        <artifactId>slingshot-agent-ui.apps</artifactId>
+        <version>${project.version}</version>
+        <type>content-package</type>
+      </dependency>
+      <dependency>
+        <groupId>rs.slingshot</groupId>
+        <artifactId>slingshot-agent-ui.apps.structure</artifactId>
+        <version>${project.version}</version>
+        <type>content-package</type>
+      </dependency>
+      <dependency>
+        <groupId>rs.slingshot</groupId>
+        <artifactId>slingshot-agent-ui.config</artifactId>
+        <version>${project.version}</version>
+        <type>content-package</type>
+      </dependency>
+
+      <!-- Build-time: the annotations the bundle plugin and the nullability contract read. -->
+      <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>osgi.annotation</artifactId>
+        <version>${osgi.annotation.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>org.osgi.service.component.annotations</artifactId>
+        <version>${osgi.component.annotations.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.osgi</groupId>
+        <artifactId>org.osgi.service.metatype.annotations</artifactId>
+        <version>${osgi.metatype.annotations.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.jetbrains</groupId>
+        <artifactId>annotations</artifactId>
+        <version>${jetbrains.annotations.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!-- Tooling: the one reader every policy and support document is loaded through. -->
+      <dependency>
+        <groupId>org.tomlj</groupId>
+        <artifactId>tomlj</artifactId>
+        <version>${tomlj.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!-- Tooling: the parser every source-policy rule decides against, rather than matching text. -->
+      <dependency>
+        <groupId>com.github.javaparser</groupId>
+        <artifactId>javaparser-core</artifactId>
+        <version>${javaparser.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <!--
+        Tooling: the platform's own test doubles. A servlet's refusals are decided against a request
+        the platform resolved, and a hand-written double for that interface would be this repository
+        deciding what Sling does rather than asking it.
+      -->
+      <dependency>
+        <groupId>org.apache.sling</groupId>
+        <artifactId>org.apache.sling.testing.sling-mock.junit5</artifactId>
+        <version>${sling.mock.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.sling</groupId>
+        <artifactId>org.apache.sling.testing.sling-mock-oak</artifactId>
+        <version>${sling.mock.oak.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!-- Tooling: the test framework. -->
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${junit.jupiter.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.platform</groupId>
+        <artifactId>junit-platform-launcher</artifactId>
+        <version>${junit.platform.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!-- Tooling: the build-model reader every repository policy check reads through. -->
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-model</artifactId>
+        <version>${maven.model.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-model-builder</artifactId>
+        <version>${maven.model.version}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.codehaus.plexus</groupId>
+        <artifactId>plexus-utils</artifactId>
+        <version>${plexus.utils.version}</version>
+        <scope>provided</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven.compiler.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>${maven.surefire.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${maven.failsafe.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>${maven.jar.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>${maven.resources.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>${maven.install.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>${maven.deploy.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>${maven.dependency.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>${jacoco.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>${maven.javadoc.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-checkstyle-plugin</artifactId>
+          <version>${maven.checkstyle.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-pmd-plugin</artifactId>
+          <version>${maven.pmd.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>com.github.spotbugs</groupId>
+          <artifactId>spotbugs-maven-plugin</artifactId>
+          <version>${spotbugs.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>biz.aQute.bnd</groupId>
+          <artifactId>bnd-maven-plugin</artifactId>
+          <version>${bnd.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.jackrabbit</groupId>
+          <artifactId>filevault-package-maven-plugin</artifactId>
+          <version>${filevault.plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>com.adobe.aem</groupId>
+          <artifactId>aemanalyser-maven-plugin</artifactId>
+          <version>${aemanalyser.plugin.version}</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <systemPropertyVariables>
+            <!-- Every check reads the repository it is checking, not the directory it was started in. -->
+            <slingshot.repository.root>${maven.multiModuleProjectDirectory}</slingshot.repository.root>
+          </systemPropertyVariables>
+          <!--
+            A scenario is a test. It is named for what it proves rather than for the fact that it is
+            one, and a build that ran only the files ending in the word would silently not run them.
+          -->
+          <includes>
+            <include>**/*Test.java</include>
+            <include>**/*Scenario.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <!-- Every warning is an error, everywhere. A module that turns either off is refused. -->
+          <failOnWarning>true</failOnWarning>
+          <!--
+            Nothing here is generated by an annotation processor. The bundle annotations are read
+            from the class files by the bundle plugin after compilation, so a processor on the
+            classpath is one that would claim nothing and warn about it.
+          -->
+          <proc>none</proc>
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+
+      <!--
+        The coverage floor, enforced per module and per class on both measures. A shortfall fails
+        the build rather than producing a report: a coverage number nobody acts on is a number, and
+        a number is not a floor.
+      -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>measure</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>floor</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <haltOnFailure>true</haltOnFailure>
+              <rules>
+                <rule>
+                  <element>BUNDLE</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${coverage.line.minimum}</minimum>
+                    </limit>
+                    <limit>
+                      <counter>BRANCH</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${coverage.branch.minimum}</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+                <rule>
+                  <element>CLASS</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>${coverage.line.minimum}</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Documentation generation with every warning an error. What the documentation policy decides
+        structurally, this decides about the generated output: a reference that does not resolve and
+        a tag the generator cannot read are both defects a reader would meet.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <configuration>
+          <failOnWarnings>true</failOnWarnings>
+          <doclint>all</doclint>
+          <quiet>true</quiet>
+          <detectJavaApiLink>false</detectJavaApiLink>
+        </configuration>
+        <executions>
+          <execution>
+            <id>documentation</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>javadoc-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        The three analysers, each failing the build at its first finding over main and test sources
+        alike. Nothing here produces a report: a finding only a server can see is a finding nobody
+        fixes on the day they wrote it.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>com.puppycrawl.tools</groupId>
+            <artifactId>checkstyle</artifactId>
+            <version>${checkstyle.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <configLocation>${maven.multiModuleProjectDirectory}/policy/analysis/checkstyle.xml</configLocation>
+          <includeTestSourceDirectory>true</includeTestSourceDirectory>
+          <consoleOutput>true</consoleOutput>
+          <failOnViolation>true</failOnViolation>
+          <violationSeverity>error</violationSeverity>
+          <maxAllowedViolations>0</maxAllowedViolations>
+          <logViolationsToConsole>true</logViolationsToConsole>
+        </configuration>
+        <executions>
+          <execution>
+            <id>convention</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-pmd-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>net.sourceforge.pmd</groupId>
+            <artifactId>pmd-core</artifactId>
+            <version>${pmd.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>net.sourceforge.pmd</groupId>
+            <artifactId>pmd-java</artifactId>
+            <version>${pmd.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <rulesets>
+            <ruleset>${maven.multiModuleProjectDirectory}/policy/analysis/pmd.xml</ruleset>
+          </rulesets>
+          <includeTests>true</includeTests>
+          <failOnViolation>true</failOnViolation>
+          <failurePriority>5</failurePriority>
+          <printFailingErrors>true</printFailingErrors>
+        </configuration>
+        <executions>
+          <execution>
+            <id>source-patterns</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <dependencies>
+          <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs</artifactId>
+            <version>${spotbugs.version}</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <effort>Max</effort>
+          <threshold>Low</threshold>
+          <includeTests>true</includeTests>
+          <failOnError>true</failOnError>
+          <excludeFilterFile>${maven.multiModuleProjectDirectory}/policy/analysis/spotbugs-exclude.xml</excludeFilterFile>
+          <plugins>
+            <plugin>
+              <groupId>com.h3xstream.findsecbugs</groupId>
+              <artifactId>findsecbugs-plugin</artifactId>
+              <version>${findsecbugs.version}</version>
+            </plugin>
+          </plugins>
+        </configuration>
+        <executions>
+          <execution>
+            <id>bug-patterns</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Every module writes the dependency set and compile classpath the build actually resolved,
+        so a policy check reads what the build made rather than what it was asked to make.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>resolved-dependency-list</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>list</goal>
+            </goals>
+            <configuration>
+              <outputFile>${project.build.directory}/resolved-dependencies.txt</outputFile>
+              <sort>true</sort>
+              <outputAbsoluteArtifactFilename>false</outputAbsoluteArtifactFilename>
+            </configuration>
+          </execution>
+          <execution>
+            <id>resolved-compile-classpath</id>
+            <phase>validate</phase>
+            <goals>
+              <goal>build-classpath</goal>
+            </goals>
+            <configuration>
+              <outputFile>${project.build.directory}/resolved-compile-classpath.txt</outputFile>
+              <includeScope>compile</includeScope>
+              <pathSeparator>${path.separator}</pathSeparator>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,1 @@
+{"properties":{"campaign":{"cardinality":"single","value":{"type":"string","value":"spring"}}},"removed_property_names":["obsolete"],"title":"Spring promotion","variation_path":"/content/experience-fragments/site/promo/web"}

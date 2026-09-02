@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published catalogue and its published schemas.
+
+[command]
+wire_name = "update_open_service_gateway_initiative_configuration"
+contract_version = "1.0.0"
+access = "write"
+
+# Not intrinsically idempotent: writing the same configuration twice is not writing it once, so the
+# caller supplies a key and this side answers the first attempt's own result to every resend of it.
+operation_key = "required"
+
+result_bytes = 16384
+failure_categories = ["configuration_lookup_ambiguous", "configuration_lookup_failed", "configuration_lookup_mismatch", "configuration_value_malformed", "configuration_value_unsupported", "platform_control_outcome_unknown", "platform_control_rejected"]
+argument_schema_digest = "5dd16864706d8aa49762af584418755d399e6274a675a21335d954479698d71c"
+result_schema_digest = "f3ec37c0b8d2c8069909d04eae68af1fad0883c4e8269d50c130cb1017e69ea5"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+staging_bytes = 0
+execution = "immediate"

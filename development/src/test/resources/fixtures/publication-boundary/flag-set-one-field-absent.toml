@@ -1,0 +1,35 @@
+[namespace]
+group = "rs.slingshot"
+domain = "slingshot.rs"
+# Set by an owner, after actually completing the registry's own verification, and by nobody else.
+verified = true
+verification_reference = "registry namespace verification 2026-09-01"
+
+[repository]
+url = "https://example.invalid/slingshot-agent"
+connection = ""
+
+[developer]
+name = "Koray Taylan Davgana"
+identifier = "koraytaylan"
+
+# The artifact has two audiences, so there are two targets rather than one: a project that embeds
+# this container package in its own build, and an operator who installs it by hand. Each declares
+# its own preconditions, and a target whose preconditions are met is never blocked by another
+# target's absent ones.
+
+[signing]
+identity = ""
+public_key_fingerprint = ""
+
+[[target]]
+id = "maven-central"
+audience = "A customer project that depends on this container package and embeds it in its own container, which is how a Cloud Service deployment reaches an author at all."
+requires_namespace_verification = true
+required_fields = ["repository.url", "repository.connection", "developer.name", "developer.identifier"]
+
+[[target]]
+id = "release-asset"
+audience = "An operator who installs the container package by hand on a self-managed or managed-services author."
+requires_namespace_verification = false
+required_fields = ["repository.url"]

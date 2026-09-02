@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# What a checker decides about the product's documents, and what a person has to.
+#
+# Documentation rots in one direction: the code moves and the prose stays. The rules below are the
+# ones a checker can decide, and they are compared with the checker itself in both directions - a
+# rule named here that nothing enforces, and a rule enforced that nothing names, are both refused.
+#
+# The rest is a closed checklist. A review question that restates a checked rule is refused outright,
+# because a checklist that repeated the checker is a checklist nobody reads.
+
+[review]
+document = "docs/DOCUMENTATION_REVIEW.md"
+reason = "The answers are committed beside the questions rather than left in a pull request, so that the state of the review is a property of the tree rather than of somebody's memory."
+
+[[checked]]
+rule = "unfinished-work"
+reason = "A marker for work not done is a promise in a document a reader takes as description."
+
+[[checked]]
+rule = "planning-heading"
+reason = "Every aspiration belongs in its plan bundle. A heading for what is coming is how a reader starts mistaking a plan for a feature."
+
+[[checked]]
+rule = "unknown-route"
+reason = "A route named in prose and absent from the committed table is a path somebody would try."
+
+[[checked]]
+rule = "undocumented-route"
+reason = "A route the product actually serves and no document mentions is a surface nobody was told about."
+
+[[checked]]
+rule = "unknown-tier-command"
+reason = "A command that runs no declared tier is one a reader would run and get nothing from."
+
+[[checked]]
+rule = "undocumented-tier-command"
+reason = "A declared tier whose command appears nowhere is a tier nobody can run."
+
+[[checked]]
+rule = "rule-with-no-stage"
+reason = "A rule with no stage behind it is a convention, and a convention stops being true in about a month."
+
+[[checked]]
+rule = "unknown-stage"
+reason = "A rule naming a stage the gate does not declare is a rule nothing enforces."
+
+[[checked]]
+rule = "unknown-policy"
+reason = "A policy file described and absent is a rule a reader would look for and not find."
+
+[[checked]]
+rule = "undocumented-policy"
+reason = "A policy that exists and nothing describes is a rule somebody meets for the first time when it refuses their change."
+
+[[checked]]
+rule = "undocumented-console-page"
+reason = "A page a request can reach and no document describes is a surface an operator meets without being told what it shows or who may see it."
+
+[[checked]]
+rule = "unknown-console-page"
+reason = "A page described and absent from the package is a document that has outlived the console it describes."
+
+[[checked]]
+rule = "unanswered-review-question"
+reason = "A checklist entry with no answer is a review nobody finished."
+
+[[reviewed]]
+id = "accuracy"
+question = "Does every sentence in the product documents describe this repository as it is today, rather than as a plan describes it?"
+reason = "A checker can find a route that does not exist. It cannot find a sentence that is merely no longer true."
+
+[[reviewed]]
+id = "completeness"
+question = "Does a reader who starts at the readme learn what installs, what the routes and commands answer, what an operator gets, what proves it, and what runs the gate?"
+reason = "Completeness is a judgement about what a reader needed and did not get, which nothing structural reveals."
+
+[[reviewed]]
+id = "failure-messages"
+question = "Does every refusal a reader is likely to meet - an absent cache, an absent image, an absent licensed jar - name the command that fixes it?"
+reason = "A checker can assert a message exists. Whether it tells somebody what to do next is a question about the person reading it."
+
+[[reviewed]]
+id = "licensed-input"
+question = "Is the handling of the licensed quickstart jar stated outright, including that it is never committed, cached, published, or fetched?"
+reason = "This is the one claim in these documents whose failure would be somebody else's licence problem rather than a defect."
+
+[[reviewed]]
+id = "reader-path"
+question = "Do the documents point at one another in an order a first-time reader can follow, with no document assuming another was read first without saying so?"
+reason = "A checker sees links. It does not see whether they lead anywhere in an order that works."

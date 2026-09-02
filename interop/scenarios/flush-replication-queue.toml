@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "flush-replication-queue"
+kind = "command"
+feature = "flush_replication_queue"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.FlushReplicationQueueScenario"
+reason = "The one guard in this plan that stops a genuinely bad outcome: a queue that filled up between reading it and emptying it would otherwise lose work the caller never saw. What this proves that no unit suite can: that its row requires an operation key, that it declares the platform control's own unknown outcome, and that the surface is reachable through the transport."

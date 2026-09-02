@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "create-user"
+kind = "command"
+feature = "create_user"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.CreateUserScenario"
+reason = "The command that makes somebody who can sign in, and takes no password because an agent that could set one is an agent that can become anybody. What this proves that no unit suite can: that it acts through the caller's own session against real access control, that its row requires an operation key, and that it declares the repository mutation's own unknown outcome."

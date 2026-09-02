@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>rs.slingshot</groupId>
+  <artifactId>slingshot-agent-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <modules>
+    <module>core</module>
+    <module>aem</module>
+    <module>ui.apps.structure</module>
+    <module>ui.apps</module>
+    <module>ui.config</module>
+    <module>all</module>
+    <module>development</module>
+    <module>interop</module>
+  </modules>
+</project>

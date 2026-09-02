@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "delete-content-fragment"
+kind = "command"
+feature = "delete_content_fragment"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.DeleteContentFragmentScenario"
+reason = "A command that removes a content fragment, on a running instance. What this proves that no unit suite can: that its row requires an operation key, that it declares both the answer nobody knows and the refusal for a fragment something still points at, and that the write surface is reachable through the transport at all."

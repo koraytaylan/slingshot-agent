@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>rs.slingshot</groupId>
+    <artifactId>slingshot-agent-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>slingshot-agent-core</artifactId>
+  <packaging>jar</packaging>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>biz.aQute.bnd</groupId>
+        <artifactId>bnd-maven-plugin</artifactId>
+        <configuration>
+          <bnd><![CDATA[
+Export-Package: rs.slingshot.agent.contract
+]]></bnd>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

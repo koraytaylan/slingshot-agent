@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "query-paths"
+kind = "command"
+feature = "query_paths"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.QueryPathsScenario"
+reason = "The simplest paged command, on a running instance. What this proves that no unit suite can: that the command is registered on a real Sling runtime, that its window reaches it through the transport intact, and that a submission carrying an operation key its own row refuses is refused before anything runs — the key rule read from the row rather than restated here, which is the point of having the row."
