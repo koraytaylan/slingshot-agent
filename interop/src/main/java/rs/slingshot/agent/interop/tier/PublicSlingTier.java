@@ -50,9 +50,20 @@ public final class PublicSlingTier implements InteropTier {
     /** Where the platform's own user manager makes a group. */
     private static final String GROUP_CREATE_PATH = "/system/userManager/group.create.html";
 
+    /** Where the platform's own user manager answers for that group. */
+    private static final String GROUP_PATH =
+            "/system/userManager/group/" + PERMITTED_GROUP + ".json";
+
     /** Where that group's membership is changed. */
     private static final String GROUP_MEMBERSHIP_PATH =
             "/system/userManager/group/" + PERMITTED_GROUP + ".update.html";
+
+    /** Where the platform's own user manager makes a user. */
+    private static final String USER_CREATE_PATH = "/system/userManager/user.create.html";
+
+    /** Where the user manager answers for the caller nobody has permitted. */
+    private static final String UNPERMITTED_USER_PATH =
+            "/system/userManager/user/" + TierRequests.UNPERMITTED_USER + ".json";
 
     /** The caller this tier authenticates as, by the path the user manager knows them at. */
     private static final String AUTHENTICATED_CALLER_PATH = "/system/userManager/user/admin";
@@ -143,12 +154,18 @@ public final class PublicSlingTier implements InteropTier {
      * @return nothing where the caller is permitted, or what was observed where they are not
      */
     private Optional<String> permitTheCaller() {
-        final HttpResponse<String> made = requests.submitWithReferrer(address() + GROUP_CREATE_PATH,
-                List.of(":name", PERMITTED_GROUP), address() + "/");
-        if (made.statusCode() >= BAD_REQUEST) {
-            return Optional.of("the group " + PERMITTED_GROUP + " could not be made on this"
-                    + " instance, and every submission is refused until it exists: "
-                    + made.statusCode());
+        // Asked for first, because a tier that is brought up twice against storage it keeps would
+        // otherwise be refused for making a group that is already there, which is a failure about
+        // the second start rather than about the product.
+        if (requests.readAsAuthenticatedUser(address() + GROUP_PATH).statusCode() >= BAD_REQUEST) {
+            final HttpResponse<String> made = requests.submitWithReferrer(
+                    address() + GROUP_CREATE_PATH, List.of(":name", PERMITTED_GROUP),
+                    address() + "/");
+            if (made.statusCode() >= BAD_REQUEST) {
+                return Optional.of("the group " + PERMITTED_GROUP + " could not be made on this"
+                        + " instance, and every submission is refused until it exists: "
+                        + made.statusCode());
+            }
         }
         final HttpResponse<String> joined = requests.submitWithReferrer(
                 address() + GROUP_MEMBERSHIP_PATH,
@@ -157,6 +174,35 @@ public final class PublicSlingTier implements InteropTier {
             return Optional.of("the caller was not put into " + PERMITTED_GROUP + ", and a caller"
                     + " in none of the permitted groups is refused before a body is read: "
                     + joined.statusCode());
+        }
+        return makeTheCallerNobodyPermits();
+    }
+
+    /**
+     * Makes a caller the platform authenticates and no operator has permitted.
+     *
+     * <p>Somebody has to be outside every permitted group for the scenarios about being outside one
+     * to be about anything. Before the group above existed that was every caller by accident, which
+     * is a proof that stops the moment the accident does — so the tier makes a caller who is
+     * deliberately outside and leaves them there.</p>
+     *
+     * @return nothing where that caller exists, or what was observed where they do not
+     */
+    private Optional<String> makeTheCallerNobodyPermits() {
+        if (requests.readAsAuthenticatedUser(address() + UNPERMITTED_USER_PATH).statusCode()
+                < BAD_REQUEST) {
+            return Optional.empty();
+        }
+        final HttpResponse<String> made = requests.submitWithReferrer(address() + USER_CREATE_PATH,
+                // The name carries the prefix the posting servlet reads and the password does
+                // not, which is the user manager's own spelling rather than a choice made here.
+                List.of(":name", TierRequests.UNPERMITTED_USER,
+                        "pwd", TierRequests.UNPERMITTED_PASSWORD,
+                        "pwdConfirm", TierRequests.UNPERMITTED_PASSWORD), address() + "/");
+        if (made.statusCode() >= BAD_REQUEST) {
+            return Optional.of("the caller nobody permits could not be made on this instance, and"
+                    + " what is outside every group would then be nobody at all: "
+                    + made.statusCode());
         }
         return Optional.empty();
     }

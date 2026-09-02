@@ -98,16 +98,16 @@ final class SubmissionScenario {
     @Test
     @DisplayName("an authenticated caller outside every permitted group may not start work")
     void anauthenticatedCallerOutsideEveryGroupIsRefused() {
-        assertEquals(FORBIDDEN, requests.postAsAuthenticatedUser(tier.address() + ROUTE,
+        assertEquals(FORBIDDEN, requests.postAsUnpermittedUser(tier.address() + ROUTE,
                         submission(), "application/json").statusCode(),
-                "a caller the operator has not permitted started work on a fresh install, where"
-                        + " the only permitted group is " + PERMITTED_GROUP);
+                "a caller the operator has not permitted started work, where the only permitted"
+                        + " group is " + PERMITTED_GROUP + " and this caller is in none");
     }
 
     @Test
     @DisplayName("authorization is decided before a body is looked at")
     void authorizationIsDecidedBeforeAbodyIsLookedAt() {
-        assertEquals(FORBIDDEN, requests.postAsAuthenticatedUser(tier.address() + ROUTE,
+        assertEquals(FORBIDDEN, requests.postAsUnpermittedUser(tier.address() + ROUTE,
                         "this is not a document at all", "application/json").statusCode(),
                 "a body was read for a caller who was about to be refused");
     }
