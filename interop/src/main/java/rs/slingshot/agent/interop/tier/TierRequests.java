@@ -41,6 +41,19 @@ public final class TierRequests {
 
     private static final String AUTHENTICATED_PASSWORD = "admin";
 
+    /**
+     * A caller the platform authenticates and no operator has permitted.
+     *
+     * <p>Kept apart from the caller above because "outside every permitted group" has to be
+     * somebody who is, rather than whoever the runtime happens not to have put in one. A tier that
+     * proved it with the ordinary caller would stop proving it the moment that caller was
+     * permitted, and would go on passing.</p>
+     */
+    public static final String UNPERMITTED_USER = "slingshot-unpermitted";
+
+    /** What that caller authenticates with, which is no secret and guards nothing. */
+    public static final String UNPERMITTED_PASSWORD = "slingshot-unpermitted";
+
     /** How far apart a field's name and its value sit, which is what makes them a pair. */
     private static final int PAIR = 2;
 
@@ -88,6 +101,28 @@ public final class TierRequests {
         return send(HttpRequest.newBuilder(URI.create(address))
                 .timeout(Duration.ofSeconds(REQUEST_SECONDS))
                 .header("Authorization", basic())
+                .header("Content-Type", mediaType)
+                .header("Referer", address)
+                .POST(HttpRequest.BodyPublishers.ofString(document))
+                .build());
+    }
+
+    /**
+     * Sends a document to a route as a caller the platform authenticates and nobody has permitted.
+     *
+     * <p>The same request as the one above in every respect but who sends it, so what the answer
+     * differs by is the caller's standing and nothing else.</p>
+     *
+     * @param address where to send it
+     * @param document what to send
+     * @param mediaType what it is
+     * @return what the instance answered
+     */
+    public HttpResponse<String> postAsUnpermittedUser(String address, String document,
+                                                      String mediaType) {
+        return send(HttpRequest.newBuilder(URI.create(address))
+                .timeout(Duration.ofSeconds(REQUEST_SECONDS))
+                .header("Authorization", basicFor(UNPERMITTED_USER, UNPERMITTED_PASSWORD))
                 .header("Content-Type", mediaType)
                 .header("Referer", address)
                 .POST(HttpRequest.BodyPublishers.ofString(document))
@@ -315,8 +350,11 @@ public final class TierRequests {
     }
 
     private static String basic() {
+        return basicFor(AUTHENTICATED_USER, AUTHENTICATED_PASSWORD);
+    }
+
+    private static String basicFor(String user, String password) {
         return "Basic " + Base64.getEncoder().encodeToString(
-                (AUTHENTICATED_USER + ":" + AUTHENTICATED_PASSWORD)
-                        .getBytes(StandardCharsets.UTF_8));
+                (user + ":" + password).getBytes(StandardCharsets.UTF_8));
     }
 }
