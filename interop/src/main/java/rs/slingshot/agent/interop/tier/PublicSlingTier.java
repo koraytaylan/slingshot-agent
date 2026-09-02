@@ -44,6 +44,19 @@ public final class PublicSlingTier implements InteropTier {
     /** The bundle this tier must not have, so a failure here is never mistaken for a missing API. */
     public static final String ADOBE_BUNDLE = "rs.slingshot.agent.aem";
 
+    /** The group this agent permits, which an author has and a plain Sling does not. */
+    private static final String PERMITTED_GROUP = "administrators";
+
+    /** Where the platform's own user manager makes a group. */
+    private static final String GROUP_CREATE_PATH = "/system/userManager/group.create.html";
+
+    /** Where that group's membership is changed. */
+    private static final String GROUP_MEMBERSHIP_PATH =
+            "/system/userManager/group/" + PERMITTED_GROUP + ".update.html";
+
+    /** The caller this tier authenticates as, by the path the user manager knows them at. */
+    private static final String AUTHENTICATED_CALLER_PATH = "/system/userManager/user/admin";
+
     private final ContainerHarness harness;
     private final ContainerHandle handle;
     private final TierRequests requests;
@@ -109,7 +122,43 @@ public final class PublicSlingTier implements InteropTier {
             tier.stop();
             return new Refused(Failure.NOT_INSTALLED, installed.get());
         }
+        final Optional<String> permitted = tier.permitTheCaller();
+        if (permitted.isPresent()) {
+            tier.stop();
+            return new Refused(Failure.NOT_INSTALLED, permitted.get());
+        }
         return new Running(tier);
+    }
+
+    /**
+     * Puts the caller this tier authenticates as into the group this agent permits.
+     *
+     * <p>The agent permits one group and refuses a permitted group the instance does not have,
+     * naming it. That is the right refusal, and it is why nothing can be submitted here until this
+     * has run: the deployment this product is built for has that group, and a plain Sling has no
+     * group by that name at all. Making it is what turns this runtime into the deployment. Without
+     * it every submission is refused before its body is read, and every scenario that means to
+     * prove what happens to a submission would quietly prove what happens to a caller instead.</p>
+     *
+     * @return nothing where the caller is permitted, or what was observed where they are not
+     */
+    private Optional<String> permitTheCaller() {
+        final HttpResponse<String> made = requests.submitWithReferrer(address() + GROUP_CREATE_PATH,
+                List.of(":name", PERMITTED_GROUP), address() + "/");
+        if (made.statusCode() >= BAD_REQUEST) {
+            return Optional.of("the group " + PERMITTED_GROUP + " could not be made on this"
+                    + " instance, and every submission is refused until it exists: "
+                    + made.statusCode());
+        }
+        final HttpResponse<String> joined = requests.submitWithReferrer(
+                address() + GROUP_MEMBERSHIP_PATH,
+                List.of(":member", AUTHENTICATED_CALLER_PATH), address() + "/");
+        if (joined.statusCode() >= BAD_REQUEST) {
+            return Optional.of("the caller was not put into " + PERMITTED_GROUP + ", and a caller"
+                    + " in none of the permitted groups is refused before a body is read: "
+                    + joined.statusCode());
+        }
+        return Optional.empty();
     }
 
     /** How many times the bundle state is asked for before the install is called a failure. */
