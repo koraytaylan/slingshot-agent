@@ -33,17 +33,31 @@ mkdir -p "${CACHE_DIRECTORY}"
 # Acquiring is all this does. The analysers are turned off here on purpose: what the gate decides is
 # decided by the gate, over a cache this command has already made complete, and a preparation that
 # also gated would be a preparation that could fail for a reason that has nothing to do with whether
-# the cache is complete. The tests do run, because a test framework resolves its own provider at the
-# moment it runs, and a cache prepared without running them would be missing exactly that.
-"${REPOSITORY_ROOT}/mvnw" --batch-mode --no-transfer-progress \
-    -Dmaven.repo.local="${CACHE_DIRECTORY}" \
-    -Dcheckstyle.skip=true \
-    -Dpmd.skip=true \
-    -Dspotbugs.skip=true \
-    -Djacoco.skip=true \
-    -Dmaven.javadoc.skip=true \
-    -f "${REPOSITORY_ROOT}/pom.xml" \
-    dependency:go-offline verify
+# the cache is complete.
+resolve() {
+    "${REPOSITORY_ROOT}/mvnw" --batch-mode --no-transfer-progress \
+        -Dmaven.repo.local="${CACHE_DIRECTORY}" \
+        -Dcheckstyle.skip=true \
+        -Dpmd.skip=true \
+        -Dspotbugs.skip=true \
+        -Djacoco.skip=true \
+        -Dmaven.javadoc.skip=true \
+        -f "${REPOSITORY_ROOT}/pom.xml" \
+        "$@"
+}
+
+# The reactor is built once before anything reads it. Several checks are about what the build
+# produced rather than what it was asked to produce - the jar a module packaged, the dependency set
+# a module resolved - and Maven runs a module's tests before that module is packaged and before any
+# module after it is built at all. On a tree somebody has already built those files are there and
+# one pass looks sufficient; on a clean checkout it is the first thing that fails, which is why it
+# fails on a runner and never on the machine the change was written on.
+resolve dependency:go-offline verify -DskipTests
+
+# Then the tests, over what the first pass made. They do run here, because a test framework resolves
+# its own provider at the moment it runs and a cache prepared without running them would be missing
+# exactly that.
+resolve verify
 
 {
     printf '# SPDX-License-Identifier: MIT OR Apache-2.0\n'
