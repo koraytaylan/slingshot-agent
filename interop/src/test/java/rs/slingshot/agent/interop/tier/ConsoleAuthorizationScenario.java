@@ -105,10 +105,6 @@ final class ConsoleAuthorizationScenario {
                         + " and the routes could be given different answers: " + configuration);
     }
 
-    private static String row(String command) {
-        return read(REPOSITORY.resolve("policy/commands/" + command + ".toml"));
-    }
-
     private static String read(Path file) {
         try {
             return Files.readString(file, StandardCharsets.UTF_8);

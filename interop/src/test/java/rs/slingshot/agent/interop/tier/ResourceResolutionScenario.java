@@ -103,6 +103,33 @@ final class ResourceResolutionScenario {
                         + " one would believe something untrue about the answer they get: " + map);
     }
 
+    @Test
+    @DisplayName("this build ships no index definition, because an index is an operator's decision")
+    void thisbuildShipsNoIndexDefinition() {
+        assertTrue(!installed().contains("oak:index"),
+                "this build ships an index definition. An index lives outside /apps, changes the"
+                        + " shape of somebody else's repository, and is an operator's decision"
+                        + " rather than a side effect of installing an agent.");
+    }
+
+    @Test
+    @DisplayName("the route that starts work refuses a caller who authenticated as nobody")
+    void therouteRefusesNobody() {
+        assertEquals(UNAUTHENTICATED,
+                requests.postAsNobody(tier.address() + SUBMIT, "{}", "application/json")
+                        .statusCode(),
+                "work was started for a caller who presented no identity");
+    }
+
+    @Test
+    @DisplayName("a submission this build cannot read is refused before anything runs")
+    void asubmissionThisBuildCannotReadIsRefused() {
+        assertEquals(REFUSED, requests.postAsAuthenticatedUser(tier.address() + SUBMIT,
+                        "{\"command_wire_name\":\"" + COMMAND + "\"}", "application/json")
+                .statusCode(),
+                "a submission carrying nothing but a name was accepted");
+    }
+
     private static String installed() {
         final java.nio.file.Path packages = REPOSITORY.resolve("ui.apps/src/main/content");
         if (!Files.isDirectory(packages)) {

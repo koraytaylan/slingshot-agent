@@ -73,9 +73,15 @@ final class ConsoleArtifactScenario {
     void anartifactIsOfferedThroughTheRoute() {
         final String link = read(REPOSITORY.resolve(
                 "core/src/main/java/rs/slingshot/agent/console/ArtifactLink.java"));
-        assertTrue(link.contains("/bin/slingshot/agent/artifact"),
+        assertTrue(link.contains("ROUTE_NAME = \"artifact-transfer\"")
+                        && link.contains("route(ROUTE_NAME).path()"),
                 "the console offers artifacts from somewhere other than the route the client"
                         + " already uses, which is a second thing deciding who may fetch what");
+        assertTrue(!link.contains("\"/bin/"),
+                "the console spells the route's path itself rather than taking it from the"
+                        + " committed table, and a path spelled in two places is one that gets"
+                        + " changed in one — after which the console offers a link that fails when"
+                        + " it is clicked");
         assertTrue(link.contains("byteCount") && link.contains("digest"),
                 "the page does not show what it would take to verify a download, so a downloader"
                         + " has to trust the page rather than check what they received");
@@ -88,10 +94,6 @@ final class ConsoleArtifactScenario {
                 requests.readAsNobody(tier.address() + "/bin/slingshot/agent/artifact")
                         .statusCode(),
                 "a caller who presented no identity reached the artifact route");
-    }
-
-    private static String row(String command) {
-        return read(REPOSITORY.resolve("policy/commands/" + command + ".toml"));
     }
 
     private static String read(Path file) {
