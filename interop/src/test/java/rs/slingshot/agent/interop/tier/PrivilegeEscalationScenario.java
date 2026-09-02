@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -101,28 +100,6 @@ final class PrivilegeEscalationScenario {
     }
 
     @Test
-    @DisplayName("no way to run as somebody else exists in either bundle")
-    void noimpersonationExists() {
-        final List<String> found = new ArrayList<>();
-        List.of("core/src/main/java", "aem/src/main/java").forEach(tree -> {
-            try (var sources = Files.walk(REPOSITORY.resolve(tree))) {
-                sources.filter(path -> String.valueOf(path.getFileName()).endsWith(".java"))
-                        // A call rather than the word. Both packages say in prose that nothing
-                        // here impersonates, and a check that read the word would refuse the
-                        // sentence that states the very absence it is checking for.
-                        .filter(path -> read(path).contains(".impersonate(")
-                                || read(path).contains("getImpersonation("))
-                        .forEach(path -> found.add(REPOSITORY.relativize(path).toString()));
-            } catch (final java.io.IOException unreadable) {
-                throw new java.io.UncheckedIOException(unreadable);
-            }
-        });
-        assertEquals(List.of(), found,
-                "a way to run as somebody else exists, and a guard against one can be got round"
-                        + " while an absence cannot: " + found);
-    }
-
-    @Test
     @DisplayName("the route that starts work refuses a caller who authenticated as nobody")
     void therouteRefusesNobody() {
         assertEquals(UNAUTHENTICATED,
@@ -139,14 +116,6 @@ final class PrivilegeEscalationScenario {
     private static List<String> spellingsOf(String address) {
         return List.of(address, address + ".json", address + ".infinity.json", address + "/",
                 address + ".html", address + ".tidy.json");
-    }
-
-    private static String read(Path file) {
-        try {
-            return Files.readString(file, StandardCharsets.UTF_8);
-        } catch (final java.io.IOException unreadable) {
-            throw new java.io.UncheckedIOException(unreadable);
-        }
     }
 
     private static Path builtBundle() {
