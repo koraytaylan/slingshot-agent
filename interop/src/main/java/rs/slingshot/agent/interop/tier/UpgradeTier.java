@@ -63,11 +63,26 @@ public final class UpgradeTier {
         final String pin = read(root.resolve(PIN_FILE));
         final String version = valueOf(pin, "version");
         final String digest = valueOf(pin, "artifact_digest");
-        if (NOT_PINNED.equals(version) || NOT_PINNED.equals(digest)) {
+        if (isNotPinned(version) || isNotPinned(digest)) {
             return new NothingToUpgradeFrom("no previous release is pinned, which before the first"
                     + " release is the true state rather than a suite that did not run");
         }
         return new Pinned(version, digest, valueOf(pin, "held_at"));
+    }
+
+    /**
+     * Whether a field of the pin says there is nothing pinned.
+     *
+     * <p>Asked of both fields through one question rather than compared twice in a condition. The
+     * sentinel is what the pin says when it names no release, so this establishes that a field is
+     * absent and never that one value matches another - which is the only reason a comparison
+     * against a digest would have to be careful about how long it takes.</p>
+     *
+     * @param field what the pin says
+     * @return whether it says nothing is pinned
+     */
+    private static boolean isNotPinned(String field) {
+        return NOT_PINNED.equals(field);
     }
 
     /**
