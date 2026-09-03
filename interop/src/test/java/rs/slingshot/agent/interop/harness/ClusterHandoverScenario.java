@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import rs.slingshot.agent.interop.tier.PublicSlingTier;
 import rs.slingshot.agent.interop.tier.TierRequests;
 
 /**
@@ -65,7 +67,19 @@ final class ClusterHandoverScenario {
      * failure. A node whose peer was killed recovers a lease the document store still holds, and
      * answers nothing useful while it does.
      */
-    private static final int RECOVERY_ATTEMPTS = 24;
+    private static final int RECOVERY_ATTEMPTS = 12;
+
+    /** Where a bundle is handed to a node's platform to install. */
+    private static final String BUNDLE_INSTALL_PATH = "/system/console/bundles";
+
+    /** Where a node reports what it has installed. */
+    private static final String BUNDLE_STATE_PATH = "/system/console/bundles.json";
+
+    /** The field a platform console takes a bundle under. */
+    private static final String BUNDLE_FIELD = "bundlefile";
+
+    /** How many settles a node is given to make the bundle active before that is the failure. */
+    private static final int INSTALL_ATTEMPTS = 60;
 
     private final TierRequests requests = TierRequests.open();
 
@@ -74,12 +88,52 @@ final class ClusterHandoverScenario {
     private ClusterHarness.Cluster nodes;
 
     @BeforeAll
-    void startTwoNodesAgainstOneRepository() {
+    void startTwoNodesAgainstOneRepository() throws InterruptedException {
         cluster = ClusterHarness.at(REPOSITORY);
         final ClusterHarness.Outcome outcome = cluster.start(STORE_IMAGE, NODE_IMAGE, NODE_PORT,
                 List.of(SHARED_REPOSITORY_MODE), List.of(), this::serving);
         nodes = assertInstanceOf(ClusterHarness.Started.class, outcome,
                 "the cluster did not come up: " + outcome).cluster();
+        // Here rather than in a second @BeforeAll, because nothing orders two of those and this
+        // has to happen once the nodes exist. On both, because what this scenario asks is what the
+        // survivor serves, and a node that was never given the bundle serves none of the agent's
+        // routes at all: the route would be an address nothing is registered at, the platform's
+        // own posting servlet would answer it by trying to create a node there, and the 500 that
+        // came back would read exactly like the agent having broken.
+        installTheAgent(nodes.first());
+        installTheAgent(nodes.second());
+    }
+
+    private void installTheAgent(ContainerHandle node) throws InterruptedException {
+        final HttpResponse<String> handed = requests.upload(node.address() + BUNDLE_INSTALL_PATH,
+                List.of("action", "install", "bundlestart", "start"), BUNDLE_FIELD, builtBundle());
+        assertTrue(handed.statusCode() < BAD_REQUEST,
+                node.address() + " refused the bundle with " + handed.statusCode());
+        for (int attempt = 0; attempt < INSTALL_ATTEMPTS && !carriesTheAgent(node); attempt++) {
+            Thread.sleep(SETTLE_MILLISECONDS);
+        }
+        assertTrue(carriesTheAgent(node), PublicSlingTier.CORE_BUNDLE + " never became active on "
+                + node.address() + ", so nothing there serves the agent's own routes");
+    }
+
+    private boolean carriesTheAgent(ContainerHandle node) {
+        return PublicSlingTier.stateOf(requests.readAsAuthenticatedUser(
+                        node.address() + BUNDLE_STATE_PATH).body(), PublicSlingTier.CORE_BUNDLE)
+                .filter("Active"::equals)
+                .isPresent();
+    }
+
+    private static Path builtBundle() {
+        final Path target = REPOSITORY.resolve("core/target");
+        try (var files = java.nio.file.Files.list(target)) {
+            return files.filter(file -> String.valueOf(file.getFileName()).endsWith(".jar"))
+                    .filter(file -> !String.valueOf(file.getFileName()).contains("sources"))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException(
+                            "no bundle was built at " + target + "; run the reactor build first"));
+        } catch (final java.io.IOException failure) {
+            throw new java.io.UncheckedIOException(failure);
+        }
     }
 
     @AfterAll
@@ -140,10 +194,11 @@ final class ClusterHandoverScenario {
         assertTrue(servingAgain(nodes.first()),
                 "the surviving node never started serving again after its peer was killed, which"
                         + " is the handover failing rather than the refusal changing");
-        // Serving again is the platform being back. The agent's own route comes back after it and
-        // answers 500 in between, so what is asked is that the survivor returns to the refusal it
-        // gave before anybody was killed, inside a bounded time. A node that never returns to it
-        // fails here, which is the property this scenario is for.
+        // Serving again is the platform being back; the agent's own route follows a moment after
+        // it, and the minute below is for that gap. It is a gap and not a broken node - which is
+        // worth saying, because until both nodes were given the bundle this address had nothing
+        // registered at it, the platform's own posting servlet answered by trying to create a
+        // node there, and the 500 it returned read exactly like a handover that had failed.
         assertEquals(UNAUTHENTICATED, refusalOnceRecovered(nodes.first()),
                 "the surviving node either stopped answering or stopped refusing, and both are"
                         + " worse than the node that was killed");
