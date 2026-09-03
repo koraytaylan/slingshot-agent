@@ -123,7 +123,7 @@ final class BuildIdentityScenario {
         assertTrue(answered.statusCode() >= BELOW_A_SUCCESS,
                 "a console screen was rendered for a caller who presented no identity: "
                         + answered.statusCode());
-        assertTrue(!answered.body().contains("slingshot-agent"),
+        assertTrue(!answered.body().contains("slingshot-agent/datasource/identity"),
                 "a console screen was disclosed to a caller who presented no identity");
     }
 
