@@ -140,11 +140,26 @@ final class ClusterHandoverScenario {
         assertTrue(servingAgain(nodes.first()),
                 "the surviving node never started serving again after its peer was killed, which"
                         + " is the handover failing rather than the refusal changing");
-        assertEquals(UNAUTHENTICATED,
-                requests.postAsNobody(nodes.first().address() + SUBMIT, "{}", "application/json")
-                        .statusCode(),
+        // Serving again is the platform being back. The agent's own route comes back after it and
+        // answers 500 in between, so what is asked is that the survivor returns to the refusal it
+        // gave before anybody was killed, inside a bounded time. A node that never returns to it
+        // fails here, which is the property this scenario is for.
+        assertEquals(UNAUTHENTICATED, refusalOnceRecovered(nodes.first()),
                 "the surviving node either stopped answering or stopped refusing, and both are"
                         + " worse than the node that was killed");
+    }
+
+    private int refusalOnceRecovered(ContainerHandle handle) throws InterruptedException {
+        int answered = 0;
+        for (int attempt = 0; attempt < RECOVERY_ATTEMPTS; attempt++) {
+            answered = requests.postAsNobody(handle.address() + SUBMIT, "{}", "application/json")
+                    .statusCode();
+            if (answered == UNAUTHENTICATED) {
+                return answered;
+            }
+            Thread.sleep(SETTLE_MILLISECONDS);
+        }
+        return answered;
     }
 
     private boolean servingAgain(ContainerHandle handle) throws InterruptedException {

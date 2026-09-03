@@ -219,7 +219,7 @@ public final class PublicSlingTier implements InteropTier {
      * receiving it and resolving it, and reading that moment as the outcome would report a
      * resolution failure for a bundle that resolves a fraction of a second later.
      */
-    private static final int SETTLING_ATTEMPTS = 5;
+    private static final int SETTLING_ATTEMPTS = 20;
 
     @Override
     public String name() {
