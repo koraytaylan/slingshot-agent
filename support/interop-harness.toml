@@ -23,6 +23,16 @@ reason = "Rootless by default and daemonless, so a tier needs no privileged sock
 # an Adobe Experience Manager quickstart on a machine that is already running the rest of a gate.
 # A deadline chosen for the fastest tier is one that reports the load rather than the product.
 readiness_deadline_milliseconds = 300000
+
+# What a published runtime is given, which is not what a quickstart needs. One deadline for both
+# means the tier that starts in seconds waits out the tier that starts in minutes - and the tier
+# that starts in minutes is licensed, so the gate never starts it at all. Measured on a runner: a
+# whole public-tier class, container start and bundle install and its own tests and the stop, has a
+# median of fifteen seconds and has never taken twenty-five. The six that failed spent five minutes
+# each finding out they never would, which was half the hour the gate took.
+#
+# Ninety seconds is six times the slowest healthy start and a third of what those six cost.
+published_runtime_readiness_deadline_milliseconds = 90000
 readiness_poll_interval_milliseconds = 500
 stop_grace_milliseconds = 10000
 

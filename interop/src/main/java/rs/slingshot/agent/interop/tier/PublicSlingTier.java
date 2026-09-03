@@ -88,7 +88,7 @@ public final class PublicSlingTier implements InteropTier {
      * @return the running tier, or the one reason there is none
      */
     public static Outcome start(Path root, String image, Path bundle) {
-        final ContainerHarness harness = ContainerHarness.at(root);
+        final ContainerHarness harness = ContainerHarness.at(root).forPublishedRuntime();
         if (!harness.holds(image)) {
             return new Refused(Failure.INPUT_ABSENT, image
                     + " is not held by this engine; run scripts/prepare_interop_images");
