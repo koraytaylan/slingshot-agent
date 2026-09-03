@@ -12,12 +12,19 @@
 # command for each, read from the inventory rather than written in here.
 name: interop
 
+# Dispatched rather than pushed. The gate runs this same tier on every push - its
+# tests-and-coverage-floor stage builds the whole reactor, scenarios included - so a push that also
+# ran this workflow started the whole container suite twice, on two runners, to be told the same
+# thing. What is left here that the gate does not already do is keeping the harness's captured
+# output as an artifact, which is what somebody wants when they are looking into a failure.
 on:
-  push:
-    branches:
-      - main
-      - develop
   workflow_dispatch:
+
+# A push supersedes the one before it. Without this every push leaves an hour of runner time
+# finishing an answer about a commit that is no longer the branch's head.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions: {}
 

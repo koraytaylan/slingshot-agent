@@ -20,6 +20,12 @@ on:
 
 # Nothing at the workflow level. Every job declares what it needs, so a job added later starts from
 # nothing rather than from whatever the workflow happened to grant.
+# A push supersedes the one before it. Without this every push leaves an hour of runner time
+# finishing an answer about a commit that is no longer the branch's head.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
