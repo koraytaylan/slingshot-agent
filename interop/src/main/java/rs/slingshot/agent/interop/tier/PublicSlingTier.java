@@ -164,7 +164,7 @@ public final class PublicSlingTier implements InteropTier {
             if (made.statusCode() >= BAD_REQUEST) {
                 return Optional.of("the group " + PERMITTED_GROUP + " could not be made on this"
                         + " instance, and every submission is refused until it exists: "
-                        + made.statusCode());
+                        + made.statusCode() + " " + said(made));
             }
         }
         final HttpResponse<String> joined = requests.submitWithReferrer(
@@ -173,7 +173,7 @@ public final class PublicSlingTier implements InteropTier {
         if (joined.statusCode() >= BAD_REQUEST) {
             return Optional.of("the caller was not put into " + PERMITTED_GROUP + ", and a caller"
                     + " in none of the permitted groups is refused before a body is read: "
-                    + joined.statusCode());
+                    + joined.statusCode() + " " + said(joined));
         }
         return makeTheCallerNobodyPermits();
     }
@@ -202,7 +202,7 @@ public final class PublicSlingTier implements InteropTier {
         if (made.statusCode() >= BAD_REQUEST) {
             return Optional.of("the caller nobody permits could not be made on this instance, and"
                     + " what is outside every group would then be nobody at all: "
-                    + made.statusCode());
+                    + made.statusCode() + " " + said(made));
         }
         return Optional.empty();
     }
@@ -346,6 +346,25 @@ public final class PublicSlingTier implements InteropTier {
         }
         final Optional<String> active = awaitActive();
         return active.isPresent() ? active : awaitRegistered();
+    }
+
+    /** How much of a platform's own refusal travels with ours. */
+    private static final int KEPT_CHARACTERS = 400;
+
+    /**
+     * What the platform said, rather than only the number it said it with.
+     *
+     * <p>A status alone names the shape of a refusal and not its cause, and these run where the
+     * instance is gone by the time anybody reads the failure.</p>
+     *
+     * @param answer what the platform answered
+     * @return the readable part of it
+     */
+    private static String said(HttpResponse<String> answer) {
+        final String flattened = answer.body().replaceAll("<[^>]*>", " ")
+                .replaceAll("\\s+", " ").strip();
+        return flattened.length() <= KEPT_CHARACTERS ? flattened
+                : flattened.substring(0, KEPT_CHARACTERS) + "...";
     }
 
     /** The field the platform console takes a bundle under. */
