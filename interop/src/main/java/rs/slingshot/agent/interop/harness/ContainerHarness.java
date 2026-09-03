@@ -290,10 +290,29 @@ public final class ContainerHarness {
         capture(handle);
         stop(handle.identifier());
         // What it wrote while it failed to become ready is the only evidence of why, and a refusal
-        // that dropped it would leave whoever reads the failure with the fact and no cause.
+        // that dropped it would leave whoever reads the failure with the fact and no cause. The
+        // path alone is not enough: on a runner the file goes when the job does, so the end of it
+        // travels in the refusal itself - otherwise this is only diagnosable by running it again
+        // somewhere the file survives, which is an hour spent learning what the run already knew.
         return new Refused(Failure.NEVER_BECAME_READY, handle.identifier()
                 + " was still running and not ready after " + readinessDeadline.toMillis()
-                + " milliseconds; what it wrote is in " + handle.capturedOutput());
+                + " milliseconds; what it wrote is in " + handle.capturedOutput()
+                + " and ends: " + endOf(capturedOutput(handle)));
+    }
+
+    /** How much of what a container wrote travels with a refusal about it. */
+    private static final int KEPT_CHARACTERS = 1500;
+
+    /**
+     * The end of what a container wrote, which is where a startup that never finished says why.
+     *
+     * @param written everything it wrote
+     * @return the last of it, on one line
+     */
+    private static String endOf(String written) {
+        final String flattened = written.replaceAll("\\s+", " ").strip();
+        return flattened.length() <= KEPT_CHARACTERS ? flattened
+                : "..." + flattened.substring(flattened.length() - KEPT_CHARACTERS);
     }
 
     /**
