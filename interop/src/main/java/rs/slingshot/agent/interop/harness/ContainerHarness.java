@@ -39,14 +39,18 @@ public final class ContainerHarness {
 
     private final String engine;
     private final Duration readinessDeadline;
+
+    private final Duration publishedRuntimeReadinessDeadline;
     private final Duration pollInterval;
     private final Duration stopGrace;
     private final long maximumCapturedBytes;
 
-    private ContainerHarness(String engine, Duration readinessDeadline, Duration pollInterval,
+    private ContainerHarness(String engine, Duration readinessDeadline,
+                             Duration publishedRuntimeReadinessDeadline, Duration pollInterval,
                              Duration stopGrace, long maximumCapturedBytes) {
         this.engine = engine;
         this.readinessDeadline = readinessDeadline;
+        this.publishedRuntimeReadinessDeadline = publishedRuntimeReadinessDeadline;
         this.pollInterval = pollInterval;
         this.stopGrace = stopGrace;
         this.maximumCapturedBytes = maximumCapturedBytes;
@@ -115,9 +119,26 @@ public final class ContainerHarness {
         return new ContainerHarness(
                 required(values, "engine.executable"),
                 milliseconds(values, "timing.readiness_deadline_milliseconds"),
+                millisecondsOr(values, "timing.published_runtime_readiness_deadline_milliseconds",
+                        milliseconds(values, "timing.readiness_deadline_milliseconds")),
                 milliseconds(values, "timing.readiness_poll_interval_milliseconds"),
                 milliseconds(values, "timing.stop_grace_milliseconds"),
                 requiredNumber(values, "capture.maximum_captured_bytes"));
+    }
+
+    /**
+     * The same harness, holding a start to what a published runtime takes rather than to what the
+     * slowest tier does.
+     *
+     * <p>The deadline in the values covers an Adobe quickstart, because it has to cover the slowest
+     * thing any tier starts. A tier that starts a published Sling runtime is not that, and holding
+     * it to that deadline means every one of its failures costs five minutes to discover.</p>
+     *
+     * @return a harness whose readiness deadline is the published runtime's
+     */
+    public ContainerHarness forPublishedRuntime() {
+        return new ContainerHarness(engine, publishedRuntimeReadinessDeadline,
+                publishedRuntimeReadinessDeadline, pollInterval, stopGrace, maximumCapturedBytes);
     }
 
     /**
@@ -508,5 +529,13 @@ public final class ContainerHarness {
 
     private static Duration milliseconds(TomlParseResult values, String key) {
         return Duration.ofMillis(requiredNumber(values, key));
+    }
+
+    // Declared where it matters and absent where it does not: the fixtures that prove what a
+    // deadline does declare one deadline, and a required second would make every one of them
+    // restate a bound they are not about.
+    private static Duration millisecondsOr(TomlParseResult values, String key, Duration fallback) {
+        final Long declared = values.getLong(key);
+        return declared == null ? fallback : Duration.ofMillis(declared);
     }
 }
