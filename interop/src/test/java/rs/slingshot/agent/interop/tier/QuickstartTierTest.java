@@ -18,7 +18,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import rs.slingshot.agent.interop.harness.ContainerHarness;
 
 /**
  * The tier that refuses rather than skipping.
@@ -45,7 +44,7 @@ final class QuickstartTierTest {
         final String todo = QuickstartTier.whatToDo(REPOSITORY, QuickstartTier.Refusal.JAR_ABSENT);
         assertTrue(todo.contains(".quickstart/aem-quickstart.jar"), todo);
         assertTrue(todo.contains("never fetches"), todo);
-        assertEquals(List.of(), ContainerHarness.at(REPOSITORY).leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "a refused tier started a container");
     }
 
@@ -129,7 +128,7 @@ final class QuickstartTierTest {
                 "a tier came up without the licensed input it needs");
         assertEquals(InteropTier.Failure.INPUT_ABSENT, refused.failure());
         assertTrue(refused.detail().contains(".quickstart/"), refused.detail());
-        assertEquals(List.of(), ContainerHarness.at(REPOSITORY).leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "a refused tier started a container");
     }
 

@@ -39,7 +39,7 @@ final class PublicSlingTierTest {
         assertEquals(InteropTier.Failure.INPUT_ABSENT, refused.failure());
         assertTrue(refused.detail().contains("scripts/prepare_interop_images"),
                 "the refusal does not name the preparation command: " + refused.detail());
-        assertEquals(List.of(), ContainerHarness.at(REPOSITORY).leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "a refused start left something running");
     }
 
