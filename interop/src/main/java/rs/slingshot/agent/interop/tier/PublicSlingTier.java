@@ -145,6 +145,11 @@ public final class PublicSlingTier implements InteropTier {
             tier.stop();
             return new Refused(Failure.NOT_INSTALLED, permitted.get());
         }
+        final Optional<String> answering = tier.awaitTheAgentsOwnRoutes();
+        if (answering.isPresent()) {
+            tier.stop();
+            return new Refused(Failure.NOT_INSTALLED, answering.get());
+        }
         return new Running(tier);
     }
 
@@ -160,6 +165,32 @@ public final class PublicSlingTier implements InteropTier {
      *
      * @return nothing where the caller is permitted, or what was observed where they are not
      */
+    /**
+     * Waits until what the bundle registers is registered.
+     *
+     * <p>Active is the bundle's state, not its servlets'. The platform reports a bundle active as
+     * soon as its components have started, and the routes those components register arrive a
+     * moment later - so a tier that stopped at active handed a scenario an instance whose own
+     * routes answered 404, and the scenario reported that this product does not serve them.</p>
+     *
+     * @return nothing where the routes answer, or what was observed where they never did
+     */
+    private Optional<String> awaitTheAgentsOwnRoutes() {
+        final boolean answered = IntStream.range(0, INSTALL_ATTEMPTS)
+                .anyMatch(this::routeAnswered);
+        return answered ? Optional.empty()
+                : Optional.of(CORE_BUNDLE + " is active and the routes it registers never"
+                        + " answered, so nothing on this instance serves what it installed");
+    }
+
+    private boolean routeAnswered(int attempt) {
+        if (attempt > 0) {
+            pause();
+        }
+        return requests.postAsNobody(address() + SUBMIT_PATH, "{}", "application/json")
+                .statusCode() != NOT_FOUND;
+    }
+
     private Optional<String> permitTheCaller() {
         // Asked for first, because a tier that is brought up twice against storage it keeps would
         // otherwise be refused for making a group that is already there, which is a failure about
@@ -385,6 +416,9 @@ public final class PublicSlingTier implements InteropTier {
 
     /** What a servlet nobody has registered yet answers, which is a moment and not a refusal. */
     private static final int NOT_FOUND = 404;
+
+    /** The route work is submitted on, spelled by the committed table and by nothing here. */
+    private static final String SUBMIT_PATH = "/bin/slingshot/agent/submit";
 
     /**
      * Submits to a platform servlet, waiting for the servlet to exist.
