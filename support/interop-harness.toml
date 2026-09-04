@@ -33,6 +33,16 @@ readiness_deadline_milliseconds = 300000
 #
 # Ninety seconds is six times the slowest healthy start and a third of what those six cost.
 published_runtime_readiness_deadline_milliseconds = 90000
+
+# What a cluster is given, which is neither of the other two. It starts a document store and two
+# runtimes that have to find it, agree on one repository and initialise it between them, and the
+# cold one costs far more than the warm ones after it. Measured on sixteen cores while the rest of
+# the suite ran: initialising Oak twice against a document store drove the load average past thirty
+# with memory never short, and whole cluster classes took twenty seconds warm and a hundred and
+# fifty-seven, a hundred and ninety-three and two hundred and sixteen cold. Ninety seconds is what
+# one runtime needs and it cut every cold cluster off; this is what a cluster needs, which is the
+# same as the ceiling and for its own reason rather than by inheriting it.
+clustered_runtime_readiness_deadline_milliseconds = 300000
 readiness_poll_interval_milliseconds = 500
 stop_grace_milliseconds = 10000
 
