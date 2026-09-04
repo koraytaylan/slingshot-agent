@@ -417,6 +417,13 @@ public final class PublicSlingTier implements InteropTier {
     /** What a servlet nobody has registered yet answers, which is a moment and not a refusal. */
     private static final int NOT_FOUND = 404;
 
+    /**
+     * What the platform's own posting servlet says when it takes a request meant for one that is
+     * not registered yet. It answers a server error rather than a not-found, because as far as it
+     * is concerned it was asked to create something where nothing may be created.
+     */
+    private static final String NOT_THE_SERVLET_MEANT_TO_ANSWER = "UnsupportedOperationException";
+
     /** The route work is submitted on, spelled by the committed table and by nothing here. */
     private static final String SUBMIT_PATH = "/bin/slingshot/agent/submit";
 
@@ -435,9 +442,20 @@ public final class PublicSlingTier implements InteropTier {
     private HttpResponse<String> submitOnceRegistered(String path, List<String> fields) {
         return IntStream.range(0, INSTALL_ATTEMPTS)
                 .mapToObj(attempt -> submitted(attempt, path, fields))
-                .filter(answered -> answered.statusCode() != NOT_FOUND)
+                .filter(answered -> !stillArriving(answered))
                 .findFirst()
                 .orElseGet(() -> submitted(0, path, fields));
+    }
+
+    /**
+     * Whether this is the platform saying the servlet is not there yet, in either way it says it.
+     *
+     * @param answered what the platform answered
+     * @return whether the servlet meant to answer had not registered
+     */
+    private static boolean stillArriving(HttpResponse<String> answered) {
+        return answered.statusCode() == NOT_FOUND
+                || answered.body().contains(NOT_THE_SERVLET_MEANT_TO_ANSWER);
     }
 
     private HttpResponse<String> submitted(int attempt, String path, List<String> fields) {
