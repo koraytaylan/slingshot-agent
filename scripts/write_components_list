@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+"""Writes what the release contains, from what the build already resolved.
+
+A release is built offline so that two builds of one source produce identical bytes. Every
+CycloneDX generator refuses to run offline - it says so and skips - so a document from one could
+only come from a release that reached a registry, and a release whose bytes depend on what a
+registry answered is not a release two builds can agree on.
+
+What belongs in the document is what this build resolved, and every module already writes that
+down: target/resolved-dependencies.txt, produced by the same run that produced the artifacts. So
+the document is written from those, sorted, with no timestamp and no serial number - because a
+document carrying either would differ between two builds of one source, and the digest recorded
+beside it is what says they do not.
+"""
+
+import json
+import pathlib
+import sys
+
+EXIT_NOT_BUILT = 3
+
+#: How many fields a dependency line carries before it says anything useful.
+FIELDS = 5
+
+
+def components(root):
+    """Every artifact this build resolved, by coordinate.
+
+    :param root: the repository root
+    :return: the components, keyed by coordinate so a dependency shared by two modules is one entry
+    """
+    found = {}
+    for resolved in sorted(root.glob("*/target/resolved-dependencies.txt")):
+        for line in resolved.read_text().splitlines():
+            parts = line.strip().split(":")
+            if len(parts) < FIELDS or not parts[0] or " " in parts[0]:
+                continue
+            group, name, version = parts[0], parts[1], parts[3]
+            found["%s:%s:%s" % (group, name, version)] = {
+                "type": "library",
+                "group": group,
+                "name": name,
+                "version": version,
+                "purl": "pkg:maven/%s/%s@%s" % (group, name, version),
+            }
+    return found
+
+
+def main():
+    """Writes the list beside the package it describes.
+
+    :return: the exit status, which is not zero when nothing has been built to describe
+    """
+    root = pathlib.Path(sys.argv[1])
+    packages = sorted((root / "all" / "target").glob("slingshot-agent-all-*.zip"))
+    if not packages:
+        print("no container package has been built, so its components cannot be listed",
+              file=sys.stderr)
+        return EXIT_NOT_BUILT
+    version = packages[0].stem[len("slingshot-agent-all-"):]
+    found = components(root)
+    document = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+            "component": {
+                "type": "application",
+                "group": "rs.slingshot",
+                "name": "slingshot-agent-all",
+                "version": version,
+            }
+        },
+        "components": [found[key] for key in sorted(found)],
+    }
+    written = root / "all" / "target" / ("slingshot-agent-all-%s.bom.json" % version)
+    written.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")
+    print("listed %d components in %s" % (len(document["components"]), written.name))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

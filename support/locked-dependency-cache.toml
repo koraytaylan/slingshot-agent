@@ -9,7 +9,7 @@
 # that the bytes were trustworthy when they were fetched. Nothing offline can establish
 # the second, and a command that implied it did would be worse than one that says so.
 
-prepared = "2026-09-01T20:28:50Z"
+prepared = "2026-09-04T12:24:40Z"
 
 [[artifact]]
 path = "aopalliance/aopalliance/1.0/aopalliance-1.0.jar"
@@ -108,12 +108,44 @@ path = "com/adobe/aem/aem-sdk-api/2026.8.27830.20260820T160150Z-260700/aem-sdk-a
 digest = "7f834159d1b53bafb5631a3618fe4370c9176bd09888693a2ce6698540d0a81f"
 
 [[artifact]]
+path = "com/ethlo/time/itu/1.10.2/itu-1.10.2.jar"
+digest = "0424b2ff0c20265a084a32a4907521b28e7b86af25d131987a6b31ef63b9687c"
+
+[[artifact]]
+path = "com/ethlo/time/itu/1.10.2/itu-1.10.2.pom"
+digest = "f1c10522cbc763fd351c790b57c251edcc1efd052da78d150ba07b55337f7b2d"
+
+[[artifact]]
+path = "com/fasterxml/jackson/core/jackson-annotations/2.17.1/jackson-annotations-2.17.1.pom"
+digest = "7355f37445f5daf50f50c75f2ebcd71ba2c4fbcea4b6254148059ec635644e77"
+
+[[artifact]]
+path = "com/fasterxml/jackson/core/jackson-annotations/2.17.2/jackson-annotations-2.17.2.jar"
+digest = "873a606e23507969f9bbbea939d5e19274a88775ea5a169ba7e2d795aa5156e1"
+
+[[artifact]]
+path = "com/fasterxml/jackson/core/jackson-annotations/2.17.2/jackson-annotations-2.17.2.pom"
+digest = "4378184d608adcdbbb04a778bc6466863f07a4552a72044465c910403f9ec0bb"
+
+[[artifact]]
 path = "com/fasterxml/jackson/core/jackson-annotations/2.17.3/jackson-annotations-2.17.3.jar"
 digest = "2747f60343783a6ec8a68405c7c839fa0bbe30ee4e2459d21a1ac3b7365e1ed5"
 
 [[artifact]]
 path = "com/fasterxml/jackson/core/jackson-annotations/2.17.3/jackson-annotations-2.17.3.pom"
 digest = "55218c7bdb0f1acb3fdf60666b411c3e076cda1a542cf0a7fe2ea7548e6c8bb5"
+
+[[artifact]]
+path = "com/fasterxml/jackson/core/jackson-core/2.17.1/jackson-core-2.17.1.pom"
+digest = "d948831209a04c01391b93aaee7ad34a1c9e94863f9e7685c2f5b6149a2ab39d"
+
+[[artifact]]
+path = "com/fasterxml/jackson/core/jackson-core/2.17.2/jackson-core-2.17.2.jar"
+digest = "721a189241dab0525d9e858e5cb604d3ecc0ede081e2de77d6f34fa5779a5b46"
+
+[[artifact]]
+path = "com/fasterxml/jackson/core/jackson-core/2.17.2/jackson-core-2.17.2.pom"
+digest = "17821e1988e832707ab471af1a306f4a5ee50134f22d8d2717b58da859eb35bb"
 
 [[artifact]]
 path = "com/fasterxml/jackson/core/jackson-core/2.17.3/jackson-core-2.17.3.jar"
@@ -124,6 +156,18 @@ path = "com/fasterxml/jackson/core/jackson-core/2.17.3/jackson-core-2.17.3.pom"
 digest = "e8465a6faf31e38e95792ddf2483c51136740e7a8ae9db995ed3e2c849291d82"
 
 [[artifact]]
+path = "com/fasterxml/jackson/core/jackson-databind/2.17.1/jackson-databind-2.17.1.pom"
+digest = "60a08a986ac313ad3e32688a4e327a61283a8a801ad6fa61579f8c4be6dc8f6c"
+
+[[artifact]]
+path = "com/fasterxml/jackson/core/jackson-databind/2.17.2/jackson-databind-2.17.2.jar"
+digest = "c04993f33c0f845342653784f14f38373d005280e6359db5f808701cfae73c0c"
+
+[[artifact]]
+path = "com/fasterxml/jackson/core/jackson-databind/2.17.2/jackson-databind-2.17.2.pom"
+digest = "d2450698bae90be338f2b99faeda694cd450adb52124213e7a53b41219b54062"
+
+[[artifact]]
 path = "com/fasterxml/jackson/core/jackson-databind/2.17.3/jackson-databind-2.17.3.jar"
 digest = "93b13e709a0b620de42019180a75bc1fc4885c81fe5b6087a4aa248f91fb9a95"
 
@@ -132,8 +176,44 @@ path = "com/fasterxml/jackson/core/jackson-databind/2.17.3/jackson-databind-2.17
 digest = "440517abfda38cd94f73f18708b4765431f79f0ce4c5393c79468c51379be070"
 
 [[artifact]]
+path = "com/fasterxml/jackson/dataformat/jackson-dataformats-text/2.17.1/jackson-dataformats-text-2.17.1.pom"
+digest = "04883f62cca7a92b15d97bd76fccde3e3082c18ecb0494943b220bae2a0b872b"
+
+[[artifact]]
+path = "com/fasterxml/jackson/dataformat/jackson-dataformat-xml/2.17.2/jackson-dataformat-xml-2.17.2.jar"
+digest = "517add5f3848517894b319a93a7ebfc1c21737b2c17c9acccd38fea97d6adc6f"
+
+[[artifact]]
+path = "com/fasterxml/jackson/dataformat/jackson-dataformat-xml/2.17.2/jackson-dataformat-xml-2.17.2.pom"
+digest = "80a9b9e7747e139eb938b66eb3d87fba3d40953085a253152221b3048056cd6c"
+
+[[artifact]]
+path = "com/fasterxml/jackson/dataformat/jackson-dataformat-yaml/2.17.1/jackson-dataformat-yaml-2.17.1.jar"
+digest = "83f38459593bc10caeb1fa2653616813b1743b6bed67163c8ae8e5a4d32a5456"
+
+[[artifact]]
+path = "com/fasterxml/jackson/dataformat/jackson-dataformat-yaml/2.17.1/jackson-dataformat-yaml-2.17.1.pom"
+digest = "adaa38542df7c91a9f52599dbf608b3371879f95747fa62d9fcf84ea9e10cf9a"
+
+[[artifact]]
+path = "com/fasterxml/jackson/jackson-base/2.17.1/jackson-base-2.17.1.pom"
+digest = "e0aefc61d38fcddd955ffeec01bb75104f1bbfffa3a6ecb58dbe74afb715e322"
+
+[[artifact]]
+path = "com/fasterxml/jackson/jackson-base/2.17.2/jackson-base-2.17.2.pom"
+digest = "7cf9c59fbd14c9056747137b90d70a95e87760dfe1b82456b9f02317d5b56faf"
+
+[[artifact]]
 path = "com/fasterxml/jackson/jackson-base/2.17.3/jackson-base-2.17.3.pom"
 digest = "ffedf2e41d3254323c62829608f7f4a30b3a5cef716178c8b63a0a625a8d4a6c"
+
+[[artifact]]
+path = "com/fasterxml/jackson/jackson-bom/2.17.1/jackson-bom-2.17.1.pom"
+digest = "9f4461228e129103eed7a302dc1001ab2e4c82dd3cea915c2a7dbb8cc61efd25"
+
+[[artifact]]
+path = "com/fasterxml/jackson/jackson-bom/2.17.2/jackson-bom-2.17.2.pom"
+digest = "1f472b0bc2004d5cf421ac48871417f84189e78f35c049718387fd8b44fb9f32"
 
 [[artifact]]
 path = "com/fasterxml/jackson/jackson-bom/2.17.3/jackson-bom-2.17.3.pom"
@@ -152,12 +232,24 @@ path = "com/fasterxml/jackson/jackson-parent/2.19.3/jackson-parent-2.19.3.pom"
 digest = "23d186c8d8cd06015d022c710c715423d660d49e2973b15870b029cc26018682"
 
 [[artifact]]
+path = "com/fasterxml/oss-parent/55/oss-parent-55.pom"
+digest = "0f5e18f2b35ebf6d839f7fd549972883f696c210f9ae3230afd2c20ba886c04d"
+
+[[artifact]]
 path = "com/fasterxml/oss-parent/58/oss-parent-58.pom"
 digest = "5670e6ac1c4ddcc9d413cf87997a5da2efaa4d2abe439363af9ef102a0a09e40"
 
 [[artifact]]
 path = "com/fasterxml/oss-parent/69/oss-parent-69.pom"
 digest = "3856d584aaa1c8e33ce94c67244f71f6f70538a259ffe8e781761b9faaad875f"
+
+[[artifact]]
+path = "com/fasterxml/woodstox/woodstox-core/6.7.0/woodstox-core-6.7.0.jar"
+digest = "81cdeef50567735bda9f6b4aabe0cc0a3f6c04f15569192bc6505393d2612c25"
+
+[[artifact]]
+path = "com/fasterxml/woodstox/woodstox-core/6.7.0/woodstox-core-6.7.0.pom"
+digest = "a11608fb92e1980f3d8c946265247140fbe37db691e115343875ab897abc4cc7"
 
 [[artifact]]
 path = "com/github/cliftonlabs/json-simple/3.0.2/json-simple-3.0.2.jar"
@@ -230,6 +322,14 @@ digest = "0b4ceb5b8362d43c9c6c49b1bd57f1c5da54d3c5c7c305fa39c0a04462bb4799"
 [[artifact]]
 path = "com/github/oowekyala/ooxml/nice-xml-messages/3.1/nice-xml-messages-3.1.pom"
 digest = "ad0aa36596cc4c0247fea54d5acc1e47b2b8d81e744c3c89e5dacb531d62a670"
+
+[[artifact]]
+path = "com/github/package-url/packageurl-java/1.5.0/packageurl-java-1.5.0.jar"
+digest = "e45551727707acc0c56ac62d56964332ea0f138d6cc3656d988b9369150f5247"
+
+[[artifact]]
+path = "com/github/package-url/packageurl-java/1.5.0/packageurl-java-1.5.0.pom"
+digest = "42fdf46c5355bcb9aa0b240d52ac9d89ee728f8cb1386e43127588af916b3e06"
 
 [[artifact]]
 path = "com/github/spotbugs/spotbugs/4.10.4/spotbugs-4.10.4.jar"
@@ -658,6 +758,14 @@ digest = "d175dbd751dd782a63bde28c7a039520e971f25e84b79c19b8435edc3603e0dc"
 [[artifact]]
 path = "commons-logging/commons-logging/1.4.0/commons-logging-1.4.0.pom"
 digest = "92d9c735808eda632a214c7f2c1640266cfc7269c3a63fd2346e15c988aeb11e"
+
+[[artifact]]
+path = "com/networknt/json-schema-validator/1.5.1/json-schema-validator-1.5.1.jar"
+digest = "de015f79d4a63d22c002bad76bb30c039cafa205465eef8770e2c6b85880ded7"
+
+[[artifact]]
+path = "com/networknt/json-schema-validator/1.5.1/json-schema-validator-1.5.1.pom"
+digest = "c7506ff13804ed00ace6b235de47d3e77104fd557815428ab31e0a48846743b0"
 
 [[artifact]]
 path = "com/puppycrawl/tools/checkstyle/14.1.0/checkstyle-14.1.0.jar"
@@ -1420,6 +1528,14 @@ path = "org/apache/commons/commons-compress/1.23.0/commons-compress-1.23.0.pom"
 digest = "59dc121406ba9e8b5b512bcef4571351fed1f902b939cf527d893b7f729454c9"
 
 [[artifact]]
+path = "org/apache/commons/commons-compress/1.25.0/commons-compress-1.25.0.jar"
+digest = "d0ec8014ebbb0749f471803122b21796afddf2e98e194e4374622e5fbaf69f49"
+
+[[artifact]]
+path = "org/apache/commons/commons-compress/1.25.0/commons-compress-1.25.0.pom"
+digest = "ba5cda496643a906fcb77b1f13c5c7de817133c977a417e8a835fe28a6518ece"
+
+[[artifact]]
 path = "org/apache/commons/commons-compress/1.26.1/commons-compress-1.26.1.jar"
 digest = "27bb5d40f37c3bb7205b4a0540247df057715e9f6cbbd97d626ab8b50318bb04"
 
@@ -1490,6 +1606,10 @@ digest = "7b96bf3ee68949abb5bc465559ac270e0551596fa34523fddf890ec418dde13c"
 [[artifact]]
 path = "org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.pom"
 digest = "110438863bad37c28f906bf87016e38c7a8c758ba321e09d11dc5a2363a8e79e"
+
+[[artifact]]
+path = "org/apache/commons/commons-lang3/3.15.0/commons-lang3-3.15.0.pom"
+digest = "0cb75cb1e87d28b4c45492fc8c6cc81d7cca3cb4882896735e28e448cdf810ce"
 
 [[artifact]]
 path = "org/apache/commons/commons-lang3/3.17.0/commons-lang3-3.17.0.jar"
@@ -3324,6 +3444,10 @@ path = "org/apache/maven/plugins/maven-plugins/39/maven-plugins-39.pom"
 digest = "18085afbef3a17942b442135a3f0e77018cda66edd33c6b18fd18440661bc29e"
 
 [[artifact]]
+path = "org/apache/maven/plugins/maven-plugins/41/maven-plugins-41.pom"
+digest = "9e64593239bb69d80b2db9e595d8c0fc3cb44cf2aa5c1ed547718b4cfd732efe"
+
+[[artifact]]
 path = "org/apache/maven/plugins/maven-plugins/42/maven-plugins-42.pom"
 digest = "5b31681ea67e838a8ed1f08af891d1ae50f16dfadd3fc2b787900ed69d5f2503"
 
@@ -3358,6 +3482,14 @@ digest = "f7bd8e943977ca85022e1252d52575b769d12d49565375550251d2f471aa350c"
 [[artifact]]
 path = "org/apache/maven/plugins/maven-site-plugin/3.12.1/maven-site-plugin-3.12.1.pom"
 digest = "6ca9fd4c6bb967bdb44ba03b3de42a79f81ea71dd13404d08fd7a72e3f5d1219"
+
+[[artifact]]
+path = "org/apache/maven/plugins/maven-source-plugin/3.3.1/maven-source-plugin-3.3.1.jar"
+digest = "82dbb27f40ef27bce18bf5ad46780b65cc54cf09493baefda7cfc7542917dcc5"
+
+[[artifact]]
+path = "org/apache/maven/plugins/maven-source-plugin/3.3.1/maven-source-plugin-3.3.1.pom"
+digest = "a788d28b0f3d976daa945ea9e083def1ad56512ef90b52f202b8cd2f90273e84"
 
 [[artifact]]
 path = "org/apache/maven/plugins/maven-surefire-plugin/3.5.6/maven-surefire-plugin-3.5.6.jar"
@@ -3510,6 +3642,14 @@ digest = "931a77aa9dad6c91f10fcfafa70adc7608c004576b4924c74ecbffb27568a880"
 [[artifact]]
 path = "org/apache/maven/shared/maven-common-artifact-filters/3.4.0/maven-common-artifact-filters-3.4.0.pom"
 digest = "c93581d69b337c1fcc0957c727c430180b6387276ef1d3c2976c175e93765eb1"
+
+[[artifact]]
+path = "org/apache/maven/shared/maven-dependency-analyzer/1.14.1/maven-dependency-analyzer-1.14.1.jar"
+digest = "88493689e519f1d2cee10d4e143d1001849c7d62db3746e98ce0c6f6facc4a2a"
+
+[[artifact]]
+path = "org/apache/maven/shared/maven-dependency-analyzer/1.14.1/maven-dependency-analyzer-1.14.1.pom"
+digest = "a9aa56c2a17b1b56c33ca829196e354771168e27b9c36beff26aeb46e5d38d26"
 
 [[artifact]]
 path = "org/apache/maven/shared/maven-dependency-analyzer/1.16.0/maven-dependency-analyzer-1.16.0.jar"
@@ -4312,6 +4452,10 @@ path = "org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.pom"
 digest = "32355081d109095c3d5d374d5a43b4f4c1b75d549e983ef50723e2772e5302a0"
 
 [[artifact]]
+path = "org/assertj/assertj-bom/3.25.3/assertj-bom-3.25.3.pom"
+digest = "91b7a19b77af5462c7290b91ac7c72c44d6483afea0b62536816e98f8d53f257"
+
+[[artifact]]
 path = "org/assertj/assertj-bom/3.27.3/assertj-bom-3.27.3.pom"
 digest = "408f9e3816661817b1479bde3b2fc9dd95161562ccfa79778920e62b7f2451be"
 
@@ -4514,6 +4658,14 @@ digest = "24513c9bc6d52716f5a22f7ef03e26c310f62ebcde309de9833deac6a4ac32e3"
 [[artifact]]
 path = "org/codehaus/plexus/plexus-archiver/4.8.0/plexus-archiver-4.8.0.pom"
 digest = "a76eb8d9750adb54408f7186460593ec8068bb9f7ded97634a8c5af296d5a28d"
+
+[[artifact]]
+path = "org/codehaus/plexus/plexus-archiver/4.9.1/plexus-archiver-4.9.1.jar"
+digest = "a33a0817c46e75f1d0af9abb201eab5f53b09cc7767595914d754ae17769da2d"
+
+[[artifact]]
+path = "org/codehaus/plexus/plexus-archiver/4.9.1/plexus-archiver-4.9.1.pom"
+digest = "deab57e80e3466c3b108a8b95a1145e9a1dc77eec3ff3c81cca9b1fe62493279"
 
 [[artifact]]
 path = "org/codehaus/plexus/plexus-archiver/4.9.2/plexus-archiver-4.9.2.jar"
@@ -5010,6 +5162,30 @@ digest = "6a49fe0c49a06b5bcd6073ff16580fcb0dd87c50295e97a9fa9f95619b69921c"
 [[artifact]]
 path = "org/codehaus/plexus/plexus-xml/3.0.2/plexus-xml-3.0.2.pom"
 digest = "45cea42b0abc5981f478a0a1b0e5a9f9fcdb99c203439e4926b063625957d95a"
+
+[[artifact]]
+path = "org/codehaus/woodstox/stax2-api/4.2.2/stax2-api-4.2.2.jar"
+digest = "a61c48d553efad78bc01fffc4ac528bebbae64cbaec170b2a5e39cf61eb51abe"
+
+[[artifact]]
+path = "org/codehaus/woodstox/stax2-api/4.2.2/stax2-api-4.2.2.pom"
+digest = "4e902ec556fc6598b41c2952ec1573edc815037e7330ec4922eab619422686e2"
+
+[[artifact]]
+path = "org/cyclonedx/cyclonedx-core-java/9.0.5/cyclonedx-core-java-9.0.5.jar"
+digest = "9474c73a81d9be6206367d357a3449e03e70c69bc672d82be04f15806ef170fa"
+
+[[artifact]]
+path = "org/cyclonedx/cyclonedx-core-java/9.0.5/cyclonedx-core-java-9.0.5.pom"
+digest = "344aed7d44b17cf9c5cea5541bf7b205d14cd9f4a4b89f2760d856f070db249a"
+
+[[artifact]]
+path = "org/cyclonedx/cyclonedx-maven-plugin/2.9.1/cyclonedx-maven-plugin-2.9.1.jar"
+digest = "698e0f37184a5b28c245c4065fd036dfce253b52f82fbb7113d81d36326cc249"
+
+[[artifact]]
+path = "org/cyclonedx/cyclonedx-maven-plugin/2.9.1/cyclonedx-maven-plugin-2.9.1.pom"
+digest = "6d59f53f79605a9870d96770653b7461c2ca906d44b2be1a9c6050f3ba0fe7dd"
 
 [[artifact]]
 path = "org/dom4j/dom4j/2.2.0/dom4j-2.2.0.jar"
@@ -5892,6 +6068,14 @@ path = "org/ow2/asm/asm/9.4/asm-9.4.pom"
 digest = "483751e48fb2d1f43c61ad3ab00ffa466edc0333d8fc2fdb5a26e95d32982394"
 
 [[artifact]]
+path = "org/ow2/asm/asm/9.7/asm-9.7.jar"
+digest = "adf46d5e34940bdf148ecdd26a9ee8eea94496a72034ff7141066b3eea5c4e9d"
+
+[[artifact]]
+path = "org/ow2/asm/asm/9.7/asm-9.7.pom"
+digest = "de00115f1d84f3a0b2ee3a4b6f6192d066f86d185d67b9d1522f2c80feac5f00"
+
+[[artifact]]
 path = "org/ow2/asm/asm/9.8/asm-9.8.jar"
 digest = "876eab6a83daecad5ca67eb9fcabb063c97b5aeb8cf1fca7a989ecde17522051"
 
@@ -6028,12 +6212,20 @@ path = "org/slf4j/slf4j-api/1.7.5/slf4j-api-1.7.5.pom"
 digest = "afaf8e74019b230d3f56fdd7c93fb1070c0dca34f3d2d5ab5dea9fc616bd5ca4"
 
 [[artifact]]
+path = "org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.pom"
+digest = "51805cfda80ca2ac82041b906d9865d39e9823e358a0eeb62379dfed475c1571"
+
+[[artifact]]
 path = "org/slf4j/slf4j-api/2.0.18/slf4j-api-2.0.18.jar"
 digest = "44508fd1576500688c790b190acdd16fec4f8c79a3e0b900afd70503cf055f55"
 
 [[artifact]]
 path = "org/slf4j/slf4j-api/2.0.18/slf4j-api-2.0.18.pom"
 digest = "6c2c7f2c02774cc2b7b619fbd2df7873cdad29718926e44754b87f70d1eb43cb"
+
+[[artifact]]
+path = "org/slf4j/slf4j-bom/2.0.13/slf4j-bom-2.0.13.pom"
+digest = "7af272d7a738e2b98763791ffdd896040e8beb298a88fd606214407976cd310a"
 
 [[artifact]]
 path = "org/slf4j/slf4j-bom/2.0.18/slf4j-bom-2.0.18.pom"
@@ -6058,6 +6250,10 @@ digest = "bb388d37fbcdd3cde64c3cede21838693218dc451f04040c5df360a78ed7e812"
 [[artifact]]
 path = "org/slf4j/slf4j-parent/1.7.5/slf4j-parent-1.7.5.pom"
 digest = "c43bc5a022dbfd9de82be232dffe46208cbc7de12c14385b5da824e331e535bb"
+
+[[artifact]]
+path = "org/slf4j/slf4j-parent/2.0.13/slf4j-parent-2.0.13.pom"
+digest = "67facfd51f06935cea85615a04775d70d80bfd03ad0f37670351f920ed0bb58a"
 
 [[artifact]]
 path = "org/slf4j/slf4j-parent/2.0.18/slf4j-parent-2.0.18.pom"
@@ -6278,6 +6474,14 @@ digest = "1fe4d5b92f708dcdb82dbce12919e0171e6b5ca62c6dca6220483625098feb5f"
 [[artifact]]
 path = "org/xmlresolver/xmlresolver/5.3.3/xmlresolver-5.3.3.pom"
 digest = "261ada76d9e6676008dcac377a4d4589749166b606559f59f2e45ea62d8b75ec"
+
+[[artifact]]
+path = "org/yaml/snakeyaml/2.2/snakeyaml-2.2.jar"
+digest = "1467931448a0817696ae2805b7b8b20bfb082652bf9c4efaed528930dc49389b"
+
+[[artifact]]
+path = "org/yaml/snakeyaml/2.2/snakeyaml-2.2.pom"
+digest = "e982eadc788c69cf2e4de50a9f632b182c31dba50612830d348fc4b4ba8dd7d6"
 
 [[artifact]]
 path = "oro/oro/2.0.8/oro-2.0.8.jar"
