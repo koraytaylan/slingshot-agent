@@ -17,9 +17,9 @@
 tier = "a"
 registry = "docker.io"
 repository = "apache/sling"
-tag = "12"
-digest = "sha256:228f3b3e284cf8bbc4685711aa09fdd87ded7b91f9214d68bef9e716b7b72b15"
-reason = "The published Apache Sling runtime, which the public tier's own image is built from. Everything in the Sling-only bundle resolves against Sling, so the whole protocol surface is proved with no licensed input at all."
+tag = "14"
+digest = "sha256:8722cd66ae0758e50784ac21df836c8f8d9e443d105e1a4292a4cb7f810a8cc9"
+reason = "The published Apache Sling runtime, which the public tier's own image is built from. Everything in the Sling-only bundle resolves against Sling, so the whole protocol surface is proved with no licensed input at all. Twelve cannot be the one: it carries ASM 9.2, which predates Java 21 and cannot read a class file this repository compiles - the weaving hook fails inside a request, the request fails, and a node in that state never becomes ready no matter how long it is given. Fourteen carries ASM 9.9.1 and reads them."
 
 [[image]]
 tier = "harness"
@@ -52,6 +52,6 @@ reason = "The Java runtime every row in support/deployments.toml declares. The p
 tier = "a"
 name = "localhost/slingshot-agent-public-sling:1"
 containerfile = "interop/tier/public-sling/Containerfile"
-base_images = ["docker.io/library/eclipse-temurin:21-jre", "docker.io/apache/sling:12"]
-identifier = "ff13e800b67798f31d6cedf7a70c14c8066ae4ed8e10e61a055b5d200c202018"
+base_images = ["docker.io/library/eclipse-temurin:21-jre", "docker.io/apache/sling:14"]
+identifier = "3796216fe6b5613496c0aceedd31c719a92b061f979dfb6a1d39c61462e13f3e"
 reason = "One image, built from two pinned ones, so the tier runs the product on the runtime its own deployment matrix declares rather than on whichever runtime somebody else's published image happened to carry."
