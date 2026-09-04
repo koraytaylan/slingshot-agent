@@ -14,6 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import rs.slingshot.agent.interop.tier.SharedPublicSlingTier;
 
 /**
  * Two nodes against one shared document store.
@@ -45,7 +46,7 @@ final class ClusterHarnessTest {
 
     @AfterEach
     void nothingIsLeftBehind() {
-        assertEquals(List.of(), cluster.harness().leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "this suite left a container running that it started");
     }
 
@@ -63,7 +64,7 @@ final class ClusterHarnessTest {
         assertTrue(started.store().mappedPort() > 0,
                 "the shared document store published no address for the nodes to reach");
         cluster.stop(started);
-        assertEquals(List.of(), cluster.harness().leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "stopping the cluster left something running");
     }
 
@@ -87,7 +88,7 @@ final class ClusterHarnessTest {
         final ClusterHarness.Refused refused = assertInstanceOf(ClusterHarness.Refused.class,
                 outcome, "a cluster started without its nodes");
         assertTrue(refused.detail().contains("the first node"), refused.detail());
-        assertEquals(List.of(), cluster.harness().leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "the store was left running after the node it was started for could not be");
     }
 
