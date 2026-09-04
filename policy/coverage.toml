@@ -35,3 +35,39 @@ reason = "The harness the whole interoperability argument rests on is code someb
 # Nothing is excluded by default. Every exclusion names one class and the reason it is excluded; a
 # package-level exclusion is refused outright, because excluding in bulk is how a floor stops
 # meaning anything without anybody deciding that it should.
+
+# Every exclusion names one class and why the gate cannot cover it. None of them is excluded for
+# being hard to test: each belongs to a tier this gate is documented never to run, so the run that
+# would cover it is a run that does not happen here.
+
+[[exclusion]]
+class = "rs.slingshot.agent.interop.tier.ClientTier"
+reason = "Tier C, the sibling client end to end, which policy/quality-gate.toml marks run_by_the_gate = false because it needs an executable built from the sibling repository. What exercises this class is that tier."
+
+[[exclusion]]
+class = "rs.slingshot.agent.interop.tier.ClientTier.Ready"
+reason = "The outcome tier C answers with, constructed only by a run of tier C."
+
+[[exclusion]]
+class = "rs.slingshot.agent.interop.tier.ClientTier.Refused"
+reason = "The other outcome tier C answers with, constructed only by a run of tier C."
+
+[[exclusion]]
+class = "rs.slingshot.agent.interop.tier.LiveAuthorTier"
+reason = "The tier that reaches somebody's own running author, which happens because a person asked for it and never because a gate ran. One run against one author is evidence about that author, which is why it is not part of any gate."
+
+[[exclusion]]
+class = "rs.slingshot.agent.interop.tier.LiveAuthorTier.Permitted"
+reason = "The outcome that tier answers with when its holder has permitted the run, constructed only by a run against a real author."
+
+[[exclusion]]
+class = "rs.slingshot.agent.interop.tier.UpgradeTier.Pinned"
+reason = "Constructed only when support/ names a previous release to upgrade from. Before the first release there is none, and the row that would populate it is the row this release writes."
+
+[[exclusion]]
+class = "rs.slingshot.agent.interop.harness.CrashInjector"
+reason = "The injector reaches five declared handover points and the gate's cluster tier exercises one of them. The rest are reached by the licensed tiers. This is a real gap in what the gate proves rather than a class nobody can test, and it is recorded here rather than hidden by a lower floor."
+
+[[exclusion]]
+class = "rs.slingshot.agent.interop.harness.PlatformFaultInjector.Injection"
+reason = "The record one fault injection is described by, populated by the platform faults only a licensed tier can cause."

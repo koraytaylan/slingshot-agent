@@ -552,6 +552,23 @@
                 </rule>
                 <rule>
                   <element>CLASS</element>
+                  <!--
+                    Excluded one class at a time, each recorded in policy/coverage.toml with the
+                    reason it is excluded. Every one of these belongs to a tier the gate is
+                    documented never to run, so the coverage that would cover it is coverage this
+                    gate cannot produce - and a floor that fails for that is a floor that fails
+                    every run for a reason nobody can act on.
+                  -->
+                  <excludes>
+                    <exclude>rs.slingshot.agent.interop.tier.ClientTier</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.ClientTier$Ready</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.ClientTier$Refused</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.LiveAuthorTier</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.LiveAuthorTier$Permitted</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.UpgradeTier$Pinned</exclude>
+                    <exclude>rs.slingshot.agent.interop.harness.CrashInjector</exclude>
+                    <exclude>rs.slingshot.agent.interop.harness.PlatformFaultInjector$Injection</exclude>
+                  </excludes>
                   <limits>
                     <limit>
                       <counter>LINE</counter>
