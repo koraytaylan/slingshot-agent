@@ -16,7 +16,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import rs.slingshot.agent.interop.harness.ContainerHarness;
 
 /**
  * The command that holds a workflow instance or lets it go, on a running instance.
@@ -57,18 +56,17 @@ final class SetWorkflowSuspensionScenario {
     @BeforeAll
     void install() {
         final InteropTier.Outcome outcome =
-                PublicSlingTier.start(REPOSITORY, IMAGE, builtBundle());
+                SharedPublicSlingTier.get(REPOSITORY, IMAGE, builtBundle());
         tier = assertInstanceOf(InteropTier.Running.class, outcome,
                 "the tier did not come up: " + outcome).tier();
     }
 
     @AfterAll
     void leaveNothingBehind() {
-        if (tier != null) {
-            tier.stop();
-        }
-        assertEquals(List.of(), ContainerHarness.at(REPOSITORY).leaked(),
-                "the tier left a container running");
+        // The shared runtime stays for the scenario after this one and goes when the test runtime
+        // ends. What has to hold here is that nothing else was left behind.
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
+                "something other than the shared runtime was left running");
     }
 
     @Test

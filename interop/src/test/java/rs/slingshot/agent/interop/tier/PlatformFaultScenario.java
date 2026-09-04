@@ -16,7 +16,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import rs.slingshot.agent.interop.harness.ContainerHarness;
 import rs.slingshot.agent.interop.harness.PlatformFaultInjector;
 
 /**
@@ -56,6 +55,10 @@ final class PlatformFaultScenario {
 
     @BeforeAll
     void install() {
+        // Its own runtime, because this scenario changes the instance itself. The shared one is
+        // given back first: two published runtimes competing for the machine is how a start that
+        // takes twenty seconds stops finishing inside ninety.
+        SharedPublicSlingTier.release();
         final InteropTier.Outcome outcome =
                 PublicSlingTier.start(REPOSITORY, IMAGE, builtBundle());
         tier = assertInstanceOf(InteropTier.Running.class, outcome,
@@ -67,8 +70,10 @@ final class PlatformFaultScenario {
         if (tier != null) {
             tier.stop();
         }
-        assertEquals(List.of(), ContainerHarness.at(REPOSITORY).leaked(),
-                "the tier left a container running");
+        // The shared runtime stays for the scenario after this one and goes when the test runtime
+        // ends. What has to hold here is that nothing else was left behind.
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
+                "something other than the shared runtime was left running");
     }
 
     @Test

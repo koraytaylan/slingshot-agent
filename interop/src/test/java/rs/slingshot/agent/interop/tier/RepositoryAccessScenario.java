@@ -29,7 +29,6 @@ import org.tomlj.Toml;
 import org.tomlj.TomlArray;
 import org.tomlj.TomlParseResult;
 import org.tomlj.TomlTable;
-import rs.slingshot.agent.interop.harness.ContainerHarness;
 
 /**
  * What the agent's own identity may do, read back off a repository that created it.
@@ -98,6 +97,10 @@ final class RepositoryAccessScenario {
     @BeforeAll
     void installTheConfigurationADeploymentInstalls() {
         policy = parsed(REPOSITORY.resolve(POLICY));
+        // Its own runtime, because this scenario changes the instance itself. The shared one is
+        // given back first: two published runtimes competing for the machine is how a start that
+        // takes twenty seconds stops finishing inside ninety.
+        SharedPublicSlingTier.release();
         final InteropTier.Outcome outcome =
                 PublicSlingTier.start(REPOSITORY, IMAGE, builtBundle());
         tier = (PublicSlingTier) assertInstanceOf(InteropTier.Running.class, outcome,
@@ -112,8 +115,10 @@ final class RepositoryAccessScenario {
         if (tier != null) {
             tier.stop();
         }
-        assertEquals(List.of(), ContainerHarness.at(REPOSITORY).leaked(),
-                "the tier left a container running");
+        // The shared runtime stays for the scenario after this one and goes when the test runtime
+        // ends. What has to hold here is that nothing else was left behind.
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
+                "something other than the shared runtime was left running");
     }
 
     @Test
