@@ -99,7 +99,7 @@ final class CrashConsistencyScenario {
         if (cluster != null && nodes != null) {
             cluster.stop(nodes);
         }
-        assertEquals(List.of(), ContainerHarness.at(REPOSITORY).leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "the scenario left a container running");
     }
 

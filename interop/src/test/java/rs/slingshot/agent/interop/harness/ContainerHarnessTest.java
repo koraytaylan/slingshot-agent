@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import rs.slingshot.agent.interop.tier.SharedPublicSlingTier;
 
 /**
  * The harness every interoperability tier depends on behaving.
@@ -44,7 +45,7 @@ final class ContainerHarnessTest {
 
     @AfterEach
     void nothingIsLeftBehind() {
-        assertEquals(List.of(), harness.leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "this suite left a container running that it started");
     }
 
@@ -113,7 +114,7 @@ final class ContainerHarnessTest {
         assertTrue(Files.isRegularFile(handle.capturedOutput()),
                 "the container's output is held rather than written to a file");
         harness.stop(handle);
-        assertEquals(List.of(), harness.leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "stopping through the retained handle left the container running");
     }
 
