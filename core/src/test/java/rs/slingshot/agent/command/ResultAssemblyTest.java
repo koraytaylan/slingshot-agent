@@ -180,17 +180,7 @@ final class ResultAssemblyTest {
     @Test
     @DisplayName("an overflow that stops accepting bytes is a failure rather than a short result")
     void anOverflowThatStopsIsNotAShortResult() {
-        final OutputStream closed = new OutputStream() {
-            @Override
-            public void write(int one) throws IOException {
-                throw new IOException("this overflow is gone");
-            }
-
-            @Override
-            public void write(byte[] chunk, int from, int length) throws IOException {
-                throw new IOException("this overflow is gone");
-            }
-        };
+        final OutputStream closed = new GoneOverflow();
         try (ResultAssembly assembly = ResultAssembly.upTo(BOUND, closed)) {
             final byte[] chunk = new byte[BOUND + 1];
             assertTrue(assertThrows(assembly, chunk).getMessage().contains("stopped accepting"),
@@ -364,5 +354,19 @@ final class ResultAssemblyTest {
 
     static {
         assertTrue("slingshot".getBytes(StandardCharsets.UTF_8).length > 0);
+    }
+
+    /** An overflow that has stopped accepting bytes, named rather than anonymous. */
+    private static final class GoneOverflow extends OutputStream {
+
+        @Override
+        public void write(int one) throws IOException {
+            throw new IOException("this overflow is gone");
+        }
+
+        @Override
+        public void write(byte[] chunk, int from, int length) throws IOException {
+            throw new IOException("this overflow is gone");
+        }
     }
 }
