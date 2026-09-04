@@ -124,7 +124,11 @@ final class DeleteComponentScenario {
         final Path target = REPOSITORY.resolve("core/target");
         try (var files = Files.list(target)) {
             return files.filter(file -> String.valueOf(file.getFileName()).endsWith(".jar"))
-                    .filter(file -> !String.valueOf(file.getFileName()).contains("sources"))
+                    // Neither of the archives a release also builds: a javadoc jar handed to the
+                    // platform as a bundle is refused with a 500 that reads like the product
+                    // failing to install.
+                    .filter(file -> !String.valueOf(file.getFileName()).contains("sources")
+                            && !String.valueOf(file.getFileName()).contains("javadoc"))
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException(
                             "no bundle was built at " + target + "; run the reactor build first"));

@@ -33,6 +33,9 @@ fi
     -DskipTests -Djacoco.skip=true \
     package
 
+# What the release contains, written from what this build resolved rather than fetched.
+"${REPOSITORY_ROOT}/scripts/write_components_list" "${REPOSITORY_ROOT}"
+
 missing=0
 while read -r file; do
     if [[ ! -f "${REPOSITORY_ROOT}/${file}" ]]; then
