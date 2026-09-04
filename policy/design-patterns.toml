@@ -266,6 +266,11 @@ pattern = "accessor"
 reason = "It answers with what a running instance said and holds only the handle that retains it."
 
 [[type]]
+name = "SharedPublicSlingTier"
+pattern = "accessor"
+reason = "It answers with the one published runtime the scenarios that only read from it share, starting it on the first ask and holding nothing else. A scenario that changes the instance itself starts its own instead, so what this holds is never something a scenario has altered underneath another."
+
+[[type]]
 name = "QuickstartTier"
 pattern = "accessor"
 reason = "It answers with what its preconditions are, and on any machine but its holder's it answers that they are not met."
