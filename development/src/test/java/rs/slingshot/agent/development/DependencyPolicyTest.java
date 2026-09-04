@@ -88,13 +88,20 @@ final class DependencyPolicyTest {
     }
 
     @Test
-    @DisplayName("only the preparation commands say they reach the network, and each is a preparation")
+    @DisplayName("what reaches the network is a preparation or the publish, and nothing else")
     void onlyPreparationCommandsReachTheNetwork() {
-        assertEquals(List.of("prepare_interop_images", "prepare_locked_dependency_cache"),
+        // Two preparations and one publish. A preparation acquires what the gate then verifies
+        // without acquiring; a publish hands finished bytes to a registry, which is the one other
+        // thing that cannot be done without reaching one. Everything else here is offline, and
+        // what makes that true is that the gate invokes none of these - which the gate's own test
+        // asserts rather than this one.
+        assertEquals(List.of("prepare_interop_images", "prepare_locked_dependency_cache",
+                        "publish_release"),
                 DependencyPolicy.networkReachingScripts(REPOSITORY));
         DependencyPolicy.networkReachingScripts(REPOSITORY).forEach(command ->
-                assertTrue(command.startsWith("prepare_"),
-                        command + " reaches the network and is not a preparation command"));
+                assertTrue(command.startsWith("prepare_") || "publish_release".equals(command),
+                        command + " reaches the network and is neither a preparation nor the"
+                                + " publish, so it is a build that depends on somebody's server"));
     }
 
     @Test

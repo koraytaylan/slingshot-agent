@@ -19,6 +19,11 @@ on:
         description: the release to build
         required: true
         type: string
+      publish:
+        description: hand the built set to the registry, where it waits for a person to release it
+        required: false
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -39,6 +44,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+          # Where the registry's own credentials are read from, by the names the publish step
+          # gives them. The token itself is a secret and reaches only that step's environment.
+          server-id: central
+          server-username: CENTRAL_USERNAME
+          server-password: CENTRAL_PASSWORD
       - name: prepare the locked dependency cache
         run: scripts/prepare_locked_dependency_cache
       - name: refuse a release whose preconditions are unmet
@@ -52,6 +62,23 @@ jobs:
         with:
           name: release-set
           path: support/release-artifacts.toml
+
+      # The key is the owner's and lives in this run and nowhere else. It is imported after the set
+      # has been built and proved reproducible, so nothing is signed that was not first checked.
+      - name: take up the signing key for this run
+        if: ${{ inputs.publish }}
+        env:
+          SIGNING_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$SIGNING_KEY" | gpg --batch --import
+          gpg --list-secret-keys --keyid-format=long
+      - name: hand the set to the registry
+        if: ${{ inputs.publish }}
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: scripts/publish_release
 
   attest:
     name: say what the bytes are

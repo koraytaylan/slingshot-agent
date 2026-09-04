@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# Signs the release set and hands it to the registry.
+#
+# THIS COMMAND REACHES THE NETWORK. It is one of the three in this repository that does, and it says
+# so above and again when it runs. The gate never invokes it, and neither does anything a
+# contributor runs: it is named by the release workflow and by a person who decided to publish.
+#
+# It uploads and stops. Whether these bytes are the ones somebody meant to publish is a decision an
+# owner makes by looking at them, so the deployment is left waiting in the registry for a person to
+# release rather than released by a build that cannot know.
+#
+# What it needs, it takes from the environment rather than from any file here: the signing key is
+# the owner's and never appears in this repository, and the registry token is a credential.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
+readonly INVENTORY="${REPOSITORY_ROOT}/support/release-artifacts.toml"
+readonly EXIT_USAGE=2
+readonly EXIT_NOT_BUILT=3
+
+if [[ $# -ne 0 ]]; then
+    printf 'publish_release takes no argument, and was given: %s\n' "$*" >&2
+    exit "${EXIT_USAGE}"
+fi
+
+printf 'This command reaches the network. It signs what %s records and uploads it\n' "${INVENTORY}"
+printf 'to the registry, where it waits for a person to release it.\n\n'
+
+# What is published is what was built and checked, not whatever a fresh build would produce now.
+if ! grep -q 'digest = "sha256:' "${INVENTORY}"; then
+    printf 'nothing has been built and verified. Run scripts/build_release_artifacts and\n' >&2
+    printf 'scripts/verify_release_artifacts first: a release nobody proved reproducible is a\n' >&2
+    printf 'release whose bytes nobody can produce again.\n' >&2
+    exit "${EXIT_NOT_BUILT}"
+fi
+
+"${REPOSITORY_ROOT}/mvnw" --batch-mode --no-transfer-progress \
+    -Dmaven.repo.local="${CACHE_DIRECTORY}" \
+    -f "${REPOSITORY_ROOT}/pom.xml" \
+    -Ppublish \
+    -DskipTests -Djacoco.skip=true \
+    deploy
+
+printf '\nUploaded. It is waiting in the registry for somebody to look at it and release it.\n'

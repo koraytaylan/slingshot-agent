@@ -66,7 +66,10 @@ final class QualityGateTest {
     @DisplayName("the gate reaches nothing, and invokes no command that does")
     void theGateReachesNothing() {
         assertEquals("", gate().reachesNothing(REPOSITORY).render());
-        assertEquals(List.of("prepare_interop_images", "prepare_locked_dependency_cache"),
+        // Three now, and the gate invokes none of them. Publishing reaches a registry because
+        // that is what publishing is; what matters is that it is never something the gate does.
+        assertEquals(List.of("prepare_interop_images", "prepare_locked_dependency_cache",
+                        "publish_release"),
                 DependencyPolicy.networkReachingScripts(REPOSITORY));
     }
 

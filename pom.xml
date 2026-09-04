@@ -173,6 +173,8 @@
     <maven.dependency.plugin.version>3.9.0</maven.dependency.plugin.version>
     <maven.javadoc.plugin.version>3.12.0</maven.javadoc.plugin.version>
     <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
+    <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
+    <central.publishing.plugin.version>0.7.0</central.publishing.plugin.version>
     <bnd.plugin.version>7.4.0</bnd.plugin.version>
     <maven.checkstyle.plugin.version>3.6.0</maven.checkstyle.plugin.version>
     <checkstyle.version>14.1.0</checkstyle.version>
@@ -786,4 +788,50 @@
       </plugin>
     </plugins>
   </build>
+
+  <!--
+    Publishing, which is the one thing here that reaches a registry and the one thing that needs a
+    key. It is a profile rather than part of the build so that nothing a contributor or the gate
+    runs will sign anything or talk to a registry: scripts/publish_release names this profile, and
+    it is the only thing that does.
+  -->
+  <profiles>
+    <profile>
+      <id>publish</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>${maven.gpg.plugin.version}</version>
+            <executions>
+              <execution>
+                <id>signature</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${central.publishing.plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <!--
+                Uploaded and left for a person to release. A build that published automatically
+                would be a build deciding that these bytes are the ones somebody meant, which is a
+                decision an owner makes by looking at them.
+              -->
+              <autoPublish>false</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
 </project>
