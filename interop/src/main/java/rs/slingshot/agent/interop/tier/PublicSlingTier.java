@@ -165,18 +165,16 @@ public final class PublicSlingTier implements InteropTier {
         // otherwise be refused for making a group that is already there, which is a failure about
         // the second start rather than about the product.
         if (requests.readAsAuthenticatedUser(address() + GROUP_PATH).statusCode() >= BAD_REQUEST) {
-            final HttpResponse<String> made = requests.submitWithReferrer(
-                    address() + GROUP_CREATE_PATH, List.of(":name", PERMITTED_GROUP),
-                    address() + "/");
+            final HttpResponse<String> made = submitOnceRegistered(GROUP_CREATE_PATH,
+                    List.of(":name", PERMITTED_GROUP));
             if (made.statusCode() >= BAD_REQUEST) {
                 return Optional.of("the group " + PERMITTED_GROUP + " could not be made on this"
                         + " instance, and every submission is refused until it exists: "
                         + made.statusCode() + " " + said(made));
             }
         }
-        final HttpResponse<String> joined = requests.submitWithReferrer(
-                address() + GROUP_MEMBERSHIP_PATH,
-                List.of(":member", AUTHENTICATED_CALLER_PATH), address() + "/");
+        final HttpResponse<String> joined = submitOnceRegistered(GROUP_MEMBERSHIP_PATH,
+                List.of(":member", AUTHENTICATED_CALLER_PATH));
         if (joined.statusCode() >= BAD_REQUEST) {
             return Optional.of("the caller was not put into " + PERMITTED_GROUP + ", and a caller"
                     + " in none of the permitted groups is refused before a body is read: "
@@ -200,12 +198,12 @@ public final class PublicSlingTier implements InteropTier {
                 < BAD_REQUEST) {
             return Optional.empty();
         }
-        final HttpResponse<String> made = requests.submitWithReferrer(address() + USER_CREATE_PATH,
-                // The name carries the prefix the posting servlet reads and the password does
-                // not, which is the user manager's own spelling rather than a choice made here.
+        // The name carries the prefix the posting servlet reads and the password does not, which
+        // is the user manager's own spelling rather than a choice made here.
+        final HttpResponse<String> made = submitOnceRegistered(USER_CREATE_PATH,
                 List.of(":name", TierRequests.UNPERMITTED_USER,
                         "pwd", TierRequests.UNPERMITTED_PASSWORD,
-                        "pwdConfirm", TierRequests.UNPERMITTED_PASSWORD), address() + "/");
+                        "pwdConfirm", TierRequests.UNPERMITTED_PASSWORD));
         if (made.statusCode() >= BAD_REQUEST) {
             return Optional.of("the caller nobody permits could not be made on this instance, and"
                     + " what is outside every group would then be nobody at all: "
@@ -383,6 +381,33 @@ public final class PublicSlingTier implements InteropTier {
                 .replaceAll("\\s+", " ").strip();
         return flattened.length() <= KEPT_CHARACTERS ? flattened
                 : flattened.substring(0, KEPT_CHARACTERS) + "...";
+    }
+
+    /** What a servlet nobody has registered yet answers, which is a moment and not a refusal. */
+    private static final int NOT_FOUND = 404;
+
+    /**
+     * Submits to a platform servlet, waiting for the servlet to exist.
+     *
+     * <p>The platform registers its own servlets as its bundles start, and the ones this tier uses
+     * arrive at their own pace: a readiness condition that named one of them was satisfied while
+     * the next was still absent. A 404 here is that moment rather than an answer, so it is waited
+     * out; anything else is what the platform has to say and is returned as it is.</p>
+     *
+     * @param path where to submit
+     * @param fields the form fields, as name and value in turn
+     * @return what the platform answered once there was something there to answer
+     */
+    private HttpResponse<String> submitOnceRegistered(String path, List<String> fields) {
+        HttpResponse<String> answered =
+                requests.submitWithReferrer(address() + path, fields, address() + "/");
+        for (int attempt = 0;
+                attempt < INSTALL_ATTEMPTS && answered.statusCode() == NOT_FOUND;
+                attempt++) {
+            pause();
+            answered = requests.submitWithReferrer(address() + path, fields, address() + "/");
+        }
+        return answered;
     }
 
     /** The field the platform console takes a bundle under. */
