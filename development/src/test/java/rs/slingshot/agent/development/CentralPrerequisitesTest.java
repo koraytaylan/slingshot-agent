@@ -26,6 +26,16 @@ final class CentralPrerequisitesTest {
 
     private static final Path REPOSITORY = RepositoryTree.locate();
 
+    /**
+     * A tree that is not ready to publish: a snapshot version, and an owner who supplied nothing.
+     *
+     * <p>Every refusal here was read from this repository while that was true of it. An owner has
+     * since supplied what only an owner can, and the version is a release, so the refusals are
+     * asked of a tree where they still apply and this repository is asked what it now says.</p>
+     */
+    private static final Path NOTHING_READY = REPOSITORY.resolve(
+            "development/src/test/resources/fixtures/central-prerequisites/nothing-ready");
+
     /** How many prerequisites this repository declares. */
     private static final int DECLARED = 10;
 
@@ -43,7 +53,7 @@ final class CentralPrerequisitesTest {
     @Test
     @DisplayName("a snapshot version is refused separately, because it is not a missing field")
     void asnapshotIsItsOwnRefusal() {
-        assertTrue(prerequisites().against(REPOSITORY).findings().stream()
+        assertTrue(prerequisites().against(NOTHING_READY).findings().stream()
                         .anyMatch(finding -> CentralPrerequisites.A_SNAPSHOT_VERSION
                                 .equals(finding.rule())),
                 "a snapshot version was accepted, and a version that means something different"
@@ -53,7 +63,7 @@ final class CentralPrerequisitesTest {
     @Test
     @DisplayName("every failure is reported at once rather than the first")
     void everyfailureIsReportedAtOnce() {
-        assertTrue(prerequisites().against(REPOSITORY).findings().size() > 1,
+        assertTrue(prerequisites().against(NOTHING_READY).findings().size() > 1,
                 "one failure was reported, and somebody about to release wants the list rather"
                         + " than one line of it per attempt");
     }
@@ -87,7 +97,7 @@ final class CentralPrerequisitesTest {
                                 .equals(finding.rule()))
                         .toList(),
                 "the model declares a name and the check said it does not");
-        assertTrue(!prerequisitesAt("signature.toml").against(REPOSITORY).findings().isEmpty(),
+        assertTrue(!prerequisitesAt("signature.toml").against(NOTHING_READY).findings().isEmpty(),
                 "nobody is declared as signing and the check said somebody is");
     }
 
