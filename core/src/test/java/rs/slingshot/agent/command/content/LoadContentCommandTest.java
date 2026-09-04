@@ -77,7 +77,7 @@ final class LoadContentCommandTest {
             assertEquals(kind, RepositoryValueKind.of(kind.code()).orElseThrow(),
                     kind + " does not map back to itself from the repository's own code");
             assertTrue(!kind.spelling().isBlank(), kind + " is spelled as nothing");
-            assertTrue(RepositoryValueKind.documentValueOf(kind, "1") != null,
+            assertInstanceOf(DocumentValue.class, RepositoryValueKind.documentValueOf(kind, "1"),
                     kind + " renders no value at all");
         }
         assertEquals(ELEVEN, RepositoryValueKind.values().length,

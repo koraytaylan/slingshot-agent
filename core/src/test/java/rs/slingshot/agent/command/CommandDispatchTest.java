@@ -126,15 +126,7 @@ final class CommandDispatchTest {
         assertInstanceOf(CommandHandler.Produced.class, produced);
         assertEquals(0, ((CommandHandler.Produced) produced).result().members().size(),
                 "the fixture handler answered with something in it");
-        final CommandHandler failing = new CommandHandler() {
-
-            @Override
-            public Answer run(DocumentValue.Mapping arguments,
-                              org.apache.sling.api.resource.ResourceResolver resolver,
-                              CallerContext context) {
-                return new Failed("not_found", "nothing at the address this asked about");
-            }
-        };
+        final CommandHandler failing = new FailingHandler();
         final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
                 failing.run(new DocumentValue.Mapping(new LinkedHashMap<>()), null, null),
                 "a handler that failed answered with a result");
@@ -223,5 +215,16 @@ final class CommandDispatchTest {
             walked = walked.getParent();
         }
         return java.util.Objects.requireNonNull(walked, "this suite is not inside the repository");
+    }
+
+    /** A handler that answers with a failure, named rather than anonymous so it keeps nothing. */
+    private static final class FailingHandler implements CommandHandler {
+
+        @Override
+        public Answer run(DocumentValue.Mapping arguments,
+                          org.apache.sling.api.resource.ResourceResolver resolver,
+                          CallerContext context) {
+            return new Failed("not_found", "nothing at the address this asked about");
+        }
     }
 }
