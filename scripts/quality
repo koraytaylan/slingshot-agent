@@ -47,44 +47,87 @@ stage pinned-interop-images "${REPOSITORY_ROOT}/scripts/verify_interop_images"
 stage formatting build checkstyle:check -pl core,aem,development,interop
 stage compilation build compile -pl core,aem,development,interop
 stage static-analysis build compile pmd:check spotbugs:check -pl core,aem,development,interop
-stage source-policy build test -Dtest=SourcePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage nullability build test -Dtest=NullabilityPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage api-shape build test -Dtest=ApiShapePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage method-shape build test -Dtest=MethodShapePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage documentation build test -Dtest=JavadocPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage allocation build test -Dtest=AllocationPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage adobe-practice build test -Dtest=AdobePracticePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+# Every check below decides from this one pass rather than starting a build of its own.
+#
+# The gate runs every stage every time, and it did: thirty-six times, each one a fresh Maven, a
+# fresh reactor scan and a fresh JVM to run a single test class that the run before it had already
+# compiled. That is not thirty-six checks, it is one suite and thirty-five restarts - it was over a
+# fifth of the gate's hour, and none of it decided anything the first pass had not.
+#
+# So the suite runs once and each stage is held to its own result. A stage that fails still fails by
+# name, out of the report the runner wrote for that class, and a stage whose class produced no
+# report at all fails too - because a check that did not run is not a check that passed.
+run_the_policy_suite() {
+    # Cleared first, so a report that is there afterwards is one this run wrote. Reading a report
+    # left by an earlier run is how a stage reports a pass for a check that never ran.
+    rm -rf "${REPOSITORY_ROOT}/development/target/surefire-reports"
+    build test -Dtest=SourcePolicyTest,NullabilityPolicyTest,ApiShapePolicyTest,MethodShapePolicyTest,JavadocPolicyTest,AllocationPolicyTest,AdobePracticePolicyTest,DependencyPolicyTest,ImportedPackagesTest,ModuleDirectionTest,StatusMappingCoverageTest,ScenarioInventoryTest,CommandConformanceTest,MutationCoverageTest,ControlCapabilityCoverageTest,RegistryCompletenessTest,CommandReferenceTest,PlatformCoverageTest,OverlayAuditTest,FuzzTargetInventoryTest,ParserFuzzTest,TokenStreamFuzzTest,CommandArgumentFuzzTest,StateMachinePropertyTest,AcceptanceMatrixTest,PresentStateTest,WorkflowPolicyTest,InteropWorkflowTest,ReleaseWorkflowTest,ReleaseArtifactsTest,BillOfMaterialsTest,PublicationAuthorityTest,CentralPrerequisitesTest,AdvisoryGateTest,WireCompatibilityTest,PlatformFloorTest,EscalationSurfaceTest,InjectionAuditTest,ExposureSurfaceTest,ClockUsagePolicyTest,ConsoleSurfaceTest,ConsoleAccessibilityTest,LogStatementPolicyTest,FrontEndFootprintTest \
+        -pl development -am -Dsurefire.failIfNoSpecifiedTests=false > "${POLICY_SUITE_OUTPUT}" 2>&1 \
+        || true
+}
+
+decided() {
+    local passed=0
+    for class in "$@"; do
+        local report
+        report="$(find "${REPOSITORY_ROOT}/development/target/surefire-reports" \
+            -name "TEST-*.${class}.xml" -print -quit 2>/dev/null)"
+        if [[ -z "${report}" ]]; then
+            printf '%s produced no result at all; the suite output is in %s\n' \
+                "${class}" "${POLICY_SUITE_OUTPUT}" >&2
+            passed=1
+            continue
+        fi
+        if ! grep -q 'failures="0"' "${report}" || ! grep -q 'errors="0"' "${report}"; then
+            printf '%s refused this change; its report is %s\n' "${class}" "${report}" >&2
+            passed=1
+        fi
+    done
+    return "${passed}"
+}
+
+readonly POLICY_SUITE_OUTPUT="${REPOSITORY_ROOT}/development/target/policy-suite.log"
+
+run_the_policy_suite
+
+stage source-policy decided SourcePolicyTest
+stage nullability decided NullabilityPolicyTest
+stage api-shape decided ApiShapePolicyTest
+stage method-shape decided MethodShapePolicyTest
+stage documentation decided JavadocPolicyTest
+stage allocation decided AllocationPolicyTest
+stage adobe-practice decided AdobePracticePolicyTest
 stage tests-and-coverage-floor build verify
 stage package-analysis build verify -pl all -am -DskipTests -Djacoco.skip=true
-stage dependency-policy build test -Dtest=DependencyPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage imported-package-footprint build test -Dtest=ImportedPackagesTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage module-direction build test -Dtest=ModuleDirectionTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage status-mapping-coverage build test -Dtest=StatusMappingCoverageTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage interop-coverage build test -Dtest=ScenarioInventoryTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage command-conformance build test -Dtest=CommandConformanceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage mutation-coverage build test -Dtest=MutationCoverageTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage control-capability build test -Dtest=ControlCapabilityCoverageTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage registry-completeness build test -Dtest=RegistryCompletenessTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage command-reference build test -Dtest=CommandReferenceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage platform-coverage build test -Dtest=PlatformCoverageTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage overlay-audit build test -Dtest=OverlayAuditTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage fuzz-target-inventory build test -Dtest=FuzzTargetInventoryTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage parser-and-token-fuzzing build test -Dtest=ParserFuzzTest,TokenStreamFuzzTest,CommandArgumentFuzzTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage state-machine-properties build test -Dtest=StateMachinePropertyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage acceptance-and-present-state build test -Dtest=AcceptanceMatrixTest,PresentStateTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage workflow-policy build test -Dtest=WorkflowPolicyTest,InteropWorkflowTest,ReleaseWorkflowTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage release-contract build test -Dtest=ReleaseArtifactsTest,BillOfMaterialsTest,PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage advisory-gate build test -Dtest=AdvisoryGateTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage wire-compatibility build test -Dtest=WireCompatibilityTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage platform-floor build test -Dtest=PlatformFloorTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage escalation-surface build test -Dtest=EscalationSurfaceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage injection-audit build test -Dtest=InjectionAuditTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage exposure-surface build test -Dtest=ExposureSurfaceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage clock-usage-policy build test -Dtest=ClockUsagePolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage console-surface build test -Dtest=ConsoleSurfaceTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage console-accessibility build test -Dtest=ConsoleAccessibilityTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage log-statement-policy build test -Dtest=LogStatementPolicyTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
-stage front-end-footprint build test -Dtest=FrontEndFootprintTest -pl development -am -Dsurefire.failIfNoSpecifiedTests=false
+stage dependency-policy decided DependencyPolicyTest
+stage imported-package-footprint decided ImportedPackagesTest
+stage module-direction decided ModuleDirectionTest
+stage status-mapping-coverage decided StatusMappingCoverageTest
+stage interop-coverage decided ScenarioInventoryTest
+stage command-conformance decided CommandConformanceTest
+stage mutation-coverage decided MutationCoverageTest
+stage control-capability decided ControlCapabilityCoverageTest
+stage registry-completeness decided RegistryCompletenessTest
+stage command-reference decided CommandReferenceTest
+stage platform-coverage decided PlatformCoverageTest
+stage overlay-audit decided OverlayAuditTest
+stage fuzz-target-inventory decided FuzzTargetInventoryTest
+stage parser-and-token-fuzzing decided ParserFuzzTest TokenStreamFuzzTest CommandArgumentFuzzTest
+stage state-machine-properties decided StateMachinePropertyTest
+stage acceptance-and-present-state decided AcceptanceMatrixTest PresentStateTest
+stage workflow-policy decided WorkflowPolicyTest InteropWorkflowTest ReleaseWorkflowTest
+stage release-contract decided ReleaseArtifactsTest BillOfMaterialsTest PublicationAuthorityTest CentralPrerequisitesTest
+stage advisory-gate decided AdvisoryGateTest
+stage wire-compatibility decided WireCompatibilityTest
+stage platform-floor decided PlatformFloorTest
+stage escalation-surface decided EscalationSurfaceTest
+stage injection-audit decided InjectionAuditTest
+stage exposure-surface decided ExposureSurfaceTest
+stage clock-usage-policy decided ClockUsagePolicyTest
+stage console-surface decided ConsoleSurfaceTest
+stage console-accessibility decided ConsoleAccessibilityTest
+stage log-statement-policy decided LogStatementPolicyTest
+stage front-end-footprint decided FrontEndFootprintTest
 stage public-interop-tier build verify -pl interop -am -DskipTests -Djacoco.skip=true
 
 printf '\n== gate passed\n'
