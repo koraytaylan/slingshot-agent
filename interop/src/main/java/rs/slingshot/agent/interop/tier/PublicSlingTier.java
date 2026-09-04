@@ -221,6 +221,17 @@ public final class PublicSlingTier implements InteropTier {
      */
     private static final int SETTLING_ATTEMPTS = 20;
 
+    /**
+     * What the engine calls the container behind a tier, where this is the kind of tier it is.
+     *
+     * @param tier the tier
+     * @return the identifier, or empty where it is some other kind of tier
+     */
+    public static String identifierOf(InteropTier tier) {
+        return tier instanceof final PublicSlingTier published
+                ? published.handle.identifier() : "";
+    }
+
     @Override
     public String name() {
         return NAME;
