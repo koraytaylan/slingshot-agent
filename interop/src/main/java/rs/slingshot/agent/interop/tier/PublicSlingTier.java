@@ -399,15 +399,18 @@ public final class PublicSlingTier implements InteropTier {
      * @return what the platform answered once there was something there to answer
      */
     private HttpResponse<String> submitOnceRegistered(String path, List<String> fields) {
-        HttpResponse<String> answered =
-                requests.submitWithReferrer(address() + path, fields, address() + "/");
-        for (int attempt = 0;
-                attempt < INSTALL_ATTEMPTS && answered.statusCode() == NOT_FOUND;
-                attempt++) {
+        return IntStream.range(0, INSTALL_ATTEMPTS)
+                .mapToObj(attempt -> submitted(attempt, path, fields))
+                .filter(answered -> answered.statusCode() != NOT_FOUND)
+                .findFirst()
+                .orElseGet(() -> submitted(0, path, fields));
+    }
+
+    private HttpResponse<String> submitted(int attempt, String path, List<String> fields) {
+        if (attempt > 0) {
             pause();
-            answered = requests.submitWithReferrer(address() + path, fields, address() + "/");
         }
-        return answered;
+        return requests.submitWithReferrer(address() + path, fields, address() + "/");
     }
 
     /** The field the platform console takes a bundle under. */
