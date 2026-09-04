@@ -44,13 +44,16 @@ final class PublicationBoundaryTest {
     }
 
     @Test
-    @DisplayName("this repository is in that state, and its own metadata says so")
-    void thisRepositoryIsUnpublished() {
+    @DisplayName("this repository's owner has supplied it all, and its own metadata says so")
+    void thisRepositoryMayPublish() {
         final PublicationBoundary boundary =
                 assertInstanceOf(PublicationBoundary.Loaded.class, PublicationBoundary.read(REPOSITORY),
                         "the publication metadata was refused").boundary();
-        assertInstanceOf(PublicationBoundary.Withheld.class, boundary.verdict(MAVEN));
-        assertInstanceOf(PublicationBoundary.Withheld.class, boundary.verdict(RELEASE_ASSET));
+        // Withheld was this repository's state while an owner had supplied nothing. What the two
+        // verdicts are held to now is the state an owner put it in, and the fixtures beside this
+        // test are where withholding is still proved.
+        assertInstanceOf(PublicationBoundary.Publishable.class, boundary.verdict(MAVEN));
+        assertInstanceOf(PublicationBoundary.Publishable.class, boundary.verdict(RELEASE_ASSET));
         assertEquals("", boundary.against(ReactorModel.at(REPOSITORY)).render());
         assertTrue(boundary.namespaceShape().isEmpty(),
                 "the declared group identifier does not reverse the declared domain");
