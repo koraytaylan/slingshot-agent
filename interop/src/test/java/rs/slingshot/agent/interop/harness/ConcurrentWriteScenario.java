@@ -88,7 +88,7 @@ final class ConcurrentWriteScenario {
         if (cluster != null && nodes != null) {
             cluster.stop(nodes);
         }
-        assertEquals(List.of(), ContainerHarness.at(REPOSITORY).leaked(),
+        assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "the cluster left a container running");
     }
 
