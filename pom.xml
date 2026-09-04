@@ -561,13 +561,13 @@
                   -->
                   <excludes>
                     <exclude>rs.slingshot.agent.interop.tier.ClientTier</exclude>
-                    <exclude>rs.slingshot.agent.interop.tier.ClientTier$Ready</exclude>
-                    <exclude>rs.slingshot.agent.interop.tier.ClientTier$Refused</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.ClientTier.Ready</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.ClientTier.Refused</exclude>
                     <exclude>rs.slingshot.agent.interop.tier.LiveAuthorTier</exclude>
-                    <exclude>rs.slingshot.agent.interop.tier.LiveAuthorTier$Permitted</exclude>
-                    <exclude>rs.slingshot.agent.interop.tier.UpgradeTier$Pinned</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.LiveAuthorTier.Permitted</exclude>
+                    <exclude>rs.slingshot.agent.interop.tier.UpgradeTier.Pinned</exclude>
                     <exclude>rs.slingshot.agent.interop.harness.CrashInjector</exclude>
-                    <exclude>rs.slingshot.agent.interop.harness.PlatformFaultInjector$Injection</exclude>
+                    <exclude>rs.slingshot.agent.interop.harness.PlatformFaultInjector.Injection</exclude>
                   </excludes>
                   <limits>
                     <limit>
