@@ -283,7 +283,11 @@ final class RepositoryAccessScenario {
     private static Path builtBundle() {
         try (var files = Files.list(REPOSITORY.resolve("core/target"))) {
             return files.filter(file -> String.valueOf(file.getFileName()).endsWith(".jar"))
-                    .filter(file -> !String.valueOf(file.getFileName()).contains("sources"))
+                    // Neither of the archives a release also builds: a javadoc jar handed to the
+                    // platform as a bundle is refused with a 500 that reads like the product
+                    // failing to install.
+                    .filter(file -> !String.valueOf(file.getFileName()).contains("sources")
+                            && !String.valueOf(file.getFileName()).contains("javadoc"))
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException(
                             "no bundle was built; run the reactor build first"));

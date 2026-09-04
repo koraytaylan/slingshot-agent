@@ -57,19 +57,6 @@
 
   <build>
     <plugins>
-      <!--
-        This module holds no documentable type yet: its only source is the package declaration. The
-        documentation generator treats a source tree with no public type as an error rather than an
-        empty result, so it is skipped here until the first task that puts a type in this module.
-        The documentation policy still reads every source in it, including this package's own.
-      -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-javadoc-plugin</artifactId>
-        <configuration>
-          <skip>true</skip>
-        </configuration>
-      </plugin>
       <plugin>
         <groupId>biz.aQute.bnd</groupId>
         <artifactId>bnd-maven-plugin</artifactId>
