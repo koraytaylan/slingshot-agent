@@ -16,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import rs.slingshot.agent.interop.tier.PublicSlingTier;
+import rs.slingshot.agent.interop.tier.SharedPublicSlingTier;
 import rs.slingshot.agent.interop.tier.TierRequests;
 
 /**
@@ -89,6 +90,10 @@ final class ClusterHandoverScenario {
 
     @BeforeAll
     void startTwoNodesAgainstOneRepository() throws InterruptedException {
+        // Three containers of its own, so the shared single-node runtime other scenarios keep
+        // alive is given back first. A cluster competing with it for the machine is a cluster
+        // whose startup reports the load rather than the product.
+        SharedPublicSlingTier.release();
         cluster = ClusterHarness.at(REPOSITORY);
         final ClusterHarness.Outcome outcome = cluster.start(STORE_IMAGE, NODE_IMAGE, NODE_PORT,
                 List.of(SHARED_REPOSITORY_MODE), List.of(), this::serving);
@@ -227,7 +232,11 @@ final class ClusterHandoverScenario {
     private boolean serving(ContainerHandle handle) {
         return requests.respondsBelow(handle.address() + "/system/console/bundles.json",
                         BAD_REQUEST)
-                && requests.respondsBelow(handle.address() + "/.json", SERVICE_UNAVAILABLE);
+                // Answering, not merely not erroring. A node that is still resolving nothing
+                // returns 404 here, which is under a server error and satisfied this while the
+                // node could not yet serve a caller - so readiness was reached before the thing
+                // readiness is for, and whichever test asked first failed instead.
+                && requests.respondsBelow(handle.address() + "/.json", BAD_REQUEST);
     }
 
     private static Path repositoryRoot() {

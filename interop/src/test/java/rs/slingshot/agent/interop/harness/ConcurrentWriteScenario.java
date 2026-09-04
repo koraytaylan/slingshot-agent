@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import rs.slingshot.agent.interop.tier.SharedPublicSlingTier;
 import rs.slingshot.agent.interop.tier.TierRequests;
 
 /**
@@ -71,6 +72,10 @@ final class ConcurrentWriteScenario {
 
     @BeforeAll
     void startTwoNodesAgainstOneRepository() {
+        // Three containers of its own, so the shared single-node runtime other scenarios keep
+        // alive is given back first. A cluster competing with it for the machine is a cluster
+        // whose startup reports the load rather than the product.
+        SharedPublicSlingTier.release();
         cluster = ClusterHarness.at(REPOSITORY);
         final ClusterHarness.Outcome outcome = cluster.start(STORE_IMAGE, NODE_IMAGE, NODE_PORT,
                 List.of(SHARED_REPOSITORY_MODE), List.of(), this::serving);
@@ -176,7 +181,7 @@ final class ConcurrentWriteScenario {
     private boolean serving(ContainerHandle handle) {
         return requests.respondsBelow(handle.address() + "/system/console/bundles.json",
                         BAD_REQUEST)
-                && requests.respondsBelow(handle.address() + "/.json", SERVICE_UNAVAILABLE)
+                && requests.respondsBelow(handle.address() + "/.json", BAD_REQUEST)
                 && requests.submitRespondsBelow(handle.address() + "/",
                         List.of(":operation", "nop", ":nopstatus", "200"), SERVICE_UNAVAILABLE);
     }
