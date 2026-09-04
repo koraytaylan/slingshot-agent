@@ -46,7 +46,9 @@ public final class ClusterHarness {
      * @return the cluster harness
      */
     public static ClusterHarness at(Path root) {
-        return new ClusterHarness(ContainerHarness.at(root));
+        // A cluster starts published runtimes and a document store, not a quickstart, so it is
+        // held to what those take. The five-minute ceiling is for the tier nothing here starts.
+        return new ClusterHarness(ContainerHarness.at(root).forClusteredRuntime());
     }
 
     /**
@@ -137,7 +139,7 @@ public final class ClusterHarness {
         harness.createNetwork(network);
         final ContainerHarness.Outcome store = harness.start(storeImage, DOCUMENT_STORE_PORT,
                 List.of(), List.of(), new ContainerHarness.Attachment(network, STORE_ALIAS),
-                handle -> true);
+                this::accepting);
         if (store instanceof final ContainerHarness.Refused refused) {
             harness.removeNetwork(network);
             return new Refused(refused.failure(), "the shared document store: " + refused.detail());
@@ -148,6 +150,25 @@ public final class ClusterHarness {
         environment.add("MONGODB_HOST=" + STORE_ALIAS);
         environment.add("MONGODB_PORT=" + DOCUMENT_STORE_PORT);
         return nodes(nodeImage, nodePort, nodeCommand, environment, network, storeHandle, ready);
+    }
+
+    /** What the document store writes once it is listening for connections. */
+    private static final String STORE_IS_LISTENING = "Waiting for connections";
+
+    /**
+     * Whether the document store is listening yet, asked of the store itself.
+     *
+     * <p>Created and listening are not the same moment, and this waited for the first while meaning
+     * the second. A node brought up against a store that is still opening its own files cannot
+     * reach the repository it is supposed to share, never finishes starting, and is reported as a
+     * node that would not start - so the store's race was read as the node's failure, on whichever
+     * node happened to lose it.</p>
+     *
+     * @param handle the store's container
+     * @return whether it has said it is waiting for connections
+     */
+    private boolean accepting(ContainerHandle handle) {
+        return harness.capturedOutput(handle).contains(STORE_IS_LISTENING);
     }
 
     private Outcome nodes(String nodeImage, int nodePort, List<String> nodeCommand,

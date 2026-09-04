@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import rs.slingshot.agent.interop.tier.SharedPublicSlingTier;
 import rs.slingshot.agent.interop.tier.TierRequests;
 
 /**
@@ -81,6 +82,10 @@ final class CrashConsistencyScenario {
 
     @BeforeAll
     void startTwoNodesAgainstOneStore() {
+        // Three containers of its own, so the shared single-node runtime other scenarios keep
+        // alive is given back first. A cluster competing with it for the machine is a cluster
+        // whose startup reports the load rather than the product.
+        SharedPublicSlingTier.release();
         cluster = ClusterHarness.at(REPOSITORY);
         injector = CrashInjector.alongside(cluster.harness());
         final ClusterHarness.Outcome outcome = cluster.start(STORE_IMAGE, NODE_IMAGE, NODE_PORT,
@@ -152,7 +157,7 @@ final class CrashConsistencyScenario {
 
     private boolean serving(ContainerHandle handle) {
         return requests.respondsBelow(handle.address() + "/system/console/bundles", BAD_REQUEST)
-                && requests.respondsBelow(handle.address() + "/.json", SERVICE_UNAVAILABLE)
+                && requests.respondsBelow(handle.address() + "/.json", BAD_REQUEST)
                 && requests.submitRespondsBelow(handle.address() + "/var", CHANGES_NOTHING,
                         SERVICE_UNAVAILABLE);
     }
