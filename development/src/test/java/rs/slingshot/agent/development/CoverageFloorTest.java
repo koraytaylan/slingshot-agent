@@ -91,9 +91,18 @@ final class CoverageFloorTest {
     }
 
     @Test
-    @DisplayName("nothing is excluded by default")
-    void nothingIsExcludedByDefault() {
-        assertEquals(List.of(), policy().exclusions());
+    @DisplayName("every exclusion names one class of a tier this gate does not run, with its reason")
+    void everyExclusionIsATierTheGateDoesNotRun() {
+        assertFalse(policy().exclusions().isEmpty(),
+                "the policy excludes nothing, and this proves nothing about what it excludes");
+        policy().exclusions().forEach(excluded -> {
+            assertFalse(excluded.reason().isBlank(),
+                    excluded.className() + " is excluded and records no reason");
+            assertTrue(excluded.className().startsWith("rs.slingshot.agent.interop."),
+                    excluded.className() + " is excluded and is not harness code. Only a class of a"
+                            + " tier this gate does not run may be, because that is the one kind"
+                            + " whose coverage this gate cannot produce.");
+        });
     }
 
     @Test
