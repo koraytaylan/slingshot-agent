@@ -863,7 +863,7 @@ reason = "The one reader every policy and support document is loaded through."
 [[artifact]]
 group = "rs.slingshot"
 name = "slingshot-agent-aem"
-version = "0.1.0-SNAPSHOT"
+version = "0.1.0"
 scope = "test"
 modules = ["development", "interop"]
 reason = "The Adobe bundle, taken by the two tooling modules at test scope so a check can read its produced archive and a scenario can drive its types."
@@ -871,7 +871,7 @@ reason = "The Adobe bundle, taken by the two tooling modules at test scope so a 
 [[artifact]]
 group = "rs.slingshot"
 name = "slingshot-agent-core"
-version = "0.1.0-SNAPSHOT"
+version = "0.1.0"
 scope = "test"
 modules = ["aem", "development", "interop"]
 reason = "The Sling-only bundle, taken by the Adobe bundle at provided scope and by the two tooling modules at test scope."

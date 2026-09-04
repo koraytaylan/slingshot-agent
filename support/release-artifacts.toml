@@ -26,55 +26,55 @@ reason = "Building and verifying are two commands because they are two acts: one
 [[artifact]]
 name = "slingshot-agent-all"
 kind = "container-package"
-file = "all/target/slingshot-agent-all-0.1.0-SNAPSHOT.zip"
-digest = ""
+file = "all/target/slingshot-agent-all-0.1.0.zip"
+digest = "sha256:16e368f75244f59f04ebda7aad7ea053090185db5667c1bcad0730501bfb6740"
 reason = "The one thing an operator installs. Everything else in this list is either inside it or is about it."
 
 [[artifact]]
 name = "slingshot-agent-core"
 kind = "bundle"
-file = "core/target/slingshot-agent-core-0.1.0-SNAPSHOT.jar"
-digest = ""
+file = "core/target/slingshot-agent-core-0.1.0.jar"
+digest = "sha256:f6b837fb102ec2957b160323dfc1c8f32a819050ae4fb76586e6461fdb57d14b"
 reason = "The Sling-only bundle, published separately because a customer project may embed it in a container of its own."
 
 [[artifact]]
 name = "slingshot-agent-aem"
 kind = "bundle"
-file = "aem/target/slingshot-agent-aem-0.1.0-SNAPSHOT.jar"
-digest = ""
+file = "aem/target/slingshot-agent-aem-0.1.0.jar"
+digest = "sha256:afdb68a127ae42b3d2b37314d744b776c6e9031c557730ca00bfea3af21ab8e0"
 reason = "The Adobe bundle, published for the same reason and separately because it resolves only on an Adobe runtime."
 
 [[artifact]]
 name = "slingshot-agent-core-sources"
 kind = "sources"
-file = "core/target/slingshot-agent-core-0.1.0-SNAPSHOT-sources.jar"
-digest = ""
+file = "core/target/slingshot-agent-core-0.1.0-sources.jar"
+digest = "sha256:9334bbcde7c15b21ab1a71cc6ea26bc58da0b1a8e3ccda7be81bcbb53d0ebdf0"
 reason = "The registry requires a sources archive for every published module, and somebody debugging inside their own author instance requires it rather more."
 
 [[artifact]]
 name = "slingshot-agent-aem-sources"
 kind = "sources"
-file = "aem/target/slingshot-agent-aem-0.1.0-SNAPSHOT-sources.jar"
-digest = ""
+file = "aem/target/slingshot-agent-aem-0.1.0-sources.jar"
+digest = "sha256:e2b688dffa9c589947c1afa74dead424b0f84a9cceba3edffc2cb4dd392385a6"
 reason = "The same, for the other bundle."
 
 [[artifact]]
 name = "slingshot-agent-core-javadoc"
 kind = "documentation"
-file = "core/target/slingshot-agent-core-0.1.0-SNAPSHOT-javadoc.jar"
-digest = ""
+file = "core/target/slingshot-agent-core-0.1.0-javadoc.jar"
+digest = "sha256:a6ac7b175d1df7a8f4a443cc77b8da61bb6a741ddb9809b5a19f1cfce57baf7d"
 reason = "The registry requires it, and it is generated under the same warnings-as-errors every other compilation here is."
 
 [[artifact]]
 name = "slingshot-agent-aem-javadoc"
 kind = "documentation"
-file = "aem/target/slingshot-agent-aem-0.1.0-SNAPSHOT-javadoc.jar"
-digest = ""
+file = "aem/target/slingshot-agent-aem-0.1.0-javadoc.jar"
+digest = "sha256:4ef9ac7a01a235cc8b4d76cab95a347017f5bbd7648adf4473ea00a3c273a490"
 reason = "The same, for the other bundle."
 
 [[artifact]]
 name = "bill-of-materials"
 kind = "components"
-file = "all/target/slingshot-agent-all-0.1.0-SNAPSHOT.bom.json"
-digest = ""
+file = "all/target/slingshot-agent-all-0.1.0.bom.json"
+digest = "sha256:b32b6b3433e9efd7848622be0ce5e645b4321531d539445938ea1ac655057a5e"
 reason = "What the release contains and what it binds to at run time. It is in this list rather than beside it so that it is verified the way every other artifact is: a components list nobody checked is a components list."
