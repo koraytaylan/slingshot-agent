@@ -121,7 +121,14 @@ public final class PublicSlingTier implements InteropTier {
                         && requests.respondsBelow(starting.address() + RENDERED_ROOT,
                                 SERVICE_UNAVAILABLE)
                         && requests.submitRespondsBelow(starting.address() + "/", CHANGES_NOTHING,
-                                SERVICE_UNAVAILABLE));
+                                SERVICE_UNAVAILABLE)
+                        // And the user manager, because the next thing this tier does is make a
+                        // group through it. A servlet that is not registered yet answers 404,
+                        // which is not a server error and would have satisfied every condition
+                        // above - so the tier was called ready and then refused by the very thing
+                        // it was about to use.
+                        && requests.respondsBelow(starting.address() + AUTHENTICATED_CALLER_PATH,
+                                BAD_REQUEST));
         if (started instanceof final ContainerHarness.Refused refused) {
             return new Refused(Failure.RUNTIME_NOT_READY,
                     refused.failure() + ": " + refused.detail());
