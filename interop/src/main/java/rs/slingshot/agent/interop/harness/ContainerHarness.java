@@ -41,16 +41,20 @@ public final class ContainerHarness {
     private final Duration readinessDeadline;
 
     private final Duration publishedRuntimeReadinessDeadline;
+
+    private final Duration clusteredRuntimeReadinessDeadline;
     private final Duration pollInterval;
     private final Duration stopGrace;
     private final long maximumCapturedBytes;
 
     private ContainerHarness(String engine, Duration readinessDeadline,
-                             Duration publishedRuntimeReadinessDeadline, Duration pollInterval,
+                             Duration publishedRuntimeReadinessDeadline,
+                             Duration clusteredRuntimeReadinessDeadline, Duration pollInterval,
                              Duration stopGrace, long maximumCapturedBytes) {
         this.engine = engine;
         this.readinessDeadline = readinessDeadline;
         this.publishedRuntimeReadinessDeadline = publishedRuntimeReadinessDeadline;
+        this.clusteredRuntimeReadinessDeadline = clusteredRuntimeReadinessDeadline;
         this.pollInterval = pollInterval;
         this.stopGrace = stopGrace;
         this.maximumCapturedBytes = maximumCapturedBytes;
@@ -121,6 +125,8 @@ public final class ContainerHarness {
                 milliseconds(values, "timing.readiness_deadline_milliseconds"),
                 millisecondsOr(values, "timing.published_runtime_readiness_deadline_milliseconds",
                         milliseconds(values, "timing.readiness_deadline_milliseconds")),
+                millisecondsOr(values, "timing.clustered_runtime_readiness_deadline_milliseconds",
+                        milliseconds(values, "timing.readiness_deadline_milliseconds")),
                 milliseconds(values, "timing.readiness_poll_interval_milliseconds"),
                 milliseconds(values, "timing.stop_grace_milliseconds"),
                 requiredNumber(values, "capture.maximum_captured_bytes"));
@@ -138,7 +144,22 @@ public final class ContainerHarness {
      */
     public ContainerHarness forPublishedRuntime() {
         return new ContainerHarness(engine, publishedRuntimeReadinessDeadline,
-                publishedRuntimeReadinessDeadline, pollInterval, stopGrace, maximumCapturedBytes);
+                publishedRuntimeReadinessDeadline, clusteredRuntimeReadinessDeadline, pollInterval,
+                stopGrace, maximumCapturedBytes);
+    }
+
+    /**
+     * The same harness, holding a start to what a cluster takes.
+     *
+     * <p>Three containers that have to find each other and agree on one repository, which is more
+     * than one runtime alone takes and far less than a quickstart.</p>
+     *
+     * @return a harness whose readiness deadline is a cluster's
+     */
+    public ContainerHarness forClusteredRuntime() {
+        return new ContainerHarness(engine, clusteredRuntimeReadinessDeadline,
+                publishedRuntimeReadinessDeadline, clusteredRuntimeReadinessDeadline, pollInterval,
+                stopGrace, maximumCapturedBytes);
     }
 
     /**
@@ -318,7 +339,11 @@ public final class ContainerHarness {
         return new Refused(Failure.NEVER_BECAME_READY, handle.identifier()
                 + " was still running and not ready after " + readinessDeadline.toMillis()
                 + " milliseconds; what it wrote is in " + handle.capturedOutput()
-                + " and ends: " + endOf(capturedOutput(handle)));
+                // Read from the file the capture above wrote, not by asking the engine again:
+                // the container is gone by now, and asking would replace what it said with the
+                // engine's complaint that there is nothing to ask.
+                + " and ends: " + endOf(ProcessRun.read(handle.capturedOutput(),
+                        maximumCapturedBytes)));
     }
 
     /** How much of what a container wrote travels with a refusal about it. */
@@ -431,7 +456,11 @@ public final class ContainerHarness {
         ProcessRun.of(bound, maximumCapturedBytes, List.of(engine, "stop", "--time",
                 String.valueOf(stopGrace.toSeconds()), identifier));
         final ProcessRun removed = ProcessRun.of(bound, maximumCapturedBytes,
-                List.of(engine, "rm", "--force", identifier));
+                // With its volumes. Both images declare one, so a removal that left them behind
+                // left two per container for the engine to carry - and this suite starts a hundred
+                // and ten of them. They are anonymous, nothing reads them again, and the engine
+                // gets slower the more of it there is to keep.
+                List.of(engine, "rm", "--force", "--volumes", identifier));
         awaitGone(identifier, bound);
         return removed;
     }
