@@ -24,6 +24,16 @@ final class PublicationAuthorityTest {
 
     private static final Path REPOSITORY = RepositoryTree.locate();
 
+    /**
+     * A tree where an owner has supplied nothing, which is what every refusal here is about.
+     *
+     * <p>The refusals were read from this repository while its own metadata was empty, so they
+     * stopped being about the boundary the day an owner filled it in. They are asked of a fixture
+     * that is still empty, and what this repository now says is asked of this repository.</p>
+     */
+    private static final Path NOTHING_SUPPLIED = REPOSITORY.resolve(
+            "development/src/test/resources/fixtures/publication-authority/nothing-supplied");
+
     /** The target that needs a verified namespace, which is the strictest of the two. */
     private static final String MAVEN_CENTRAL = "maven-central";
 
@@ -33,7 +43,7 @@ final class PublicationAuthorityTest {
     @Test
     @DisplayName("publication is refused while an owner has supplied nothing")
     void publicationIsRefusedWhileNothingIsSupplied() {
-        assertTrue(!PublicationAuthority.of(REPOSITORY, MAVEN_CENTRAL).findings().isEmpty(),
+        assertTrue(!PublicationAuthority.of(NOTHING_SUPPLIED, MAVEN_CENTRAL).findings().isEmpty(),
                 "publication to the registry was permitted with no metadata at all, which is a"
                         + " claim to a namespace this build made on its own");
     }
@@ -42,7 +52,7 @@ final class PublicationAuthorityTest {
     @DisplayName("every absent field is named at once rather than one per attempt")
     void everyabsentFieldIsNamedAtOnce() {
         final List<PolicyFinding> findings =
-                PublicationAuthority.of(REPOSITORY, MAVEN_CENTRAL).findings();
+                PublicationAuthority.of(NOTHING_SUPPLIED, MAVEN_CENTRAL).findings();
         assertTrue(findings.stream()
                         .filter(finding -> PublicationAuthority.AN_ABSENT_FIELD
                                 .equals(finding.rule()))
@@ -58,7 +68,7 @@ final class PublicationAuthorityTest {
     @Test
     @DisplayName("a namespace nobody verified is its own refusal, not just an absent field")
     void anunverifiedNamespaceIsItsOwnRefusal() {
-        assertTrue(PublicationAuthority.of(REPOSITORY, MAVEN_CENTRAL).findings().stream()
+        assertTrue(PublicationAuthority.of(NOTHING_SUPPLIED, MAVEN_CENTRAL).findings().stream()
                         .anyMatch(finding -> PublicationAuthority.AN_UNVERIFIED_NAMESPACE
                                 .equals(finding.rule())),
                 "an unverified namespace was reported as a missing field, and holding a domain is"
@@ -70,7 +80,7 @@ final class PublicationAuthorityTest {
     @DisplayName("the target that needs less is not blocked by what the other one needs")
     void onetargetIsNotBlockedByAnothersRequirements() {
         final List<PolicyFinding> asset =
-                PublicationAuthority.of(REPOSITORY, RELEASE_ASSET).findings();
+                PublicationAuthority.of(NOTHING_SUPPLIED, RELEASE_ASSET).findings();
         assertTrue(asset.stream()
                         .noneMatch(finding -> PublicationAuthority.AN_UNVERIFIED_NAMESPACE
                                 .equals(finding.rule())),
@@ -81,7 +91,7 @@ final class PublicationAuthorityTest {
     @Test
     @DisplayName("the automation says what it may act on rather than acting wherever it runs")
     void theautomationSaysWhatItMayActOn() {
-        assertTrue(PublicationAuthority.of(REPOSITORY, RELEASE_ASSET).findings().stream()
+        assertTrue(PublicationAuthority.of(NOTHING_SUPPLIED, RELEASE_ASSET).findings().stream()
                         .anyMatch(finding -> PublicationAuthority.NO_AUTOMATION_AUTHORITY
                                 .equals(finding.rule())),
                 "the automation may act wherever it happens to be running, which is a property of"
@@ -96,5 +106,16 @@ final class PublicationAuthorityTest {
                 "the fields an owner supplies are not the ones the targets require: " + fields);
         assertEquals(fields.stream().distinct().sorted().toList(), fields,
                 "a field is asked for twice, which reads as two things to supply");
+    }
+
+    @Test
+    @DisplayName("this repository's own metadata is complete, so publication is no longer refused")
+    void thisrepositoryMaySayWhatItPublishes() {
+        assertEquals(List.of(), PublicationAuthority.of(REPOSITORY, MAVEN_CENTRAL).findings(),
+                "an owner supplied the four things only an owner can and publication is still"
+                        + " refused, which is a boundary that stopped being about what it holds");
+        assertEquals(List.of(), PublicationAuthority.of(REPOSITORY, RELEASE_ASSET).findings(),
+                "the target an operator installs from is refused, and it needs less than the"
+                        + " other one does");
     }
 }

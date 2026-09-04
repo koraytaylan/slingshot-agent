@@ -12,11 +12,11 @@
 # repository is a claim about somebody's account, and no build should make one on its own.
 
 [repository]
-owner = "koraytaylan"
-name = "slingshot-agent"
+owner = ""
+name = ""
 reason = "The one repository this automation may act on. A workflow that ran against a fork with the same file would be a workflow acting somewhere nobody granted it."
 
 [[identity]]
 kind = "workflow-token"
-name = "github-actions[bot]"
+name = ""
 reason = "The identity a workflow acts as when it acts as itself. Named so that a change to it is somebody's decision rather than a default that moved."

@@ -18,24 +18,24 @@
 group = "rs.slingshot"
 domain = "slingshot.rs"
 # Set by an owner, after actually completing the registry's own verification, and by nobody else.
-verified = true
-verification_reference = "395f2dd2-cb3a-4834-afdd-b01ac91b0a47"
+verified = false
+verification_reference = ""
 
 [repository]
-url = "https://github.com/koraytaylan/slingshot-agent"
-connection = "scm:git:https://github.com/koraytaylan/slingshot-agent.git"
+url = ""
+connection = ""
 
 [developer]
-name = "Koray Taylan Davgana"
-identifier = "koraytaylan"
+name = ""
+identifier = ""
 
 # What the Maven repository checks every artifact against. A signature is a claim that these bytes
 # came from whoever holds this key, and a registry that accepted an unsigned artifact would be
 # accepting a claim nobody made. The identity is the owner's; the key itself never appears here or
 # anywhere else in this repository.
 [signing]
-identity = "Koray Taylan Davgana <koraytaylan@gmail.com>"
-public_key_fingerprint = "17976C0C5A0EFC14CAF68B09902E9E9C0A9654AB"
+identity = ""
+public_key_fingerprint = ""
 
 # The artifact has two audiences, so there are two targets rather than one: a project that embeds
 # this container package in its own build, and an operator who installs it by hand. Each declares
