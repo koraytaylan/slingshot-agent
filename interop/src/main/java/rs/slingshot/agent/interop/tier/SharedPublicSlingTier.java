@@ -4,6 +4,7 @@
 package rs.slingshot.agent.interop.tier;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.locks.Lock;
@@ -32,9 +33,8 @@ public final class SharedPublicSlingTier {
 
     private static final Lock LOCK = new ReentrantLock();
 
-    private static Optional<InteropTier> held = Optional.empty();
-
-    private static String identifier = "";
+    /** The one runtime, or nothing. Final, and what changes is what it holds. */
+    private static final List<InteropTier> HELD = new ArrayList<>();
 
     private SharedPublicSlingTier() {
     }
@@ -50,13 +50,12 @@ public final class SharedPublicSlingTier {
     public static InteropTier.Outcome get(Path root, String image, Path bundle) {
         LOCK.lock();
         try {
-            if (held.isPresent()) {
-                return new InteropTier.Running(held.get());
+            if (!HELD.isEmpty()) {
+                return new InteropTier.Running(HELD.getFirst());
             }
             final InteropTier.Outcome outcome = PublicSlingTier.start(root, image, bundle);
             if (outcome instanceof final InteropTier.Running running) {
-                held = Optional.of(running.tier());
-                identifier = PublicSlingTier.identifierOf(running.tier());
+                HELD.add(running.tier());
                 // Taken away when the runtime that asked for it ends, rather than by whichever
                 // scenario happened to run last - which is not something a scenario can know it is.
                 Runtime.getRuntime().addShutdownHook(new Thread(SharedPublicSlingTier::release));
@@ -75,7 +74,8 @@ public final class SharedPublicSlingTier {
     public static Optional<String> identifier() {
         LOCK.lock();
         try {
-            return identifier.isEmpty() ? Optional.empty() : Optional.of(identifier);
+            return HELD.isEmpty() ? Optional.empty()
+                    : Optional.of(PublicSlingTier.identifierOf(HELD.getFirst()));
         } finally {
             LOCK.unlock();
         }
@@ -102,9 +102,8 @@ public final class SharedPublicSlingTier {
     public static void release() {
         LOCK.lock();
         try {
-            held.ifPresent(InteropTier::stop);
-            held = Optional.empty();
-            identifier = "";
+            HELD.forEach(InteropTier::stop);
+            HELD.clear();
         } finally {
             LOCK.unlock();
         }
