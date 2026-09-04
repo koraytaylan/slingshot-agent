@@ -3,10 +3,13 @@
 
 # The public tier's runtime: Apache Sling on the Java runtime the supported deployments provide.
 #
-# The published Sling image carries Java 17, and every row in support/deployments.toml declares Java
-# 21. A bundle compiled to 21 does not resolve on a 17 runtime at all - the execution-environment
-# requirement is unsatisfiable - so a tier that ran the published image would prove the product
-# against a platform nobody this repository supports is running.
+# Every row in support/deployments.toml declares Java 21, and the runtime has to be able to both run
+# and read a bundle compiled to it. The published Sling 12 image can do neither: it carries Java 17,
+# on which a bundle compiled to 21 does not resolve at all, and ASM 9.2, which cannot parse a class
+# file of that release - so its own weaving hook throws inside a request, the request fails, and a
+# node in that state never becomes ready however long it is given. Sling 14 carries Java 21 and ASM
+# 9.9.1. The Java runtime is still layered in rather than inherited, so what this tier runs on is
+# the release the deployment matrix names rather than whatever the base image happened to ship.
 #
 # So this tier's image is the published one with the declared runtime layered in. Both halves are
 # pinned by digest, and the whole thing is built by scripts/prepare_interop_images rather than at
