@@ -12,6 +12,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -25,7 +28,10 @@ import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.HighWaterMark;
@@ -53,6 +59,8 @@ final class HighWaterServletTest {
     private static final String ANOTHER_SUBSCRIPTION = "following-daemon-two";
 
     private static final long NOW = 1788000000000L;
+
+    private Clock clock = Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC);
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
@@ -134,6 +142,28 @@ final class HighWaterServletTest {
                 asking("{\"daemon_subscription_identifier\":\"a name with spaces\"}").getStatus());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"2020-01-01T00:00:00Z", "2026-09-05T00:00:00Z",
+            "2040-12-31T23:59:59Z"})
+    @DisplayName("subscription expiry is inclusive at the retention boundary on every date")
+    void expiryBoundaryUsesTheSuppliedClock(String date) throws RepositoryException, IOException,
+            ServletException {
+        clock = Clock.fixed(Instant.parse(date), ZoneOffset.UTC);
+        final Session session = prepared();
+        assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
+                        clock.millis(), CONTRACT));
+        assertEquals(OperationLookupServlet.SERVED, ask(SUBSCRIPTION, 0).getStatus());
+        final long expiry = clock.millis() + CONTRACT.value(
+                ContractLimit.MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS);
+        clock = Clock.fixed(Instant.ofEpochMilli(expiry - 1), ZoneOffset.UTC);
+        assertEquals(OperationLookupServlet.SERVED, ask(SUBSCRIPTION, 0).getStatus());
+        clock = Clock.fixed(Instant.ofEpochMilli(expiry), ZoneOffset.UTC);
+        assertEquals(OperationLookupServlet.SERVED, ask(SUBSCRIPTION, 0).getStatus());
+        clock = Clock.fixed(Instant.ofEpochMilli(expiry + 1), ZoneOffset.UTC);
+        assertEquals(HighWaterServlet.EXPIRED, ask(SUBSCRIPTION, 0).getStatus());
+    }
+
     private MockSlingHttpServletResponse ask(String subscription, long generation)
             throws IOException, ServletException {
         return asking("{\"" + HighWaterServlet.SUBSCRIPTION + "\":\"" + subscription + "\""
@@ -150,7 +180,7 @@ final class HighWaterServletTest {
         ((MockRequestPathInfo) request.getRequestPathInfo())
                 .setResourcePath(HighWaterServlet.route().path());
         final MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
-        new HighWaterServlet().service(request, response);
+        new HighWaterServlet(clock).service(request, response);
         return response;
     }
 

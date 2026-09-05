@@ -13,7 +13,8 @@ This plan records a review of commit **11d5fc9fd04614b63c959ac0369748b32e34f126*
 - [Findings](FINDINGS.md): prioritised defects, triggers, consequences, source locations, and repair tasks.
 - [Evidence](EVIDENCE.md): observed outputs, reproducible probes, and the limits of each proof.
 - [Architecture and sequencing](ARCHITECTURE.md): invariants the repairs must establish.
-- [Status](STATUS.md): authored task inventory; implementation has not started.
+- [Status](STATUS.md): authored task inventory and direct implementation progress.
+- [Implementation evidence](EXECUTION.md): per-task review loops and validation results.
 - [Tasks](tasks/): one independently verifiable target per task, with bundle-local dependencies.
 
 ## Scope

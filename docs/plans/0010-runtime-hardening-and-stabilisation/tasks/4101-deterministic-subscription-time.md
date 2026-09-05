@@ -22,3 +22,5 @@ Finding(s): R16 in [FINDINGS.md](../FINDINGS.md).
 3. Run the affected tests at multiple simulated calendar dates and record the full gate's independent remaining failures.
 
 - **Done when:** The live and expired subscription cases pass at every simulated date and distinguish the expiry boundary without depending on the execution day's clock.
+
+Direct implementation and review evidence: [EXECUTION.md](../EXECUTION.md#4101--deterministic-subscription-time).
