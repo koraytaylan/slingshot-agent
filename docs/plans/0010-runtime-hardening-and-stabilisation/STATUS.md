@@ -1,14 +1,16 @@
 # Plan 0010 — Runtime Hardening and Stabilisation — Unregistered
 
-This is an authored plan, not an implementation completion record or a registered
-Makina run. No task has landed. Lifecycle fields are initialized as pending with no landing OIDs;
+This is an authored plan, not a registered Makina run. Direct implementation is tracked in
+[EXECUTION.md](EXECUTION.md), with review and validation evidence for each task. The authored
+Makina lifecycle fields remain pending with no landing OIDs;
 subsequent registration, progress, integration evidence and root roll-up updates belong to the
 coordinator under [the authoring contract](../README.md). Existing plans' completion records have
 not been rewritten by this review.
 
 - Authored against: 11d5fc9fd04614b63c959ac0369748b32e34f126.
 - Review date: 2026-09-05.
-- Implementation: 0/27 tasks complete.
+- Direct implementation: 1/27 tasks complete (4101). See [EXECUTION.md](EXECUTION.md)
+  for review evidence and the independent remaining gate failure.
 - Registration/integration: not attempted; no validated Phase R base or integration OID claimed.
 - Review evidence: [EVIDENCE.md](EVIDENCE.md).
 - Full gate baseline: refused in core tests, 857 run / 2 failures; see R16.
