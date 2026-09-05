@@ -24,3 +24,6 @@ Finding(s): R10 in [FINDINGS.md](../FINDINGS.md).
 3. Add conservative recovery of incomplete historical records and stale-holder takeover tests without enabling deferred execution.
 
 - **Done when:** A crash at any acquisition/renewal boundary leaves a valid owned fence or a recoverable expired/incomplete fence, and an old owner cannot modify work after a new epoch wins.
+
+Direct implementation is complete; review loops and full-gate verification are recorded in
+[EXECUTION.md](../EXECUTION.md#4106--atomic-execution-fences).

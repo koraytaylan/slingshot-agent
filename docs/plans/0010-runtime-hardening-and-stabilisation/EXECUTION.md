@@ -482,3 +482,75 @@ Review and correction loop:
     and exhausted contention preserve data and accounting. The obsolete split-release API is gone.
     Task 4104 is complete. Bounds within dense buckets remain task 4105, and execution-fence and
     runtime-lifecycle guarantees remain their separately authored tasks.
+
+## 4106 — atomic execution fences
+
+This independent task was implemented and verified in an isolated checkout while task 4105's
+bounded traversal design remains unfinished. Its prerequisite, task 4102, is complete.
+
+Review and correction loop:
+
+1. Added real-Oak regressions for a lost acquisition response after expiry persistence and for an
+   ownerless historical expiry. Both failed: expiry existed without owner, and the historical
+   record returned Lost instead of allowing recovery. Evidence:
+   `interop/target/plan10-4106-red.log`, nine tests, two failures.
+2. Acquisition now fences the lease node and commits owner, expiry, and a unique acquisition epoch
+   together. Renewal compares the complete holder, preserves its epoch, and refuses expired holds;
+   retries refresh from durable state and discard pending writes. Incomplete owner/expiry records
+   are recoverable. All nine focused tests passed in `interop/target/plan10-4106-first-green.log`.
+3. Added explicit stale-epoch tests using a matching worker name and expiry, expired-renewal refusal,
+   and conservative handling of complete legacy records without epochs. Such legacy holds reserve
+   their window until expiry but cannot authorize renewal or writes as a modern holder. All 12
+   focused cases passed in `interop/target/plan10-4106-epochs.log`.
+
+4. Added `ExecutionFence.stageHeld` for checking and stamping authority inside an enclosing
+   transaction. OperationStore now has a holder-bearing move path and refuses the unguarded move
+   path once an operation has a lease record. A stale epoch cannot change operation state; takeover
+   immediately before commit conflicts with the old worker's staged lease stamp and leaves state
+   unchanged. The new overlapping-session fixture now retains its resolver for the whole test;
+   its first version lost that resolver and observed a closed session. All 14 fence tests passed in
+   `interop/target/plan10-4106-protected-recheck.log`. Core verification then passed all 984 tests
+   and stopped at three import-order violations in the new tests, which were corrected. Evidence:
+   `interop/target/plan10-4106-core-moves.log`, 00:44 CEST on 2026-09-06. This does not establish
+   completion of the remaining static checks or the full gate.
+
+5. TerminalCommit now carries authority to the final SnapshotStore/EventLedger callback, after
+   admission's intermediate saves and refreshes. The callback stamps operation and lease authority
+   with state/result/event/snapshot writes. Unguarded calls refuse leased operations, and stale
+   holders receive FENCE_REQUIRED without publishing a terminal result. The first 24 focused cases
+   passed in `interop/target/plan10-4106-terminal.log`.
+6. Added before/after interruptions at both acquisition saves and at renewal's save. The first
+   acquisition boundary exposed pending writes left after failed lease creation. Wrapped creation
+   with refresh/discard handling; all authority boundaries now leave complete or recoverable state.
+   Added a real independent takeover immediately before the final terminal save; the old worker's
+   commit is refused, the operation remains running without a result, the event count stays one,
+   and event row/byte capacity returns to its original values. All 31 focused cases passed in
+   `interop/target/plan10-4106-terminal-overlap.log`. Core verification passed 992 tests, then
+   formatting found two long lines, which were corrected. The full core recheck passed all 992
+   tests, coverage, formatting, PMD, and SpotBugs at 00:51 CEST on 2026-09-06 in
+   `interop/target/plan10-4106-core-recheck.log`. A complete gate was then started.
+
+7. The first gate stopped because this fresh isolated checkout had no built AEM bundle for the
+   nullability/import policy checks. The gate reported missing reactor output; this was not an
+   authority-test failure. Evidence: `interop/target/plan10-4106-quality.log`. Preparing the reactor
+   artifacts offline before rerunning the gate.
+8. Final review found that the acquisition API could accept an empty worker and wrap expiry into
+   the past at the numeric limit. Two tests reproduced those cases in
+   `interop/target/plan10-4106-authority-input-red.log`. Acquisition now rejects the empty worker;
+   acquisition and renewal use checked expiry addition. Core verification passed all 994 tests,
+   coverage, formatting, PMD, and SpotBugs at 00:56 CEST on 2026-09-06 in
+   `interop/target/plan10-4106-core-inputs.log`. Offline reactor packaging completed at 00:57 CEST
+   in `interop/target/plan10-4106-reactor-inputs.log`; the subsequent complete gate is recorded in
+   `interop/target/plan10-4106-prepared-quality.log`.
+
+9. The complete argument-free `scripts/quality` passed at 01:07 CEST on 2026-09-06. Core ran
+   994 tests and interop ran 460, with zero failures, errors, or skips. All gate policy, coverage,
+   static-analysis, and packaging stages passed. Evidence:
+   `interop/target/plan10-4106-prepared-quality.log`. The owner-supplied Adobe quickstart and
+   sibling-client end-to-end tiers did not run.
+10. Final review checked acquisition/renewal persistence boundaries, conservative legacy recovery,
+    epoch comparisons, and the placement of state and terminal authority checks inside their
+    conflict-protected commits. Old unguarded paths refuse leased operations; takeover prevents an
+    old worker from publishing state or terminal writes. Existing immediate callers remain covered
+    by the core suite, and deferred execution was not enabled. Task 4106 is complete. Task 4105 and
+    the remaining plan tasks are still required; this does not complete plan 0010.
