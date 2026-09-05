@@ -6,6 +6,8 @@ package rs.slingshot.agent.execution;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -18,6 +20,9 @@ import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.Digest;
@@ -26,6 +31,7 @@ import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.identity.OperationIdentity;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.store.SaveInterleaving;
 import rs.slingshot.agent.store.StatePath;
 
 /**
@@ -46,6 +52,169 @@ final class ExecutionFenceTest {
             CONTRACT.value(ContractLimit.WORKER_EXECUTION_LEASE_MILLISECONDS);
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @Test
+    void acquisitionCannotCreateOwnerlessAuthority() throws RepositoryException {
+        final Session session = withRecord();
+        assertThrows(IllegalArgumentException.class,
+                () -> ExecutionFence.take(session, identity(), "", NOW, CONTRACT));
+        assertFalse(session.nodeExists(ExecutionFence.pathOf(identity()).path()));
+        assertFalse(session.hasPendingChanges());
+    }
+
+    @Test
+    void acquisitionCannotWrapItsExpiryIntoThePast() throws RepositoryException {
+        final Session session = withRecord();
+        assertThrows(ArithmeticException.class,
+                () -> ExecutionFence.take(session, identity(), "the-worker", Long.MAX_VALUE, CONTRACT));
+        session.refresh(false);
+        final Node lease = session.getNode(ExecutionFence.pathOf(identity()).path());
+        assertFalse(lease.hasProperty(ExecutionFence.EPOCH));
+        assertFalse(lease.hasProperty(ExecutionFence.HELD_UNTIL));
+        assertFalse(session.hasPendingChanges());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1,false", "1,true", "2,false", "2,true"})
+    void everyAcquisitionBoundaryLeavesCompleteOrRecoverableAuthority(int boundary, boolean committed)
+            throws RepositoryException {
+        final Session session = withRecord();
+        assertThrows(RepositoryException.class,
+                () -> ExecutionFence.take(SaveInterleaving.interruptSave(session, boundary, committed),
+                        identity(), "the-worker", NOW, CONTRACT));
+        assertFalse(session.hasPendingChanges(), "failed acquisition left transient authority writes");
+        final FenceOutcome retried = ExecutionFence.take(session, identity(), "the-next-worker", NOW,
+                CONTRACT);
+        assertTrue(retried instanceof FenceOutcome.Held || retried instanceof FenceOutcome.Refused);
+        final Node node = session.getNode(ExecutionFence.pathOf(identity()).path());
+        assertTrue(node.hasProperty(ExecutionFence.WORKER));
+        assertTrue(node.hasProperty(ExecutionFence.HELD_UNTIL));
+        assertTrue(node.hasProperty(ExecutionFence.EPOCH));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void interruptedRenewalPreservesOwnerAndEpoch(boolean committed) throws RepositoryException {
+        final Session session = withRecord();
+        final FenceHolder first = held(session, "the-worker", NOW);
+        assertThrows(RepositoryException.class,
+                () -> ExecutionFence.renew(SaveInterleaving.interruptSave(session, 1, committed),
+                        identity(), first, NOW + 1, CONTRACT));
+        assertFalse(session.hasPendingChanges());
+        final Node node = session.getNode(ExecutionFence.pathOf(identity()).path());
+        assertEquals(first.worker(), node.getProperty(ExecutionFence.WORKER).getString());
+        assertEquals(first.epoch(), node.getProperty(ExecutionFence.EPOCH).getString());
+        assertEquals(first.heldUntilUnixMilliseconds() + (committed ? 1 : 0),
+                node.getProperty(ExecutionFence.HELD_UNTIL).getLong());
+    }
+
+    @Test
+    void protectedMoveRequiresTheCurrentEpoch() throws RepositoryException {
+        final Session session = withRecord();
+        final LogicalOperation operation = assertInstanceOf(OperationStore.Held.class,
+                OperationStore.read(session, identity())).operation();
+        final FenceHolder first = held(session, "the-worker", NOW);
+        final FenceHolder second = held(session, "the-worker", NOW + LEASE);
+        assertEquals(OperationStore.Refusal.FENCE_REQUIRED,
+                assertInstanceOf(OperationStore.Refused.class,
+                        OperationStore.move(session, operation, OperationState.RUNNING, first,
+                                NOW + LEASE)).refusal());
+        assertEquals(OperationStore.Refusal.FENCE_REQUIRED,
+                assertInstanceOf(OperationStore.Refused.class,
+                        OperationStore.move(session, operation, OperationState.RUNNING)).refusal());
+        assertFalse(session.hasPendingChanges());
+        assertInstanceOf(OperationStore.Held.class,
+                OperationStore.move(session, operation, OperationState.RUNNING, second, NOW + LEASE));
+    }
+
+    @Test
+    void takeoverBeforeProtectedCommitRejectsTheOldWorkersWrites() throws RepositoryException {
+        final Session session = withRecord();
+        final LogicalOperation operation = assertInstanceOf(OperationStore.Held.class,
+                OperationStore.read(session, identity())).operation();
+        final FenceHolder first = held(session, "the-first-worker", NOW);
+        final var factory = java.util.Objects.requireNonNull(sling.getService(
+                org.apache.sling.api.resource.ResourceResolverFactory.class));
+        try (var resolver = factory.getResourceResolver(java.util.Map.of())) {
+            final Session competing = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final OperationStore.Outcome outcome = OperationStore.move(SaveInterleaving.before(session,
+                    () -> held(competing, "the-second-worker", NOW + LEASE)), operation,
+                    OperationState.RUNNING, first, NOW);
+            assertEquals(OperationStore.Refusal.CONTENDED,
+                    assertInstanceOf(OperationStore.Refused.class, outcome).refusal());
+            assertEquals(OperationState.ACCEPTED, assertInstanceOf(OperationStore.Held.class,
+                    OperationStore.read(competing, identity())).operation().state());
+            assertFalse(session.hasPendingChanges());
+        } catch (final org.apache.sling.api.resource.LoginException refused) {
+            throw new IllegalStateException("the competing resolver could not be opened", refused);
+        }
+    }
+
+    @Test
+    void takeoverEpochRejectsAStaleWorkerEvenWithMatchingNameAndExpiry() throws RepositoryException {
+        final Session session = withRecord();
+        final FenceHolder first = held(session, "the-worker", NOW);
+        final FenceHolder second = held(session, "the-worker", NOW + LEASE);
+        assertNotEquals(first.epoch(), second.epoch());
+        final FenceHolder stale = new FenceHolder(second.worker(), second.heldUntilUnixMilliseconds(),
+                first.epoch());
+        assertFalse(ExecutionFence.stillHeld(session, identity(), stale, NOW + LEASE));
+        assertInstanceOf(FenceOutcome.Lost.class,
+                ExecutionFence.renew(session, identity(), stale, NOW + LEASE, CONTRACT));
+        final FenceHolder renewed = assertInstanceOf(FenceOutcome.Held.class,
+                ExecutionFence.renew(session, identity(), second, NOW + LEASE + 1, CONTRACT)).holder();
+        assertEquals(second.epoch(), renewed.epoch());
+    }
+
+    @Test
+    void expiredEpochCannotBeRenewedWithoutANewAcquisition() throws RepositoryException {
+        final Session session = withRecord();
+        final FenceHolder first = held(session, "the-worker", NOW);
+        assertInstanceOf(FenceOutcome.Lost.class,
+                ExecutionFence.renew(session, identity(), first, NOW + LEASE, CONTRACT));
+        assertFalse(session.hasPendingChanges());
+    }
+
+    @Test
+    void completeLegacyFenceRemainsReservedUntilExpiry() throws RepositoryException {
+        final Session session = withRecord();
+        final Node lease = session.getNode(OperationStore.pathOf(identity()).path())
+                .addNode(ExecutionFence.NODE, "nt:unstructured");
+        lease.setProperty(ExecutionFence.WORKER, "the-legacy-worker");
+        lease.setProperty(ExecutionFence.HELD_UNTIL, NOW + LEASE);
+        session.save();
+        final FenceHolder legacy = assertInstanceOf(FenceOutcome.Refused.class,
+                ExecutionFence.take(session, identity(), "the-new-worker", NOW, CONTRACT)).holder();
+        assertFalse(ExecutionFence.stillHeld(session, identity(), legacy, NOW));
+        assertInstanceOf(FenceOutcome.Lost.class,
+                ExecutionFence.renew(session, identity(), legacy, NOW, CONTRACT));
+        final FenceHolder next = held(session, "the-new-worker", NOW + LEASE);
+        assertFalse(next.epoch().isEmpty());
+    }
+
+    @Test
+    void interruptedAcquisitionDoesNotPublishExpiryWithoutItsOwner() throws RepositoryException {
+        final Session session = withRecord();
+        assertThrows(RepositoryException.class,
+                () -> ExecutionFence.take(SaveInterleaving.interruptSave(session, 2, true),
+                        identity(), "the-first-worker", NOW, CONTRACT));
+        session.refresh(false);
+        final Node lease = session.getNode(ExecutionFence.pathOf(identity()).path());
+        assertEquals(lease.hasProperty(ExecutionFence.HELD_UNTIL), lease.hasProperty(ExecutionFence.WORKER),
+                "acquisition committed an expiry without its owner");
+    }
+
+    @Test
+    void incompleteHistoricalFenceCanBeRecovered() throws RepositoryException {
+        final Session session = withRecord();
+        final Node record = session.getNode(OperationStore.pathOf(identity()).path());
+        final Node lease = record.addNode(ExecutionFence.NODE, "nt:unstructured");
+        lease.setProperty(ExecutionFence.HELD_UNTIL, NOW + LEASE);
+        session.save();
+        assertInstanceOf(FenceOutcome.Held.class,
+                ExecutionFence.take(session, identity(), "the-recovery-worker", NOW, CONTRACT),
+                "an ownerless historical expiry permanently blocked acquisition");
+    }
 
     @Test
     @DisplayName("one worker takes the fence and a second is refused while the first holds it")

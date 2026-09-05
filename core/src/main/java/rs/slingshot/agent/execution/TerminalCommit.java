@@ -17,6 +17,7 @@ import rs.slingshot.agent.store.ArtifactRecord;
 import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.store.ArtifactStore;
 import rs.slingshot.agent.store.CapacityLedger;
+import rs.slingshot.agent.store.CompareAndSet;
 import rs.slingshot.agent.store.EventLedger;
 import rs.slingshot.agent.store.SnapshotStore;
 import rs.slingshot.agent.store.StatePath;
@@ -75,7 +76,9 @@ public final class TerminalCommit {
         /** It already ended, as something else, and an operation ends once. */
         DIFFERENT_OUTCOME,
         /** The ledger would not take the terminal event. */
-        EVENT_REFUSED
+        EVENT_REFUSED,
+        /** The presented holder no longer owns the operation's live acquisition epoch. */
+        FENCE_REQUIRED
     }
 
     /** What ending an operation did. */
@@ -130,6 +133,54 @@ public final class TerminalCommit {
     public static Outcome commit(Session session, StatePath.Caller caller, LogicalOperation read,
                                  ExecutionOutcome outcome, AgentContract contract)
             throws RepositoryException {
+        return commit(session, caller, read, outcome, contract,
+                transaction -> !transaction.nodeExists(ExecutionFence.pathOf(read.identity()).path()));
+    }
+
+    /**
+     * Ends a leased operation with authority fenced inside the terminal transaction.
+     *
+     * @param session the write session
+     * @param caller the owner of the terminal event's capacity
+     * @param read the operation as read by the worker
+     * @param outcome the terminal result
+     * @param contract the authenticated bounds
+     * @param holder the worker's acquired fence
+     * @param nowUnixMilliseconds when authority must be live
+     * @return the committed result or a refusal without a terminal state change
+     * @throws RepositoryException if persistence fails
+     */
+    public static Outcome commit(Session session, StatePath.Caller caller, LogicalOperation read,
+                                 ExecutionOutcome outcome, AgentContract contract, FenceHolder holder,
+                                 long nowUnixMilliseconds) throws RepositoryException {
+        return commit(session, caller, read, outcome, contract,
+                transaction -> ExecutionFence.stageHeld(transaction, read.identity(), holder,
+                        nowUnixMilliseconds));
+    }
+
+    @FunctionalInterface
+    private interface Authority {
+        /**
+         * Stages authority in the terminal transaction.
+         *
+         * @param session the transaction
+         * @return whether the terminal write is permitted
+         * @throws RepositoryException if authority cannot be read or fenced
+         */
+        boolean permits(Session session) throws RepositoryException;
+    }
+
+    private static final class FenceRequired extends RepositoryException {
+        private static final long serialVersionUID = 1L;
+
+        private FenceRequired() {
+            super("the current acquisition epoch is required for a terminal commit");
+        }
+    }
+
+    private static Outcome commit(Session session, StatePath.Caller caller, LogicalOperation read,
+                                  ExecutionOutcome outcome, AgentContract contract, Authority authority)
+            throws RepositoryException {
         final OperationStore.Outcome current = OperationStore.read(session, read.identity());
         if (current instanceof OperationStore.Refused) {
             return new Refused(Refusal.NO_RECORD, "nothing durable holds "
@@ -148,7 +199,7 @@ public final class TerminalCommit {
             return new Refused(Refusal.NOT_A_PERMITTED_MOVE, read.state().spelling()
                     + " does not move to " + outcome.state().spelling());
         }
-        return referenced(session, caller, stored, outcome, contract);
+        return referenced(session, caller, stored, outcome, contract, authority);
     }
 
     private static Outcome alreadyEnded(Session session, LogicalOperation stored,
@@ -182,7 +233,8 @@ public final class TerminalCommit {
 
     private static Outcome referenced(Session session, StatePath.Caller caller,
                                       LogicalOperation stored, ExecutionOutcome outcome,
-                                      AgentContract contract) throws RepositoryException {
+                                      AgentContract contract, Authority authority)
+            throws RepositoryException {
         if (outcome.result() instanceof final ExecutionOutcome.Published published) {
             final Optional<ArtifactRecord> committed = ArtifactStore.read(session,
                     OperationStore.pathOf(stored.identity()), published.slot());
@@ -196,7 +248,7 @@ public final class TerminalCommit {
                 return mismatch.get();
             }
         }
-        return written(session, caller, stored, outcome, contract);
+        return written(session, caller, stored, outcome, contract, authority);
     }
 
     private static Optional<Refused> mismatch(ExecutionOutcome.Published published,
@@ -213,7 +265,7 @@ public final class TerminalCommit {
 
     private static Outcome written(Session session, StatePath.Caller caller,
                                    LogicalOperation stored, ExecutionOutcome outcome,
-                                   AgentContract contract) throws RepositoryException {
+                                   AgentContract contract, Authority authority) throws RepositoryException {
         final StatePath operation = OperationStore.pathOf(stored.identity());
         final long next = EventLedger.events(session, operation.child(EventLedger.NODE));
         final Optional<JobEvent> terminal = terminalEvent(stored, outcome, next, contract);
@@ -228,7 +280,7 @@ public final class TerminalCommit {
                     "the terminal event has no canonical form to write down");
         }
         return appended(session, caller, stored, outcome, new Terminal(terminal.get(),
-                ((CanonicalByteWriter.Written) canonical).bytes(), contract));
+                ((CanonicalByteWriter.Written) canonical).bytes(), contract, authority));
     }
 
     /**
@@ -237,8 +289,9 @@ public final class TerminalCommit {
      * @param event the event
      * @param canonical its canonical bytes
      * @param contract the authenticated contract
+     * @param authority the fence staged with the terminal writes
      */
-    private record Terminal(JobEvent event, byte[] canonical, AgentContract contract) {
+    private record Terminal(JobEvent event, byte[] canonical, AgentContract contract, Authority authority) {
     }
 
     private static Outcome appended(Session session, StatePath.Caller caller,
@@ -248,8 +301,13 @@ public final class TerminalCommit {
         try {
             appended = SnapshotStore.record(session, caller, terminal.event(),
                     terminal.canonical(), outcome.finishedAtUnixMilliseconds(),
-                    terminal.contract(), (written, event) -> end(written, stored, outcome));
+                    terminal.contract(),
+                    (written, event) -> end(written, stored, outcome, terminal.authority()));
         } catch (final IllegalStateException interrupted) {
+            if (interrupted.getCause() instanceof FenceRequired) {
+                session.refresh(false);
+                return new Refused(Refusal.FENCE_REQUIRED, interrupted.getCause().getMessage());
+            }
             // The record moved while this commit was being prepared. Nothing was written: the
             // event, the answer, the state, and the snapshot are one commit, and it did not happen.
             if (!(interrupted.getCause() instanceof javax.jcr.InvalidItemStateException)) {
@@ -271,9 +329,14 @@ public final class TerminalCommit {
                 terminal.event());
     }
 
-    private static void end(Session session, LogicalOperation stored, ExecutionOutcome outcome)
+    private static void end(Session session, LogicalOperation stored, ExecutionOutcome outcome,
+                            Authority authority)
             throws RepositoryException {
         final Node record = session.getNode(OperationStore.pathOf(stored.identity()).path());
+        CompareAndSet.stamp(record);
+        if (!authority.permits(session)) {
+            throw new FenceRequired();
+        }
         if (!record.getProperty(OperationStore.STATE).getString()
                 .equals(stored.state().spelling())) {
             throw new javax.jcr.InvalidItemStateException("the record moved to "

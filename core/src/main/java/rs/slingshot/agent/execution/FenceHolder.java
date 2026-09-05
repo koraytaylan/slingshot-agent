@@ -12,8 +12,9 @@ package rs.slingshot.agent.execution;
  *
  * @param worker the worker's own name
  * @param heldUntilUnixMilliseconds when the hold runs out
+ * @param epoch the unique acquisition identity, retained across renewals
  */
-public record FenceHolder(String worker, long heldUntilUnixMilliseconds) {
+public record FenceHolder(String worker, long heldUntilUnixMilliseconds, String epoch) {
 
     /**
      * Whether this hold is still live at an instant.
