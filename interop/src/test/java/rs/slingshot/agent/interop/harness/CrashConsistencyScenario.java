@@ -105,18 +105,21 @@ final class CrashConsistencyScenario {
 
     @Test
     @DisplayName("what one node committed is still there after that node is killed outright")
-    void acommittedWriteSurvivesAnungracefulKill() throws InterruptedException {
+    void acommittedWriteSurvivesAnungracefulKill() throws InterruptedException, java.io.IOException,
+            java.util.concurrent.ExecutionException, java.util.concurrent.TimeoutException {
+        final ExclusiveTransitionRuntime transitions =
+                new ExclusiveTransitionRuntime(REPOSITORY, requests, nodes);
+        transitions.verifyRaces();
         final String path = "/var/crash-" + System.nanoTime();
         assertEquals(CREATED, requests.submit(address(nodes.first()) + path,
                         List.of("jcr:primaryType", "nt:unstructured", "held", "before the crash"))
                 .statusCode(), "the write this scenario is about was not committed");
         settle();
-        final CrashInjector.Ended ended = injector.kill(nodes.first(),
-                CrashInjector.Point.AFTER_TERMINAL_BEFORE_ACKNOWLEDGEMENT);
+        final CrashInjector.Ended ended = transitions.killBeforeReply(injector);
         assertEquals(CrashInjector.KILLED, ended.exitStatus(),
                 "the node was not killed by the signal nothing can handle");
         assertEquals(CrashInjector.Graceful.NOTHING_WAS_FLUSHED, ended.graceful());
-        assertEquals(CrashInjector.Point.AFTER_TERMINAL_BEFORE_ACKNOWLEDGEMENT, ended.point());
+        assertEquals(CrashInjector.Point.AFTER_COMMAND_COMMIT_BEFORE_TERMINAL, ended.point());
         assertFalse(injector.isRunning(nodes.first()), "the node is still running after a kill");
         final var read = requests.readAsAuthenticatedUser(address(nodes.second()) + path + ".json");
         assertEquals(OK, read.statusCode(),

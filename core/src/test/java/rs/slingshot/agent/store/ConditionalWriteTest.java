@@ -27,6 +27,8 @@ import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The two primitives everything durable here is built from, and the counting that is built from
@@ -64,24 +66,66 @@ final class ConditionalWriteTest {
     }
 
     @Test
-    @DisplayName("two writers that both found the path free leave one record between them")
-    void twoWritersLeaveOneRecord() throws RepositoryException {
+    @DisplayName("identical claims have one winner even when both prepared while the path was free")
+    void identicalClaimsHaveOneWinner() throws RepositoryException {
         final Session first = session();
         final StatePath path = path("raced-for");
         final Session second = anotherSession();
-        // The second writer prepares its claim while the path is free and commits after the first.
-        // The repository accepts both, because what a claim writes is derived from the identifier
-        // it is claiming and the two writers wrote the same thing - which is why a claim says "this
-        // node created this record" rather than "no other node did", and why which worker may
-        // execute is decided by a lease instead.
-        second.getNode(StatePath.ROOT).addNode("raced-for", "nt:unstructured");
-        assertEquals(WriteOutcome.CLAIMED,
-                ClaimByCreation.claim(first, path, "nt:unstructured", node -> set(node, COUNT, 1)));
-        second.save();
+        final Session raced = SaveInterleaving.before(first, () -> assertEquals(
+                WriteOutcome.CLAIMED, ClaimByCreation.claim(second, path, "nt:unstructured",
+                        node -> set(node, COUNT, 1))));
+        assertEquals(WriteOutcome.ALREADY_HELD,
+                ClaimByCreation.claim(raced, path, "nt:unstructured", node -> set(node, COUNT, 1)),
+                "identical bytes must not let the second claimant report ownership");
         first.refresh(false);
-        assertTrue(first.nodeExists(path.path()), "the race left no record at all");
-        assertEquals(1, first.getNode(path.path()).getProperty(COUNT).getLong(),
-                "the record the two writers left is not the one either of them wrote");
+        assertEquals(1, first.getNode(path.path()).getProperty(COUNT).getLong());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @DisplayName("identical counter updates conflict rather than merge into two reported wins")
+    void identicalUpdatesHaveOneWinner(boolean hasRevision) throws RepositoryException {
+        final Session first = session();
+        final StatePath path = path("identical-next");
+        ClaimByCreation.claim(first, path, "nt:unstructured", node -> set(node, COUNT, 0));
+        if (!hasRevision) {
+            first.getNode(path.path()).getProperty(CompareAndSet.REVISION).remove();
+            first.save();
+        }
+        final Session second = anotherSession();
+        final Session raced = SaveInterleaving.before(first, () -> assertEquals(
+                WriteOutcome.WRITTEN, CompareAndSet.set(second, path, COUNT, 0, 1)));
+        assertEquals(WriteOutcome.VALUE_CHANGED, CompareAndSet.set(raced, path, COUNT, 0, 1),
+                "a merged update is not an exclusive winner");
+        first.refresh(false);
+        assertEquals(1, first.getNode(path.path()).getProperty(COUNT).getLong());
+    }
+
+    @Test
+    @DisplayName("a refresh between the predicate and write cannot adopt a competing update")
+    void aRefreshBeforeWritingStillHasOneWinner() throws RepositoryException {
+        final Session first = session();
+        final StatePath path = path("refreshed-before-write");
+        ClaimByCreation.claim(first, path, "nt:unstructured", node -> set(node, COUNT, 0));
+        final Session second = anotherSession();
+        final Session raced = SaveInterleaving.beforeWrite(first, path.path(), () -> assertEquals(
+                WriteOutcome.WRITTEN, CompareAndSet.set(second, path, COUNT, 0, 1)));
+        assertEquals(WriteOutcome.VALUE_CHANGED, CompareAndSet.set(raced, path, COUNT, 0, 1));
+        assertFalse(first.hasPendingChanges());
+    }
+
+    @Test
+    @DisplayName("a refresh while filling a newly created node cannot adopt a competing claim")
+    void aRefreshedCreationStillHasOneOwner() throws RepositoryException {
+        final Session first = session();
+        final StatePath path = path("refreshed-creation");
+        final Session second = anotherSession();
+        final Session raced = SaveInterleaving.beforeWrite(first, path.path(), () -> assertEquals(
+                WriteOutcome.CLAIMED, ClaimByCreation.claim(second, path, "nt:unstructured",
+                        node -> set(node, COUNT, 1))));
+        assertEquals(WriteOutcome.ALREADY_HELD,
+                ClaimByCreation.claim(raced, path, "nt:unstructured", node -> set(node, COUNT, 1)));
+        assertFalse(first.hasPendingChanges());
     }
 
     @Test
@@ -92,6 +136,18 @@ final class ConditionalWriteTest {
         assertEquals(WriteOutcome.ALREADY_HELD,
                 ClaimByCreation.claim(refusing(session), path, "nt:unstructured", node -> { }),
                 "a repository saying the node is there was reported as a failure");
+    }
+
+    @Test
+    @DisplayName("a conflict with no visible winner is contention, not ownership")
+    void aConflictWithoutAVisibleOwnerIsContention() throws RepositoryException {
+        final Session first = session();
+        final StatePath path = path("no-visible-winner");
+        assertEquals(WriteOutcome.CONTENDED,
+                ClaimByCreation.claim(losing(first, new AtomicInteger(1)), path,
+                        "nt:unstructured", node -> set(node, COUNT, 1)));
+        assertFalse(first.hasPendingChanges(), "a refused claim retained its staged bytes");
+        assertFalse(first.nodeExists(path.path()));
     }
 
     @Test

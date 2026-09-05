@@ -27,3 +27,5 @@ Finding(s): R02 in [FINDINGS.md](../FINDINGS.md).
 3. Drive the same cases on shared DocumentNodeStore nodes and count an independently observed side effect, including resend after response loss.
 
 - **Done when:** Identical competing submissions and starts produce exactly one winner and at most one observed side effect on both embedded Oak and the shared-store runtime; losing attempts cannot return success.
+
+Direct implementation and review evidence: [EXECUTION.md](../EXECUTION.md#4102--exclusive-store-transitions).
