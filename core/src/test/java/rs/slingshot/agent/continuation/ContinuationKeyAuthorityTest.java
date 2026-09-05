@@ -40,7 +40,7 @@ final class ContinuationKeyAuthorityTest {
     private static final long NOW = 1788000000000L;
 
     private static final ContinuationKeyAuthority.Lease LEASE =
-            new ContinuationKeyAuthority.Lease("a worker", NOW + 30000);
+            new ContinuationKeyAuthority.Lease("a worker", NOW + 30000, "test-epoch");
 
     @Test
     @DisplayName("a deployment holding no ring is a distinct answer from one holding an empty one")
@@ -84,7 +84,7 @@ final class ContinuationKeyAuthorityTest {
     void aStaleCompareAndSetWritesNothing() {
         final KeyRing held = KeyRing.initial("the first key");
         final MemoryAuthority authority = new MemoryAuthority(held);
-        final KeyRing changed = KeyRing.initial("somebody else's key");
+        final KeyRing changed = rotated(held, "somebody else's key");
         assertInstanceOf(ContinuationKeyAuthority.Written.class,
                 authority.compareAndSet(held, changed, LEASE, NOW), "a write against what was read"
                         + " did not happen");
@@ -198,10 +198,23 @@ final class ContinuationKeyAuthorityTest {
         @Override
         public WriteOutcome compareAndSet(KeyRing expected, KeyRing next, Lease lease,
                                           long nowUnixMilliseconds) {
-            if (nowUnixMilliseconds >= lease.expiresAtUnixMilliseconds()) {
+            if (!LEASE.equals(lease) || nowUnixMilliseconds >= lease.expiresAtUnixMilliseconds()) {
                 return new NotWritten(new KeyRingRefusal(
                         KeyRingRefusal.Failure.NOT_THE_LEASE_HOLDER,
                         lease.holder() + " no longer holds the lease"));
+            }
+            if (!expected.equals(held.get())) {
+                return new NotWritten(new KeyRingRefusal(
+                        KeyRingRefusal.Failure.CHANGED_SINCE_IT_WAS_READ, "the ring changed"));
+            }
+            final KeyRing.Outcome rotation = expected.rotated(next.current(), nowUnixMilliseconds, CONTRACT);
+            if (rotation instanceof final KeyRing.Refused refused) {
+                return new NotWritten(refused.refusal());
+            }
+            if (!((KeyRing.Held) rotation).ring().equals(next)) {
+                return new NotWritten(new KeyRingRefusal(
+                        KeyRingRefusal.Failure.INVALID_TRANSITION,
+                        "the rotation does not preserve retention"));
             }
             if (!held.compareAndSet(expected, next)) {
                 return new NotWritten(new KeyRingRefusal(
