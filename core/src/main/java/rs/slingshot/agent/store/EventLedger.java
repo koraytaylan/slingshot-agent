@@ -223,24 +223,27 @@ public final class EventLedger {
             return new NotWritten(notCounted.notCounted().outcome(), "the counters an event is"
                     + " admitted against did not move, so nothing was written against them");
         }
-        return written(session, caller, append, nowUnixMilliseconds, contract, ledger);
+        return written(session, append, nowUnixMilliseconds, contract, ledger,
+                (LedgerAdmission.Admitted) admission);
     }
 
-    private static Outcome written(Session session, StatePath.Caller caller, Append append,
-                                   long nowUnixMilliseconds, AgentContract contract,
-                                   StatePath ledger) throws RepositoryException {
-        final StatePath path = ledger.child(nameOf(append.event().sequence()));
-        final WriteOutcome claimed = ClaimByCreation.claim(session, path, "nt:unstructured",
-                node -> fill(node, append, nowUnixMilliseconds));
-        if (claimed != WriteOutcome.CLAIMED) {
-            LedgerAdmission.release(session, caller, append.canonical().length, contract);
-            return new Refused(Refusal.SEQUENCE_REPEAT, "another writer took sequence "
-                    + append.event().sequence().number() + " first, and one sequence is one event");
+    private static Outcome written(Session session, Append append, long nowUnixMilliseconds,
+                                   AgentContract contract, StatePath ledger,
+                                   LedgerAdmission.Admitted admission) throws RepositoryException {
+        try (CapacityReservation.Guard guard = admission.reservation().guard(session, contract)) {
+            final StatePath path = ledger.child(nameOf(append.event().sequence()));
+            final WriteOutcome claimed = ClaimByCreation.claim(session, path, "nt:unstructured",
+                    node -> fill(node, append, nowUnixMilliseconds, guard.reservation()));
+            if (claimed != WriteOutcome.CLAIMED) {
+                return new Refused(Refusal.SEQUENCE_REPEAT, "another writer took sequence "
+                        + append.event().sequence().number() + " first, and one sequence is one event");
+            }
+            return new Appended(append.event(), events(session, ledger), bytes(session, ledger));
         }
-        return new Appended(append.event(), events(session, ledger), bytes(session, ledger));
     }
 
-    private static void fill(Node node, Append append, long nowUnixMilliseconds) {
+    private static void fill(Node node, Append append, long nowUnixMilliseconds,
+                              CapacityReservation reservation) {
         try {
             node.setProperty(KIND, append.event().kind().spelling());
             node.setProperty(SEQUENCE, append.event().sequence().number());
@@ -248,6 +251,7 @@ public final class EventLedger {
             node.setProperty(WRITTEN_AT, nowUnixMilliseconds);
             node.setProperty(DOCUMENT,
                     new String(append.canonical(), StandardCharsets.UTF_8));
+            CapacityReservation.retain(node.getSession(), reservation, node);
             append.alongside().write(node.getSession(), append.event());
         } catch (final RepositoryException failed) {
             throw new IllegalStateException("an event node this writer created would not hold what"

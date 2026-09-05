@@ -33,8 +33,10 @@ import rs.slingshot.agent.wire.JobEvent;
  *
  * @param session whose stream this is
  * @param contract the authenticated contract, which declares every bound
+ * @param admission the exact stream reservation released on every ending
  */
-public record StreamWriter(StreamSession session, AgentContract contract) {
+public record StreamWriter(StreamSession session, AgentContract contract,
+                            StreamAdmission.Admitted admission) {
 
     /** How one stream ended, of which there are four ways and no fifth. */
     public enum Ending {
@@ -268,7 +270,7 @@ public record StreamWriter(StreamSession session, AgentContract contract) {
 
     private void release(Session store, Closing closing) {
         try {
-            StreamAdmission.close(store, session.caller(), contract);
+            StreamAdmission.close(store, admission, contract);
         } catch (final RepositoryException unreadable) {
             // A room that could not be given back is one this instance will hold until the sweep
             // reclaims it, and an instance quietly losing rooms is what runs out of them.

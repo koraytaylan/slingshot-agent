@@ -541,6 +541,11 @@ pattern = "stateless-policy"
 reason = "Admission depends on what the repository holds now rather than on anything this process remembers. A cached total is a total two nodes would both admit against."
 
 [[type]]
+name = "CapacityReservation"
+pattern = "value-object"
+reason = "One durable identity binds a caller and process incarnation to an immutable charge vector, so a retry can recognise precisely what it reserved."
+
+[[type]]
 name = "OperationState"
 pattern = "enumeration"
 reason = "Four states with every permitted move declared as data. A chain of conditions is where the fourth case nobody wrote lives, and a matrix is something a reader can check."

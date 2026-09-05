@@ -3,12 +3,14 @@
 
 package rs.slingshot.agent.stream;
 
+import java.util.List;
 import java.util.Optional;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.store.AccountedQuantity;
 import rs.slingshot.agent.store.CapacityLedger;
+import rs.slingshot.agent.store.CapacityReservation;
 import rs.slingshot.agent.store.StatePath;
 
 /**
@@ -34,8 +36,12 @@ public final class StreamAdmission {
     public sealed interface Outcome permits Admitted, Refused, NotCounted {
     }
 
-    /** Room for one more stream. */
-    public record Admitted() implements Outcome {
+    /**
+     * Room for one more stream.
+     *
+     * @param reservation the exact identity to release when this stream ends
+     */
+    public record Admitted(CapacityReservation reservation) implements Outcome {
     }
 
     /**
@@ -65,10 +71,11 @@ public final class StreamAdmission {
      */
     public static Outcome open(Session store, StatePath.Caller caller, AgentContract contract)
             throws RepositoryException {
-        final CapacityLedger.Admission admitted = CapacityLedger.admit(store,
-                AccountedQuantity.CONCURRENT_EVENT_STREAMS, caller, ONE_STREAM, contract);
-        if (admitted instanceof CapacityLedger.Admitted) {
-            return new Admitted();
+        final CapacityLedger.ReservationAdmission admitted = CapacityLedger.take(store, caller,
+                List.of(new CapacityReservation.Charge(
+                        AccountedQuantity.CONCURRENT_EVENT_STREAMS, ONE_STREAM)), contract);
+        if (admitted instanceof final CapacityLedger.Reserved reserved) {
+            return new Admitted(reserved.reservation());
         }
         return admitted instanceof final CapacityLedger.Refused refused
                 ? new Refused(refused)
@@ -79,14 +86,13 @@ public final class StreamAdmission {
      * Gives back the room one stream took, on every ending there is.
      *
      * @param store the session to write under
-     * @param caller whose share it goes back to
+     * @param admitted the stream's own admission identity
      * @param contract the authenticated contract, which decides how the counts are spread
      * @throws RepositoryException if the repository fails
      */
-    public static void close(Session store, StatePath.Caller caller, AgentContract contract)
+    public static void close(Session store, Admitted admitted, AgentContract contract)
             throws RepositoryException {
-        CapacityLedger.release(store, AccountedQuantity.CONCURRENT_EVENT_STREAMS, caller,
-                ONE_STREAM, contract);
+        CapacityLedger.release(store, admitted.reservation(), contract);
     }
 
     /**

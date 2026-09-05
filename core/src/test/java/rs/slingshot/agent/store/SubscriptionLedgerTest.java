@@ -218,7 +218,7 @@ final class SubscriptionLedgerTest {
     void nothingHereCountsAnythingItself() {
         final String source = read(REPOSITORY.resolve(
                 "core/src/main/java/rs/slingshot/agent/store/SubscriptionLedger.java"));
-        assertTrue(source.contains("CapacityLedger.admit"),
+        assertTrue(source.contains("CapacityLedger.take"),
                 "a subscription is admitted somewhere other than through the one authority");
         assertFalse(source.contains("ShardedCount"),
                 "the ledger reaches for a counter rather than the authority");

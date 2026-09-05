@@ -5,6 +5,7 @@ package rs.slingshot.agent.http;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,6 +19,7 @@ import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.servlet.ServletException;
+import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.servlethelpers.MockRequestPathInfo;
 import org.apache.sling.servlethelpers.MockSlingHttpServletRequest;
 import org.apache.sling.servlethelpers.MockSlingHttpServletResponse;
@@ -37,6 +39,7 @@ import rs.slingshot.agent.store.AccountedQuantity;
 import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.store.ArtifactStore;
 import rs.slingshot.agent.store.CapacityLedger;
+import rs.slingshot.agent.store.CapacityReservation;
 import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.LedgerAdmission;
 import rs.slingshot.agent.store.StatePath;
@@ -68,6 +71,7 @@ final class ArtifactIntakeServletTest {
     void asubmissionDeclaringApayloadDoesNotStart() throws RepositoryException, IOException,
             ServletException {
         final Session session = submitted();
+        capacity(session, 1);
         assertEquals(OperationState.ACCEPTED, stored(session).state(),
                 "a command started against a payload that had not arrived");
         assertEquals(1, IntakeSlotWrite.outstanding(session, operation()),
@@ -80,6 +84,7 @@ final class ArtifactIntakeServletTest {
             ServletException {
         final Session session = submitted();
         assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), SLOT).getStatus());
+        capacity(session, 0);
         assertEquals(0, IntakeSlotWrite.outstanding(session, operation()),
                 "the store is still waiting for a payload it has");
         try (InputStream held = ArtifactStore.open(session, operation(), slot(SLOT))
@@ -102,6 +107,7 @@ final class ArtifactIntakeServletTest {
                 "a refused payload left something reachable");
         assertEquals(1, IntakeSlotWrite.outstanding(session, operation()),
                 "a refused payload left the slot closed");
+        capacity(session, 1);
         assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), SLOT).getStatus(),
                 "the slot could not be filled after a refusal");
     }
@@ -205,6 +211,183 @@ final class ArtifactIntakeServletTest {
                 IntakeSlotWrite.IntakeRefusal.UNDECLARED_SLOT));
     }
 
+    @Test
+    void manifestQuotaRefusalLeavesNoAcceptedOperation() throws RepositoryException, IOException,
+            ServletException {
+        final Session session = prepared();
+        final AccountedQuantity quantity = AccountedQuantity.OPERATION_RESERVATION_BYTES;
+        final CapacityReservation pressure = assertInstanceOf(CapacityLedger.Reserved.class,
+                CapacityLedger.take(session, caller(), java.util.List.of(new CapacityReservation.Charge(
+                        quantity, quantity.admissibleCallerShare(CONTRACT))), CONTRACT)).reservation();
+        assertEquals(SubmitServlet.AT_CAPACITY, submit(sling.resourceResolver()).getStatus());
+        assertFalse(session.nodeExists(operation().path()));
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        CapacityLedger.release(session, pressure, CONTRACT);
+        assertEquals(SubmitServlet.ACCEPTED, submit(sling.resourceResolver()).getStatus());
+        capacity(session, 1);
+    }
+
+    @Test
+    void missingPreparedCountersLeaveTheManifestUnaccepted() throws RepositoryException, IOException,
+            ServletException {
+        final Session session = prepared();
+        final AccountedQuantity quantity = AccountedQuantity.OPERATION_RESERVATION_ROWS;
+        session.getNode(CapacityLedger.callerPath(quantity, caller()).path()).remove();
+        session.save();
+        assertEquals(SubmitServlet.AT_CAPACITY, submit(sling.resourceResolver()).getStatus());
+        assertFalse(session.nodeExists(operation().path()));
+        count(session, AccountedQuantity.ARTIFACT_ROWS, 0);
+        count(session, AccountedQuantity.ARTIFACT_BYTES, 0);
+        CapacityLedger.prepare(session, quantity, caller());
+        assertEquals(SubmitServlet.ACCEPTED, submit(sling.resourceResolver()).getStatus());
+        capacity(session, 1);
+    }
+
+    @Test
+    void twoSlotsAreReservedTogetherAndTransferredIndependently() throws RepositoryException, IOException,
+            ServletException {
+        final Session session = prepared();
+        final String second = "{\"byte_count\":" + payload().length + ",\"digest\":\""
+                + rs.slingshot.agent.digest.Digest.of(payload()).rendered()
+                + "\",\"name\":\"second\"},";
+        final String body = new String(submission(), StandardCharsets.UTF_8)
+                .replace("\"artifact_bytes\": 48", "\"artifact_bytes\": 96")
+                .replace("\"artifact_rows\": 1", "\"artifact_rows\": 2")
+                .replace("\"slots\": [", "\"slots\": [" + second);
+        assertEquals(SubmitServlet.ACCEPTED,
+                submit(sling.resourceResolver(), body.getBytes(StandardCharsets.UTF_8)).getStatus());
+        assertEquals(2, IntakeSlotWrite.outstanding(session, operation()));
+        count(session, AccountedQuantity.ARTIFACT_ROWS, 2);
+        count(session, AccountedQuantity.ARTIFACT_BYTES, 2L * payload().length);
+        count(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, 2);
+        assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), SLOT).getStatus());
+        count(session, AccountedQuantity.ARTIFACT_ROWS, 2);
+        count(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, 1);
+        count(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, payload().length);
+        assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), "second").getStatus());
+        count(session, AccountedQuantity.ARTIFACT_BYTES, 2L * payload().length);
+        count(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, 0);
+        count(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, 0);
+    }
+
+    @Test
+    void interruptedAcceptanceCanBeRetriedWithoutStrandingTheManifest() throws RepositoryException,
+            IOException, ServletException, LoginException {
+        interruptedAcceptance(false);
+    }
+
+    @Test
+    void lostAcceptanceReplyRecognisesThePublishedManifestWithoutChargingAgain() throws RepositoryException,
+            IOException, ServletException, LoginException {
+        interruptedAcceptance(true);
+    }
+
+    private void interruptedAcceptance(boolean committed) throws RepositoryException, IOException,
+            ServletException, LoginException {
+        final Session session = prepared();
+        try (org.apache.sling.api.resource.ResourceResolver resolver =
+                     publicationFailure(session, committed)) {
+            assertEquals(javax.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                    submit(resolver).getStatus());
+            session.refresh(false);
+            assertEquals(committed, session.nodeExists(operation().path()));
+            assertEquals(committed ? 1 : 0,
+                    CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+            assertEquals(SubmitServlet.ACCEPTED, submit(sling.resourceResolver()).getStatus());
+            capacity(session, 1);
+        }
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver publicationFailure(Session session,
+                                                                              boolean committed)
+            throws LoginException {
+        final var failed = new java.util.concurrent.atomic.AtomicBoolean();
+        return intercepting(session, () -> {
+            if (session.nodeExists(operation().path()) && failed.compareAndSet(false, true)) {
+                if (committed) {
+                    session.save();
+                }
+                throw new RepositoryException("acceptance save interrupted");
+            }
+        });
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver intercepting(Session session,
+            rs.slingshot.agent.store.SaveInterleaving.Action before) throws LoginException {
+        final ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        final Session interrupted = (Session) java.lang.reflect.Proxy.newProxyInstance(loader,
+                new Class<?>[] {org.apache.jackrabbit.api.JackrabbitSession.class},
+                (proxy, method, arguments) -> {
+                    if ("save".equals(method.getName())) {
+                        before.run();
+                    }
+                    try {
+                        return method.invoke(session, arguments);
+                    } catch (final java.lang.reflect.InvocationTargetException failure) {
+                        throw failure.getCause();
+                    }
+                });
+        return new org.apache.sling.api.wrappers.ResourceResolverWrapper(
+                sling.resourceResolver().clone(java.util.Map.of())) {
+            @Override
+            public <T> T adaptTo(Class<T> type) {
+                return type == Session.class ? type.cast(interrupted) : super.adaptTo(type);
+            }
+        };
+    }
+
+    @Test
+    void reservationAllocationContentionIsRetryableWithoutLosingThePromise() throws RepositoryException,
+            IOException, ServletException, LoginException {
+        final Session session = submitted();
+        try (org.apache.sling.api.resource.ResourceResolver resolver = intercepting(session, () -> {
+            throw new javax.jcr.InvalidItemStateException("capacity allocation contended");
+        })) {
+            assertEquals(ArtifactIntakeServlet.TEMPORARILY_UNAVAILABLE,
+                    upload(payload(), SLOT, resolver).getStatus());
+            capacity(session, 1);
+            assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), SLOT).getStatus());
+            capacity(session, 0);
+        }
+    }
+
+    @Test
+    void uploadCommitContentionIsRetryableWithoutConsumingItsPromise() throws RepositoryException,
+            IOException, ServletException, LoginException {
+        final Session session = submitted();
+        try (org.apache.sling.api.resource.ResourceResolver resolver = intercepting(session, () -> {
+            if (session.nodeExists(slot(SLOT).under(operation()).path())) {
+                throw new javax.jcr.InvalidItemStateException("artifact publication contended");
+            }
+        })) {
+            assertEquals(ArtifactIntakeServlet.TEMPORARILY_UNAVAILABLE,
+                    upload(payload(), SLOT, resolver).getStatus());
+            capacity(session, 1);
+            assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), SLOT).getStatus());
+            capacity(session, 0);
+        }
+    }
+
+    private void capacity(Session session, long outstanding) throws RepositoryException {
+        for (final AccountedQuantity quantity : java.util.List.of(AccountedQuantity.ARTIFACT_ROWS,
+                AccountedQuantity.ARTIFACT_BYTES, AccountedQuantity.OPERATION_RESERVATION_ROWS,
+                AccountedQuantity.OPERATION_RESERVATION_BYTES)) {
+            final boolean reservation = quantity == AccountedQuantity.OPERATION_RESERVATION_ROWS
+                    || quantity == AccountedQuantity.OPERATION_RESERVATION_BYTES;
+            final boolean bytes = quantity == AccountedQuantity.ARTIFACT_BYTES
+                    || quantity == AccountedQuantity.OPERATION_RESERVATION_BYTES;
+            final long expected = (reservation ? outstanding : 1) * (bytes ? payload().length : 1);
+            count(session, quantity, expected);
+        }
+    }
+
+    private void count(Session session, AccountedQuantity quantity, long expected)
+            throws RepositoryException {
+        assertEquals(expected, CapacityLedger.held(session, quantity, CONTRACT), quantity.spelling());
+        assertEquals(expected, CapacityLedger.heldBy(session, quantity, caller(), CONTRACT),
+                quantity.spelling());
+    }
+
     private MockSlingHttpServletResponse uploading(byte[] body,
                                                    java.util.Map<String, Object> asked)
             throws IOException, ServletException {
@@ -223,8 +406,13 @@ final class ArtifactIntakeServletTest {
 
     private MockSlingHttpServletResponse upload(byte[] body, String slot)
             throws IOException, ServletException {
+        return upload(body, slot, sling.resourceResolver());
+    }
+
+    private MockSlingHttpServletResponse upload(byte[] body, String slot,
+            org.apache.sling.api.resource.ResourceResolver resolver) throws IOException, ServletException {
         final MockSlingHttpServletRequest request =
-                new MockSlingHttpServletRequest(sling.resourceResolver());
+                new MockSlingHttpServletRequest(resolver);
         request.setMethod("POST");
         request.setContentType("application/octet-stream");
         request.setContent(body);
@@ -240,17 +428,28 @@ final class ArtifactIntakeServletTest {
 
     private Session submitted() throws RepositoryException, IOException, ServletException {
         final Session session = prepared();
+        final MockSlingHttpServletResponse response = submit(sling.resourceResolver());
+        assertEquals(SubmitServlet.ACCEPTED, response.getStatus(), response.getOutputAsString());
+        return session;
+    }
+
+    private MockSlingHttpServletResponse submit(org.apache.sling.api.resource.ResourceResolver resolver)
+            throws IOException, ServletException {
+        return submit(resolver, submission());
+    }
+
+    private MockSlingHttpServletResponse submit(org.apache.sling.api.resource.ResourceResolver resolver,
+                                                byte[] body) throws IOException, ServletException {
         final MockSlingHttpServletRequest request =
-                new MockSlingHttpServletRequest(sling.resourceResolver());
+                new MockSlingHttpServletRequest(resolver);
         request.setMethod("POST");
         request.setContentType("application/json");
-        request.setContent(submission());
+        request.setContent(body);
         ((MockRequestPathInfo) request.getRequestPathInfo())
                 .setResourcePath(SubmitServlet.route().path());
         final MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
         new SubmitServlet(new NothingRuns()).service(request, response);
-        assertEquals(SubmitServlet.ACCEPTED, response.getStatus(), response.getOutputAsString());
-        return session;
+        return response;
     }
 
     /** A build that serves the command these fixtures name and never has to run it. */
@@ -328,6 +527,8 @@ final class ArtifactIntakeServletTest {
         GenerationStore.establish(session);
         LedgerAdmission.prepare(session, caller());
         ArtifactStore.prepare(session, caller());
+        CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, caller());
+        CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, caller());
         CapacityLedger.prepare(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, caller());
         final String path = operation().path();
         walked(session, path.substring(0, path.lastIndexOf('/')));

@@ -5,6 +5,7 @@ package rs.slingshot.agent.proof;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -32,6 +33,9 @@ import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.OperationIdentity;
 import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.store.AccountedQuantity;
+import rs.slingshot.agent.store.CapacityLedger;
+import rs.slingshot.agent.store.CapacityReservation;
 import rs.slingshot.agent.store.CompareAndSet;
 import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.SaveInterleaving;
@@ -48,6 +52,11 @@ public final class ExclusiveTransitionProbe extends SlingAllMethodsServlet imple
     private static final String COUNTER = StatePath.ROOT + "/proof-counter";
     private static final String EFFECTS = "/var/slingshot-proof/effects";
     private static final AgentContract CONTRACT = ((AgentContract.Loaded) AgentContract.load()).contract();
+    private static final AccountedQuantity CAPACITY = AccountedQuantity.CONCURRENT_EVENT_STREAMS;
+    private static final StatePath.Caller CAPACITY_CALLER =
+            ((StatePath.Held) StatePath.caller("proof-capacity-owner")).caller();
+    private static final List<CapacityReservation.Charge> CAPACITY_CHARGE =
+            List.of(new CapacityReservation.Charge(CAPACITY, 1));
     private final transient Map<String, Barrier> barriers = new ConcurrentHashMap<>();
 
     /** Restores an empty set of test barriers if the servlet is deserialized. */
@@ -97,6 +106,13 @@ public final class ExclusiveTransitionProbe extends SlingAllMethodsServlet imple
             throws RepositoryException, IOException {
         return switch (action) {
             case "prepare" -> prepare(session);
+            case "capacity-source" -> capacitySource(session);
+            case "capacity-live" -> capacityLive(session);
+            case "capacity-view" -> capacityView(session);
+            case "capacity-recover" -> {
+                CapacityLedger.recoverOwner(session, UUID.fromString(fixture), CONTRACT);
+                yield "recovered";
+            }
             case "view" -> view(session, fixture);
             case "arm" -> {
                 barriers.put(fixture, new Barrier(new CountDownLatch(1), new CountDownLatch(1)));
@@ -124,6 +140,58 @@ public final class ExclusiveTransitionProbe extends SlingAllMethodsServlet imple
             }
             default -> throw new IllegalArgumentException("unknown test action: " + action);
         };
+    }
+
+    private static String capacitySource(Session session) throws RepositoryException {
+        CapacityLedger.prepare(session, CAPACITY, CAPACITY_CALLER);
+        CapacityReservation.create(session, CapacityReservation.processOwner(), CAPACITY_CALLER,
+                CAPACITY_CHARGE).orElseThrow();
+        capacityLive(session);
+        final CapacityReservation retained = ((CapacityLedger.Reserved)
+                CapacityLedger.take(session, CAPACITY_CALLER, CAPACITY_CHARGE, CONTRACT)).reservation();
+        final Node data = session.getNode(StatePath.ROOT)
+                .addNode("proof-retained-capacity", "nt:unstructured");
+        data.setProperty("retained", true);
+        CapacityReservation.retain(session, retained, data);
+        session.save();
+        return CapacityReservation.processOwner() + "," + retained.identifier();
+    }
+
+    private static String capacityLive(Session session) throws RepositoryException {
+        final CapacityReservation reservation = ((CapacityLedger.Reserved)
+                CapacityLedger.take(session, CAPACITY_CALLER, CAPACITY_CHARGE, CONTRACT)).reservation();
+        return reservation.identifier().toString();
+    }
+
+    private static String capacityView(Session session) throws RepositoryException {
+        session.refresh(false);
+        if (!session.nodeExists(CapacityLedger.totalPath(CAPACITY).path())) {
+            return "unprepared";
+        }
+        final long total = CapacityLedger.held(session, CAPACITY, CONTRACT);
+        final long caller = CapacityLedger.heldBy(session, CAPACITY, CAPACITY_CALLER, CONTRACT);
+        final long[] inventory = capacityInventory(session.getNode(StatePath.deployment(StatePath.CAPACITY)
+                .child(CapacityReservation.NODE).path()), StatePath.BUCKET_DEPTH);
+        return total + "/" + caller + "/" + inventory[0] + "/" + inventory[1];
+    }
+
+    private static long[] capacityInventory(Node parent, int depth) throws RepositoryException {
+        final long[] totals = new long[2];
+        final javax.jcr.NodeIterator children = parent.getNodes();
+        while (children.hasNext()) {
+            final Node child = children.nextNode();
+            if (depth > 0) {
+                final long[] nested = capacityInventory(child, depth - 1);
+                totals[0] += nested[0];
+                totals[1] += nested[1];
+            } else if (child.getProperty("active").getBoolean()) {
+                totals[0] += child.hasProperty("amount_concurrent_event_streams")
+                        ? child.getProperty("amount_concurrent_event_streams").getLong() : 0;
+            } else {
+                totals[1] += 1;
+            }
+        }
+        return totals;
     }
 
     private static String view(Session session, String fixture)

@@ -254,17 +254,12 @@ public final class RestartRecovery {
         }
         for (final String slot : outstanding) {
             final Node declared = record.getNode(INTAKE).getNode(slot);
-            final long bytes = declared.hasProperty(DECLARED_BYTES)
-                    ? declared.getProperty(DECLARED_BYTES).getLong() : 0;
-            // The slot goes with the reservation it stands for. A declaration nobody is waiting for
-            // that stayed behind would be released again on the next pass, and a count released
-            // twice is a store that believes it has room it does not have.
+            // The identity or legacy marker makes a retry safe even if removal is interrupted.
+            CapacityLedger.releaseResource(session, declared, named.caller(),
+                    new CapacityLedger.ResourceCharge(AccountedQuantity.OPERATION_RESERVATION_ROWS,
+                            AccountedQuantity.OPERATION_RESERVATION_BYTES, DECLARED_BYTES), contract);
             declared.remove();
             session.save();
-            CapacityLedger.release(session, AccountedQuantity.OPERATION_RESERVATION_ROWS,
-                    named.caller(), 1, contract);
-            CapacityLedger.release(session, AccountedQuantity.OPERATION_RESERVATION_BYTES,
-                    named.caller(), bytes, contract);
         }
     }
 

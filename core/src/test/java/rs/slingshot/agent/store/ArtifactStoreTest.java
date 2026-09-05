@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -163,6 +164,106 @@ final class ArtifactStoreTest {
         }
         assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, small),
                 "a refused reservation kept the row it took first");
+    }
+
+    @Test
+    @DisplayName("a failed artifact commit cancels only its own reservation")
+    void failedPublicationReturnsItsReservation() throws RepositoryException {
+        interruptedPublication(false);
+    }
+
+    @Test
+    @DisplayName("a lost artifact save reply preserves the published artifact's reservation")
+    void lostPublicationReplyPreservesItsReservation() throws RepositoryException {
+        interruptedPublication(true);
+    }
+
+    private void interruptedPublication(boolean committed) throws RepositoryException {
+        final Session session = prepared();
+        final byte[] content = "reserved bytes".getBytes(StandardCharsets.UTF_8);
+        final CapacityReservation other = assertInstanceOf(CapacityLedger.Reserved.class,
+                CapacityLedger.take(session, caller(), List.of(
+                        new CapacityReservation.Charge(AccountedQuantity.ARTIFACT_ROWS, 1),
+                        new CapacityReservation.Charge(AccountedQuantity.ARTIFACT_BYTES, content.length)),
+                        CONTRACT)).reservation();
+        assertThrows(RepositoryException.class,
+                () -> publish(interrupted(session, committed), "the-only-slot", content));
+        session.refresh(false);
+        final long expected = committed ? 2 : 1;
+        assertEquals(expected, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        assertEquals(expected * content.length,
+                CapacityLedger.held(session, AccountedQuantity.ARTIFACT_BYTES, CONTRACT));
+        assertEquals(committed, session.nodeExists(slot("the-only-slot").under(operation()).path()));
+        assertTrue(CapacityReservation.read(session, other.path()).isPresent());
+        if (committed) {
+            final Node resource = session.getNode(slot("the-only-slot").under(operation()).path());
+            assertTrue(CapacityReservation.ofResource(session, resource).isPresent());
+        }
+    }
+
+    private static Session interrupted(Session session, boolean committed) {
+        final var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
+        return (Session) java.lang.reflect.Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(), new Class<?>[] {Session.class},
+                (proxy, method, arguments) -> {
+                    if ("save".equals(method.getName())
+                            && session.nodeExists(slot("the-only-slot").under(operation()).path())
+                            && interrupted.compareAndSet(false, true)) {
+                        if (committed) {
+                            session.save();
+                        }
+                        throw new RepositoryException("publication save interrupted");
+                    }
+                    try {
+                        return method.invoke(session, arguments);
+                    } catch (final java.lang.reflect.InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
+    }
+
+    @Test
+    @DisplayName("artifact parent contention refuses before consuming the input")
+    void parentContentionDoesNotReadTheInput() throws RepositoryException {
+        contendedPublication(operation().child(ArtifactStore.NODE).path(), false);
+    }
+
+    @Test
+    @DisplayName("publication contention without a visible winner is retryable")
+    void unrelatedContentionIsNotAnOccupiedSlot() throws RepositoryException {
+        contendedPublication(slot("the-only-slot").under(operation()).path(), true);
+    }
+
+    private void contendedPublication(String path, boolean consumed) throws RepositoryException {
+        final Session session = prepared();
+        final byte[] content = "one attempt only".getBytes(StandardCharsets.UTF_8);
+        final var body = new ByteArrayInputStream(content);
+        final ArtifactStore.NotCounted outcome = assertInstanceOf(ArtifactStore.NotCounted.class,
+                ArtifactStore.publish(contendedAt(session, path), caller(), operation(),
+                        new ArtifactStore.Publication(slot("the-only-slot"), content.length, body),
+                        NOW, CONTRACT));
+        assertEquals(WriteOutcome.CONTENDED, outcome.notCounted().outcome());
+        assertEquals(consumed ? 0 : content.length, body.available());
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(session, AccountedQuantity.ARTIFACT_BYTES, caller(), CONTRACT));
+        assertFalse(session.nodeExists(slot("the-only-slot").under(operation()).path()));
+    }
+
+    private static Session contendedAt(Session session, String path) {
+        final var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
+        return (Session) java.lang.reflect.Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(), new Class<?>[] {Session.class},
+                (proxy, method, arguments) -> {
+                    if ("save".equals(method.getName()) && session.nodeExists(path)
+                            && interrupted.compareAndSet(false, true)) {
+                        throw new javax.jcr.InvalidItemStateException("an unrelated writer committed");
+                    }
+                    try {
+                        return method.invoke(session, arguments);
+                    } catch (final java.lang.reflect.InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
     }
 
     @Test

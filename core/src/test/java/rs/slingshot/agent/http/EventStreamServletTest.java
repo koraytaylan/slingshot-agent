@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -123,6 +124,26 @@ final class EventStreamServletTest {
         assertTrue(heartbeatsIn(wire) > 1,
                 "a stream with nothing to say said nothing at all, which is a stream that has"
                         + " stopped: " + wire);
+    }
+
+    @Test
+    void aResponseFailureBeforeWritingReleasesOnlyItsOwnReservation() throws RepositoryException {
+        final Session session = recorded();
+        final StreamAdmission.Admitted existing = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        final MockSlingHttpServletResponse failed = new MockSlingHttpServletResponse() {
+            @Override
+            public void flushBuffer() {
+                throw new IllegalStateException("the response failed before the writer started");
+            }
+        };
+        assertThrows(IllegalStateException.class,
+                () -> asking("with-nothing-waiting", "", failed));
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS, CONTRACT));
+        assertEquals(1, CapacityLedger.heldBy(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS,
+                caller(), CONTRACT));
+        StreamAdmission.close(session, existing, CONTRACT);
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS, CONTRACT));
     }
 
     @Test
@@ -392,6 +413,12 @@ final class EventStreamServletTest {
 
     private MockSlingHttpServletResponse asking(String fixture, String resumption)
             throws IOException, ServletException {
+        return asking(fixture, resumption, new MockSlingHttpServletResponse());
+    }
+
+    private MockSlingHttpServletResponse asking(String fixture, String resumption,
+                                                MockSlingHttpServletResponse response)
+            throws IOException, ServletException {
         final DocumentValue.Mapping asked = assertInstanceOf(DocumentValue.Mapping.class,
                 asks().member(fixture).orElseThrow(), fixture + " is not an ask");
         final MockSlingHttpServletRequest request =
@@ -407,7 +434,6 @@ final class EventStreamServletTest {
         if (!resumption.isEmpty()) {
             request.setHeader(StreamResumption.RESUMPTION_HEADER, resumption);
         }
-        final MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
         new EventStreamServlet(new AdvancingTicker()).service(request, response);
         return response;
     }

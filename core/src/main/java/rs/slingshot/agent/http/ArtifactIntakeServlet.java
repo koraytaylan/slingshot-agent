@@ -57,6 +57,9 @@ public final class ArtifactIntakeServlet extends AgentServlet {
     /** What a payload for a slot that already holds one is answered with. */
     public static final int ALREADY_COMPLETE = 409;
 
+    /** What temporary capacity or repository contention is answered with. */
+    public static final int TEMPORARILY_UNAVAILABLE = 503;
+
     /** What a payload this side took is answered with. */
     public static final int TAKEN = 204;
 
@@ -130,6 +133,10 @@ public final class ArtifactIntakeServlet extends AgentServlet {
                          AgentContract contract) throws IOException, RepositoryException {
         final IntakeSlotWrite.Outcome outcome =
                 IntakeSlotWrite.write(session, caller, arriving, contract);
+        if (outcome instanceof IntakeSlotWrite.Unavailable) {
+            refuse(response, TEMPORARILY_UNAVAILABLE);
+            return;
+        }
         final Optional<IntakeSlotWrite.Refused> refused = IntakeSlotWrite.refusalIn(outcome);
         if (refused.isEmpty()) {
             response.setStatus(TAKEN);

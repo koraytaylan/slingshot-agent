@@ -105,3 +105,285 @@ Validation:
   `interop/target/plan10-4102-refresh-red.log`, and `interop/target/plan10-4102-quality.log`.
   The JVM's temporary directory is set to `interop/target/runtime-tmp` because the host's `/tmp`
   quota was exhausted. The gate still takes no arguments and uses the existing prepared inputs.
+
+## 4103 — consistent capacity accounting
+
+Capacity admission now owns durable identities with complete charge vectors. Activation and release
+commit total and caller changes together, and publication binds retained data to its identity in the
+same commit. All production callers have migrated and the amount-only APIs are removed. Recovery
+reclaims reservations of an independently verified stopped process, preserving retained data and
+other owners. A shared-store runtime test verifies this after actually killing the owning process.
+Legacy resources keep their existing charges until their identity-marked retirement; owner recovery
+never fabricates missing historical ownership or clamps counters. Final gate validation passed.
+
+Review and correction loop:
+
+1. Added three deterministic Oak regressions before changing the ledger. Two competing releases
+   reproduced total=0/share=1. Interrupting admission or release after the first successful save
+   reproduced unequal total and caller counts. All three failed the original implementation.
+2. Changed the counter transition to fence both nodes before checking counts and to save both
+   changes together. Every conflict retries the entire decision after refresh. Exhausted release
+   contention now raises a repository failure, and over-release refuses without clamping or
+   leaving pending changes.
+3. Added last-slot admission, automatic refresh between counter stamps, exhausted contention, and
+   over-release checks. All 14 capacity-ledger tests passed. The broader core run exposed four
+   stream fixtures that served a writer without first reserving its slot; the former implementation
+   silently decremented their empty counts. Corrected those fixtures. All 875 core tests then passed.
+4. Added `CapacityReservation`: a fresh, bucketed, process-owned pending identity with a canonical
+   charge vector. Admission requires that record and activates all quantities in one save. Release
+   removes the record and all its charges together. Repeated release is harmless, and a delayed
+   admission cannot recreate the removed identity. This avoids retaining a tombstone per release.
+5. Nine additional identity tests cover uncertain save responses, competing admission and release,
+   cancellation racing an already prepared admission, whole-vector refusal, persisted identity
+   recovery from another session, and refusal of altered identity data. The combined focused run
+   passed all 23 tests. The tests distinguish pending identities, which charge nothing, from active
+   identities, whose persisted vectors supply exactly what is released.
+6. Corrected formatting, an immutable-list accessor finding, and the repository-name provenance
+   finding from the full gate. Added negative/duplicate/empty vector, immutability, and exhausted
+   pending-creation contention checks. The complete argument-free `scripts/quality` passed on
+   2026-09-05 at 19:50 CEST: 886 core tests and 459 interop tests passed with no failures, errors,
+   or skips; all coverage and policy stages passed. The owner-supplied AEM and sibling-client tiers
+   were not run. The log is `interop/target/plan10-4103-quality.log`. This validates the current
+   foundation, not the remaining caller migration or process-death capacity recovery.
+
+7. Migrated stream admission and synchronous command execution to `CapacityLedger.take`, carrying
+   each returned identity into release. Stream writers now require their admission identity.
+   Repeated close, lost activation replies, and response failure before writing preserve other
+   open streams' counts. Reservation creation contention is an explicit absent result translated
+   to `NotCounted(CONTENDED)`, rather than being confused with an unrelated repository failure.
+8. Migrated events and subscriptions to one row/byte charge vector. Their publication commits
+   bind the reservation to retained data. Cancellation preserves a committed publication even
+   when its save response was lost; cancellation that wins before publication fences the pending
+   resource commit. The retained-resource ownership marker is checked before a cleanup debit.
+9. Added identity-aware retained-resource release for maintenance and restart cleanup. Legacy
+   records commit a per-record release marker with both counter changes, preventing repeated
+   release after response loss. Data removal is still separate and remains task 4104's work.
+   Repeated modern/legacy cleanup tests preserve a second reservation's counts.
+10. The migrated core suite passed 894 tests. A subsequent full-gate review rejected broad runtime
+    catches in cleanup paths. Replaced them with an `AutoCloseable` ownership guard, allowing Java
+    to preserve primary and suppressed cleanup failures. The guard hands off explicitly after
+    successful activation or stream scheduling and otherwise cancels unfinished ownership.
+    The private-constructor cleanup scope borrows its session through the reservation's factory,
+    following the repository's existing authority pattern. Added rejection of foreign resource
+    paths and decoding of malformed negative persisted charges as repository failures. All 896
+    core tests and coverage passed; integration validation of this refactor was recorded in
+    `interop/target/plan10-4103-migration-quality.log`.
+11. Confirmed that `IntakeSlotWrite.declare` writes declarations without reserving capacity, while
+    upload passes `ArtifactStore.Reservation.ALREADY_TAKEN`. The existing documentation's upfront
+    reservation claim is not evidence of implemented behavior. This assumption must be removed
+    by implementing actual intake reservation ownership, not carried into the identity API.
+
+12. The first full migration gate passed 896 core tests and reached all 459 interop tests, but
+    `TransportDisruptionScenario.everyenumeratedPointSevers` observed `NOTHING_CONNECTED` after a
+    mid-intake reset. An isolated four-test rerun passed. Review found that `NetworkDisruptor`
+    closed the socket before publishing `SEVERED`, allowing the peer to return before the observer
+    saw that publication. Synchronized the status read and the close/publication transition;
+    success is still recorded only after close succeeds. This is a supporting gate-observer fix,
+    not a claim that the positive-intake acceptance work in task 4601 is complete.
+13. The first rerun after that synchronization passed the severance check but observed an HTTP 500
+    in the separate post-disruption capability probe. Added the response body to that assertion's
+    diagnostic. The subsequent diagnostic rerun passed all four tests; the cause of that one HTTP
+    500 remains unproved. The full gate is being rerun with the synchronization and diagnostic
+    changes. The original gate failure is preserved in
+    `interop/target/plan10-4103-migration-transport-red.log`; isolated runs are in
+    `interop/target/plan10-4103-transport-recheck.log`,
+    `interop/target/plan10-4103-transport-fixed.log`, and
+    `interop/target/plan10-4103-transport-diagnostic.log`.
+
+14. The next migration gate passed all 896 core tests but failed one of 459 interop tests: the
+    shared-store proof received a 404 while polling the second node's prepared fixture state.
+    The probe had already passed its GET readiness check, so this was not a missing installation
+    wait. Read-only visibility polls now tolerate 404 within the existing 20-second deadline;
+    every mutation still requires a successful response without replay. Both focused
+    `CrashConsistencyScenario` tests passed in `interop/target/plan10-4103-probe-readiness.log`.
+15. Migrated ordinary artifact publication to one row-and-byte reservation and bound that identity
+    in the artifact publication commit. Its cleanup guard returns capacity on repository failures
+    and preserves it after a committed publication loses its response. Publication also stamps the
+    parent before creating the slot and disposes the staged binary after use. The intake-only
+    `ALREADY_TAKEN` assertion remains an explicit unfinished path.
+16. Added two publication-interruption regressions with another live reservation present. Against
+    the previous ArtifactStore implementation, the failed-commit case leaked its row (expected
+    one, observed two), and the lost-response case had no durable reservation ownership. Both red
+    results are in `interop/target/plan10-4103-artifacts-red.log`. The original 18 artifact/intake
+    tests passed with the migration. The complete gate then passed at 21:12 CEST on 2026-09-05,
+    including all 898 core tests, all 459 interop tests, and the required coverage and policy checks.
+    Evidence: `interop/target/plan10-4103-artifact-quality.log`. The owner-supplied Adobe quickstart
+    and sibling-client tiers were not run by this gate. This validates the current partial
+    migration; intake and recovery requirements still prevent completion of task 4103.
+
+17. Artifact contention review reproduced two failures: an invisible parent-claim conflict led to
+    `PathNotFoundException`, and an unrelated publication conflict was reported as `SLOT_TAKEN`.
+    The parent conflict now returns `NotCounted(CONTENDED)` before consuming input. Publication
+    refreshes and distinguishes a visible winner from unrelated contention, without replaying the
+    stream. A checked ownership callback preserves repository contention for this classification.
+    Red evidence: `interop/target/plan10-4103-artifact-contention-red.log`; all 22 artifact/intake
+    tests passed after the correction in `interop/target/plan10-4103-artifact-contention.log`.
+18. Added atomic activation of a nonempty manifest of distinct pending reservation identities.
+    Every pending vector is staged under the common capacity fence and one save commits them all;
+    quota refusal or cancellation of one member discards the entire activation. Active replay does
+    not charge again, and each admitted identity remains independently releasable. Four tests cover
+    combined quota refusal, lost response, cancellation by an independent session, and malformed
+    manifests. All 44 focused tests passed in `interop/target/plan10-4103-manifest-activation.log`.
+19. Added a staged ownership transfer from retained declaration capacity to a fresh pending artifact
+    identity. Counter replacement, destination ownership, and removal of the old identity belong to
+    the publication commit. The source resource is fenced too; foreign resources are refused.
+    Four tests cover a lost response plus delayed source release, quota refusal preserving the
+    source, source retirement by an independent session, and refusal of an already active
+    replacement. All 48 focused tests passed in `interop/target/plan10-4103-capacity-transfer.log`
+    before the subsequent source-resource fence review. Added a fifth transfer test where another
+    session deletes the source data without modifying the capacity root; the source fence prevents
+    the prepared transfer from committing. Core verification passed all 909 tests, coverage,
+    formatting, and static analysis at 21:22 CEST on 2026-09-05. Evidence:
+    `interop/target/plan10-4103-intake-primitives-verify.log`. The complete gate has not been rerun
+    since these manifest and transfer changes; its earlier 898/459 result remains scoped to the
+    preceding artifact migration.
+20. Intake integration must attach declarations and retained ownership to operation creation's
+    commit. Calling declaration admission after `SubmissionAdmission.Accepted` would leave an
+    accepted operation with no declarations when quota admission fails; a recognised retry would
+    then skip the missing work. The new primitives are not yet wired into this boundary or upload.
+
+21. Added a lexical reservation batch that tracks identities as each slot is allocated. Cleanup
+    attempts every identity even after a cancellation fails, preserves all suppressed failures,
+    keeps charges attached to published data, and permits idempotent retry of failed cleanup.
+    Three batch tests passed with the existing reservation tests (30 total) in
+    `interop/target/plan10-4103-batch-cleanup.log`.
+22. Replaced `ClaimByCreation`'s unchecked callback type with checked `InitialValues`, and added
+    operation creation/admission overloads for data belonging in the acceptance commit. Intake now
+    activates all per-slot promises before acceptance and writes every declaration plus retained
+    ownership in that same operation commit. A refused manifest leaves no accepted operation.
+    Existing operation recognition does not allocate another manifest.
+23. Removed `ArtifactStore.Reservation.ALREADY_TAKEN`. Intake upload now creates a pending artifact
+    identity and transfers its actual declaration reservation during publication. Each declaration
+    initially reserves artifact rows/bytes and outstanding-operation rows/bytes; upload preserves
+    the artifact charge and releases the outstanding-operation charge. Expected digest validation
+    moved before publication because transferring ownership and then deleting a wrong-digest
+    artifact would strand its capacity. This implements part of task 4303's validation ordering;
+    final-slot execution/completion and that task's full proof remain unimplemented here.
+24. Servlet regressions now verify exact total and caller counts before upload, after rejection,
+    after upload, and across two slots transferred independently. Quota refusal leaves no operation;
+    a failed acceptance save can be retried; a committed acceptance with a lost reply is recognised
+    without another charge. All 88 focused tests passed in
+    `interop/target/plan10-4103-intake-atomicity.log`. The next core run passed 916 tests but identified
+    an uncovered missing-prepared-counter refusal; added a regression proving atomic refusal and
+    successful admission after preparation is repaired. The full gate is running in
+    `interop/target/plan10-4103-intake-quality.log`. Its first attempts caught test resource scopes,
+    exception comparison, and formatting findings, which were corrected without changing policy.
+
+25. The gate's policy suite rejected the eight-argument prepaid publication method and the batch's
+    copying accessor. Grouped the declaration path and required digest in `ArtifactStore.Prepaid`
+    and made the batch accessor a read-only view, matching its allocation lifecycle. No policy
+    rules changed. Review then corrected intake's conversion of artifact backpressure/contention
+    into a permanent length mismatch: `Unavailable` now maps to HTTP 503. Two servlet tests force
+    allocation and publication contention, verify that the original promise survives, and retry
+    successfully. All 73 focused tests passed in `interop/target/plan10-4103-intake-retry.log`.
+    Fault-injection resolver wrappers own cloned delegates; closing a test wrapper therefore does
+    not close the Sling context's resolver during teardown. The complete gate passed at 21:55 CEST
+    on 2026-09-05 with all 919 core tests, all 459 interop tests, coverage, policy, and package checks.
+    Evidence: `interop/target/plan10-4103-intake-quality.log`. The owner-supplied Adobe quickstart and
+    sibling-client tiers were not run. This gate validates the current intake migration, not the
+    still-unimplemented dead-owner reconciliation or later final-slot execution wiring.
+
+26. Bounds-change regressions reproduced invisible legacy charges (seven bytes read as zero), a
+    release subtracting from the wrong shard, and acceptance of a negative stored shard. Counter
+    reads now include every supported legacy shard, reject negative values, and use exact integer
+    addition. A successful transition consolidates the sum into shard zero and removes the other
+    shard properties in the same fenced commit. Bound changes no longer select storage locations.
+    Initial red evidence: `interop/target/plan10-4103-layout-red.log`; all 64 focused tests passed
+    after this correction in `interop/target/plan10-4103-layout.log`.
+27. Transfer review reproduced refusal of a fully paid promise after the bound fell below current
+    usage. Transfers now credit only the original identity's own quantity: preserving or reducing
+    it is permitted, while an increase still must fit the current total and caller bounds. Tests
+    cover both cases and preserve another reservation's charge. Red evidence:
+    `interop/target/plan10-4103-transfer-bounds-red.log`.
+28. Preparation review reproduced an unrelated writer making a parent claim invisible, followed by
+    a missing-parent exception; exhausted contention stopped after one attempt instead of the
+    configured limit. Preparation now checks every claim outcome and retries from fresh state,
+    surfacing exhaustion without pending writes. The first race uses independently refreshed Oak
+    sessions. Red evidence: `interop/target/plan10-4103-preparation-red.log`. Core tests passed all
+    927 cases during verification, which then identified formatting and obsolete private layout
+    arguments. Those were corrected, and core verification passed all 927 tests, coverage,
+    formatting, and static analysis at 22:09 CEST on 2026-09-05. Evidence:
+    `interop/target/plan10-4103-layout-verify.log`. The full gate has not been rerun since these
+    layout and preparation changes; its preceding 919/459 result covers the intake migration.
+
+29. Added `CapacityLedger.recoverOwner` for a process incarnation whose retirement the caller has
+    independently established. A different UUID or an expired lease is explicitly insufficient,
+    and recovery refuses the current incarnation. Inventory validates its capacity-root revision
+    before returning a snapshot and retries contention; cancellation then uses each owned identity.
+    Retained resources and other owners remain charged. Eight reservation tests cover retained/live
+    ownership, interrupted recovery, concurrent inventory writes, empty inventories, contention
+    exhaustion, and malformed/misplaced records. The bucket-path check prevents an identity moved
+    under another bucket from being silently skipped during cancellation.
+30. Extended the test-only shared-store probe to create a pending reservation, an abandoned active
+    reservation, and retained data on the node subsequently killed. The survivor owns a fourth
+    reservation. After the actual process kill, the survivor invokes recovery for the killed
+    process's UUID. Independently scanned active charge vectors agree with total and caller counts
+    (two), no pending record remains, retained data and its active identity remain readable, and the
+    survivor's active identity remains readable. Repeating recovery leaves those counts unchanged.
+    Both `CrashConsistencyScenario` tests passed in
+    `interop/target/plan10-4103-recovery-runtime.log` at 22:20 CEST on 2026-09-05. This proves the
+    recovery primitive after process death; automatic lifecycle discovery/wiring remains task 4501.
+31. Core verification passed all 935 tests, coverage, formatting, and static analysis at 22:25 CEST
+    on 2026-09-05 after the final inventory validation tests and formatting corrections. Evidence:
+    `interop/target/plan10-4103-recovery-verify.log`. The focused runtime run preceded the additional
+    misplaced-record validation. The complete gate must cover the final task implementation before
+    task 4103 can be committed; the earlier 919/459 gate is not evidence for these later changes.
+
+32. Removed the amount-only capacity admission and release APIs after migrating their remaining
+    callers. Quota tests use actual reservation vectors; concurrent release tests own two distinct
+    identities, and the interrupted admission test loses the activation response after creating its
+    pending identity. The underflow test corrupts one persisted counter beneath a real reservation
+    and verifies refusal leaves both the identity and the other counter unchanged. The first build
+    found a migration syntax error, then an import-order error; both were corrected.
+33. Reviewed legacy reconciliation against R08: process recovery is explicitly based on durable
+    ownership, which historical counters do not contain. It must preserve unattributable legacy
+    charges rather than invent owners or replace totals with only modern reservation sums. Added
+    a mixed legacy/modern test using independent sessions: repeated stopped-owner recovery removes
+    only the abandoned modern vector; repeated resource retirement removes the legacy vector once;
+    releasing the surviving modern identity restores both quantities and both accounts to zero.
+    Historical corruption without durable ownership evidence remains unrecoverable automatically.
+    Adopting every legacy record is not required for identity-based process recovery and would not
+    establish the missing provenance. Existing unbacked intake declarations likewise cannot acquire
+    a prepaid identity merely by being present.
+34. Reviewed the standalone sharded helper: production capacity no longer calls it. Its conditional
+    delta explicitly returns VALUE_CHANGED for stale input; a new independent-session interleaving
+    verifies that refusal changes nothing and a fresh invocation advances exactly once. Documented
+    that caller obligation. Runtime lifecycle discovery remains task 4501, atomic resource deletion
+    with charge retirement remains 4104, and accepted-operation progress and intake completion remain
+    4301/4303/4304. The primitive recovery proof does not claim these later behaviors.
+
+35. Core verification passed all 937 tests, coverage, formatting, PMD, and SpotBugs at 22:36 CEST
+    on 2026-09-05. Evidence: `interop/target/plan10-4103-final-core-verify.log`. The full argument-free
+    gate is running against the final implementation.
+
+36. The final gate passed all 937 core tests and the process-kill recovery scenario, but 14 of
+    459 interop assertions received HTTP 404 instead of application responses. Failures clustered
+    after the shared public runtime was restarted following StorageUpgradeScenario; later scenarios
+    recovered. The saved startup logs do not establish the cause of this transient outage. The
+    affected scenarios and their preceding restart passed on focused recheck without code changes.
+    The failed gate is retained in `interop/target/plan10-4103-final-quality.log` and the focused
+    result in `interop/target/plan10-4103-route-recheck.log` (53 tests passed). The full gate recheck
+    captures test-owned container logs throughout the run. No assertion or mutation retry was relaxed.
+
+37. The complete argument-free gate passed at 22:58 CEST on 2026-09-05: all 937 core tests and
+    all 459 interop tests passed, with no failures, errors, or skips. Coverage, formatting, static
+    analysis, policy checks, and package checks passed. The shared-store process-kill recovery proof
+    ran in this gate. Evidence: `interop/target/plan10-4103-final-quality-recheck.log`; diagnostic
+    runtime logs are under `interop/target/plan10-4103-gate-runtime-logs`. The earlier transient 404
+    failure remains unexplained; passing this unchanged rerun does not establish a repair for it.
+    The owner-supplied Adobe quickstart and sibling-client end-to-end tiers did not run.
+38. Re-read the final production caller changes, checked that no amount-only capacity call remains,
+    reviewed the legacy and standalone-shard boundaries, and checked whitespace. Task 4103's
+    identity accounting and verified-process recovery requirements are satisfied. Resource deletion
+    and charge retirement still require the task 4104 transaction; runtime lifecycle activation and
+    accepted-operation progress remain their separately authored tasks. No claim is made that the
+    full plan or positive installed command execution is complete.
+
+Current focused logs: `interop/target/plan10-4103-red.log`,
+`interop/target/plan10-4103-atomic-review.log`, `interop/target/plan10-4103-core-review.log`, and
+`interop/target/plan10-4103-identities.log`.
+
+Migration logs: `interop/target/plan10-4103-consumers.log`,
+`interop/target/plan10-4103-retained.log`, `interop/target/plan10-4103-resource-release.log`,
+`interop/target/plan10-4103-migrated-core.log`, and
+`interop/target/plan10-4103-migration-quality.log`.

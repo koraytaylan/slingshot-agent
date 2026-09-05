@@ -3,6 +3,7 @@
 
 package rs.slingshot.agent.store;
 
+import java.util.List;
 import java.util.Optional;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
@@ -32,6 +33,8 @@ public final class SubscriptionLedger {
 
     /** How much of a row one subscription costs, which is one row. */
     private static final long ONE_ROW = 1;
+
+    private static final String BYTE_COUNT = "byte_count";
 
     private SubscriptionLedger() {
     }
@@ -147,37 +150,38 @@ public final class SubscriptionLedger {
                                     AgentContract contract) throws RepositoryException {
         final SubscriptionRecord record = new SubscriptionRecord(identifier, generation,
                 SubscriptionRecord.Unread.NOTHING_SHOWN_YET, nowUnixMilliseconds);
-        final CapacityLedger.Admission rows = CapacityLedger.admit(session,
-                AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, caller, ONE_ROW, contract);
-        if (!(rows instanceof CapacityLedger.Admitted)) {
-            return of(rows);
+        final CapacityLedger.ReservationAdmission admission = CapacityLedger.take(session, caller,
+                List.of(new CapacityReservation.Charge(AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, ONE_ROW),
+                        new CapacityReservation.Charge(AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES,
+                                record.bytes())), contract);
+        if (!(admission instanceof final CapacityLedger.Reserved reserved)) {
+            return of(admission);
         }
-        final CapacityLedger.Admission bytes = CapacityLedger.admit(session,
-                AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, caller, record.bytes(), contract);
-        if (!(bytes instanceof CapacityLedger.Admitted)) {
-            CapacityLedger.release(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, caller,
-                    ONE_ROW, contract);
-            return of(bytes);
-        }
-        return claimed(session, caller, record, contract);
+        return claimed(session, caller, record, contract, reserved.reservation());
     }
 
     private static Outcome claimed(Session session, StatePath.Caller caller,
-                                   SubscriptionRecord record, AgentContract contract)
-            throws RepositoryException {
-        ClaimByCreation.claim(session, StatePath.deployment(SubscriptionRecord.NODE),
-                "nt:unstructured", node -> { });
-        final WriteOutcome claimed = ClaimByCreation.claim(session,
-                SubscriptionRecord.pathOf(record.identifier()), "nt:unstructured",
-                node -> write(node, record, caller));
-        if (claimed == WriteOutcome.CLAIMED) {
-            return new Subscribed(record);
+                                   SubscriptionRecord record, AgentContract contract,
+                                   CapacityReservation reservation) throws RepositoryException {
+        try (CapacityReservation.Guard guard = reservation.guard(session, contract)) {
+            ClaimByCreation.claim(session, StatePath.deployment(SubscriptionRecord.NODE),
+                    "nt:unstructured", node -> { });
+            final WriteOutcome claimed = ClaimByCreation.claim(session,
+                    SubscriptionRecord.pathOf(record.identifier()), "nt:unstructured",
+                    node -> write(node, record, caller, guard.reservation()));
+            if (claimed == WriteOutcome.CLAIMED) {
+                return new Subscribed(record);
+            }
+            if (claimed == WriteOutcome.ALREADY_HELD) {
+                return new Resumed(readBack(session, record.identifier(), record.generation()));
+            }
+            return new NotCounted(new CapacityLedger.NotCounted(
+                    AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, claimed));
         }
-        release(session, caller, record, contract);
-        return new Resumed(readBack(session, record.identifier(), record.generation()));
     }
 
-    private static void write(Node node, SubscriptionRecord record, StatePath.Caller caller) {
+    private static void write(Node node, SubscriptionRecord record, StatePath.Caller caller,
+                                CapacityReservation reservation) {
         try {
             node.setProperty(SubscriptionRecord.IDENTIFIER, record.identifier().rendered());
             node.setProperty(SubscriptionRecord.GENERATION, record.generation().number());
@@ -185,6 +189,8 @@ public final class SubscriptionLedger {
             node.setProperty(SubscriptionRecord.LAST_ADVANCED_AT,
                     record.lastAdvancedAtUnixMilliseconds());
             node.setProperty(SUBSCRIBER, caller.name());
+            node.setProperty(BYTE_COUNT, record.bytes());
+            CapacityReservation.retain(node.getSession(), reservation, node);
         } catch (final RepositoryException unwritable) {
             throw new IllegalStateException("the subscription could not be written", unwritable);
         }
@@ -236,20 +242,16 @@ public final class SubscriptionLedger {
     public static void end(Session session, StatePath.Caller caller, SubscriptionRecord record,
                            AgentContract contract) throws RepositoryException {
         final StatePath path = SubscriptionRecord.pathOf(record.identifier());
+        if (!session.nodeExists(path.path())) {
+            return;
+        }
+        CapacityLedger.releaseResource(session, session.getNode(path.path()), caller,
+                new CapacityLedger.ResourceCharge(AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
+                        AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, BYTE_COUNT, record.bytes()), contract);
         if (session.nodeExists(path.path())) {
             session.getNode(path.path()).remove();
             session.save();
         }
-        release(session, caller, record, contract);
-    }
-
-    private static void release(Session session, StatePath.Caller caller,
-                                SubscriptionRecord record, AgentContract contract)
-            throws RepositoryException {
-        CapacityLedger.release(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, caller,
-                record.bytes(), contract);
-        CapacityLedger.release(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, caller,
-                ONE_ROW, contract);
     }
 
     /**
@@ -275,7 +277,7 @@ public final class SubscriptionLedger {
         return outcome instanceof final Refused refused ? Optional.of(refused) : Optional.empty();
     }
 
-    private static Outcome of(CapacityLedger.Admission admission) {
+    private static Outcome of(CapacityLedger.ReservationAdmission admission) {
         return admission instanceof final CapacityLedger.Refused refused
                 ? new AtCapacity(refused)
                 : new NotCounted((CapacityLedger.NotCounted) admission);

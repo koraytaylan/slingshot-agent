@@ -9,6 +9,7 @@ import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.OperationIdentity;
+import rs.slingshot.agent.store.ClaimByCreation;
 import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.StatePath;
 import rs.slingshot.agent.store.WriteOutcome;
@@ -60,6 +61,23 @@ public final class SubmissionAdmission {
     public static AdmissionOutcome admit(Session session, Submission submission,
                                          long nowUnixMilliseconds, AgentContract contract)
             throws RepositoryException {
+        return admit(session, submission, nowUnixMilliseconds, contract, node -> { });
+    }
+
+    /**
+     * Admits an operation with initial data that must be published in its acceptance commit.
+     *
+     * @param session the admission session
+     * @param submission the submitted operation identity and contract
+     * @param nowUnixMilliseconds the admission time
+     * @param contract the authenticated bounds
+     * @param alongside initial data written only if this call creates the operation
+     * @return acceptance, recognition, or refusal
+     * @throws RepositoryException if the repository or initial-data publication fails
+     */
+    public static AdmissionOutcome admit(Session session, Submission submission,
+                                         long nowUnixMilliseconds, AgentContract contract,
+                                         ClaimByCreation.InitialValues alongside) throws RepositoryException {
         final GenerationStore.Membership membership =
                 GenerationStore.membership(session, submission.identity().generation());
         if (membership != GenerationStore.Membership.SERVING) {
@@ -72,7 +90,7 @@ public final class SubmissionAdmission {
         if (existing instanceof final OperationStore.Held held) {
             return compared(held.operation(), submission);
         }
-        return recorded(session, submission, nowUnixMilliseconds, contract);
+        return recorded(session, submission, nowUnixMilliseconds, contract, alongside);
     }
 
     private static AdmissionOutcome.Reason reasonFor(GenerationStore.Membership membership) {
@@ -82,7 +100,8 @@ public final class SubmissionAdmission {
     }
 
     private static AdmissionOutcome recorded(Session session, Submission submission,
-                                             long nowUnixMilliseconds, AgentContract contract)
+                                             long nowUnixMilliseconds, AgentContract contract,
+                                             ClaimByCreation.InitialValues alongside)
             throws RepositoryException {
         final LogicalOperation.Outcome accepted = LogicalOperation.accepted(submission.identity(),
                 submission.submissionDigest(), submission.commandContract(), submission.caller(),
@@ -92,7 +111,7 @@ public final class SubmissionAdmission {
                     AdmissionOutcome.Reason.UNBELIEVABLE_REQUEST_START, refused.detail());
         }
         final Object created = OperationStore.create(session,
-                ((LogicalOperation.Held) accepted).operation());
+                ((LogicalOperation.Held) accepted).operation(), alongside);
         if (created instanceof final OperationStore.Refused refused) {
             return new AdmissionOutcome.Refused(AdmissionOutcome.Reason.NOT_RECORDED,
                     refused.refusal() + ": " + refused.detail());

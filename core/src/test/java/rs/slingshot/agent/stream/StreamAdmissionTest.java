@@ -13,9 +13,12 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -111,23 +114,23 @@ final class StreamAdmissionTest {
     void eachOfTheFourEndingsGivesTheRoomBack() throws RepositoryException {
         final Session session = recorded();
         final StreamSession quiet = following(identifierOf("nothing-waiting.json"));
-        ended(session, () -> assertEquals(StreamWriter.Ending.REACHED_THE_SESSION_BOUND,
-                new StreamWriter(quiet, CONTRACT)
+        ended(session, admission -> assertEquals(StreamWriter.Ending.REACHED_THE_SESSION_BOUND,
+                new StreamWriter(quiet, CONTRACT, admission)
                         .serve(new StringWriter(), session, new AdvancingTicker(), ""),
                 "a quiet stream ended some way other than at its own bound"));
-        ended(session, () -> assertEquals(StreamWriter.Ending.THE_CLIENT_WENT_AWAY,
-                new StreamWriter(quiet, CONTRACT)
+        ended(session, admission -> assertEquals(StreamWriter.Ending.THE_CLIENT_WENT_AWAY,
+                new StreamWriter(quiet, CONTRACT, admission)
                         .serve(new SeveredWriter(), session, new AdvancingTicker(), ""),
                 "a client that stopped reading ended the stream some other way"));
         final StreamSession gone = following(identifierOf("accepted.json"));
         session.getNode(operation("accepted.json").path()).remove();
         session.save();
-        ended(session, () -> assertEquals(StreamWriter.Ending.NOTHING_LEFT_TO_SERVE,
-                new StreamWriter(gone, CONTRACT)
+        ended(session, admission -> assertEquals(StreamWriter.Ending.NOTHING_LEFT_TO_SERVE,
+                new StreamWriter(gone, CONTRACT, admission)
                         .serve(new StringWriter(), session, new AdvancingTicker(), "1:0"),
                 "a stream on an operation nothing holds went on saying nothing"));
-        ended(session, () -> assertThrows(IllegalStateException.class,
-                () -> new StreamWriter(quiet, CONTRACT)
+        ended(session, admission -> assertThrows(IllegalStateException.class,
+                () -> new StreamWriter(quiet, CONTRACT, admission)
                         .serve(new FaultingWriter(), session, new AdvancingTicker(), ""),
                 "a fault in the writing was swallowed rather than ending the stream"));
         assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS,
@@ -148,20 +151,65 @@ final class StreamAdmissionTest {
                 "a count that did not happen was reported as a bound that was reached");
     }
 
-    private void ended(Session session, Runnable ending) throws RepositoryException {
-        assertInstanceOf(StreamAdmission.Admitted.class,
+    @Test
+    void repeatedCloseLeavesAnotherOpenStreamCounted() throws RepositoryException {
+        final Session session = recorded();
+        final StreamAdmission.Admitted first = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        final StreamAdmission.Admitted second = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        StreamAdmission.close(session, first, CONTRACT);
+        StreamAdmission.close(session, first, CONTRACT);
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS, CONTRACT));
+        assertEquals(1, CapacityLedger.heldBy(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS,
+                caller(), CONTRACT));
+        StreamAdmission.close(session, second, CONTRACT);
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS, CONTRACT));
+    }
+
+    @Test
+    void uncertainAdmissionIsCancelledWithoutDebitingAnExistingStream() throws RepositoryException {
+        final Session session = recorded();
+        final StreamAdmission.Admitted existing = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        final AtomicInteger saves = new AtomicInteger();
+        final Session uncertain = (Session) Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(), new Class<?>[] {Session.class},
+                (proxy, method, arguments) -> {
+                    try {
+                        final Object returned = method.invoke(session, arguments);
+                        if ("save".equals(method.getName()) && saves.incrementAndGet() == 2) {
+                            throw new RepositoryException("the activation commit reply was lost");
+                        }
+                        return returned;
+                    } catch (final InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
+        assertThrows(RepositoryException.class,
+                () -> StreamAdmission.open(uncertain, caller(), CONTRACT));
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS, CONTRACT));
+        assertEquals(1, CapacityLedger.heldBy(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS,
+                caller(), CONTRACT));
+        StreamAdmission.close(session, existing, CONTRACT);
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS, CONTRACT));
+    }
+
+    private void ended(Session session, java.util.function.Consumer<StreamAdmission.Admitted> ending)
+            throws RepositoryException {
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
                 StreamAdmission.open(session, caller(), CONTRACT),
                 "there was no room to prove an ending with");
         assertEquals(1, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS,
                         CONTRACT), "an open stream is not counted");
-        ending.run();
+        ending.accept(admission);
         assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_EVENT_STREAMS,
                         CONTRACT), "an ending did not give the room back");
-        assertNotEquals(CapacityLedger.Reached.THE_TOTAL, StreamAdmission.refusalIn(
-                        StreamAdmission.open(session, caller(), CONTRACT))
+        final StreamAdmission.Outcome reopened = StreamAdmission.open(session, caller(), CONTRACT);
+        assertNotEquals(CapacityLedger.Reached.THE_TOTAL, StreamAdmission.refusalIn(reopened)
                 .map(refused -> refused.refusal().reached()).orElse(null),
                 "a room could not be taken again immediately after an ending");
-        StreamAdmission.close(session, caller(), CONTRACT);
+        StreamAdmission.close(session, assertInstanceOf(StreamAdmission.Admitted.class, reopened), CONTRACT);
     }
 
     /** A client that went away, which is the second of the four endings. */

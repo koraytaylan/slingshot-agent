@@ -277,13 +277,14 @@ public final class SubmitServlet extends AgentServlet {
             refuse(response, REFUSED);
             return;
         }
-        final AdmissionOutcome outcome = SubmissionAdmission.admit(session, asked.get(),
-                System.currentTimeMillis(), arriving.contract());
+        final IntakeSlotWrite.Admission intake = IntakeSlotWrite.admit(session, asked.get(),
+                declaredSlots(submission), System.currentTimeMillis(), arriving.contract());
+        if (intake instanceof IntakeSlotWrite.AtCapacity || intake instanceof IntakeSlotWrite.NotCounted) {
+            refuse(response, AT_CAPACITY);
+            return;
+        }
+        final AdmissionOutcome outcome = ((IntakeSlotWrite.Decided) intake).outcome();
         if (outcome instanceof final AdmissionOutcome.Accepted accepted) {
-            IntakeSlotWrite.declare(session,
-                    rs.slingshot.agent.execution.OperationStore.pathOf(
-                            accepted.operation().identity()),
-                    declaredSlots(submission));
             if (IntakeSlotWrite.outstanding(session,
                     rs.slingshot.agent.execution.OperationStore.pathOf(
                             accepted.operation().identity())) > 0) {
@@ -313,11 +314,12 @@ public final class SubmitServlet extends AgentServlet {
             refuse(response, REFUSED);
             return;
         }
-        final rs.slingshot.agent.store.CapacityLedger.Admission room =
-                rs.slingshot.agent.store.CapacityLedger.admit(session,
-                        rs.slingshot.agent.store.AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
-                        caller.get(), 1, arriving.contract());
-        if (!(room instanceof rs.slingshot.agent.store.CapacityLedger.Admitted)) {
+        final rs.slingshot.agent.store.CapacityLedger.ReservationAdmission room =
+                rs.slingshot.agent.store.CapacityLedger.take(session, caller.get(), java.util.List.of(
+                        new rs.slingshot.agent.store.CapacityReservation.Charge(
+                                rs.slingshot.agent.store.AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, 1)),
+                        arriving.contract());
+        if (!(room instanceof final rs.slingshot.agent.store.CapacityLedger.Reserved reserved)) {
             // An executing command holds one of this instance's request threads. A bound on what
             // the store keeps is not a bound on how much of somebody's author this occupies.
             response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
@@ -327,9 +329,8 @@ public final class SubmitServlet extends AgentServlet {
         try {
             running(response, accepted, submission, arriving, session);
         } finally {
-            rs.slingshot.agent.store.CapacityLedger.release(session,
-                    rs.slingshot.agent.store.AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
-                    caller.get(), 1, arriving.contract());
+            rs.slingshot.agent.store.CapacityLedger.release(session, reserved.reservation(),
+                    arriving.contract());
         }
     }
 

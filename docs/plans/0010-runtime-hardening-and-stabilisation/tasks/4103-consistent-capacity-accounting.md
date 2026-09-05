@@ -27,3 +27,6 @@ Finding(s): R08; R02 in [FINDINGS.md](../FINDINGS.md).
 3. Reconcile abandoned reservations after process death and validate quota equality against the live reservations rather than clamping counters.
 
 - **Done when:** Concurrent, repeated and interrupted admission/release preserves exact total and caller accounting and restores all room after work ends or recovery runs, without exceeding configured bounds.
+
+Direct implementation is complete; the review loops, final gate result, and scope boundaries are
+recorded in [EXECUTION.md](../EXECUTION.md#4103--consistent-capacity-accounting).
