@@ -63,8 +63,9 @@ public interface ContinuationKeyAuthority {
      *
      * @param holder who holds it
      * @param expiresAtUnixMilliseconds when it stops being held
+     * @param epoch the unique persisted acquisition identity
      */
-    record Lease(String holder, long expiresAtUnixMilliseconds) {
+    record Lease(String holder, long expiresAtUnixMilliseconds, String epoch) {
     }
 
     /**
@@ -80,7 +81,10 @@ public interface ContinuationKeyAuthority {
     ReadOutcome read();
 
     /**
-     * Writes a ring, only if what is held is still what the caller read, and only under a lease.
+     * Rotates a ring under the exact persisted live lease and expected ring.
+     *
+     * <p>The new current key must differ and the previous current key must be retained for the
+     * full contract interval. Rotation is refused while a previous key is still retained.</p>
      *
      * @param expected what the caller read
      * @param next what it wants held instead

@@ -163,6 +163,10 @@ public record KeyRing(String current, Prior prior) {
         }
         final long retention =
                 contract.value(ContractLimit.CONTINUATION_KEY_PRIOR_RETENTION_MILLISECONDS);
+        if (nowUnixMilliseconds > Long.MAX_VALUE - retention) {
+            return new Refused(new KeyRingRefusal(KeyRingRefusal.Failure.INVALID_TRANSITION,
+                    "the required retention expiry cannot be represented"));
+        }
         final KeyRing rotated = new KeyRing(next,
                 new Retained(current, nowUnixMilliseconds + retention));
         final Optional<KeyRingRefusal> unbounded = rotated.unbounded(contract);

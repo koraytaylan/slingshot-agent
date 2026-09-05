@@ -554,3 +554,57 @@ Review and correction loop:
     old worker from publishing state or terminal writes. Existing immediate callers remain covered
     by the core suite, and deferred execution was not enabled. Task 4106 is complete. Task 4105 and
     the remaining plan tasks are still required; this does not complete plan 0010.
+
+## 4107 — persisted continuation-key ownership
+
+1. Two real-Oak regressions reproduced fabricated unexpired authority replacing the ring while
+   another owner holds its persisted lease, and a current holder dropping the signing key without
+   retaining it. Both failed as expected in `interop/target/plan10-4107-red.log`.
+2. Acquisition now commits holder, expiry, and a fresh epoch in one stamped transaction. Renewal
+   preserves the epoch and compares the complete persisted lease. Key writes validate this lease
+   and the expected ring under the same stamp, require the legal rotation with its full retention,
+   and discard pending writes on refusal or repository failure. The initial 20 focused tests passed
+   in `interop/target/plan10-4107-focused.log`.
+3. Review added real takeover immediately before a key save, before/after acquisition and renewal
+   interruptions, stale versus renewed versus reacquired authority, and token verification across
+   the full retention window and its boundary. It also found retention expiry overflow, now refused.
+   All 28 focused tests passed in `interop/target/plan10-4107-epochs.log`. Added further coverage for
+   legacy authority, forged lease fields, contention cleanup, and identical competing acquisitions
+   before the full core verification. Task completion remains unproved until the full gate passes.
+
+4. The first full core run passed 1008 tests, then stopped on 11 formatting violations. During
+   review, a new regression proved that a missing holder could match the diagnostic placeholder
+   "nobody" when the other lease fields remained. Evidence:
+   `interop/target/plan10-4107-incomplete-red.log`. Ownership now requires all three persisted
+   fields before comparison, including an explicit expiry rather than the missing-property zero
+   default. Added the missing-expiry regression and corrected formatting before re-verification.
+
+5. Core re-verification passed all 1010 tests and coverage, then found one remaining long line,
+   now corrected. Evidence: `interop/target/plan10-4107-core-recheck.log`. Updated the in-memory
+   contract fixture to use a legal retained-key rotation and validate its declared lease, matching
+   the strengthened interface documentation. The complete argument-free gate follows.
+
+6. The first gate stopped on one long line in the contract fixture
+   (`interop/target/plan10-4107-quality-formatting.log`). After that correction, static analysis
+   found two new race-test methods declaring broad Exception; narrowed their throws clauses to
+   RepositoryException and LoginException. Evidence: `interop/target/plan10-4107-quality-static.log`.
+   Both were test-source findings; neither failed a runtime authority assertion.
+
+7. The early static stage initially re-read stale test bytecode because its compile goal does not
+   compile tests. Confirmed the corrected source and older class timestamp; rebuilt with core verify.
+   All 1010 core tests, coverage, formatting, PMD, and SpotBugs passed at 01:26 CEST on 2026-09-06
+   in `interop/target/plan10-4107-core-final.log`. The stale-bytecode attempt is preserved in
+   `interop/target/plan10-4107-quality-stale-bytecode.log`.
+
+8. The complete argument-free `scripts/quality` passed at 01:37 CEST on 2026-09-06. Core ran
+   1010 tests and interoperability ran 460, with zero failures, errors, or skips. Every required
+   policy, static-analysis, coverage, and packaging stage passed. Evidence:
+   `interop/target/plan10-4107-quality.log`. The owner-supplied Adobe quickstart and sibling-client
+   end-to-end tiers did not run.
+9. Final review checked that acquisition, renewal, and key writes all stamp the same node before
+   reading their predicates; all authority fields and the protected transition share one save.
+   Missing fields cannot match diagnostic defaults, renewal preserves acquisition identity, and
+   reacquisition replaces it. The authority refuses forged or stale leases and rings that drop or
+   shorten required retention; tokens from before and after rotation remain verifiable at the
+   retention boundary as appropriate. No policy exceptions or suppressions were added. Task 4107
+   is complete. Task 4105 and the remaining plan tasks are still required.
