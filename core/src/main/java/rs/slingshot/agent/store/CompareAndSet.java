@@ -3,6 +3,7 @@
 
 package rs.slingshot.agent.store;
 
+import java.util.UUID;
 import javax.jcr.InvalidItemStateException;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
@@ -21,6 +22,9 @@ public final class CompareAndSet {
 
     /** How many times a writer retries a commit somebody else won before it reports contention. */
     public static final int ATTEMPTS = 5;
+
+    /** The per-node commit identity, changed even when competing business values are identical. */
+    public static final String REVISION = "transition_revision";
 
     private CompareAndSet() {
     }
@@ -53,7 +57,9 @@ public final class CompareAndSet {
                                         long expected, long next) throws RepositoryException {
         session.refresh(false);
         final Node node = session.getNode(path.path());
+        stamp(node);
         if (held(node, property) != expected) {
+            session.refresh(false);
             return WriteOutcome.VALUE_CHANGED;
         }
         node.setProperty(property, next);
@@ -66,6 +72,22 @@ public final class CompareAndSet {
             session.refresh(false);
             return WriteOutcome.CONTENDED;
         }
+    }
+
+    /**
+     * Gives a pending node transition a unique commit identity.
+     *
+     * <p>Oak may merge identical property updates and identical node creations. Distinct revision
+     * values force concurrent writers of the same base to conflict instead. Stage this stamp
+     * before reading the expected business state, so an automatic refresh cannot adopt another
+     * writer between the predicate and the first pending change. Commit the stamp with the
+     * transition, or discard both when the predicate fails. No save or refresh happens here.</p>
+     *
+     * @param node the node whose pending transition must have one winner
+     * @throws RepositoryException if the revision cannot be staged
+     */
+    public static void stamp(Node node) throws RepositoryException {
+        node.setProperty(REVISION, UUID.randomUUID().toString());
     }
 
     /**

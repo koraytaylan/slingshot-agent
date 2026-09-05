@@ -4,6 +4,7 @@
 package rs.slingshot.agent.store;
 
 import java.util.function.Consumer;
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.ItemExistsException;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
@@ -21,14 +22,13 @@ import javax.jcr.nodetype.ConstraintViolationException;
  * <p>The repository's own "that already exists" is this primitive's second outcome rather than an
  * error, because it is the answer a caller asked for.</p>
  *
- * <p><strong>What a claim means on a cluster.</strong> On a document store two nodes can each find
- * a path free, each create it, and each be told they claimed it — the store resolves the collision
- * afterwards, on its own background read, and both nodes then agree about what is there. That is
- * proved on two nodes against one shared repository rather than assumed. So {@code CLAIMED} means
- * "this node created this record", not "no other node did", and it is safe because what a claim
- * writes is derived from the identifier it is claiming: two claimants write the same record. Which
- * worker may <em>execute</em> is a different question, decided by a fenced lease rather than by
- * this primitive, precisely because this one cannot decide it.</p>
+ * <p>Each claim carries a unique revision in the same commit as its initial values. Identical
+ * submissions therefore conflict even when Oak would otherwise merge their identical bytes.
+ * Only the successful commit returns {@code CLAIMED}; a losing contender refreshes before reading
+ * the winner. This establishes admission ownership, while starting execution is a separate
+ * conflict-protected operation transition. The parent revision is staged before rechecking
+ * absence, so a refresh while filling a new node cannot adopt somebody else's claim. Sibling
+ * claims can therefore contend on their bucket, and the caller must handle that refusal.</p>
  */
 public final class ClaimByCreation {
 
@@ -43,7 +43,8 @@ public final class ClaimByCreation {
      * @param primaryType the node type to create it as
      * @param fill what to write into the node before the claim is committed, which is committed
      *     with it or not at all
-     * @return whether this writer claimed it or somebody else already had
+     * @return whether this writer claimed it, somebody else already had it, or contention left
+     *     no visible winner
      * @throws RepositoryException if the repository fails for a reason that is not the path being
      *     held, because a repository that cannot answer is a different thing from an answer of no
      */
@@ -53,8 +54,16 @@ public final class ClaimByCreation {
             return WriteOutcome.ALREADY_HELD;
         }
         try {
-            final Node claimed = create(session, path, primaryType);
+            final Node parent = parentOf(session, path);
+            CompareAndSet.stamp(parent);
+            if (session.nodeExists(path.path())) {
+                session.refresh(false);
+                return WriteOutcome.ALREADY_HELD;
+            }
+            final String name = path.path().substring(path.path().lastIndexOf('/') + 1);
+            final Node claimed = parent.addNode(name, primaryType);
             fill.accept(claimed);
+            CompareAndSet.stamp(claimed);
             session.save();
             return WriteOutcome.CLAIMED;
         } catch (final ItemExistsException | ConstraintViolationException held) {
@@ -62,13 +71,16 @@ public final class ClaimByCreation {
             // primitive exists to resolve, and the answer is the same as finding it there.
             session.refresh(false);
             return WriteOutcome.ALREADY_HELD;
+        } catch (final InvalidItemStateException contended) {
+            session.refresh(false);
+            return session.nodeExists(path.path())
+                    ? WriteOutcome.ALREADY_HELD : WriteOutcome.CONTENDED;
         }
     }
 
-    private static Node create(Session session, StatePath path, String primaryType)
+    private static Node parentOf(Session session, StatePath path)
             throws RepositoryException {
         final String parentPath = path.path().substring(0, path.path().lastIndexOf('/'));
-        final String name = path.path().substring(path.path().lastIndexOf('/') + 1);
-        return session.getNode(parentPath).addNode(name, primaryType);
+        return session.getNode(parentPath);
     }
 }
