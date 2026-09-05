@@ -25,3 +25,6 @@ Finding(s): R10 in [FINDINGS.md](../FINDINGS.md).
 3. Test fabricated, expired, stale, renewed and reacquired leases with tokens issued before and after rotation.
 
 - **Done when:** Only the current persisted lease epoch can change the key ring, and valid pre-rotation tokens remain verifiable for the required retention interval.
+
+Direct implementation is complete; review loops and full-gate verification are recorded in
+[EXECUTION.md](../EXECUTION.md#4107--persisted-continuation-key-ownership).

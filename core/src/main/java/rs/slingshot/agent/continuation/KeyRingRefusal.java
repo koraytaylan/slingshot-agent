@@ -27,6 +27,8 @@ public record KeyRingRefusal(Failure failure, String detail) {
         RECORD_TOO_LONG,
         /** A rotation was asked for while the previous key is still retained. */
         PRIOR_STILL_RETAINED,
+        /** The proposed ring does not preserve the required signing-key retention. */
+        INVALID_TRANSITION,
         /** The ring changed since the caller read it, so the write it asked for is not the one it
          * meant. */
         CHANGED_SINCE_IT_WAS_READ,

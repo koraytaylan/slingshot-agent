@@ -133,12 +133,12 @@ public final class DefaultContinuationKeyAuthority implements ContinuationKeyAut
     @Override
     public ReadOutcome read() {
         try {
+            session.refresh(false);
             if (!session.nodeExists(record().path())) {
                 return new Unavailable(new KeyRingRefusal(KeyRingRefusal.Failure.ABSENT,
                         "this deployment holds no key ring at " + record().path()
                                 + ", and one is not created implicitly"));
             }
-            session.refresh(false);
             return new Read(ringIn(session.getNode(record().path())));
         } catch (final RepositoryException unreadable) {
             return new Unavailable(new KeyRingRefusal(KeyRingRefusal.Failure.ABSENT,
@@ -176,27 +176,51 @@ public final class DefaultContinuationKeyAuthority implements ContinuationKeyAut
         if (unbounded.isPresent()) {
             return new NotWritten(unbounded.get());
         }
-        return written(expected, next);
+        return written(expected, next, lease, nowUnixMilliseconds);
     }
 
-    private ContinuationKeyAuthority.WriteOutcome written(KeyRing expected,
-                                                          KeyRing next) {
+    private ContinuationKeyAuthority.WriteOutcome written(KeyRing expected, KeyRing next,
+                                                           Lease lease, long now) {
         try {
             session.refresh(false);
-            final Node node = session.getNode(record().path());
-            if (!ringIn(node).equals(expected)) {
-                return new NotWritten(new KeyRingRefusal(
-                        KeyRingRefusal.Failure.CHANGED_SINCE_IT_WAS_READ,
-                        "the ring changed since it was read, so this write is not the one meant"));
+            try {
+                return transition(expected, next, lease, now);
+            } finally {
+                session.refresh(false);
             }
-            write(node, next);
-            session.save();
-            return new Written(next);
         } catch (final RepositoryException unwritable) {
             return new NotWritten(new KeyRingRefusal(
                     KeyRingRefusal.Failure.CHANGED_SINCE_IT_WAS_READ,
                     "the ring could not be written: " + unwritable.getMessage()));
         }
+    }
+
+    private ContinuationKeyAuthority.WriteOutcome transition(KeyRing expected, KeyRing next,
+                                                               Lease lease, long now)
+            throws RepositoryException {
+        final Node node = session.getNode(record().path());
+        CompareAndSet.stamp(node);
+        if (!RotationLease.matches(node, lease, now)) {
+            return new NotWritten(new KeyRingRefusal(KeyRingRefusal.Failure.NOT_THE_LEASE_HOLDER,
+                    "the complete persisted lease does not match the presented acquisition"));
+        }
+        if (!ringIn(node).equals(expected)) {
+            return new NotWritten(new KeyRingRefusal(
+                    KeyRingRefusal.Failure.CHANGED_SINCE_IT_WAS_READ,
+                    "the ring changed since it was read, so this write is not the one meant"));
+        }
+        final KeyRing.Outcome rotation = expected.rotated(next.current(), now, contract);
+        if (rotation instanceof final KeyRing.Refused refused) {
+            return new NotWritten(refused.refusal());
+        }
+        if (!((KeyRing.Held) rotation).ring().equals(next)
+                || next.current().isEmpty() || next.current().equals(expected.current())) {
+            return new NotWritten(new KeyRingRefusal(KeyRingRefusal.Failure.INVALID_TRANSITION,
+                    "a rotation must change the current key and retain it for the contract interval"));
+        }
+        persist(node, next);
+        session.save();
+        return new Written(next);
     }
 
     /**
@@ -229,16 +253,20 @@ public final class DefaultContinuationKeyAuthority implements ContinuationKeyAut
 
     private static void write(Node node, KeyRing ring) {
         try {
-            node.setProperty(CURRENT, ring.current());
-            if (ring.prior() instanceof final KeyRing.Retained retained) {
-                node.setProperty(PRIOR, retained.key());
-                node.setProperty(PRIOR_UNTIL, retained.expiresAtUnixMilliseconds());
-                return;
-            }
-            remove(node, PRIOR);
-            remove(node, PRIOR_UNTIL);
+            persist(node, ring);
         } catch (final RepositoryException unwritable) {
             throw new IllegalStateException("the ring could not be written", unwritable);
         }
+    }
+
+    private static void persist(Node node, KeyRing ring) throws RepositoryException {
+        node.setProperty(CURRENT, ring.current());
+        if (ring.prior() instanceof final KeyRing.Retained retained) {
+            node.setProperty(PRIOR, retained.key());
+            node.setProperty(PRIOR_UNTIL, retained.expiresAtUnixMilliseconds());
+            return;
+        }
+        remove(node, PRIOR);
+        remove(node, PRIOR_UNTIL);
     }
 }
