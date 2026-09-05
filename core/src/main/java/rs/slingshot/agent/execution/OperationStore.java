@@ -182,7 +182,9 @@ public final class OperationStore {
     private static Outcome written(Session session, StatePath path, LogicalOperation moved,
                                    OperationState from) throws RepositoryException {
         final Node node = session.getNode(path.path());
+        CompareAndSet.stamp(node);
         if (!from.spelling().equals(node.getProperty(STATE).getString())) {
+            session.refresh(false);
             return new Refused(Refusal.NOT_THE_STATE_THAT_WAS_READ,
                     "the record moved while this move was being made");
         }

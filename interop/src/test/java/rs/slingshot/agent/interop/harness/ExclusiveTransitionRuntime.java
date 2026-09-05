@@ -1,0 +1,214 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright 2026 Koray Taylan Davgana
+
+package rs.slingshot.agent.interop.harness;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
+import rs.slingshot.agent.interop.tier.TierRequests;
+
+/** Drives the built store classes with forced save interleavings on separate DocumentNodeStores. */
+final class ExclusiveTransitionRuntime {
+
+    private static final String ENDPOINT = "/bin/slingshot-proof/transitions";
+    private static final String EFFECTS = "/var/slingshot-proof/effects/";
+    private final TierRequests requests;
+    private final ClusterHarness.Cluster nodes;
+
+    ExclusiveTransitionRuntime(Path repository, TierRequests requests, ClusterHarness.Cluster nodes)
+            throws IOException, InterruptedException {
+        this.requests = requests;
+        this.nodes = nodes;
+        final Path bundle = bundle(repository);
+        for (final ContainerHandle node : List.of(nodes.first(), nodes.second())) {
+            final var installed = requests.upload(node.address() + "/system/console/bundles",
+                    List.of("action", "install", "bundlestart", "start"), "bundlefile", bundle);
+            assertTrue(installed.statusCode() < 400, installed.body());
+            await(() -> "ready".equals(requests.readAsAuthenticatedUser(node.address() + ENDPOINT).body()),
+                    "the test-only store probe did not register");
+        }
+    }
+
+    void verifyRaces() throws InterruptedException, ExecutionException, TimeoutException {
+        assertEquals("prepared", post(nodes.first(), "prepare", "all"));
+        await(() -> "absent".equals(post(nodes.second(), "view", "admission"))
+                && "ACCEPTED".equals(post(nodes.second(), "view", "start"))
+                && "ACCEPTED".equals(post(nodes.second(), "view", "loss"))
+                && "0".equals(post(nodes.second(), "view", "counter")),
+                "the second node did not observe the prepared shared state");
+        race("counter", "cas", "WRITTEN", List.of("VALUE_CHANGED", "CONTENDED"));
+        assertEquals("1", post(nodes.first(), "view", "counter"));
+        await(() -> "1".equals(post(nodes.second(), "view", "counter")),
+                "the shared counter did not become one");
+        race("admission", "admit", "Accepted", List.of("Recognised", "Refused"));
+        await(() -> "ACCEPTED".equals(post(nodes.second(), "view", "admission")),
+                "the admitted record did not persist on the shared store");
+        race("start", "start", "Held", List.of("Refused"));
+        awaitEffects(nodes.second(), "start");
+        assertEquals("Recognised/Refused", post(nodes.second(), "resend", "start"));
+        assertEffects(nodes.first(), "start");
+    }
+
+    CrashInjector.Ended killBeforeReply(CrashInjector injector)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        assertEquals("armed", post(nodes.first(), "arm", "loss"));
+        try (var callers = Executors.newSingleThreadExecutor()) {
+            final var lost = callers.submit(() -> post(nodes.first(), "lose", "loss"));
+            awaitPrepared(nodes.first(), "loss", lost);
+            awaitEffects(nodes.second(), "loss");
+            final CrashInjector.Ended ended = injector.kill(nodes.first(),
+                    CrashInjector.Point.AFTER_COMMAND_COMMIT_BEFORE_TERMINAL);
+            final ExecutionException unanswered = assertThrows(ExecutionException.class,
+                    () -> lost.get(10, TimeUnit.SECONDS),
+                    "the side effect's response was received despite killing the blocked node");
+            assertInstanceOf(java.io.UncheckedIOException.class, unanswered.getCause(),
+                    "the failure must be lost transport, not an assertion about an HTTP response");
+            assertEquals("Recognised/Refused", post(nodes.second(), "resend", "loss"));
+            assertEffects(nodes.second(), "loss");
+            return ended;
+        }
+    }
+
+    private void race(String fixture, String action, String winner, List<String> losers)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        assertEquals("armed", post(nodes.first(), "arm", fixture));
+        assertEquals("armed", post(nodes.second(), "arm", fixture));
+        try (var callers = Executors.newFixedThreadPool(2)) {
+            try {
+                racePrepared(callers, fixture, action, winner, losers);
+            } finally {
+                post(nodes.first(), "release", fixture);
+                post(nodes.second(), "release", fixture);
+            }
+        }
+    }
+
+    private void racePrepared(java.util.concurrent.ExecutorService callers, String fixture,
+                              String action, String winner, List<String> losers)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        final var first = callers.submit(() -> post(nodes.first(), action, fixture));
+        awaitPrepared(nodes.first(), fixture, first);
+        final var second = callers.submit(() -> post(nodes.second(), action, fixture));
+        awaitPrepared(nodes.second(), fixture, second);
+        assertEquals("released", post(nodes.first(), "release", fixture));
+        assertEquals(winner, first.get(10, TimeUnit.SECONDS));
+        assertEquals("released", post(nodes.second(), "release", fixture));
+        final String loser = second.get(10, TimeUnit.SECONDS);
+        assertTrue(losers.contains(loser), "the losing " + action + " returned " + loser);
+    }
+
+    private void awaitPrepared(ContainerHandle node, String fixture, Future<String> pending)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (!"prepared".equals(requests.readAsAuthenticatedUser(node.address() + ENDPOINT
+                + "?fixture=" + fixture).body())) {
+            if (pending.isDone()) {
+                throw new AssertionError("request ended before barrier: " + pending.get(1, TimeUnit.SECONDS));
+            }
+            assertTrue(System.nanoTime() < deadline, fixture + " did not reach its pre-commit barrier");
+            Thread.sleep(100);
+        }
+    }
+
+    private void awaitEffects(ContainerHandle node, String fixture) throws InterruptedException {
+        await(() -> effects(node, fixture) == 1, "the effect was not independently observed");
+        assertEffects(node, fixture);
+    }
+
+    private void assertEffects(ContainerHandle node, String fixture) {
+        assertEquals(1, effects(node, fixture), "more than one content effect was committed");
+    }
+
+    private int effects(ContainerHandle node, String fixture) {
+        final var response = requests.readAsAuthenticatedUser(node.address() + EFFECTS + fixture + ".1.json");
+        assertEquals(200, response.statusCode(), response.body());
+        // Observe distinct content nodes through Sling's own JSON servlet, independently of the
+        // operation record and of what either contender claims about its execution.
+        final int count = response.body().split("\"effect-", -1).length - 1;
+        assertTrue(count <= 1, "duplicate effects: " + response.body());
+        return count;
+    }
+
+    private String post(ContainerHandle node, String action, String fixture) {
+        final HttpResponse<String> response = requests.submit(node.address() + ENDPOINT,
+                List.of("action", action, "fixture", fixture));
+        assertEquals(200, response.statusCode(), response.body());
+        return response.body();
+    }
+
+    private static void await(BooleanSupplier condition, String failure) throws InterruptedException {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        while (!condition.getAsBoolean()) {
+            assertTrue(System.nanoTime() < deadline, failure);
+            Thread.sleep(100);
+        }
+    }
+
+    private static Path bundle(Path repository) throws IOException {
+        final Path target = repository.resolve("interop/target/exclusive-transition-probe.jar");
+        final Path product = repository.resolve("core/target/slingshot-agent-core-0.1.0.jar");
+        try (JarFile source = new JarFile(product.toFile())) {
+            final Manifest manifest = new Manifest();
+            manifest.getMainAttributes().putValue("Manifest-Version", "1.0");
+            manifest.getMainAttributes().putValue("Bundle-ManifestVersion", "2");
+            manifest.getMainAttributes().putValue("Bundle-SymbolicName",
+                    "rs.slingshot.agent.exclusive-transition-proof");
+            manifest.getMainAttributes().putValue("Bundle-Version", "1.0.0");
+            manifest.getMainAttributes().putValue("Bundle-Activator",
+                    "rs.slingshot.agent.proof.ExclusiveTransitionProbe");
+            manifest.getMainAttributes().putValue("Import-Package",
+                    "org.osgi.framework.wiring,javax.jcr.version,"
+                    + "javax.jcr.lock,javax.jcr.security,javax.jcr.retention,org.xml.sax,"
+                    + source.getManifest().getMainAttributes()
+                    .getValue("Import-Package"));
+            try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(target), manifest)) {
+                final var entries = source.entries();
+                while (entries.hasMoreElements()) {
+                    final JarEntry entry = entries.nextElement();
+                    if (!entry.isDirectory() && !entry.getName().startsWith("META-INF/")
+                            && !entry.getName().startsWith("OSGI-INF/")) {
+                        output.putNextEntry(new JarEntry(entry.getName()));
+                        try (var bytes = source.getInputStream(entry)) {
+                            bytes.transferTo(output);
+                        }
+                        output.closeEntry();
+                    }
+                }
+                addProofFiles(repository.resolve("core/target/test-classes"), output);
+            }
+        }
+        return target;
+    }
+
+    private static void addProofFiles(Path root, JarOutputStream output) throws IOException {
+        final List<String> names = List.of("rs/slingshot/agent/proof/ExclusiveTransitionProbe.class",
+                "rs/slingshot/agent/proof/ExclusiveTransitionProbe$Barrier.class",
+                "rs/slingshot/agent/store/SaveInterleaving.class",
+                "rs/slingshot/agent/store/SaveInterleaving$Action.class",
+                "fixtures/submission-admission/operation.json",
+                "fixtures/submission-admission/command-contract.json");
+        for (final String name : names) {
+            output.putNextEntry(new JarEntry(name));
+            Files.copy(root.resolve(name), output);
+            output.closeEntry();
+        }
+    }
+}

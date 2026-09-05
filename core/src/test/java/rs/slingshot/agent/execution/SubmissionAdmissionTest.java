@@ -4,6 +4,7 @@
 package rs.slingshot.agent.execution;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -30,6 +31,7 @@ import rs.slingshot.agent.identity.OperationIdentity;
 import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.DocumentValue;
 import rs.slingshot.agent.store.GenerationStore;
+import rs.slingshot.agent.store.SaveInterleaving;
 import rs.slingshot.agent.store.StatePath;
 
 /**
@@ -177,6 +179,84 @@ final class SubmissionAdmissionTest {
         assertInstanceOf(OperationStore.Refused.class,
                 OperationStore.read(session, identity("operation.json")),
                 "a refused submission left a record behind");
+    }
+
+    @Test
+    @DisplayName("identical overlapping admissions produce one accepted and one recognised record")
+    void identicalAdmissionsHaveOneWinner() throws RepositoryException,
+            org.apache.sling.api.resource.LoginException {
+        final Session first = prepared();
+        final var submission = submission("operation.json", "command-contract.json", "a submission");
+        try (var resolver = anotherResolver()) {
+            final Session second = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final Session raced = SaveInterleaving.before(first, () -> assertInstanceOf(
+                    AdmissionOutcome.Accepted.class, admit(second, submission)));
+            final LogicalOperation recognised = assertInstanceOf(AdmissionOutcome.Recognised.class,
+                    admit(raced, submission), "two identical contenders were accepted").operation();
+            first.refresh(false);
+            assertEquals(1, children(first, recognised));
+            assertInstanceOf(AdmissionOutcome.Recognised.class, admit(first, submission));
+        }
+    }
+
+    @Test
+    @DisplayName("competing starts count one independent effect, including a resend after reply loss")
+    void competingStartsPerformOneEffect() throws RepositoryException,
+            org.apache.sling.api.resource.LoginException {
+        final Session first = prepared();
+        final var submission = submission("operation.json", "command-contract.json", "a submission");
+        final LogicalOperation accepted = assertInstanceOf(AdmissionOutcome.Accepted.class,
+                admit(first, submission)).operation();
+        first.getNode(StatePath.ROOT).addNode("observed-effects", "nt:unstructured");
+        first.save();
+        try (var resolver = anotherResolver()) {
+            final Session second = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final Session raced = SaveInterleaving.before(first, () -> startAndCount(second, accepted));
+            assertInstanceOf(OperationStore.Refused.class, startAndCount(raced, accepted));
+            // The winning response is treated as lost. A fresh resend must not execute again.
+            final LogicalOperation recognised = assertInstanceOf(AdmissionOutcome.Recognised.class,
+                    admit(first, submission)).operation();
+            assertInstanceOf(OperationStore.Refused.class, startAndCount(first, recognised));
+            first.refresh(false);
+            assertEquals(1, first.getNode(StatePath.ROOT + "/observed-effects").getNodes().getSize(),
+                    "more than one independently committed effect escaped the start fence");
+        }
+    }
+
+    @Test
+    @DisplayName("a session refresh after reading the start predicate cannot adopt the winner")
+    void aRefreshedStartStillHasOneWinner() throws RepositoryException,
+            org.apache.sling.api.resource.LoginException {
+        final Session first = prepared();
+        final var submission = submission("operation.json", "command-contract.json", "a submission");
+        final LogicalOperation accepted = assertInstanceOf(AdmissionOutcome.Accepted.class,
+                admit(first, submission)).operation();
+        try (var resolver = anotherResolver()) {
+            final Session second = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final Session raced = SaveInterleaving.beforeWrite(first,
+                    OperationStore.pathOf(accepted.identity()).path(), () -> assertInstanceOf(
+                            OperationStore.Held.class, SubmissionAdmission.start(second, accepted)));
+            assertInstanceOf(OperationStore.Refused.class, SubmissionAdmission.start(raced, accepted));
+            assertFalse(first.hasPendingChanges());
+        }
+    }
+
+    private static OperationStore.Outcome startAndCount(Session session, LogicalOperation operation)
+            throws RepositoryException {
+        final OperationStore.Outcome outcome = SubmissionAdmission.start(session, operation);
+        if (outcome instanceof OperationStore.Held) {
+            session.getNode(StatePath.ROOT + "/observed-effects")
+                    .addNode(java.util.UUID.randomUUID().toString(), "nt:unstructured");
+            session.save();
+        }
+        return outcome;
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver anotherResolver()
+            throws org.apache.sling.api.resource.LoginException {
+        return java.util.Objects.requireNonNull(sling.getService(
+                org.apache.sling.api.resource.ResourceResolverFactory.class))
+                .getResourceResolver(java.util.Map.of());
     }
 
     private AdmissionOutcome admit(Session session, SubmissionAdmission.Submission submission)
