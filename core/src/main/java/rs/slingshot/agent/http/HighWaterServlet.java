@@ -5,6 +5,7 @@ package rs.slingshot.agent.http;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.SequencedMap;
@@ -67,9 +68,30 @@ public final class HighWaterServlet extends AgentServlet {
 
     private static final long serialVersionUID = 1L;
 
-    /** Holds a servlet with nothing in it. */
+    private final transient Clock clock;
+
+    /** Holds a servlet using the production wall clock. */
     public HighWaterServlet() {
+        this(Clock.systemUTC());
+    }
+
+    /**
+     * Holds a servlet using the supplied subscription expiry clock.
+     *
+     * @param clock the wall clock used to compare persisted subscription timestamps
+     */
+    public HighWaterServlet(Clock clock) {
         super();
+        this.clock = clock;
+    }
+
+    /**
+     * Restores the production clock when the servlet is deserialized.
+     *
+     * @return a servlet whose expiry decisions use the production wall clock
+     */
+    private Object readResolve() {
+        return new HighWaterServlet();
     }
 
     @Override
@@ -164,7 +186,7 @@ public final class HighWaterServlet extends AgentServlet {
                 shownBy(session, identifier));
     }
 
-    private static boolean expired(javax.jcr.Node record, AgentContract contract)
+    private boolean expired(javax.jcr.Node record, AgentContract contract)
             throws RepositoryException {
         final long lastAdvanced = record.hasProperty(SubscriptionRecord.LAST_ADVANCED_AT)
                 ? record.getProperty(SubscriptionRecord.LAST_ADVANCED_AT).getLong()
@@ -174,7 +196,7 @@ public final class HighWaterServlet extends AgentServlet {
                         ((EventStoreGeneration.Held) EventStoreGeneration
                                 .of(EventStoreGeneration.FIRST)).generation(),
                         SubscriptionRecord.Unread.NOTHING_SHOWN_YET, lastAdvanced),
-                System.currentTimeMillis(), contract);
+                clock.millis(), contract);
     }
 
     private static long shownBy(Session session, SubscriptionRecord.Identifier identifier)

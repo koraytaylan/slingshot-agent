@@ -797,8 +797,8 @@ reason = "What the job system did with one operation's attempts, read out of tha
 
 [[type]]
 name = "HighWaterServlet"
-pattern = "stateless-policy"
-reason = "How far a subscription has been served, read from the durable cursor at the moment of asking, with a subscription nobody has, one that was swept, and a cursor into another incarnation kept apart."
+pattern = "accessor"
+reason = "Answers durable subscription progress and expiry using its supplied immutable clock reference, with no request state retained or changed by the servlet."
 
 [[type]]
 name = "StatusMapping"
