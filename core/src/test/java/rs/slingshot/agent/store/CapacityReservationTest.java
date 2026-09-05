@@ -100,11 +100,11 @@ final class CapacityReservationTest {
             assertTrue(recovery.nodeExists(legacy.getPath()));
             assertTrue(recovery.nodeExists(live.path().path()));
             assertFalse(recovery.nodeExists(abandoned.path().path()));
-            final Node retained = recovery.getNode(legacy.getPath());
+            final StatePath retained = StatePath.deployment("legacy-retained");
             final CapacityLedger.ResourceCharge charge = new CapacityLedger.ResourceCharge(
                     AccountedQuantity.EVENT_ROWS, AccountedQuantity.EVENT_BYTES, "size");
-            CapacityLedger.releaseResource(recovery, retained, CALLER, charge, CONTRACT);
-            CapacityLedger.releaseResource(recovery, retained, CALLER, charge, CONTRACT);
+            CapacityLedger.retireResource(recovery, retained, CALLER, charge);
+            CapacityLedger.retireResource(recovery, retained, CALLER, charge);
             counts(recovery, 1, 23);
             CapacityLedger.release(recovery, live, CONTRACT);
             counts(recovery, 0, 0);
@@ -319,9 +319,11 @@ final class CapacityReservationTest {
         session.save();
         final CapacityLedger.ResourceCharge legacy = new CapacityLedger.ResourceCharge(
                 AccountedQuantity.EVENT_ROWS, AccountedQuantity.EVENT_BYTES, "absent-size");
+        final StatePath path = StatePath.deployment(resource.getName());
         assertThrows(RepositoryException.class,
-                () -> CapacityLedger.releaseResource(lostReply(session), resource, CALLER, legacy, CONTRACT));
-        CapacityLedger.releaseResource(session, resource, CALLER, legacy, CONTRACT);
+                () -> CapacityLedger.retireResource(lostReply(session), path, CALLER, legacy));
+        CapacityLedger.retireResource(session, path, CALLER, legacy);
+        assertFalse(session.nodeExists(path.path()));
         CapacityLedger.cancel(session, first, CONTRACT);
         counts(session, 1, 23);
         CapacityLedger.release(session, second, CONTRACT);
@@ -329,7 +331,7 @@ final class CapacityReservationTest {
     }
 
     @Test
-    void legacyResourceReleaseMarksItsIdentityWithBothCounterChanges() throws RepositoryException {
+    void legacyResourceRetirementCommitsDeletionWithBothCounterChanges() throws RepositoryException {
         final Session session = prepared();
         LegacyCapacity.seed(session, AccountedQuantity.EVENT_ROWS, CALLER, 2);
         LegacyCapacity.seed(session, AccountedQuantity.EVENT_BYTES, CALLER, 46);
@@ -338,9 +340,11 @@ final class CapacityReservationTest {
         session.save();
         final CapacityLedger.ResourceCharge legacy = new CapacityLedger.ResourceCharge(
                 AccountedQuantity.EVENT_ROWS, AccountedQuantity.EVENT_BYTES, "size");
+        final StatePath path = StatePath.deployment(resource.getName());
         assertThrows(RepositoryException.class,
-                () -> CapacityLedger.releaseResource(lostReply(session), resource, CALLER, legacy, CONTRACT));
-        CapacityLedger.releaseResource(session, resource, CALLER, legacy, CONTRACT);
+                () -> CapacityLedger.retireResource(lostReply(session), path, CALLER, legacy));
+        CapacityLedger.retireResource(session, path, CALLER, legacy);
+        assertFalse(session.nodeExists(path.path()));
         counts(session, 1, 23);
     }
 
@@ -353,9 +357,10 @@ final class CapacityReservationTest {
         session.save();
         assertThrows(RepositoryException.class,
                 () -> CapacityReservation.retain(session, reservation, foreign));
-        assertThrows(RepositoryException.class, () -> CapacityLedger.releaseResource(session, foreign, CALLER,
+        assertThrows(RepositoryException.class, () -> CapacityLedger.retireResource(session,
+                StatePath.deployment("../../foreign-resource"), CALLER,
                 new CapacityLedger.ResourceCharge(AccountedQuantity.EVENT_ROWS,
-                        AccountedQuantity.EVENT_BYTES, "size"), CONTRACT));
+                        AccountedQuantity.EVENT_BYTES, "size")));
         assertFalse(foreign.hasProperty(CapacityReservation.RESOURCE_RESERVATION));
         assertFalse(session.hasPendingChanges());
         counts(session, 1, 23);

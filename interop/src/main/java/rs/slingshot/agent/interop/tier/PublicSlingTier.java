@@ -7,6 +7,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import rs.slingshot.agent.interop.harness.ContainerHandle;
 import rs.slingshot.agent.interop.harness.ContainerHarness;
@@ -176,19 +177,38 @@ public final class PublicSlingTier implements InteropTier {
      * @return nothing where the routes answer, or what was observed where they never did
      */
     private Optional<String> awaitTheAgentsOwnRoutes() {
+        final AtomicInteger consecutive = new AtomicInteger();
         final boolean answered = IntStream.range(0, INSTALL_ATTEMPTS)
-                .anyMatch(this::routeAnswered);
+                .anyMatch(attempt -> routeAnswered(attempt, consecutive));
         return answered ? Optional.empty()
-                : Optional.of(CORE_BUNDLE + " is active and the routes it registers never"
-                        + " answered, so nothing on this instance serves what it installed");
+                : Optional.of(CORE_BUNDLE + " is active but its routes did not settle before the deadline");
     }
 
-    private boolean routeAnswered(int attempt) {
+    private boolean routeAnswered(int attempt, AtomicInteger consecutive) {
         if (attempt > 0) {
             pause();
         }
-        return requests.postAsNobody(address() + SUBMIT_PATH, "{}", "application/json")
-                .statusCode() != NOT_FOUND;
+        return routeSettled(consecutive,
+                requests.postAsNobody(address() + SUBMIT_PATH, "{}", "application/json").statusCode());
+    }
+
+    /**
+     * Requires expected route responses across consecutive startup observations.
+     *
+     * <p>Sling can rebind its servlet resolver after the first route answers. Startup therefore
+     * requires three expected responses one polling interval apart. Any other status resets the
+     * observation window.</p>
+     *
+     * @param consecutive the successful observations in the current startup window
+     * @param status the latest unauthenticated probe response
+     * @return whether this window contains enough consecutive expected responses
+     */
+    static boolean routeSettled(AtomicInteger consecutive, int status) {
+        if (status != UNAUTHENTICATED) {
+            consecutive.set(0);
+            return false;
+        }
+        return consecutive.incrementAndGet() >= ROUTE_SETTLEMENT_OBSERVATIONS;
     }
 
     private Optional<String> permitTheCaller() {
@@ -245,6 +265,9 @@ public final class PublicSlingTier implements InteropTier {
 
     /** How many times the bundle state is asked for before the install is called a failure. */
     private static final int INSTALL_ATTEMPTS = 60;
+
+    /** Expected responses required across the startup observation window. */
+    private static final int ROUTE_SETTLEMENT_OBSERVATIONS = 3;
 
     /** How long between those asks. */
     private static final int INSTALL_POLL_MILLISECONDS = 1000;

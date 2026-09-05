@@ -387,3 +387,98 @@ Migration logs: `interop/target/plan10-4103-consumers.log`,
 `interop/target/plan10-4103-retained.log`, `interop/target/plan10-4103-resource-release.log`,
 `interop/target/plan10-4103-migrated-core.log`, and
 `interop/target/plan10-4103-migration-quality.log`.
+
+## 4104 — atomic retention cleanup
+
+Resource release is staged with resource deletion. Maintenance stages one operation's cleanup and counter changes in a fenced
+transaction, retries from fresh state, and includes only committed changes in its report.
+Subscription ending and abandoned-intake recovery use a shared atomic resource-retirement method.
+
+Review and correction loop:
+
+1. Added independently observed interruption tests before changing cleanup. The first real save
+   committed accounting release, then its response was lost. Artifact collection and whole-operation
+   removal left three artifact rows with only two counted; subscription ending left a row with zero
+   counted. All three regressions failed. An overlapping subscription-end test already passed with
+   the task 4103 reservation identities. Evidence: `interop/target/plan10-4104-red.log`.
+2. Extracted staged capacity retirement, moved maintenance's save outside its release/deletion work,
+   and merged report counts only after that commit. Added fresh contention retries around the whole
+   operation decision. Subscription deletion now shares its commit with accounting. The initial
+   22 focused tests passed in `interop/target/plan10-4104-first-green.log`.
+3. Expanded sweep tests to interrupt before and after each of six persistence boundaries: the three
+   operation cleanups and the existing three cursor writes. Independently read artifact rows and
+   bytes agree with total and caller counters at every interruption and after repeated recovery.
+   Overlapping sweeps leave one committed cleanup and no duplicate report counts. All 45 focused
+   cases passed in `interop/target/plan10-4104-boundaries.log`.
+4. Review found unfinished intake vectors omitted from whole-operation deletion. A new test left
+   the reservation identity after its declaration was deleted. Evidence:
+   `interop/target/plan10-4104-intake-red.log`. Intake declarations now participate in the same
+   transaction, retiring their full modern vector or their persisted legacy quantities. Core testing
+   passed all 965 cases; verification then refused five long test lines, which were corrected.
+5. Review found the same split transition in restart recovery's abandoned-intake cleanup. Added
+   `CapacityLedger.retireResource`, which takes a stable path for retries after deletion and commits
+   resource removal with its charge retirement. Both subscription ending and restart recovery use
+   it. Four independent-session tests interrupt before/after each legacy intake deletion and check
+   persisted declarations against the counters. All 969 core tests, coverage, formatting, PMD, and
+   SpotBugs passed at 23:10 CEST on 2026-09-05 in `interop/target/plan10-4104-review-verify.log`.
+6. Missing-caller review found that both collection and whole-operation deletion assumed an absent
+   caller meant nothing had been charged. Two tests reproduced deletion of charged data after its
+   caller property was removed. Evidence: `interop/target/plan10-4104-owner-red.log`. Both paths now
+   refuse malformed ownership inside their transaction, preserving the data and existing charges.
+   All 971 tests passed, then formatting identified one additional long line, which was corrected.
+7. Added before/after-save checks for combined event and artifact retirement, before-commit
+   subscription interruption, and exhausted contention for subscription ending, artifact collection,
+   and whole-operation removal. Exhaustion makes five fresh attempts, discards pending writes, and
+   preserves data and counters. Core verification passed all 977 tests, coverage, formatting, PMD,
+   and SpotBugs at 23:15 CEST on 2026-09-05. Evidence: `interop/target/plan10-4104-final-core.log`.
+8. API review found the obsolete public resource-release method still exposed the split transition,
+   although no production caller used it. Removed that method and its non-deleting branch. Migrated
+   its identity/legacy retry tests to atomic retirement, checking deletion as well as exact charges.
+   The staged helper rejects a resource whose resolved repository path is outside the agent store;
+   a path containing parent segments cannot bypass that check. Core verification passed all 977
+   tests and required checks at 23:17 CEST on 2026-09-05. Evidence:
+   `interop/target/plan10-4104-retirement-api-verify.log`.
+9. The full gate passed its initial checks but stopped at documentation: the package-visible staged
+   helper lacked parameter and exception descriptions. Added the required descriptions and its
+   same-commit deletion obligation. Removed the now-unused first-save-only test helper; the generalized
+   boundary injector covers its uses. The refused gate is `interop/target/plan10-4104-final-quality.log`.
+
+10. The next gate passed core verification and policy checks but five of 459 interop assertions
+    received transient HTTP 404s. Captured logs now establish that Sling unregistered its servlet
+    resolver at 21:28:54.443 UTC, coinciding with failures in CancelSlingJobScenario,
+    WalkingSkeletonScenario, and ListWorkflowModelsScenario. The relevant runtime log is
+    `interop/target/plan10-4104-gate-runtime-logs/39b846a1923f.log`; the gate result is
+    `interop/target/plan10-4104-final-quality-recheck.log`. This identifies resolver unavailability,
+    not the upstream reason for its rebinding.
+11. The public-tier startup check previously accepted its first non-404 response. It now requires
+    three consecutive expected 401 responses at the existing one-second interval, resetting on any
+    other status within the existing deadline. A unit test covers a resolver disappearance between
+    successful probes and rejects 200/503 as readiness. Runtime scenario assertions and mutations
+    are unchanged. Focused verification covers those three affected scenarios, a runtime restart,
+    the following scenario, and the public-tier tests. All 30 focused tests passed at 23:35 CEST
+    on 2026-09-05 in `interop/target/plan10-4104-readiness-recheck.log`.
+12. The next gate's source policy required the observation count to be a named constant. Named it
+    without changing the tested value or behavior. The refused run is preserved in
+    `interop/target/plan10-4104-readiness-quality.log`.
+
+13. The settled-startup gate passed core/policy checks and all public-route scenarios, including the
+    previously failing groups. One of 460 interop cases failed instead: ClockChaosScenario's second
+    node response did not satisfy its existing below-400 assertion. The assertion recorded no status
+    or body, and captured logs do not establish the cause. Added those diagnostics without changing
+    its requests, threshold, or retry behavior. Evidence: `interop/target/plan10-4104-settled-quality.log`.
+    All eight focused cluster tests passed at 23:51 CEST on 2026-09-05 in
+    `interop/target/plan10-4104-clock-recheck.log`. The complete gate is running again; this
+    focused pass does not establish the cause of the earlier second-node failure.
+
+14. The complete argument-free `scripts/quality` passed at 00:02 CEST on 2026-09-06. Core ran
+    977 tests and interop ran 460, with zero failures, errors, or skips. Required coverage,
+    static analysis, packaging, and all gate policy stages passed. ClockChaos and the previously
+    failing public-route groups passed with their assertions unchanged. Evidence:
+    `interop/target/plan10-4104-complete-quality.log`. The owner-supplied Adobe quickstart and
+    sibling-client end-to-end tiers did not run.
+15. Re-read the production transaction boundaries and supporting interop changes, checked the
+    independent-session interruption and overlap evidence, and checked whitespace. Retained data
+    keeps its charges; committed deletion retires the exact persisted charge once. Missing ownership
+    and exhausted contention preserve data and accounting. The obsolete split-release API is gone.
+    Task 4104 is complete. Bounds within dense buckets remain task 4105, and execution-fence and
+    runtime-lifecycle guarantees remain their separately authored tasks.

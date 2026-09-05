@@ -5,6 +5,7 @@ package rs.slingshot.agent.store;
 
 import java.util.ArrayList;
 import java.util.List;
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
@@ -151,9 +152,42 @@ public final class MaintenanceSweep {
 
     private static void examine(Session session, Pass pass, StatePath record)
             throws RepositoryException {
-        if (!session.nodeExists(record.path())) {
-            return;
+        int attempt = 0;
+        while (attempt < CompareAndSet.ATTEMPTS) {
+            if (examineAttempt(session, pass, record)) {
+                return;
+            }
+            attempt = attempt + 1;
         }
+        throw new RepositoryException("retention cleanup remained contended");
+    }
+
+    private static boolean examineAttempt(Session session, Pass pass, StatePath record)
+            throws RepositoryException {
+        session.refresh(false);
+        try {
+            if (!session.nodeExists(record.path())) {
+                return true;
+            }
+            CompareAndSet.stamp(session.getNode(StatePath.deployment(StatePath.CAPACITY).path()));
+            CompareAndSet.stamp(session.getNode(record.path()));
+            final Pass staged = new Pass(pass.generation(), pass.nowUnixMilliseconds(), pass.contract());
+            examineStaged(session, staged, record);
+            if (staged.removed() == 0 && staged.collected() == 0) {
+                return true;
+            }
+            session.save();
+            pass.include(staged);
+            return true;
+        } catch (final InvalidItemStateException contended) {
+            return false;
+        } finally {
+            session.refresh(false);
+        }
+    }
+
+    private static void examineStaged(Session session, Pass pass, StatePath record)
+            throws RepositoryException {
         final RetentionPolicy.Outcome until = RetentionPolicy.until(session, record,
                 RetentionPolicy.Kind.OPERATION_DETAIL, pass.contract());
         if (until instanceof RetentionPolicy.Refused) {
@@ -174,15 +208,12 @@ public final class MaintenanceSweep {
         release(session, pass, held, caller);
         pass.removedOne();
         held.remove();
-        session.save();
     }
 
     private static void release(Session session, Pass pass, Node held,
                                 StatePath.Outcome caller) throws RepositoryException {
         if (!(caller instanceof final StatePath.Held named)) {
-            // A record naming no caller is one nothing was counted against, so there is nothing to
-            // give back. It is removed either way: what it costs the store is its bytes, not a name.
-            return;
+            throw new RepositoryException("retention cannot retire data with no valid caller");
         }
         releaseEach(session, pass, held, named.caller(),
                 new Counted(ArtifactStore.NODE, AccountedQuantity.ARTIFACT_ROWS,
@@ -190,6 +221,9 @@ public final class MaintenanceSweep {
         releaseEach(session, pass, held, named.caller(),
                 new Counted(EventLedger.NODE, AccountedQuantity.EVENT_ROWS,
                         AccountedQuantity.EVENT_BYTES, EventLedger.BYTES));
+        releaseEach(session, pass, held, named.caller(),
+                new Counted(INTAKE, AccountedQuantity.OPERATION_RESERVATION_ROWS,
+                        AccountedQuantity.OPERATION_RESERVATION_BYTES, "declared_byte_count"));
     }
 
     /**
@@ -216,9 +250,8 @@ public final class MaintenanceSweep {
             final long size = one.hasProperty(counted.property())
                     ? one.getProperty(counted.property()).getLong()
                     : 0;
-            CapacityLedger.releaseResource(session, one, caller,
-                    new CapacityLedger.ResourceCharge(counted.rows(), counted.bytes(), counted.property()),
-                    pass.contract());
+            CapacityLedger.stageResourceRelease(session, one, caller,
+                    new CapacityLedger.ResourceCharge(counted.rows(), counted.bytes(), counted.property()));
             pass.releasedSome(size);
         }
     }
@@ -267,14 +300,14 @@ public final class MaintenanceSweep {
                 ? artifact.getProperty(ArtifactStore.BYTE_COUNT).getLong() : 0;
         final StatePath.Outcome caller = StatePath.caller(operation.hasProperty(CALLER)
                 ? operation.getProperty(CALLER).getString() : "");
-        if (caller instanceof final StatePath.Held named) {
-            CapacityLedger.releaseResource(session, artifact, named.caller(),
-                    new CapacityLedger.ResourceCharge(AccountedQuantity.ARTIFACT_ROWS,
-                            AccountedQuantity.ARTIFACT_BYTES, ArtifactStore.BYTE_COUNT), pass.contract());
+        if (!(caller instanceof final StatePath.Held named)) {
+            throw new RepositoryException("retention cannot collect data with no valid caller");
         }
+        CapacityLedger.stageResourceRelease(session, artifact, named.caller(),
+                new CapacityLedger.ResourceCharge(AccountedQuantity.ARTIFACT_ROWS,
+                        AccountedQuantity.ARTIFACT_BYTES, ArtifactStore.BYTE_COUNT));
         pass.collectedOne(size);
         artifact.remove();
-        session.save();
     }
 
     private static boolean referenced(Node operation, String slot) throws RepositoryException {
@@ -335,6 +368,12 @@ public final class MaintenanceSweep {
 
         AgentContract contract() {
             return contract;
+        }
+
+        void include(Pass committed) {
+            removed.addAndGet(committed.removed());
+            collected.addAndGet(committed.collected());
+            released.addAndGet(committed.released());
         }
 
         void removedOne() {
