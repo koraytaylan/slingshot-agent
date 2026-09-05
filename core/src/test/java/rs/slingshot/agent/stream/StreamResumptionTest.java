@@ -143,7 +143,9 @@ final class StreamResumptionTest {
                 StreamResumption.from(session, following, "1:0", CONTRACT)),
                 "a cursor into an operation nothing holds was served");
         final StringWriter writer = new StringWriter();
-        new StreamWriter(following, CONTRACT).serve(writer, session, new AdvancingTicker(), "1:0");
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        new StreamWriter(following, CONTRACT, admission).serve(writer, session, new AdvancingTicker(), "1:0");
         assertEquals(Heartbeat.bytes(), writer.toString(),
                 "a stream on an operation nothing holds went on saying nothing: "
                         + writer.toString());

@@ -18,11 +18,10 @@ import javax.jcr.Session;
  * author. So counting is compare-and-set like everything else, and the mixin is refused everywhere
  * in this repository.</p>
  *
- * <p>Sharding is what keeps a single hot property from serialising every writer in the cluster;
- * compare-and-set is what makes each shard exact. Two nodes advancing different shards from one
- * read can each admit, so a total may be understated by at most one advance per shard while
- * advances are in flight — which is why an admission compares against the declared bound less that
- * margin. A decision may be conservative and may never be wrong.</p>
+ * <p>The shard properties preserve the stored counter layout. A unique node revision serialises
+ * competing changes, including changes to different shards. Capacity admission fences the entire
+ * total and caller count before checking the bounds; shard headroom alone cannot protect a
+ * multi-unit admission from concurrent writers.</p>
  */
 public final class ShardedCount {
 
@@ -37,6 +36,10 @@ public final class ShardedCount {
 
     /**
      * Advances one count by one, on the shard a writer's own name lands on.
+     *
+     * <p>This conditional delta may return {@link WriteOutcome#VALUE_CHANGED} if its initial read
+     * becomes stale. A caller must handle that outcome and retry from fresh state as appropriate;
+     * capacity accounting uses reservation transactions instead of this standalone helper.</p>
      *
      * @param session the session to write under
      * @param path the node the count sits on
@@ -68,7 +71,18 @@ public final class ShardedCount {
     public static long total(Session session, StatePath path, int shards)
             throws RepositoryException {
         session.refresh(false);
-        final Node node = session.getNode(path.path());
+        return total(session.getNode(path.path()), shards);
+    }
+
+    /**
+     * Reads every shard without refreshing or discarding an enclosing pending transaction.
+     *
+     * @param node the counter node from the transaction's session
+     * @param shards how many shards this count is spread over
+     * @return the total in the current session view
+     * @throws RepositoryException if the repository fails
+     */
+    public static long total(Node node, int shards) throws RepositoryException {
         long total = 0;
         int shard = 0;
         while (shard < shards) {
@@ -79,12 +93,11 @@ public final class ShardedCount {
     }
 
     /**
-     * The margin a total spread over so many shards may be understated by.
+     * The conservative headroom retained by the existing admission contract.
      *
-     * <p>One advance per <em>other</em> shard: a writer commits its own advance before it reads, so
-     * what it cannot see is at most one uncommitted advance on each shard that is not its own. A
-     * count on a single shard is therefore exact, which is why a small bound is not sharded at all
-     * — sharding a count of eight would mean refusing at eight less a margin of sixteen.</p>
+     * <p>This is not a concurrency guarantee: amounts can exceed one, and more than one writer
+     * can target a shard. The admission transaction supplies exclusivity. Keeping this headroom
+     * preserves the currently exposed admission thresholds.</p>
      *
      * @param shards how many shards the count is spread over
      * @return the margin

@@ -111,3 +111,9 @@ name = "caller-capacity"
 path = "capacity/callers/{bucket}/{bucket}/{caller}"
 primitive = "set"
 holds = "One submitting caller's share of the store, bucketed through the same derivation an operation is, so no client can spend the whole store on everybody's behalf."
+
+[[node]]
+name = "capacity-reservation"
+path = "capacity/reservations/{bucket}/{bucket}/{identifier}"
+primitive = "set"
+holds = "A process-owned pending identity activated atomically with its caller and total charges; release removes the identity and those charges together, fencing delayed retries without per-release tombstones."

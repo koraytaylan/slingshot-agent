@@ -39,6 +39,7 @@ import rs.slingshot.agent.execution.TerminalCommit;
 import rs.slingshot.agent.json.DocumentValue;
 import rs.slingshot.agent.store.AccountedQuantity;
 import rs.slingshot.agent.store.CapacityLedger;
+import rs.slingshot.agent.store.CapacityReservation;
 import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.LedgerAdmission;
 import rs.slingshot.agent.store.StatePath;
@@ -179,8 +180,8 @@ final class SubmitServletTest {
         final long bound = AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS
                 .admissibleTotal(CONTRACT);
         for (long taken = 0; taken < bound; taken = taken + 1) {
-            CapacityLedger.admit(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
-                    caller(), 1, CONTRACT);
+            CapacityLedger.take(session, caller(), List.of(new CapacityReservation.Charge(
+                    AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, 1)), CONTRACT);
         }
         final var answered = answering(new Counting(), "a-submission.json");
         assertEquals(SubmitServlet.AT_CAPACITY, answered.getStatus(),

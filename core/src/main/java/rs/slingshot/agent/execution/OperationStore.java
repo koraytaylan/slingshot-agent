@@ -120,10 +120,27 @@ public final class OperationStore {
      */
     public static Object create(Session session, LogicalOperation operation)
             throws RepositoryException {
+        return create(session, operation, node -> { });
+    }
+
+    /**
+     * Creates an operation with the retained input declarations that belong to its acceptance.
+     *
+     * @param session the publication session
+     * @param operation the operation being accepted
+     * @param alongside initial values committed with the operation, only by the winning creator
+     * @return the created or existing record, or the reason no record can be read
+     * @throws RepositoryException if the repository or initial-value publication fails
+     */
+    public static Object create(Session session, LogicalOperation operation,
+                                ClaimByCreation.InitialValues alongside) throws RepositoryException {
         final StatePath path = pathOf(operation.identity());
         bucketsFor(session, path);
         final WriteOutcome claimed = ClaimByCreation.claim(session, path, "nt:unstructured",
-                node -> write(node, operation));
+                node -> {
+                    write(node, operation);
+                    alongside.write(node);
+                });
         final Outcome read = read(session, operation.identity());
         if (read instanceof final Refused refused) {
             return refused;

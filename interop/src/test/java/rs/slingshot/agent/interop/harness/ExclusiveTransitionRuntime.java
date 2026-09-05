@@ -49,17 +49,17 @@ final class ExclusiveTransitionRuntime {
 
     void verifyRaces() throws InterruptedException, ExecutionException, TimeoutException {
         assertEquals("prepared", post(nodes.first(), "prepare", "all"));
-        await(() -> "absent".equals(post(nodes.second(), "view", "admission"))
-                && "ACCEPTED".equals(post(nodes.second(), "view", "start"))
-                && "ACCEPTED".equals(post(nodes.second(), "view", "loss"))
-                && "0".equals(post(nodes.second(), "view", "counter")),
+        await(() -> observes(nodes.second(), "admission", "absent")
+                && observes(nodes.second(), "start", "ACCEPTED")
+                && observes(nodes.second(), "loss", "ACCEPTED")
+                && observes(nodes.second(), "counter", "0"),
                 "the second node did not observe the prepared shared state");
         race("counter", "cas", "WRITTEN", List.of("VALUE_CHANGED", "CONTENDED"));
         assertEquals("1", post(nodes.first(), "view", "counter"));
-        await(() -> "1".equals(post(nodes.second(), "view", "counter")),
+        await(() -> observes(nodes.second(), "counter", "1"),
                 "the shared counter did not become one");
         race("admission", "admit", "Accepted", List.of("Recognised", "Refused"));
-        await(() -> "ACCEPTED".equals(post(nodes.second(), "view", "admission")),
+        await(() -> observes(nodes.second(), "admission", "ACCEPTED"),
                 "the admitted record did not persist on the shared store");
         race("start", "start", "Held", List.of("Refused"));
         awaitEffects(nodes.second(), "start");
@@ -69,6 +69,11 @@ final class ExclusiveTransitionRuntime {
 
     CrashInjector.Ended killBeforeReply(CrashInjector injector)
             throws InterruptedException, ExecutionException, TimeoutException {
+        final String[] capacity = post(nodes.first(), "capacity-source", "all").split(",");
+        await(() -> "2/2/2/1".equals(post(nodes.second(), "capacity-view", "all")),
+                "the survivor did not observe the source reservations before process loss");
+        final String live = post(nodes.second(), "capacity-live", "all");
+        assertEquals("3/3/3/1", post(nodes.second(), "capacity-view", "all"));
         assertEquals("armed", post(nodes.first(), "arm", "loss"));
         try (var callers = Executors.newSingleThreadExecutor()) {
             final var lost = callers.submit(() -> post(nodes.first(), "lose", "loss"));
@@ -83,8 +88,27 @@ final class ExclusiveTransitionRuntime {
                     "the failure must be lost transport, not an assertion about an HTTP response");
             assertEquals("Recognised/Refused", post(nodes.second(), "resend", "loss"));
             assertEffects(nodes.second(), "loss");
+            assertEquals("recovered", post(nodes.second(), "capacity-recover", capacity[0]));
+            assertEquals("2/2/2/0", post(nodes.second(), "capacity-view", "all"),
+                    "counters must equal active reservation vectors after recovering the killed process");
+            assertEquals("recovered", post(nodes.second(), "capacity-recover", capacity[0]));
+            assertEquals("2/2/2/0", post(nodes.second(), "capacity-view", "all"));
+            assertReservation(capacity[1]);
+            assertReservation(live);
+            final var retained = requests.readAsAuthenticatedUser(nodes.second().address()
+                    + "/var/slingshot-agent/proof-retained-capacity.1.json");
+            assertEquals(200, retained.statusCode(), retained.body());
+            assertTrue(retained.body().contains("\"retained\":true"), retained.body());
             return ended;
         }
+    }
+
+    private void assertReservation(String identifier) {
+        final String path = "/var/slingshot-agent/capacity/reservations/"
+                + identifier.substring(0, 2) + "/" + identifier.substring(2, 4) + "/" + identifier;
+        final var response = requests.readAsAuthenticatedUser(nodes.second().address() + path + ".1.json");
+        assertEquals(200, response.statusCode(), response.body());
+        assertTrue(response.body().contains("\"active\":true"), response.body());
     }
 
     private void race(String fixture, String action, String winner, List<String> losers)
@@ -152,6 +176,18 @@ final class ExclusiveTransitionRuntime {
                 List.of("action", action, "fixture", fixture));
         assertEquals(200, response.statusCode(), response.body());
         return response.body();
+    }
+
+    private boolean observes(ContainerHandle node, String fixture, String expected) {
+        final HttpResponse<String> response = requests.submit(node.address() + ENDPOINT,
+                List.of("action", "view", "fixture", fixture));
+        // Sling may rebuild servlet resolution after the shared fixture tree is created.
+        // Only this read-only observation may wait through absence; mutations are never replayed.
+        if (response.statusCode() == 404) {
+            return false;
+        }
+        assertEquals(200, response.statusCode(), response.body());
+        return expected.equals(response.body());
     }
 
     private static void await(BooleanSupplier condition, String failure) throws InterruptedException {

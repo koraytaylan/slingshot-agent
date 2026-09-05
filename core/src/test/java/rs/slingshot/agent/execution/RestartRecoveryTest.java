@@ -35,6 +35,7 @@ import rs.slingshot.agent.json.DocumentValue;
 import rs.slingshot.agent.store.AccountedQuantity;
 import rs.slingshot.agent.store.CapacityLedger;
 import rs.slingshot.agent.store.LedgerAdmission;
+import rs.slingshot.agent.store.LegacyCapacity;
 import rs.slingshot.agent.store.MaintenanceSweep;
 import rs.slingshot.agent.store.RetentionPolicy;
 import rs.slingshot.agent.store.StatePath;
@@ -129,10 +130,9 @@ final class RestartRecoveryTest {
         CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, caller());
         CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, caller());
         // Two intakes are outstanding in this store, so two reservations are what it is holding.
-        CapacityLedger.admit(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, caller(), 2,
-                CONTRACT);
-        CapacityLedger.admit(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, caller(),
-                2 * DECLARED_BYTES, CONTRACT);
+        LegacyCapacity.seed(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, caller(), 2);
+        LegacyCapacity.seed(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, caller(),
+                2 * DECLARED_BYTES);
         final long past = REQUEST_START
                 + RetentionPolicy.Kind.OPERATION_DETAIL.minimum(CONTRACT);
         assertEquals(RecoveryDisposition.AWAITING_INTAKE,

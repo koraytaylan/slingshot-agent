@@ -89,10 +89,12 @@ final class HeartbeatTest {
     @DisplayName("a session ends at exactly its bound, after a final heartbeat and a clean close")
     void asessionEndsAtExactlyItsBound() throws RepositoryException {
         recorded();
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session(), caller(), CONTRACT));
         final AdvancingTicker ticker = new AdvancingTicker();
         try (ClosingWriter writer = new ClosingWriter()) {
             assertEquals(StreamWriter.Ending.REACHED_THE_SESSION_BOUND,
-                    new StreamWriter(following(identifierOf("nothing-waiting.json")), CONTRACT)
+                    new StreamWriter(following(identifierOf("nothing-waiting.json")), CONTRACT, admission)
                             .serve(writer, session(), ticker, ""),
                     "a quiet session ended some way other than at its own bound");
             assertEquals(NOW + SessionBound.milliseconds(CONTRACT), ticker.milliseconds(),
@@ -173,8 +175,10 @@ final class HeartbeatTest {
     }
 
     private String quiet(AgentContract contract) throws RepositoryException {
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session(), caller(), contract));
         final StringWriter writer = new StringWriter();
-        new StreamWriter(following(identifierOf("nothing-waiting.json")), contract)
+        new StreamWriter(following(identifierOf("nothing-waiting.json")), contract, admission)
                 .serve(writer, session(), new AdvancingTicker(), "");
         return writer.toString();
     }

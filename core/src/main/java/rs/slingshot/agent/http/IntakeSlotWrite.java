@@ -12,10 +12,16 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.digest.DigestValue;
+import rs.slingshot.agent.execution.AdmissionOutcome;
 import rs.slingshot.agent.execution.OperationStore;
+import rs.slingshot.agent.execution.SubmissionAdmission;
+import rs.slingshot.agent.store.AccountedQuantity;
 import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.store.ArtifactStore;
+import rs.slingshot.agent.store.CapacityLedger;
+import rs.slingshot.agent.store.CapacityReservation;
 import rs.slingshot.agent.store.StatePath;
+import rs.slingshot.agent.store.WriteOutcome;
 import rs.slingshot.agent.wire.JobEventKind;
 
 /**
@@ -63,7 +69,7 @@ public final class IntakeSlotWrite {
     }
 
     /** What writing one payload did. */
-    public sealed interface Outcome permits Written, Refused {
+    public sealed interface Outcome permits Written, Refused, Unavailable {
     }
 
     /**
@@ -87,6 +93,10 @@ public final class IntakeSlotWrite {
     public record Refused(IntakeRefusal refusal, String detail) implements Outcome {
     }
 
+    /** The store could not count or commit this upload, so the declaration remains retryable. */
+    public record Unavailable() implements Outcome {
+    }
+
     /**
      * One slot a manifest declares.
      *
@@ -97,31 +107,91 @@ public final class IntakeSlotWrite {
     public record Declared(ArtifactSlot slot, long byteCount, DigestValue digest) {
     }
 
+    /** The operation admission decision or the capacity that prevented it. */
+    public sealed interface Admission permits Decided, AtCapacity, NotCounted {
+    }
+
     /**
-     * Writes down what a manifest declared, so the store knows what it is waiting for.
+     * The ordinary operation admission outcome, after preparing any required intake capacity.
      *
-     * @param session the session to write under
-     * @param operation the operation the manifest belongs to
-     * @param declared the slots it declares
-     * @throws RepositoryException if the repository fails
+     * @param outcome acceptance, recognition, or refusal of the operation
      */
-    public static void declare(Session session, StatePath operation, List<Declared> declared)
-            throws RepositoryException {
-        if (declared.isEmpty() || !session.nodeExists(operation.path())) {
-            return;
+    public record Decided(AdmissionOutcome outcome) implements Admission {
+    }
+
+    /**
+     * The whole manifest was refused without recording an accepted operation.
+     *
+     * @param refusal the quantity and bound that prevented admission
+     */
+    public record AtCapacity(CapacityLedger.Refused refusal) implements Admission {
+    }
+
+    /**
+     * No manifest was admitted because capacity could not be counted.
+     *
+     * @param outcome contention or missing prepared state
+     */
+    public record NotCounted(WriteOutcome outcome) implements Admission {
+    }
+
+    /**
+     * Reserves a manifest and commits its declarations with operation acceptance.
+     *
+     * @param session the admission session
+     * @param submission the operation being submitted
+     * @param declared the payload declarations in manifest order
+     * @param nowUnixMilliseconds the admission time
+     * @param contract the authenticated bounds
+     * @return the operation outcome or the capacity refusal
+     * @throws RepositoryException if preparation, publication, or cleanup fails
+     */
+    public static Admission admit(Session session, SubmissionAdmission.Submission submission,
+                                   List<Declared> declared, long nowUnixMilliseconds,
+                                   AgentContract contract) throws RepositoryException {
+        final List<Declared> manifest = List.copyOf(declared);
+        if (manifest.isEmpty()
+                || OperationStore.read(session, submission.identity()) instanceof OperationStore.Held) {
+            return new Decided(SubmissionAdmission.admit(session, submission, nowUnixMilliseconds, contract));
         }
-        final Node record = session.getNode(operation.path());
-        final Node intake = record.hasNode(NODE)
-                ? record.getNode(NODE)
-                : record.addNode(NODE, "nt:unstructured");
+        try (CapacityReservation.Batch batch = CapacityReservation.batch(session, contract)) {
+            for (final Declared slot : manifest) {
+                if (batch.create(submission.caller(), charges(slot)).isEmpty()) {
+                    return new NotCounted(WriteOutcome.CONTENDED);
+                }
+            }
+            final CapacityLedger.Admission room =
+                    CapacityLedger.reserve(session, batch.reservations(), contract);
+            if (room instanceof final CapacityLedger.Refused refused) {
+                return new AtCapacity(refused);
+            }
+            if (room instanceof final CapacityLedger.NotCounted missed) {
+                return new NotCounted(missed.outcome());
+            }
+            return new Decided(SubmissionAdmission.admit(session, submission, nowUnixMilliseconds, contract,
+                    node -> declare(node, manifest, batch.reservations())));
+        }
+    }
+
+    private static List<CapacityReservation.Charge> charges(Declared slot) {
+        return List.of(new CapacityReservation.Charge(AccountedQuantity.ARTIFACT_ROWS, 1),
+                new CapacityReservation.Charge(AccountedQuantity.ARTIFACT_BYTES, slot.byteCount()),
+                new CapacityReservation.Charge(AccountedQuantity.OPERATION_RESERVATION_ROWS, 1),
+                new CapacityReservation.Charge(AccountedQuantity.OPERATION_RESERVATION_BYTES,
+                        slot.byteCount()));
+    }
+
+    private static void declare(Node record, List<Declared> declared,
+                                 List<CapacityReservation> reservations) throws RepositoryException {
+        final Node intake = record.addNode(NODE, "nt:unstructured");
+        int index = 0;
         for (final Declared slot : declared) {
-            final Node written = intake.hasNode(slot.slot().name())
-                    ? intake.getNode(slot.slot().name())
-                    : intake.addNode(slot.slot().name(), "nt:unstructured");
+            final Node written = intake.addNode(slot.slot().name(), "nt:unstructured");
             written.setProperty(DECLARED_BYTES, slot.byteCount());
             written.setProperty(DECLARED_DIGEST, slot.digest().rendered());
+            CapacityReservation.retain(record.getSession(), reservations.get(index), written);
+            index = index + 1;
         }
-        session.save();
     }
 
     /**
@@ -173,35 +243,23 @@ public final class IntakeSlotWrite {
     private static Outcome streamed(Session session, StatePath.Caller caller, Arriving arriving,
                                     Declared declared, AgentContract contract)
             throws RepositoryException {
-        final ArtifactStore.Outcome written = ArtifactStore.publish(session, caller,
+        final ArtifactStore.Outcome written = ArtifactStore.publishReserved(session, caller,
                 arriving.operation(),
                 new ArtifactStore.Publication(arriving.slot(), declared.byteCount(),
                         arriving.body()),
-                arriving.nowUnixMilliseconds(), contract, ArtifactStore.Reservation.ALREADY_TAKEN);
+                arriving.nowUnixMilliseconds(), contract,
+                new ArtifactStore.Prepaid(arriving.operation().child(NODE).child(arriving.slot().name()),
+                        declared.digest()));
         if (written instanceof final ArtifactStore.Refused refused) {
+            if (refused.refusal() == ArtifactStore.Refusal.DIGEST_DIFFERS) {
+                return new Refused(IntakeRefusal.DIGEST_MISMATCH, refused.detail());
+            }
             return new Refused(refused.refusal() == ArtifactStore.Refusal.SIZE_DIFFERS
                     ? IntakeRefusal.LENGTH_MISMATCH
                     : IntakeRefusal.UNDECLARED_SLOT, refused.detail());
         }
         if (!(written instanceof final ArtifactStore.Published published)) {
-            return new Refused(IntakeRefusal.LENGTH_MISMATCH,
-                    "the store did not take these bytes: " + written);
-        }
-        return verified(session, arriving, declared, published);
-    }
-
-    private static Outcome verified(Session session, Arriving arriving, Declared declared,
-                                    ArtifactStore.Published published) throws RepositoryException {
-        if (!published.record().digest().rendered().equals(declared.digest().rendered())) {
-            // Nothing reachable and the slot claimable again: a partial payload under a record
-            // that looks complete is the failure every later reader would inherit.
-            final String path = arriving.slot().under(arriving.operation()).path();
-            if (session.nodeExists(path)) {
-                session.getNode(path).remove();
-                session.save();
-            }
-            return new Refused(IntakeRefusal.DIGEST_MISMATCH,
-                    "the bytes that arrived are not the ones this slot declared");
+            return new Unavailable();
         }
         return new Written(arriving.slot(), published.record().byteCount(),
                 published.record().digest(), outstanding(session, arriving.operation()));

@@ -216,8 +216,9 @@ public final class MaintenanceSweep {
             final long size = one.hasProperty(counted.property())
                     ? one.getProperty(counted.property()).getLong()
                     : 0;
-            CapacityLedger.release(session, counted.rows(), caller, 1, pass.contract());
-            CapacityLedger.release(session, counted.bytes(), caller, size, pass.contract());
+            CapacityLedger.releaseResource(session, one, caller,
+                    new CapacityLedger.ResourceCharge(counted.rows(), counted.bytes(), counted.property()),
+                    pass.contract());
             pass.releasedSome(size);
         }
     }
@@ -267,10 +268,9 @@ public final class MaintenanceSweep {
         final StatePath.Outcome caller = StatePath.caller(operation.hasProperty(CALLER)
                 ? operation.getProperty(CALLER).getString() : "");
         if (caller instanceof final StatePath.Held named) {
-            CapacityLedger.release(session, AccountedQuantity.ARTIFACT_ROWS, named.caller(), 1,
-                    pass.contract());
-            CapacityLedger.release(session, AccountedQuantity.ARTIFACT_BYTES, named.caller(), size,
-                    pass.contract());
+            CapacityLedger.releaseResource(session, artifact, named.caller(),
+                    new CapacityLedger.ResourceCharge(AccountedQuantity.ARTIFACT_ROWS,
+                            AccountedQuantity.ARTIFACT_BYTES, ArtifactStore.BYTE_COUNT), pass.contract());
         }
         pass.collectedOne(size);
         artifact.remove();

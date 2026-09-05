@@ -12,6 +12,8 @@ import java.nio.channels.Channels;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * A connection severed at a named moment, at the boundary rather than inside either process.
@@ -87,6 +89,8 @@ public final class NetworkDisruptor implements AutoCloseable {
     private final Point point;
     private final AtomicReference<Severance> severance =
             new AtomicReference<>(Severance.NOTHING_CONNECTED);
+
+    private final Lock severanceLock = new ReentrantLock();
     private final Thread pump;
 
     private NetworkDisruptor(ServerSocketChannel listening, URI target, Point point) {
@@ -139,7 +143,12 @@ public final class NetworkDisruptor implements AutoCloseable {
      * @return whether it was severed
      */
     public Severance severance() {
-        return severance.get();
+        severanceLock.lock();
+        try {
+            return severance.get();
+        } finally {
+            severanceLock.unlock();
+        }
     }
 
     /**
@@ -293,8 +302,15 @@ public final class NetworkDisruptor implements AutoCloseable {
         // The linger interval at zero sends a reset rather than closing: an orderly close is
         // something both sides can flush through and read to the end of, and what is being proved
         // here is what happens when nobody got an answer at all.
-        accepted.setOption(StandardSocketOptions.SO_LINGER, 0);
-        accepted.close();
-        severance.set(Severance.SEVERED);
+        severanceLock.lock();
+        try {
+            accepted.setOption(StandardSocketOptions.SO_LINGER, 0);
+            // The peer can observe the reset before close returns. Keep observers outside this
+            // transition until it is recorded, without claiming success before close succeeds.
+            accepted.close();
+            severance.set(Severance.SEVERED);
+        } finally {
+            severanceLock.unlock();
+        }
     }
 }

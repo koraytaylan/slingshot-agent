@@ -3,6 +3,7 @@
 
 package rs.slingshot.agent.store;
 
+import java.util.List;
 import java.util.Optional;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -12,9 +13,9 @@ import rs.slingshot.agent.contract.AgentContract;
  * The event ledger's use of the one capacity authority, and not a second authority beside it.
  *
  * <p>An event costs two things at once — a row and its bytes — and both have to be admitted before
- * either is spent, or a store admits the row it has no bytes for. So this takes both, gives the
- * first back where the second is refused, and gives both back where the write that follows does not
- * happen. Nothing here counts anything itself: every number it moves is moved by
+ * either is spent, or a store admits the row it has no bytes for. Both are activated in one
+ * reservation transaction and cancelled by that identity if publication does not happen. Nothing
+ * here counts anything itself: every number it moves is moved by
  * {@link CapacityLedger}, which is what makes a bound one thing to change rather than two.</p>
  */
 public final class LedgerAdmission {
@@ -33,8 +34,9 @@ public final class LedgerAdmission {
      * Room for one event, taken from both counts.
      *
      * @param bytes how many bytes were admitted alongside the row
+     * @param reservation the identity paying for both quantities
      */
-    public record Admitted(long bytes) implements Outcome {
+    public record Admitted(long bytes, CapacityReservation reservation) implements Outcome {
     }
 
     /**
@@ -65,34 +67,27 @@ public final class LedgerAdmission {
      */
     public static Outcome admit(Session session, StatePath.Caller caller, long bytes,
                                 AgentContract contract) throws RepositoryException {
-        final CapacityLedger.Admission rows = CapacityLedger.admit(session,
-                AccountedQuantity.EVENT_ROWS, caller, ONE_ROW, contract);
-        if (!(rows instanceof CapacityLedger.Admitted)) {
-            return of(rows);
+        final CapacityLedger.ReservationAdmission admission = CapacityLedger.take(session, caller,
+                List.of(new CapacityReservation.Charge(AccountedQuantity.EVENT_ROWS, ONE_ROW),
+                        new CapacityReservation.Charge(AccountedQuantity.EVENT_BYTES, bytes)), contract);
+        if (admission instanceof final CapacityLedger.Reserved reserved) {
+            return new Admitted(bytes, reserved.reservation());
         }
-        final CapacityLedger.Admission written = CapacityLedger.admit(session,
-                AccountedQuantity.EVENT_BYTES, caller, bytes, contract);
-        if (!(written instanceof CapacityLedger.Admitted)) {
-            CapacityLedger.release(session, AccountedQuantity.EVENT_ROWS, caller, ONE_ROW,
-                    contract);
-            return of(written);
-        }
-        return new Admitted(bytes);
+        return admission instanceof final CapacityLedger.Refused refused
+                ? new Refused(refused) : new NotCounted((CapacityLedger.NotCounted) admission);
     }
 
     /**
      * Gives back the room one event took, where the event did not happen.
      *
      * @param session the session to write under
-     * @param caller whose share it goes back to
-     * @param bytes how large the event was going to be
+     * @param admitted the event's own reservation, preserved if publication already committed
      * @param contract the authenticated contract, which decides how the counts are spread
      * @throws RepositoryException if the repository fails
      */
-    public static void release(Session session, StatePath.Caller caller, long bytes,
+    public static void release(Session session, Admitted admitted,
                                AgentContract contract) throws RepositoryException {
-        CapacityLedger.release(session, AccountedQuantity.EVENT_BYTES, caller, bytes, contract);
-        CapacityLedger.release(session, AccountedQuantity.EVENT_ROWS, caller, ONE_ROW, contract);
+        CapacityLedger.cancel(session, admitted.reservation(), contract);
     }
 
     /**
@@ -118,9 +113,4 @@ public final class LedgerAdmission {
         return outcome instanceof final Refused refused ? Optional.of(refused) : Optional.empty();
     }
 
-    private static Outcome of(CapacityLedger.Admission admission) {
-        return admission instanceof final CapacityLedger.Refused refused
-                ? new Refused(refused)
-                : new NotCounted((CapacityLedger.NotCounted) admission);
-    }
 }
