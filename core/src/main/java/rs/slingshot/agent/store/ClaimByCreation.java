@@ -3,7 +3,6 @@
 
 package rs.slingshot.agent.store;
 
-import java.util.function.Consumer;
 import javax.jcr.InvalidItemStateException;
 import javax.jcr.ItemExistsException;
 import javax.jcr.Node;
@@ -35,6 +34,19 @@ public final class ClaimByCreation {
     private ClaimByCreation() {
     }
 
+    /** The initial values that must commit together with a newly claimed node. */
+    @FunctionalInterface
+    public interface InitialValues {
+
+        /**
+         * Writes the claim's initial values in its pending transaction.
+         *
+         * @param node the newly staged node
+         * @throws RepositoryException if the initial values cannot be staged
+         */
+        void write(Node node) throws RepositoryException;
+    }
+
     /**
      * Claims a path by creating a node at it.
      *
@@ -49,7 +61,7 @@ public final class ClaimByCreation {
      *     held, because a repository that cannot answer is a different thing from an answer of no
      */
     public static WriteOutcome claim(Session session, StatePath path, String primaryType,
-                                     Consumer<Node> fill) throws RepositoryException {
+                                     InitialValues fill) throws RepositoryException {
         if (session.nodeExists(path.path())) {
             return WriteOutcome.ALREADY_HELD;
         }
@@ -62,7 +74,7 @@ public final class ClaimByCreation {
             }
             final String name = path.path().substring(path.path().lastIndexOf('/') + 1);
             final Node claimed = parent.addNode(name, primaryType);
-            fill.accept(claimed);
+            fill.write(claimed);
             CompareAndSet.stamp(claimed);
             session.save();
             return WriteOutcome.CLAIMED;

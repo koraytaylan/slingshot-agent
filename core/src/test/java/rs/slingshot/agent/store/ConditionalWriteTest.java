@@ -233,6 +233,21 @@ final class ConditionalWriteTest {
     }
 
     @Test
+    void aStaleShardDeltaRefusesExplicitlyAndCanBeRetriedFromFreshState() throws RepositoryException {
+        final Session first = session();
+        final StatePath path = path("stale-shard");
+        ClaimByCreation.claim(first, path, "nt:unstructured", node -> { });
+        final Session second = anotherSession();
+        final Session raced = SaveInterleaving.beforeWrite(first, path.path(), () -> assertEquals(
+                WriteOutcome.WRITTEN, ShardedCount.advance(second, path, "writer", 1, 1)));
+        assertEquals(WriteOutcome.VALUE_CHANGED, ShardedCount.advance(raced, path, "writer", 1, 1));
+        assertFalse(first.hasPendingChanges());
+        assertEquals(1, ShardedCount.total(first, path, 1));
+        assertEquals(WriteOutcome.WRITTEN, ShardedCount.advance(first, path, "writer", 1, 1));
+        assertEquals(2, ShardedCount.total(second, path, 1));
+    }
+
+    @Test
     @DisplayName("the counter mixin appears in no built class of this bundle")
     void theCounterMixinIsInNoBuiltClass() {
         final String refused = new String(new byte[] {'m', 'i', 'x', ':', 'a', 't', 'o', 'm', 'i',

@@ -122,7 +122,7 @@ final class TransportDisruptionScenario {
             severed(point);
             final var answered = requests.readAsAuthenticatedUser(tier.address() + CAPABILITIES);
             assertEquals(SERVED, answered.statusCode(),
-                    "the instance stopped answering after " + point.spelling());
+                    "the instance stopped answering after " + point.spelling() + ": " + answered.body());
             assertEquals(before, answered.body(),
                     "the answer changed after " + point.spelling() + ", so a severed request left"
                             + " something behind");

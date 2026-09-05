@@ -4,13 +4,24 @@
 package rs.slingshot.agent.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import org.apache.sling.api.resource.LoginException;
+import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
@@ -23,10 +34,9 @@ import rs.slingshot.agent.contract.ContractLimit;
 /**
  * What this store admits, and what it refuses at whose bound.
  *
- * <p>The bounds are exercised at exactly the number an admission compares against rather than at
- * the contract's own: the difference between the two is the margin a sharded count may understate
- * by while advances are in flight, and admitting up to the declared bound would be admitting past
- * it on a cluster. A decision may be conservative and may never be wrong.</p>
+ * <p>The thresholds retain the existing shard headroom. Independent Oak sessions also prove that
+ * competing and interrupted transitions preserve the entire account, because headroom cannot
+ * supply atomicity or recover an ignored write conflict.</p>
  */
 @ExtendWith(SlingContextExtension.class)
 final class CapacityLedgerTest {
@@ -77,13 +87,15 @@ final class CapacityLedgerTest {
         assertTrue(admissible > 0, "the suite cannot reach this bound");
         long admitted = 0;
         while (admitted < admissible) {
-            assertInstanceOf(CapacityLedger.Admitted.class,
-                    CapacityLedger.admit(session, SMALL, caller, 1, CONTRACT),
+            assertInstanceOf(CapacityLedger.Reserved.class,
+                    CapacityLedger.take(session, caller,
+                        List.of(new CapacityReservation.Charge(SMALL, 1)), CONTRACT),
                     "work inside the bound was refused at " + admitted);
             admitted = admitted + 1;
         }
         final CapacityLedger.Refused refused = assertInstanceOf(CapacityLedger.Refused.class,
-                CapacityLedger.admit(session, SMALL, caller, 1, CONTRACT),
+                CapacityLedger.take(session, caller,
+                        List.of(new CapacityReservation.Charge(SMALL, 1)), CONTRACT),
                 "work past the bound was admitted");
         assertEquals(CapacityLedger.Reached.THE_CALLERS_SHARE, refused.reached());
         assertEquals(admissible, refused.bound());
@@ -104,14 +116,17 @@ final class CapacityLedgerTest {
         CapacityLedger.prepare(session, SMALL, second);
         long admitted = 0;
         while (admitted < SMALL.admissibleCallerShare(CONTRACT)) {
-            CapacityLedger.admit(session, SMALL, first, 1, CONTRACT);
+            CapacityLedger.take(session, first,
+                        List.of(new CapacityReservation.Charge(SMALL, 1)), CONTRACT);
             admitted = admitted + 1;
         }
         assertEquals(CapacityLedger.Reached.THE_CALLERS_SHARE,
                 assertInstanceOf(CapacityLedger.Refused.class,
-                        CapacityLedger.admit(session, SMALL, first, 1, CONTRACT)).reached());
-        assertInstanceOf(CapacityLedger.Admitted.class,
-                CapacityLedger.admit(session, SMALL, second, 1, CONTRACT),
+                        CapacityLedger.take(session, first,
+                        List.of(new CapacityReservation.Charge(SMALL, 1)), CONTRACT)).reached());
+        assertInstanceOf(CapacityLedger.Reserved.class,
+                CapacityLedger.take(session, second,
+                        List.of(new CapacityReservation.Charge(SMALL, 1)), CONTRACT),
                 "a caller under their own share was refused because another caller was busy");
     }
 
@@ -121,15 +136,186 @@ final class CapacityLedgerTest {
         final Session session = prepared();
         final StatePath.Caller caller = caller("the-reserving-caller");
         CapacityLedger.prepare(session, SMALL, caller);
-        assertInstanceOf(CapacityLedger.Admitted.class,
-                CapacityLedger.admit(session, SMALL, caller, 3, CONTRACT));
+        final CapacityReservation reservation = take(session, caller, 3);
         assertEquals(3, CapacityLedger.held(session, SMALL, CONTRACT));
         assertEquals(3, CapacityLedger.heldBy(session, SMALL, caller, CONTRACT));
-        CapacityLedger.release(session, SMALL, caller, 3, CONTRACT);
+        CapacityLedger.release(session, reservation, CONTRACT);
         assertEquals(0, CapacityLedger.held(session, SMALL, CONTRACT),
                 "a released reservation left something behind in the total");
         assertEquals(0, CapacityLedger.heldBy(session, SMALL, caller, CONTRACT),
                 "a released reservation left something behind in the caller's share");
+    }
+
+    @Test
+    @DisplayName("two independent releases restore both counts even when their saves race")
+    void competingReleasesRestoreBothCounts() throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("racing-releases");
+        CapacityLedger.prepare(session, SMALL, caller);
+        final CapacityReservation first = take(session, caller, 1);
+        final CapacityReservation other = take(session, caller, 1);
+        try (ResourceResolver resolver = anotherResolver()) {
+            final Session second = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final Session raced = SaveInterleaving.before(session,
+                    () -> CapacityLedger.release(second, other, CONTRACT));
+            CapacityLedger.release(raced, first, CONTRACT);
+            assertEquals(0, CapacityLedger.held(second, SMALL, CONTRACT));
+            assertEquals(0, CapacityLedger.heldBy(second, SMALL, caller, CONTRACT));
+        }
+    }
+
+    @Test
+    @DisplayName("an admission interrupted after its first commit never leaves half an account")
+    void interruptedAdmissionKeepsTheAccountsEqual() throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("interrupted-admission");
+        CapacityLedger.prepare(session, SMALL, caller);
+        final CapacityReservation reservation = pending(session, caller);
+        assertThrows(RepositoryException.class,
+                () -> CapacityLedger.reserve(lostReply(session), reservation, CONTRACT));
+        try (ResourceResolver resolver = anotherResolver()) {
+            final Session observer = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            assertEquals(CapacityLedger.held(observer, SMALL, CONTRACT),
+                    CapacityLedger.heldBy(observer, SMALL, caller, CONTRACT));
+        }
+    }
+
+    @Test
+    @DisplayName("a release interrupted after its first commit never leaves half an account")
+    void interruptedReleaseKeepsTheAccountsEqual() throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("interrupted-release");
+        CapacityLedger.prepare(session, SMALL, caller);
+        final CapacityReservation reservation = take(session, caller, 1);
+        assertThrows(RepositoryException.class,
+                () -> CapacityLedger.release(lostReply(session), reservation, CONTRACT));
+        try (ResourceResolver resolver = anotherResolver()) {
+            final Session observer = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            assertEquals(CapacityLedger.held(observer, SMALL, CONTRACT),
+                    CapacityLedger.heldBy(observer, SMALL, caller, CONTRACT));
+        }
+    }
+
+    @Test
+    @DisplayName("a last-slot contender retries its admission against the winner's fresh counts")
+    void aLastSlotHasOnlyOneReservation() throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("last-slot");
+        CapacityLedger.prepare(session, SMALL, caller);
+        final long bound = SMALL.admissibleCallerShare(CONTRACT);
+        CapacityLedger.take(session, caller,
+                        List.of(new CapacityReservation.Charge(SMALL, bound - 1)), CONTRACT);
+        final CapacityReservation first = pending(session, caller);
+        final CapacityReservation other = pending(session, caller);
+        try (ResourceResolver resolver = anotherResolver()) {
+            final Session second = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final Session raced = SaveInterleaving.before(session, () -> assertInstanceOf(
+                    CapacityLedger.Admitted.class,
+                    CapacityLedger.reserve(second, other, CONTRACT)));
+            assertInstanceOf(CapacityLedger.Refused.class,
+                    CapacityLedger.reserve(raced, first, CONTRACT));
+            assertEquals(bound, CapacityLedger.held(second, SMALL, CONTRACT));
+            assertEquals(bound, CapacityLedger.heldBy(second, SMALL, caller, CONTRACT));
+        }
+    }
+
+    @Test
+    @DisplayName("an automatic refresh between the two counter stamps cannot lose a release")
+    void refreshingBetweenCountersPreservesBothReleases()
+            throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("refreshed-releases");
+        CapacityLedger.prepare(session, SMALL, caller);
+        final CapacityReservation first = take(session, caller, 1);
+        final CapacityReservation other = take(session, caller, 1);
+        try (ResourceResolver resolver = anotherResolver()) {
+            final Session second = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final Session raced = SaveInterleaving.beforeWrite(session,
+                    CapacityLedger.callerPath(SMALL, caller).path(),
+                    () -> CapacityLedger.release(second, other, CONTRACT));
+            CapacityLedger.release(raced, first, CONTRACT);
+            assertEquals(0, CapacityLedger.held(second, SMALL, CONTRACT));
+            assertEquals(0, CapacityLedger.heldBy(second, SMALL, caller, CONTRACT));
+        }
+    }
+
+    @Test
+    @DisplayName("exhausted contention is surfaced without leaving pending counter changes")
+    void exhaustedReleaseContentionIsReported() throws RepositoryException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("contended-release");
+        CapacityLedger.prepare(session, SMALL, caller);
+        final CapacityReservation reservation = take(session, caller, 1);
+        final AtomicInteger attempts = new AtomicInteger();
+        final Session contended = (Session) Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(), new Class<?>[] {Session.class},
+                (proxy, method, arguments) -> {
+                    if ("save".equals(method.getName())) {
+                        attempts.incrementAndGet();
+                        throw new InvalidItemStateException("the competing writer won");
+                    }
+                    try {
+                        return method.invoke(session, arguments);
+                    } catch (final InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
+        assertThrows(RepositoryException.class,
+                () -> CapacityLedger.release(contended, reservation, CONTRACT));
+        assertEquals(CompareAndSet.ATTEMPTS, attempts.get());
+        assertFalse(session.hasPendingChanges());
+        assertEquals(1, CapacityLedger.held(session, SMALL, CONTRACT));
+        assertEquals(1, CapacityLedger.heldBy(session, SMALL, caller, CONTRACT));
+    }
+
+    @Test
+    @DisplayName("a release exceeding its count refuses without clamping or changing either count")
+    void overReleaseCannotCreateCapacity() throws RepositoryException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("over-release");
+        CapacityLedger.prepare(session, SMALL, caller);
+        final CapacityReservation reservation = take(session, caller, 1);
+        session.getNode(CapacityLedger.callerPath(SMALL, caller).path())
+                .setProperty(ShardedCount.SHARD_PREFIX + 0, 0);
+        session.save();
+        assertThrows(RepositoryException.class,
+                () -> CapacityLedger.release(session, reservation, CONTRACT));
+        assertFalse(session.hasPendingChanges());
+        assertEquals(1, CapacityLedger.held(session, SMALL, CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(session, SMALL, caller, CONTRACT));
+        assertTrue(session.nodeExists(reservation.path().path()));
+    }
+
+    private static CapacityReservation take(Session session, StatePath.Caller caller, long amount)
+            throws RepositoryException {
+        return assertInstanceOf(CapacityLedger.Reserved.class, CapacityLedger.take(session, caller,
+                List.of(new CapacityReservation.Charge(SMALL, amount)), CONTRACT)).reservation();
+    }
+
+    private static CapacityReservation pending(Session session, StatePath.Caller caller)
+            throws RepositoryException {
+        return CapacityReservation.create(session, CapacityReservation.processOwner(), caller,
+                List.of(new CapacityReservation.Charge(SMALL, 1))).orElseThrow();
+    }
+
+    private ResourceResolver anotherResolver() throws LoginException {
+        return Objects.requireNonNull(sling.getService(ResourceResolverFactory.class))
+                .getResourceResolver(Map.of());
+    }
+
+    private static Session lostReply(Session session) {
+        return (Session) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] {Session.class}, (proxy, method, arguments) -> {
+                    try {
+                        final Object returned = method.invoke(session, arguments);
+                        if ("save".equals(method.getName())) {
+                            throw new RepositoryException("the committed save reply was lost");
+                        }
+                        return returned;
+                    } catch (final InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
     }
 
     @Test
@@ -149,21 +335,23 @@ final class CapacityLedgerTest {
         for (final StatePath.Caller caller : callers) {
             long mine = 0;
             while (mine < streams.admissibleCallerShare(CONTRACT) && admitted < admissible) {
-                CapacityLedger.admit(session, streams, caller, 1, CONTRACT);
+                CapacityLedger.take(session, caller,
+                        List.of(new CapacityReservation.Charge(streams, 1)), CONTRACT);
                 mine = mine + 1;
                 admitted = admitted + 1;
             }
         }
         assertEquals(admissible, CapacityLedger.held(session, streams, CONTRACT));
         final CapacityLedger.Refused refused = assertInstanceOf(CapacityLedger.Refused.class,
-                CapacityLedger.admit(session, streams, callers.getLast(), 1, CONTRACT),
+                CapacityLedger.take(session, callers.getLast(),
+                        List.of(new CapacityReservation.Charge(streams, 1)), CONTRACT),
                 "work past the store's own total was admitted");
         assertEquals(CapacityLedger.Reached.THE_TOTAL, refused.reached());
         assertTrue(refused.rendered().contains("what this store may hold"), refused.rendered());
     }
 
     @Test
-    @DisplayName("an admission compares against the bound less what a sharded count may understate")
+    @DisplayName("an admission retains the existing conservative shard headroom")
     void themarginIsWhatMakesADecisionConservative() {
         Arrays.stream(AccountedQuantity.values()).forEach(quantity -> {
             assertEquals(CONTRACT.value(quantity.total())
@@ -184,12 +372,52 @@ final class CapacityLedgerTest {
     void awriteThatDidNotHappenIsNotARefusal() throws RepositoryException {
         final Session session = prepared();
         final StatePath.Caller caller = caller("the-uncounted-caller");
-        final CapacityLedger.Admission admission =
-                CapacityLedger.admit(session, SMALL, caller, 1, CONTRACT);
+        final CapacityLedger.ReservationAdmission admission = CapacityLedger.take(session, caller,
+                List.of(new CapacityReservation.Charge(SMALL, 1)), CONTRACT);
         assertInstanceOf(CapacityLedger.NotCounted.class, admission,
                 "a store with no counters answered as though it were full");
-        assertTrue(CapacityLedger.refusalIn(admission).isEmpty(),
-                "a write that did not happen was reported as a refusal");
+        assertFalse(session.hasPendingChanges());
+    }
+
+    @Test
+    void preparationRetriesAnInvisibleParentClaimConflict() throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("preparation-race");
+        try (ResourceResolver resolver = anotherResolver()) {
+            final Session competing = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            CapacityLedger.prepare(SaveInterleaving.before(session, () -> {
+                final javax.jcr.Node root = competing.getNode(StatePath.ROOT);
+                CompareAndSet.stamp(root);
+                root.addNode("unrelated", "nt:unstructured");
+                competing.save();
+            }), SMALL, caller);
+        }
+        assertEquals(0, CapacityLedger.held(session, SMALL, CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(session, SMALL, caller, CONTRACT));
+    }
+
+    @Test
+    void preparationReportsExhaustedContentionAfterFreshAttempts() throws RepositoryException {
+        final Session session = prepared();
+        final AtomicInteger attempts = new AtomicInteger();
+        final Session contended = (Session) Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(), new Class<?>[] {Session.class},
+                (proxy, method, arguments) -> {
+                    if ("save".equals(method.getName())) {
+                        attempts.incrementAndGet();
+                        throw new InvalidItemStateException("preparation contended");
+                    }
+                    try {
+                        return method.invoke(session, arguments);
+                    } catch (final InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
+        assertThrows(RepositoryException.class,
+                () -> CapacityLedger.prepare(contended, SMALL, caller("preparation-refusal")));
+        assertEquals(CompareAndSet.ATTEMPTS, attempts.get());
+        assertFalse(session.hasPendingChanges());
+        assertFalse(session.nodeExists(CapacityLedger.totalPath(SMALL).path()));
     }
 
     private static StatePath.Caller caller(String name) {

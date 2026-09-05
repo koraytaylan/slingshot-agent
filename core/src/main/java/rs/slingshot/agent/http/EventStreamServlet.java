@@ -193,7 +193,7 @@ public final class EventStreamServlet extends AgentServlet {
             throws IOException, RepositoryException {
         final StreamAdmission.Outcome room =
                 StreamAdmission.open(store, session.caller(), contract);
-        if (!(room instanceof StreamAdmission.Admitted)) {
+        if (!(room instanceof final StreamAdmission.Admitted admitted)) {
             // The honest answer: there is room for a bounded number of subscribers and this caller
             // is past it. The hint is the contract's own cap rather than a number chosen here.
             response.setHeader(RETRY_AFTER, String.valueOf(Math.max(1,
@@ -202,17 +202,22 @@ public final class EventStreamServlet extends AgentServlet {
             refuse(response, AT_CAPACITY);
             return;
         }
-        response.setStatus(SERVING);
-        response.setContentType(EventEncoder.MEDIA_TYPE);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.flushBuffer();
-        writing(request, response, store, session, contract);
+        try (rs.slingshot.agent.store.CapacityReservation.Guard guard =
+                     admitted.reservation().guard(store, contract)) {
+            response.setStatus(SERVING);
+            response.setContentType(EventEncoder.MEDIA_TYPE);
+            response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+            response.flushBuffer();
+            writing(request, response, store, session, contract, admitted);
+            guard.handoff();
+        }
     }
 
     private void writing(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                         Session store, StreamSession session, AgentContract contract)
+                         Session store, StreamSession session, AgentContract contract,
+                         StreamAdmission.Admitted admitted)
             throws IOException {
-        final StreamWriter writer = new StreamWriter(session, contract);
+        final StreamWriter writer = new StreamWriter(session, contract, admitted);
         final java.io.Writer bytes = response.getWriter();
         final String resumption = text(request.getHeader(StreamResumption.RESUMPTION_HEADER));
         if (StreamHandoff.from(request, contract)

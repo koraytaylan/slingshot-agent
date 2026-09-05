@@ -199,7 +199,8 @@ final class EventLedgerTest {
                 "room that was taken was reported as room that was refused");
         assertEquals(1, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT));
         assertEquals(size(), CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, CONTRACT));
-        LedgerAdmission.release(session, caller(), size(), CONTRACT);
+        LedgerAdmission.release(session, assertInstanceOf(LedgerAdmission.Admitted.class, admitted),
+                CONTRACT);
         assertEquals(0, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT),
                 "what an event gave back is not what it took");
         assertEquals(0, CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, CONTRACT));
@@ -214,7 +215,7 @@ final class EventLedgerTest {
                 "core/src/main/java/rs/slingshot/agent/store/LedgerAdmission.java"));
         assertTrue(ledger.contains("LedgerAdmission.admit"),
                 "the ledger admits somewhere other than through the one authority");
-        assertTrue(admission.contains("CapacityLedger.admit"),
+        assertTrue(admission.contains("CapacityLedger.take"),
                 "the admission counts somewhere other than through the one authority");
         for (final String counting : List.of("ShardedCount", "ContractLimit", "CompareAndSet")) {
             assertFalse(ledger.contains(counting),

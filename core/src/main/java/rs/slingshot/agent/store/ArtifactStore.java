@@ -9,7 +9,9 @@ import java.io.InputStream;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import javax.jcr.Binary;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
@@ -64,6 +66,8 @@ public final class ArtifactStore {
         SLOT_TAKEN,
         /** The bytes that arrived are not as many as the caller said they would be. */
         SIZE_DIFFERS,
+        /** The bytes do not have the digest promised by the intake declaration. */
+        DIGEST_DIFFERS,
         /** The bytes could not be read to their end. */
         TRANSFER_FAILED
     }
@@ -115,116 +119,149 @@ public final class ArtifactStore {
     public record Publication(ArtifactSlot slot, long declaredByteCount, InputStream content) {
     }
 
-    /** Whether the room for these bytes still has to be taken, or was taken already. */
-    public enum Reservation {
-        /** Take it now, which is what a command producing an answer does. */
-        TAKE_IT_NOW,
-        /**
-         * It was taken already, which is what an inbound payload does.
-         *
-         * <p>A manifest declares its byte counts before anything is sent and the whole declaration
-         * is reserved when the submission is admitted, so a caller whose payloads will not fit
-         * learns it before sending one. Reserving again here would charge a retried upload twice.
-         * </p>
-         */
-        ALREADY_TAKEN
+    /**
+     * The durable intake promise and digest required before replacing its ownership.
+     *
+     * @param declaration where the retained declaration lives
+     * @param expected the promised digest
+     */
+    public record Prepaid(StatePath declaration, DigestValue expected) {
     }
 
     /**
-     * Publishes one artifact, or publishes nothing at all.
+     * Reserves and publishes one artifact, or publishes nothing.
      *
-     * @param session the session to write under
-     * @param caller whose share the row and the bytes come out of
-     * @param operation the operation the artifact belongs to
-     * @param publication the artifact as its caller offered it
-     * @param nowUnixMilliseconds what this side's clock says
-     * @param contract the authenticated contract, which declares every bound
-     * @return what publishing it did
+     * @param session the publication session
+     * @param caller whose row and bytes are charged
+     * @param operation the owning operation
+     * @param publication the offered bytes and declared length
+     * @param nowUnixMilliseconds the publication time
+     * @param contract the authenticated bounds
+     * @return publication or the reason nothing was published
      * @throws RepositoryException if the repository fails
      */
     public static Outcome publish(Session session, StatePath.Caller caller, StatePath operation,
                                   Publication publication, long nowUnixMilliseconds,
                                   AgentContract contract) throws RepositoryException {
-        return publish(session, caller, operation, publication, nowUnixMilliseconds, contract,
-                Reservation.TAKE_IT_NOW);
+        final Optional<Refused> refused = before(session, operation, publication);
+        return refused.isPresent() ? refused.get()
+                : reserved(session, caller, operation, publication, nowUnixMilliseconds, contract);
     }
 
     /**
-     * Publishes one artifact whose room is taken now or was taken already.
+     * Publishes declared input by transferring its retained reservation to the validated artifact.
      *
-     * @param session the session to write under
-     * @param caller whose share the row and the bytes come out of
-     * @param operation the operation the artifact belongs to
-     * @param publication the artifact as its caller offered it
-     * @param nowUnixMilliseconds what this side's clock says
-     * @param contract the authenticated contract, which declares every bound
-     * @param reservation whether the room still has to be taken
-     * @return what publishing it did
-     * @throws RepositoryException if the repository fails
+     * @param session the publication session
+     * @param caller the declaration owner
+     * @param operation the owning operation
+     * @param publication the offered bytes and declared length
+     * @param nowUnixMilliseconds the publication time
+     * @param contract the authenticated bounds
+     * @param prepaid the retained declaration and the digest required before publication
+     * @return publication or the reason the declaration remains outstanding
+     * @throws RepositoryException if reservation ownership or the repository fails
      */
-    public static Outcome publish(Session session, StatePath.Caller caller, StatePath operation,
-                                  Publication publication, long nowUnixMilliseconds,
-                                  AgentContract contract, Reservation reservation)
+    public static Outcome publishReserved(Session session, StatePath.Caller caller, StatePath operation,
+                                          Publication publication, long nowUnixMilliseconds,
+                                          AgentContract contract, Prepaid prepaid)
+            throws RepositoryException {
+        final Optional<Refused> refused = before(session, operation, publication);
+        if (refused.isPresent()) {
+            return refused.get();
+        }
+        final Optional<CapacityReservation> pending = CapacityReservation.create(session,
+                CapacityReservation.processOwner(), caller, charges(publication));
+        if (pending.isEmpty()) {
+            return contended();
+        }
+        try (CapacityReservation.Guard guard = pending.get().guard(session, contract)) {
+            return streamed(session, operation, publication, nowUnixMilliseconds,
+                    node -> CapacityLedger.transfer(session, session.getNode(prepaid.declaration().path()),
+                            node, guard.reservation(), contract),
+                    prepaid.expected()::matches);
+        }
+    }
+
+    private static Optional<Refused> before(Session session, StatePath operation, Publication publication)
             throws RepositoryException {
         if (!session.nodeExists(operation.path())) {
-            return new Refused(Refusal.NO_OPERATION, "there is no operation at " + operation.path()
-                    + " for an artifact to belong to");
+            return Optional.of(new Refused(Refusal.NO_OPERATION,
+                    "there is no operation at " + operation.path()));
         }
         final StatePath slot = publication.slot().under(operation);
-        if (session.nodeExists(slot.path())) {
-            return new Refused(Refusal.SLOT_TAKEN, slot.path() + " already holds an artifact, and"
-                    + " a slot holds one");
-        }
-        return reservation == Reservation.TAKE_IT_NOW
-                ? reserved(session, caller, operation, publication, nowUnixMilliseconds, contract)
-                : streamed(session, caller, operation, publication, nowUnixMilliseconds, contract,
-                        Reservation.ALREADY_TAKEN);
+        return session.nodeExists(slot.path())
+                ? Optional.of(new Refused(Refusal.SLOT_TAKEN, slot.path() + " already holds an artifact"))
+                : Optional.empty();
+    }
+
+    private static List<CapacityReservation.Charge> charges(Publication publication) {
+        return List.of(new CapacityReservation.Charge(AccountedQuantity.ARTIFACT_ROWS, ONE_ROW),
+                new CapacityReservation.Charge(AccountedQuantity.ARTIFACT_BYTES,
+                        publication.declaredByteCount()));
     }
 
     private static Outcome reserved(Session session, StatePath.Caller caller, StatePath operation,
                                     Publication publication, long nowUnixMilliseconds,
                                     AgentContract contract) throws RepositoryException {
-        final CapacityLedger.Admission rows = CapacityLedger.admit(session,
-                AccountedQuantity.ARTIFACT_ROWS, caller, ONE_ROW, contract);
-        if (!(rows instanceof CapacityLedger.Admitted)) {
-            return of(rows);
+        final CapacityLedger.ReservationAdmission admission = CapacityLedger.take(session, caller,
+                charges(publication), contract);
+        if (!(admission instanceof final CapacityLedger.Reserved reserved)) {
+            return of(admission);
         }
-        final CapacityLedger.Admission bytes = CapacityLedger.admit(session,
-                AccountedQuantity.ARTIFACT_BYTES, caller, publication.declaredByteCount(),
-                contract);
-        if (!(bytes instanceof CapacityLedger.Admitted)) {
-            CapacityLedger.release(session, AccountedQuantity.ARTIFACT_ROWS, caller, ONE_ROW,
-                    contract);
-            return of(bytes);
+        try (CapacityReservation.Guard guard = reserved.reservation().guard(session, contract)) {
+            return streamed(session, operation, publication, nowUnixMilliseconds,
+                    node -> {
+                        CapacityReservation.retain(node.getSession(), guard.reservation(), node);
+                        return new CapacityLedger.Admitted(AccountedQuantity.ARTIFACT_ROWS, ONE_ROW);
+                    }, digest -> true);
         }
-        return streamed(session, caller, operation, publication, nowUnixMilliseconds, contract,
-                Reservation.TAKE_IT_NOW);
     }
 
-    private static Outcome streamed(Session session, StatePath.Caller caller, StatePath operation,
+    /** Stages ownership in the same repository transaction as the artifact. */
+    @FunctionalInterface
+    private interface Binding {
+
+        /**
+         * Binds the artifact to the capacity paying for it.
+         *
+         * @param node the staged artifact
+         * @return admission of ownership or a capacity refusal
+         * @throws RepositoryException if ownership cannot be retained
+         */
+        CapacityLedger.Admission accept(Node node) throws RepositoryException;
+    }
+
+    private static Outcome streamed(Session session, StatePath operation,
                                     Publication publication, long nowUnixMilliseconds,
-                                    AgentContract contract, Reservation reservation)
+                                    Binding binding, Predicate<DigestValue> acceptsDigest)
             throws RepositoryException {
-        ClaimByCreation.claim(session, operation.child(NODE), "nt:unstructured", node -> { });
+        if (ClaimByCreation.claim(session, operation.child(NODE), "nt:unstructured", node -> { })
+                == WriteOutcome.CONTENDED) {
+            return contended();
+        }
         final Staged staged;
         try (Counted counted = new Counted(digesting(publication.content()))) {
             final Binary binary = session.getValueFactory().createBinary(counted);
             staged = new Staged(binary, counted.bytes(),
                     DigestValue.ofBytes(counted.digested().digest()));
         } catch (final IOException unreadable) {
-            releasing(session, caller, publication, contract, reservation);
             return new Refused(Refusal.TRANSFER_FAILED, "the bytes could not be read to their end: "
                     + unreadable.getMessage());
         }
-        if (staged.byteCount() != publication.declaredByteCount()) {
-            releasing(session, caller, publication, contract, reservation);
-            return new Refused(Refusal.SIZE_DIFFERS, staged.byteCount() + " bytes arrived and "
-                    + publication.declaredByteCount() + " were declared, so nothing was written at"
-                    + " all");
+        try {
+            if (staged.byteCount() != publication.declaredByteCount()) {
+                return new Refused(Refusal.SIZE_DIFFERS, staged.byteCount() + " bytes arrived and "
+                        + publication.declaredByteCount() + " were declared, so nothing was written at"
+                        + " all");
+            }
+            if (!acceptsDigest.test(staged.digest())) {
+                return new Refused(Refusal.DIGEST_DIFFERS, "the bytes differ from the declared digest");
+            }
+            return committed(session, new Committing(operation, publication, staged, binding),
+                    nowUnixMilliseconds);
+        } finally {
+            staged.binary().dispose();
         }
-        return committed(session, caller,
-                new Committing(operation, publication, staged, reservation), nowUnixMilliseconds,
-                contract);
     }
 
     /**
@@ -243,52 +280,51 @@ public final class ArtifactStore {
      * @param operation where it goes
      * @param publication what its caller offered
      * @param staged the bytes that arrived, with their count and digest
-     * @param reservation whether the room was taken here or already
+     * @param binding stages the reservation ownership alongside the artifact
      */
     private record Committing(StatePath operation, Publication publication, Staged staged,
-                              Reservation reservation) {
+                              Binding binding) {
     }
 
-    private static Outcome committed(Session session, StatePath.Caller caller,
-                                     Committing committing, long nowUnixMilliseconds,
-                                     AgentContract contract) throws RepositoryException {
+    private static Outcome committed(Session session, Committing committing,
+                                     long nowUnixMilliseconds) throws RepositoryException {
         final StatePath operation = committing.operation();
         final Publication publication = committing.publication();
         final Staged staged = committing.staged();
-        final Reservation reservation = committing.reservation();
         try {
-            final Node written = session.getNode(operation.child(NODE).path())
-                    .addNode(publication.slot().name(), "nt:unstructured");
+            final Node parent = session.getNode(operation.child(NODE).path());
+            CompareAndSet.stamp(parent);
+            final Node written = parent.addNode(publication.slot().name(), "nt:unstructured");
             written.setProperty(CONTENT, staged.binary());
             written.setProperty(BYTE_COUNT, staged.byteCount());
             written.setProperty(DIGEST, staged.digest().rendered());
             written.setProperty(PUBLISHED_AT, nowUnixMilliseconds);
+            final CapacityLedger.Admission ownership = committing.binding().accept(written);
+            if (!(ownership instanceof CapacityLedger.Admitted)) {
+                return ownership instanceof final CapacityLedger.Refused refused
+                        ? new AtCapacity(refused) : new NotCounted((CapacityLedger.NotCounted) ownership);
+            }
             session.save();
-        } catch (final javax.jcr.ItemExistsException | javax.jcr.InvalidItemStateException taken) {
-            // Somebody else took this slot while these bytes were arriving. One slot holds one
-            // artifact, and the writer that lost gives back everything it reserved.
+        } catch (final javax.jcr.ItemExistsException taken) {
             session.refresh(false);
-            releasing(session, caller, publication, contract, reservation);
-            return new Refused(Refusal.SLOT_TAKEN, "another writer committed "
-                    + publication.slot().name() + " while these bytes were arriving");
+            return occupied(publication);
+        } catch (final javax.jcr.InvalidItemStateException contended) {
+            session.refresh(false);
+            return session.nodeExists(publication.slot().under(operation).path())
+                    ? occupied(publication) : contended();
         }
         return new Published(new ArtifactRecord(publication.slot(), staged.byteCount(),
                 staged.digest(), nowUnixMilliseconds));
     }
 
-    private static void releasing(Session session, StatePath.Caller caller,
-                                  Publication publication, AgentContract contract,
-                                  Reservation reservation) throws RepositoryException {
-        if (reservation == Reservation.TAKE_IT_NOW) {
-            release(session, caller, publication, contract);
-        }
+    private static Refused occupied(Publication publication) {
+        return new Refused(Refusal.SLOT_TAKEN, "another writer committed "
+                + publication.slot().name() + " while these bytes were arriving");
     }
 
-    private static void release(Session session, StatePath.Caller caller, Publication publication,
-                                AgentContract contract) throws RepositoryException {
-        CapacityLedger.release(session, AccountedQuantity.ARTIFACT_BYTES, caller,
-                publication.declaredByteCount(), contract);
-        CapacityLedger.release(session, AccountedQuantity.ARTIFACT_ROWS, caller, ONE_ROW, contract);
+    private static NotCounted contended() {
+        return new NotCounted(new CapacityLedger.NotCounted(AccountedQuantity.ARTIFACT_ROWS,
+                WriteOutcome.CONTENDED));
     }
 
     /**
@@ -355,7 +391,7 @@ public final class ArtifactStore {
         return outcome instanceof final Refused refused ? Optional.of(refused) : Optional.empty();
     }
 
-    private static Outcome of(CapacityLedger.Admission admission) {
+    private static Outcome of(CapacityLedger.ReservationAdmission admission) {
         return admission instanceof final CapacityLedger.Refused refused
                 ? new AtCapacity(refused)
                 : new NotCounted((CapacityLedger.NotCounted) admission);
