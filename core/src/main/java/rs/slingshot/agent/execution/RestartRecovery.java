@@ -227,7 +227,7 @@ public final class RestartRecovery {
                 RetentionPolicy.Kind.OPERATION_DETAIL, moment.contract());
         if (until instanceof final RetentionPolicy.Held held
                 && held.retainedUntil().hasPassed(moment.nowUnixMilliseconds())) {
-            release(session, record, moment.contract());
+            release(session, operation, record);
             return new Finding(operation, RecoveryDisposition.ABANDONED, outstanding
                     + " declared payloads never arrived and its retention has passed, so nobody is"
                     + " waiting for it");
@@ -236,7 +236,7 @@ public final class RestartRecovery {
                 + " declared payloads have not arrived and there is still time for them to");
     }
 
-    private static void release(Session session, Node record, AgentContract contract)
+    private static void release(Session session, StatePath operation, Node record)
             throws RepositoryException {
         final StatePath.Outcome caller = StatePath.caller(record.hasProperty(
                 MaintenanceSweep.CALLER) ? record.getProperty(MaintenanceSweep.CALLER).getString()
@@ -253,13 +253,9 @@ public final class RestartRecovery {
             }
         }
         for (final String slot : outstanding) {
-            final Node declared = record.getNode(INTAKE).getNode(slot);
-            // The identity or legacy marker makes a retry safe even if removal is interrupted.
-            CapacityLedger.releaseResource(session, declared, named.caller(),
+            CapacityLedger.retireResource(session, operation.child(INTAKE).child(slot), named.caller(),
                     new CapacityLedger.ResourceCharge(AccountedQuantity.OPERATION_RESERVATION_ROWS,
-                            AccountedQuantity.OPERATION_RESERVATION_BYTES, DECLARED_BYTES), contract);
-            declared.remove();
-            session.save();
+                            AccountedQuantity.OPERATION_RESERVATION_BYTES, DECLARED_BYTES));
         }
     }
 

@@ -87,37 +87,27 @@ public final class CapacityLedger {
     }
 
     /**
-     * Releases a persisted resource's own capacity at most once.
+     * Deletes one resource and retires its complete accounting in the same fenced commit.
      *
-     * <p>Modern resources release their recorded identity. Legacy resources fence and mark their
-     * own record while releasing both quantities in one commit. The resource remains present;
-     * removal belongs to the retention transaction.</p>
-     *
-     * @param session the session to write under
-     * @param resource the persisted resource being retired
+     * @param session the cleanup session
+     * @param resource the stable path, also usable after a lost deletion response
      * @param caller the owner of legacy capacity
-     * @param charge how a legacy resource is counted
-     * @param contract the authenticated counter layout
-     * @throws RepositoryException if release fails or persisted ownership is inconsistent
+     * @param charge the persisted legacy charge layout
+     * @throws RepositoryException if ownership is invalid or deletion cannot commit after fresh retries
      */
-    public static void releaseResource(Session session, Node resource, StatePath.Caller caller,
-                                       ResourceCharge charge, AgentContract contract)
-            throws RepositoryException {
-        final String path = resource.getPath();
-        if (!path.startsWith(StatePath.ROOT + "/")) {
-            throw new RepositoryException("capacity release requires an agent-owned resource");
-        }
+    public static void retireResource(Session session, StatePath resource, StatePath.Caller caller,
+                                       ResourceCharge charge) throws RepositoryException {
         int attempt = 0;
         while (attempt < CompareAndSet.ATTEMPTS) {
-            if (releaseResource(session, path, caller, charge) == WriteOutcome.WRITTEN) {
+            if (retiringResource(session, resource.path(), caller, charge) == WriteOutcome.WRITTEN) {
                 return;
             }
             attempt = attempt + 1;
         }
-        throw new RepositoryException("resource capacity release remained contended");
+        throw new RepositoryException("resource retirement remained contended");
     }
 
-    private static WriteOutcome releaseResource(Session session, String path, StatePath.Caller caller,
+    private static WriteOutcome retiringResource(Session session, String path, StatePath.Caller caller,
                                                  ResourceCharge charge)
             throws RepositoryException {
         session.refresh(false);
@@ -126,23 +116,43 @@ public final class CapacityLedger {
             if (!session.nodeExists(path)) {
                 return WriteOutcome.WRITTEN;
             }
-            final Node resource = session.getNode(path);
-            CompareAndSet.stamp(resource);
-            if (resource.hasProperty(CapacityReservation.RESOURCE_RESERVATION)) {
-                releaseRecorded(session, resource);
-            } else if (!resource.hasProperty(RESOURCE_RELEASED)) {
-                final long bytes = resource.hasProperty(charge.sizeProperty())
-                        ? resource.getProperty(charge.sizeProperty()).getLong() : charge.absentSize();
-                returned(session, caller, List.of(new CapacityReservation.Charge(charge.rows(), 1),
-                        new CapacityReservation.Charge(charge.bytes(), bytes)));
-                resource.setProperty(RESOURCE_RELEASED, true);
-            }
+            stageResourceRelease(session, session.getNode(path), caller, charge);
+            session.getNode(path).remove();
             session.save();
             return WriteOutcome.WRITTEN;
         } catch (final InvalidItemStateException contended) {
             return WriteOutcome.CONTENDED;
         } finally {
             session.refresh(false);
+        }
+    }
+
+    /**
+     * Stages exact resource retirement without saving or refreshing the enclosing transaction.
+     *
+     * <p>The caller must delete the resource in that same commit, or discard all staged changes.</p>
+     *
+     * @param session the enclosing cleanup transaction
+     * @param resource the resource that transaction will delete
+     * @param caller the owner of any legacy charges
+     * @param charge the persisted legacy charge layout
+     * @throws RepositoryException if the resource is foreign or its accounting cannot be retired exactly
+     */
+    static void stageResourceRelease(Session session, Node resource, StatePath.Caller caller,
+                                      ResourceCharge charge) throws RepositoryException {
+        if (!resource.getPath().startsWith(StatePath.ROOT + "/")) {
+            throw new RepositoryException("capacity retirement requires an agent-owned resource");
+        }
+        CompareAndSet.stamp(session.getNode(StatePath.deployment(StatePath.CAPACITY).path()));
+        CompareAndSet.stamp(resource);
+        if (resource.hasProperty(CapacityReservation.RESOURCE_RESERVATION)) {
+            releaseRecorded(session, resource);
+        } else if (!resource.hasProperty(RESOURCE_RELEASED)) {
+            final long bytes = resource.hasProperty(charge.sizeProperty())
+                    ? resource.getProperty(charge.sizeProperty()).getLong() : charge.absentSize();
+            returned(session, caller, List.of(new CapacityReservation.Charge(charge.rows(), 1),
+                    new CapacityReservation.Charge(charge.bytes(), bytes)));
+            resource.setProperty(RESOURCE_RELEASED, true);
         }
     }
 
@@ -410,7 +420,7 @@ public final class CapacityLedger {
      * Repeating recovery after an interrupted response cannot debit another owner's capacity.</p>
      *
      * <p>Legacy counters do not identify a process and are never attributed to the retired owner.
-     * Their resources retain the existing charges until {@link #releaseResource} retires them.
+     * Their resources retain the existing charges until {@link #retireResource} retires them.
      * Historical discrepancies without durable ownership evidence cannot be repaired by inferring
      * identities or replacing the counts with the sum of modern reservations.</p>
      *

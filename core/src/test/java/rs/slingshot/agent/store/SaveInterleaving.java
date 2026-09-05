@@ -6,6 +6,7 @@ package rs.slingshot.agent.store;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -14,6 +15,28 @@ import javax.jcr.Session;
 public final class SaveInterleaving {
 
     private SaveInterleaving() {
+    }
+
+    /** Interrupts the selected persistence boundary immediately before or after the real save. */
+    public static Session interruptSave(Session session, int boundary, boolean committed) {
+        final AtomicInteger saves = new AtomicInteger();
+        return (Session) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] {Session.class}, (proxy, method, arguments) -> {
+                    final boolean interrupted = "save".equals(method.getName())
+                            && saves.incrementAndGet() == boundary;
+                    if (interrupted && !committed) {
+                        throw new RepositoryException("the save was interrupted before commit");
+                    }
+                    try {
+                        final Object result = method.invoke(session, arguments);
+                        if (interrupted) {
+                            throw new RepositoryException("the save was interrupted after commit");
+                        }
+                        return result;
+                    } catch (final InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
     }
 
     /** A competing repository action which runs once, before the outer writer saves. */
@@ -65,6 +88,21 @@ public final class SaveInterleaving {
     /** Returns a session which preserves real Oak conflict handling at the selected boundary. */
     public static Session before(Session session, Action action) {
         return before(session, action, Thread.currentThread().getContextClassLoader());
+    }
+
+    /** Injects a persistence failure on every attempt, including retries from fresh state. */
+    public static Session beforeEverySave(Session session, Action action) {
+        return (Session) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] {Session.class}, (proxy, method, arguments) -> {
+                    if ("save".equals(method.getName())) {
+                        action.run();
+                    }
+                    try {
+                        return method.invoke(session, arguments);
+                    } catch (final InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
     }
 
     /** Uses the runtime's interface loader when the hosting launcher cannot see JCR. */
