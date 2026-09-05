@@ -75,6 +75,8 @@ public final class OperationStore {
         NOT_A_PERMITTED_MOVE,
         /** Somebody else was writing the record often enough that this writer gave up. */
         CONTENDED,
+        /** A leased operation requires its current acquisition epoch for this transition. */
+        FENCE_REQUIRED,
         /** What is written down is not a record this build can read back. */
         UNREADABLE
     }
@@ -178,6 +180,42 @@ public final class OperationStore {
      */
     public static Outcome move(Session session, LogicalOperation operation, OperationState next)
             throws RepositoryException {
+        return move(session, operation, next,
+                transaction -> !transaction.nodeExists(ExecutionFence.pathOf(operation.identity()).path()));
+    }
+
+    /**
+     * Moves a leased operation only while the presented acquisition epoch still owns it.
+     *
+     * @param session the write session
+     * @param operation the operation as read by the worker
+     * @param next the requested state
+     * @param holder the worker's acquired fence
+     * @param nowUnixMilliseconds when the authority must be live
+     * @return the moved record, or the refusal without any committed writes
+     * @throws RepositoryException if persistence fails
+     */
+    public static Outcome move(Session session, LogicalOperation operation, OperationState next,
+                               FenceHolder holder, long nowUnixMilliseconds) throws RepositoryException {
+        return move(session, operation, next,
+                transaction -> ExecutionFence.stageHeld(transaction, operation.identity(), holder,
+                        nowUnixMilliseconds));
+    }
+
+    @FunctionalInterface
+    private interface Authority {
+        /**
+         * Stages any authority fence required by the enclosing transition.
+         *
+         * @param session the enclosing transaction
+         * @return whether its authority permits the transition
+         * @throws RepositoryException if authority cannot be read or fenced
+         */
+        boolean permits(Session session) throws RepositoryException;
+    }
+
+    private static Outcome move(Session session, LogicalOperation operation, OperationState next,
+                                Authority authority) throws RepositoryException {
         final Optional<LogicalOperation> moved = operation.moved(next);
         if (moved.isEmpty()) {
             return new Refused(Refusal.NOT_A_PERMITTED_MOVE, operation.state().spelling()
@@ -193,13 +231,25 @@ public final class OperationStore {
                     + ((Held) current).operation().state().spelling() + " and this move was made"
                     + " from " + operation.state().spelling());
         }
-        return written(session, path, moved.get(), operation.state());
+        return written(session, path, moved.get(), operation.state(), authority);
     }
 
     private static Outcome written(Session session, StatePath path, LogicalOperation moved,
-                                   OperationState from) throws RepositoryException {
+                                   OperationState from, Authority authority) throws RepositoryException {
+        try {
+            return stageMove(session, path, moved, from, authority);
+        } finally {
+            session.refresh(false);
+        }
+    }
+
+    private static Outcome stageMove(Session session, StatePath path, LogicalOperation moved,
+                                     OperationState from, Authority authority) throws RepositoryException {
         final Node node = session.getNode(path.path());
         CompareAndSet.stamp(node);
+        if (!authority.permits(session)) {
+            return new Refused(Refusal.FENCE_REQUIRED, "the current acquisition epoch is required");
+        }
         if (!from.spelling().equals(node.getProperty(STATE).getString())) {
             session.refresh(false);
             return new Refused(Refusal.NOT_THE_STATE_THAT_WAS_READ,

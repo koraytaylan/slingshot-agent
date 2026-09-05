@@ -32,11 +32,14 @@ import rs.slingshot.agent.identity.OperationIdentity;
 import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.store.AccountedQuantity;
 import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.store.ArtifactStore;
+import rs.slingshot.agent.store.CapacityLedger;
 import rs.slingshot.agent.store.EventLedger;
 import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.LedgerAdmission;
+import rs.slingshot.agent.store.SaveInterleaving;
 import rs.slingshot.agent.store.SnapshotStore;
 import rs.slingshot.agent.store.StatePath;
 import rs.slingshot.agent.wire.JobEventKind;
@@ -62,6 +65,66 @@ final class TerminalCommitTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @Test
+    void takeoverBeforeTerminalCommitPreservesStateResultAndAccounting() throws RepositoryException {
+        final Session session = running();
+        final LogicalOperation read = stored(session);
+        final FenceHolder first = assertInstanceOf(FenceOutcome.Held.class,
+                ExecutionFence.take(session, read.identity(), "the-first-worker", NOW, CONTRACT)).holder();
+        final long rows = CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT);
+        final long bytes = CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, CONTRACT);
+        final var factory = java.util.Objects.requireNonNull(sling.getService(
+                org.apache.sling.api.resource.ResourceResolverFactory.class));
+        try (var resolver = factory.getResourceResolver(java.util.Map.of())) {
+            final Session competing = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final var inserted = new java.util.concurrent.atomic.AtomicBoolean();
+            final Session watched = SaveInterleaving.beforeEverySave(session, () -> {
+                if (session.getNode(operation().path()).getProperty(OperationStore.STATE).getString()
+                        .equals(OperationState.SUCCEEDED.spelling()) && inserted.compareAndSet(false, true)) {
+                    assertInstanceOf(FenceOutcome.Held.class,
+                            ExecutionFence.take(competing, read.identity(), "the-second-worker",
+                                    first.heldUntilUnixMilliseconds(), CONTRACT));
+                }
+            });
+            assertInstanceOf(TerminalCommit.Refused.class, TerminalCommit.commit(watched, caller(), read,
+                    outcome(inline(), OperationState.SUCCEEDED), CONTRACT, first, NOW));
+            assertTrue(inserted.get(), "the takeover did not reach the terminal persistence boundary");
+            assertEquals(OperationState.RUNNING, stored(competing).state());
+            assertTrue(TerminalCommit.answerIn(competing, operation()).isEmpty());
+            assertEquals(1, EventLedger.events(competing, operation().child(EventLedger.NODE)));
+            assertEquals(rows, CapacityLedger.held(competing, AccountedQuantity.EVENT_ROWS, CONTRACT));
+            assertEquals(bytes, CapacityLedger.held(competing, AccountedQuantity.EVENT_BYTES, CONTRACT));
+            assertFalse(session.hasPendingChanges());
+        } catch (final org.apache.sling.api.resource.LoginException refused) {
+            throw new IllegalStateException("the competing resolver could not be opened", refused);
+        }
+    }
+
+    @Test
+    void terminalCommitRequiresTheCurrentAcquisitionEpoch() throws RepositoryException {
+        final Session session = running();
+        final LogicalOperation read = stored(session);
+        final FenceHolder first = assertInstanceOf(FenceOutcome.Held.class,
+                ExecutionFence.take(session, read.identity(), "the-worker", NOW, CONTRACT)).holder();
+        final long takeover = first.heldUntilUnixMilliseconds();
+        final FenceHolder second = assertInstanceOf(FenceOutcome.Held.class,
+                ExecutionFence.take(session, read.identity(), "the-worker", takeover, CONTRACT)).holder();
+        final ExecutionOutcome result = outcome(inline(), OperationState.SUCCEEDED);
+        assertEquals(TerminalCommit.Refusal.FENCE_REQUIRED,
+                assertInstanceOf(TerminalCommit.Refused.class, TerminalCommit.commit(session, caller(),
+                        read, result, CONTRACT, first, takeover)).refusal());
+        assertEquals(TerminalCommit.Refusal.FENCE_REQUIRED,
+                assertInstanceOf(TerminalCommit.Refused.class, TerminalCommit.commit(session, caller(),
+                        read, result, CONTRACT)).refusal());
+        assertEquals(OperationState.RUNNING, stored(session).state());
+        assertEquals(1, EventLedger.events(session, operation().child(EventLedger.NODE)));
+        assertTrue(TerminalCommit.answerIn(session, operation()).isEmpty());
+        assertFalse(session.hasPendingChanges());
+        assertInstanceOf(TerminalCommit.Committed.class, TerminalCommit.commit(session, caller(),
+                read, result, CONTRACT, second, takeover));
+        assertEquals(OperationState.SUCCEEDED, stored(session).state());
+    }
 
     @Test
     @DisplayName("the state, the answer, the terminal event, and the snapshot arrive together")
