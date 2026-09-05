@@ -4,6 +4,7 @@
 package rs.slingshot.agent.interop.tier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -152,6 +153,22 @@ final class PublicSlingTierTest {
                         + " the window this wait exists to close");
         assertEquals(Optional.empty(), PublicSlingTier.registration(SERVED),
                 "an answer no unauthenticated caller can be given ended the wait");
+    }
+
+    @Test
+    void resolverRebindingRestartsTheStartupObservationWindow() {
+        final var consecutive = new java.util.concurrent.atomic.AtomicInteger();
+        assertFalse(PublicSlingTier.routeSettled(consecutive, UNAUTHENTICATED));
+        assertFalse(PublicSlingTier.routeSettled(consecutive, UNAUTHENTICATED));
+        assertFalse(PublicSlingTier.routeSettled(consecutive, NOTHING_THERE));
+        assertEquals(0, consecutive.get());
+        assertFalse(PublicSlingTier.routeSettled(consecutive, UNAUTHENTICATED));
+        assertFalse(PublicSlingTier.routeSettled(consecutive, UNAUTHENTICATED));
+        assertTrue(PublicSlingTier.routeSettled(consecutive, UNAUTHENTICATED));
+        assertFalse(PublicSlingTier.routeSettled(consecutive, SERVED));
+        assertEquals(0, consecutive.get());
+        assertFalse(PublicSlingTier.routeSettled(consecutive, 503));
+        assertEquals(0, consecutive.get());
     }
 
     /** What a route this bundle owns answers a caller who presented no identity. */

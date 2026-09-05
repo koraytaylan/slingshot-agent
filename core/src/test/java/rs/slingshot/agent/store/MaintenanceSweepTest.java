@@ -6,6 +6,7 @@ package rs.slingshot.agent.store;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -16,15 +17,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import org.apache.sling.api.resource.LoginException;
+import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.Digest;
@@ -63,6 +71,183 @@ final class MaintenanceSweepTest {
     private static final long REQUEST_START = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @ParameterizedTest
+    @CsvSource({"1,false", "1,true", "2,false", "2,true", "3,false", "3,true",
+        "4,false", "4,true", "5,false", "5,true", "6,false", "6,true"})
+    void interruptedCollectionKeepsArtifactAccountingExact(int boundary, boolean committed)
+            throws RepositoryException, LoginException {
+        interruptedCleanup(REQUEST_START + CONTRACT.value(ContractLimit.WORKER_EXECUTION_LEASE_MILLISECONDS),
+                boundary, committed);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1,false", "1,true", "2,false", "2,true", "3,false", "3,true",
+        "4,false", "4,true", "5,false", "5,true", "6,false", "6,true"})
+    void interruptedOperationRemovalKeepsArtifactAccountingExact(int boundary, boolean committed)
+            throws RepositoryException, LoginException {
+        interruptedCleanup(past(), boundary, committed);
+    }
+
+    private void interruptedCleanup(long now, int boundary, boolean committed)
+            throws RepositoryException, LoginException {
+        final Session session = recorded();
+        assertThrows(RepositoryException.class,
+                () -> MaintenanceSweep.run(SaveInterleaving.interruptSave(session, boundary, committed),
+                        generation(), now, CONTRACT));
+        try (ResourceResolver resolver = Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class)).getResourceResolver(Map.of())) {
+            final Session observer = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            artifactCountsMatchData(observer);
+            MaintenanceSweep.run(observer, generation(), now, CONTRACT);
+            MaintenanceSweep.run(observer, generation(), now, CONTRACT);
+            artifactCountsMatchData(observer);
+            assertEquals(0, CapacityLedger.held(observer, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        }
+    }
+
+    @Test
+    void overlappingSweepsReleaseEveryResourceOnce() throws RepositoryException, LoginException {
+        final Session session = recorded();
+        try (ResourceResolver resolver = Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class)).getResourceResolver(Map.of())) {
+            final Session competing = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final SweepReport report = MaintenanceSweep.run(SaveInterleaving.before(session,
+                    () -> MaintenanceSweep.run(competing, generation(), past(), CONTRACT)), generation(),
+                    past(), CONTRACT);
+            assertEquals(0, report.recordsRemoved());
+            assertEquals(0, report.bytesReleased());
+            artifactCountsMatchData(competing);
+            assertEquals(0, CapacityLedger.held(competing, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        }
+    }
+
+    private static void artifactCountsMatchData(Session session) throws RepositoryException {
+        session.refresh(false);
+        long rows = 0;
+        long bytes = 0;
+        for (final String fixture : OPERATIONS) {
+            if (session.nodeExists(slotOf(fixture).path())) {
+                rows = rows + 1;
+                bytes = bytes + session.getNode(slotOf(fixture).path())
+                        .getProperty(ArtifactStore.BYTE_COUNT).getLong();
+            }
+        }
+        assertEquals(rows, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        assertEquals(rows, CapacityLedger.heldBy(session, AccountedQuantity.ARTIFACT_ROWS,
+                caller(), CONTRACT));
+        assertEquals(bytes, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_BYTES, CONTRACT));
+        assertEquals(bytes, CapacityLedger.heldBy(session, AccountedQuantity.ARTIFACT_BYTES,
+                caller(), CONTRACT));
+    }
+
+    @Test
+    void removingAnOperationRetiresItsUnfinishedIntakeVector() throws RepositoryException {
+        final Session session = recorded();
+        CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, caller());
+        CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, caller());
+        final List<CapacityReservation.Charge> charges = List.of(
+                new CapacityReservation.Charge(AccountedQuantity.ARTIFACT_ROWS, 1),
+                new CapacityReservation.Charge(AccountedQuantity.ARTIFACT_BYTES, 17),
+                new CapacityReservation.Charge(AccountedQuantity.OPERATION_RESERVATION_ROWS, 1),
+                new CapacityReservation.Charge(AccountedQuantity.OPERATION_RESERVATION_BYTES, 17));
+        final CapacityReservation reservation = assertInstanceOf(CapacityLedger.Reserved.class,
+                CapacityLedger.take(session, caller(), charges, CONTRACT)).reservation();
+        final Node declaration = session.getNode(operation(OPERATIONS.getFirst()).path())
+                .addNode(MaintenanceSweep.INTAKE, "nt:unstructured").addNode("incoming", "nt:unstructured");
+        declaration.setProperty("declared_byte_count", 17);
+        CapacityReservation.retain(session, reservation, declaration);
+        session.save();
+        MaintenanceSweep.run(session, generation(), past(), CONTRACT);
+        assertFalse(session.nodeExists(reservation.path().path()));
+        for (final CapacityReservation.Charge charge : charges) {
+            assertEquals(0, CapacityLedger.held(session, charge.quantity(), CONTRACT));
+            assertEquals(0, CapacityLedger.heldBy(session, charge.quantity(), caller(), CONTRACT));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void aMissingCallerCannotDeleteChargedData(boolean expired) throws RepositoryException {
+        final Session session = recorded();
+        session.getNode(operation(OPERATIONS.getFirst()).path())
+                .getProperty(MaintenanceSweep.CALLER).remove();
+        session.save();
+        final long now = expired ? past()
+                : REQUEST_START + CONTRACT.value(ContractLimit.WORKER_EXECUTION_LEASE_MILLISECONDS);
+        assertThrows(RepositoryException.class,
+                () -> MaintenanceSweep.run(session, generation(), now, CONTRACT));
+        assertTrue(session.nodeExists(slotOf(OPERATIONS.getFirst()).path()));
+        artifactCountsMatchData(session);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void exhaustedCleanupContentionPreservesDataAndCounters(boolean expired) throws RepositoryException {
+        final Session session = recorded();
+        final var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        final Session contended = SaveInterleaving.beforeEverySave(session, () -> {
+            attempts.incrementAndGet();
+            throw new javax.jcr.InvalidItemStateException("cleanup lost to another writer");
+        });
+        final long now = expired ? past()
+                : REQUEST_START + CONTRACT.value(ContractLimit.WORKER_EXECUTION_LEASE_MILLISECONDS);
+        assertThrows(RepositoryException.class,
+                () -> MaintenanceSweep.run(contended, generation(), now, CONTRACT));
+        assertEquals(CompareAndSet.ATTEMPTS, attempts.get());
+        assertFalse(session.hasPendingChanges());
+        artifactCountsMatchData(session);
+        assertEquals(OPERATIONS.size(), CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS,
+                CONTRACT));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void eventAndArtifactRetirementShareTheOperationCommit(boolean committed)
+            throws RepositoryException, LoginException {
+        final Session session = recorded();
+        for (final String fixture : OPERATIONS) {
+            final LedgerAdmission.Admitted admission = assertInstanceOf(LedgerAdmission.Admitted.class,
+                    LedgerAdmission.admit(session, caller(), 7, CONTRACT));
+            final Node operation = session.getNode(operation(fixture).path());
+            final Node ledger = operation.hasNode(EventLedger.NODE) ? operation.getNode(EventLedger.NODE)
+                    : operation.addNode(EventLedger.NODE, "nt:unstructured");
+            final Node event = ledger.addNode("1", "nt:unstructured");
+            event.setProperty(EventLedger.BYTES, 7);
+            CapacityReservation.retain(session, admission.reservation(), event);
+            session.save();
+        }
+        assertThrows(RepositoryException.class, () -> MaintenanceSweep.run(
+                SaveInterleaving.interruptSave(session, 1, committed), generation(), past(), CONTRACT));
+        try (ResourceResolver resolver = Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class)).getResourceResolver(Map.of())) {
+            final Session observer = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            eventCountsMatchData(observer);
+            artifactCountsMatchData(observer);
+            MaintenanceSweep.run(observer, generation(), past(), CONTRACT);
+            MaintenanceSweep.run(observer, generation(), past(), CONTRACT);
+            eventCountsMatchData(observer);
+            assertEquals(0, CapacityLedger.held(observer, AccountedQuantity.EVENT_ROWS, CONTRACT));
+        }
+    }
+
+    private static void eventCountsMatchData(Session session) throws RepositoryException {
+        session.refresh(false);
+        long rows = 0;
+        long bytes = 0;
+        for (final String fixture : OPERATIONS) {
+            if (session.nodeExists(operation(fixture).child(EventLedger.NODE).child("1").path())) {
+                rows = rows + 1;
+                bytes = bytes + session.getNode(operation(fixture).child(EventLedger.NODE).child("1").path())
+                        .getProperty(EventLedger.BYTES).getLong();
+            }
+        }
+        assertEquals(rows, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT));
+        assertEquals(rows, CapacityLedger.heldBy(session, AccountedQuantity.EVENT_ROWS, caller(), CONTRACT));
+        assertEquals(bytes, CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, CONTRACT));
+        assertEquals(bytes, CapacityLedger.heldBy(session, AccountedQuantity.EVENT_BYTES,
+                caller(), CONTRACT));
+    }
 
     @Test
     @DisplayName("a sweep with nothing to do removes nothing and ends at the start again")

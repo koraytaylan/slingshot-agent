@@ -131,10 +131,14 @@ final class ClockChaosScenario {
     @Test
     @DisplayName("both nodes answer, so a disagreement between their clocks is about them")
     void bothnodesAnswer() {
-        assertTrue(requests.readAsAuthenticatedUser(nodes.first().address() + "/.json")
-                        .statusCode() < BAD_REQUEST);
-        assertTrue(requests.readAsAuthenticatedUser(nodes.second().address() + "/.json")
-                        .statusCode() < BAD_REQUEST);
+        assertAnswer(nodes.first());
+        assertAnswer(nodes.second());
+    }
+
+    private void assertAnswer(ContainerHandle node) {
+        final var response = requests.readAsAuthenticatedUser(node.address() + "/.json");
+        assertTrue(response.statusCode() < BAD_REQUEST,
+                () -> node.identifier() + " answered " + response.statusCode() + ": " + response.body());
     }
 
     /**

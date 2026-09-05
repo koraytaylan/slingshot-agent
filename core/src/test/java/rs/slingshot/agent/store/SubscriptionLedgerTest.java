@@ -6,6 +6,7 @@ package rs.slingshot.agent.store;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -25,6 +26,8 @@ import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.BoundedDocumentReader;
@@ -51,6 +54,73 @@ final class SubscriptionLedgerTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void interruptedEndingKeepsDataAndAccountingTogether(boolean committed)
+            throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final SubscriptionRecord taken = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        assertThrows(RepositoryException.class,
+                () -> SubscriptionLedger.end(SaveInterleaving.interruptSave(session, 1, committed),
+                        caller(), taken, CONTRACT));
+        final Session observer = second();
+        try {
+            final long rows = observer.nodeExists(
+                    SubscriptionRecord.pathOf(taken.identifier()).path()) ? 1 : 0;
+            assertEquals(rows, CapacityLedger.held(observer, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
+                    CONTRACT));
+            assertEquals(rows * taken.bytes(), CapacityLedger.heldBy(observer,
+                    AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, caller(), CONTRACT));
+            SubscriptionLedger.end(observer, caller(), taken, CONTRACT);
+            SubscriptionLedger.end(observer, caller(), taken, CONTRACT);
+            assertEquals(0, CapacityLedger.held(observer, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
+                    CONTRACT));
+        } finally {
+            observer.logout();
+        }
+    }
+
+    @Test
+    void overlappingEndsRemoveOneSubscriptionAndReleaseOnce() throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final SubscriptionRecord taken = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final Session competing = second();
+        try {
+            SubscriptionLedger.end(SaveInterleaving.before(session,
+                    () -> SubscriptionLedger.end(competing, caller(), taken, CONTRACT)), caller(), taken,
+                    CONTRACT);
+            assertFalse(competing.nodeExists(SubscriptionRecord.pathOf(taken.identifier()).path()));
+            assertEquals(0, CapacityLedger.held(competing, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
+                    CONTRACT));
+            assertEquals(0, CapacityLedger.heldBy(competing, AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES,
+                    caller(), CONTRACT));
+        } finally {
+            competing.logout();
+        }
+    }
+
+    @Test
+    void exhaustedEndingContentionPreservesTheSubscription() throws RepositoryException {
+        final Session session = prepared();
+        final SubscriptionRecord taken = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        final Session contended = SaveInterleaving.beforeEverySave(session, () -> {
+            attempts.incrementAndGet();
+            throw new javax.jcr.InvalidItemStateException("subscription ending contended");
+        });
+        assertThrows(RepositoryException.class,
+                () -> SubscriptionLedger.end(contended, caller(), taken, CONTRACT));
+        assertEquals(CompareAndSet.ATTEMPTS, attempts.get());
+        assertFalse(session.hasPendingChanges());
+        assertTrue(session.nodeExists(SubscriptionRecord.pathOf(taken.identifier()).path()));
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        assertEquals(taken.bytes(), CapacityLedger.heldBy(session,
+                AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, caller(), CONTRACT));
+    }
 
     @Test
     @DisplayName("a subscription is taken once, and subscribing again resumes the same record")

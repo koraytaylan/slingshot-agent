@@ -6,6 +6,7 @@ package rs.slingshot.agent.execution;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -15,15 +16,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import org.apache.sling.api.resource.LoginException;
+import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.Digest;
@@ -38,6 +45,7 @@ import rs.slingshot.agent.store.LedgerAdmission;
 import rs.slingshot.agent.store.LegacyCapacity;
 import rs.slingshot.agent.store.MaintenanceSweep;
 import rs.slingshot.agent.store.RetentionPolicy;
+import rs.slingshot.agent.store.SaveInterleaving;
 import rs.slingshot.agent.store.StatePath;
 
 /**
@@ -63,6 +71,40 @@ final class RestartRecoveryTest {
 
     /** How large one declared payload is in these fixtures. */
     private static final long DECLARED_BYTES = 4096;
+
+    @ParameterizedTest
+    @CsvSource({"1,false", "1,true", "2,false", "2,true"})
+    void interruptedIntakeRetirementKeepsChargesWithDeclarations(int boundary, boolean committed)
+            throws RepositoryException, LoginException {
+        final Session session = stored();
+        CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, caller());
+        CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, caller());
+        LegacyCapacity.seed(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, caller(), 2);
+        LegacyCapacity.seed(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, caller(),
+                2 * DECLARED_BYTES);
+        final long past = REQUEST_START + RetentionPolicy.Kind.OPERATION_DETAIL.minimum(CONTRACT);
+        assertThrows(RepositoryException.class, () -> RestartRecovery.reconcile(
+                SaveInterleaving.interruptSave(session, boundary, committed), generation(), past, CONTRACT));
+        try (ResourceResolver resolver = Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class)).getResourceResolver(Map.of())) {
+            final Session observer = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            long rows = 0;
+            for (final String fixture : List.of("intake-never-completed", "intake-still-arriving")) {
+                if (observer.nodeExists(operation(fixture).child(RestartRecovery.INTAKE)
+                        .child("payload").path())) {
+                    rows = rows + 1;
+                }
+            }
+            assertEquals(rows, CapacityLedger.held(observer, AccountedQuantity.OPERATION_RESERVATION_ROWS,
+                    CONTRACT));
+            assertEquals(rows * DECLARED_BYTES, CapacityLedger.heldBy(observer,
+                    AccountedQuantity.OPERATION_RESERVATION_BYTES, caller(), CONTRACT));
+            RestartRecovery.reconcile(observer, generation(), past, CONTRACT);
+            RestartRecovery.reconcile(observer, generation(), past, CONTRACT);
+            assertEquals(0, CapacityLedger.held(observer, AccountedQuantity.OPERATION_RESERVATION_ROWS,
+                    CONTRACT));
+        }
+    }
 
     private static final long BUDGET =
             CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_EXECUTION_MILLISECONDS)

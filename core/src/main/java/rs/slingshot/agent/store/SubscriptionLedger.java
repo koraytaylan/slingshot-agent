@@ -241,17 +241,9 @@ public final class SubscriptionLedger {
      */
     public static void end(Session session, StatePath.Caller caller, SubscriptionRecord record,
                            AgentContract contract) throws RepositoryException {
-        final StatePath path = SubscriptionRecord.pathOf(record.identifier());
-        if (!session.nodeExists(path.path())) {
-            return;
-        }
-        CapacityLedger.releaseResource(session, session.getNode(path.path()), caller,
+        CapacityLedger.retireResource(session, SubscriptionRecord.pathOf(record.identifier()), caller,
                 new CapacityLedger.ResourceCharge(AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
-                        AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, BYTE_COUNT, record.bytes()), contract);
-        if (session.nodeExists(path.path())) {
-            session.getNode(path.path()).remove();
-            session.save();
-        }
+                        AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, BYTE_COUNT, record.bytes()));
     }
 
     /**
