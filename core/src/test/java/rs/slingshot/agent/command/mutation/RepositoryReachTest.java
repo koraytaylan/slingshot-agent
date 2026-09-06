@@ -7,8 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Proxy;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
@@ -90,5 +93,60 @@ final class RepositoryReachTest {
 
         assertEquals(101, reached.size(), "the deep walk did not stop one node past its bound");
         assertEquals(deepest.toString(), reached.get(reached.size() - 1));
+    }
+
+    @Test
+    void aWideIteratorIsAdvancedOnlyForTheBoundedPrefix() {
+        final AtomicInteger advances = new AtomicInteger();
+        final List<Resource> children = new java.util.ArrayList<>();
+        for (int child = 0; child < 10_000; child++) {
+            children.add(resource("/content/wide/child-" + child, List.of(), advances));
+        }
+
+        RepositoryReach.under(resource("/content/wide", children, advances), 1);
+
+        assertEquals(2, advances.get(), "a bound-one walk consumed the whole wide iterator");
+    }
+
+    @Test
+    void aDeepIteratorAdvancesOnlyAlongTheActivePath() {
+        final AtomicInteger advances = new AtomicInteger();
+        Resource current = resource("/content/deep/child-100", List.of(), advances);
+        for (int depth = 99; depth >= 0; depth--) {
+            current = resource("/content/deep" + (depth == 0 ? "" : "/child-" + depth),
+                    List.of(current), advances);
+        }
+
+        RepositoryReach.under(current, 100);
+
+        assertEquals(100, advances.get(), "a deep walk advanced outside its active path");
+    }
+
+    private static Resource resource(String path, List<Resource> children, AtomicInteger advances) {
+        return (Resource) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                new Class<?>[]{Resource.class}, (proxy, method, arguments) -> {
+                    if ("getPath".equals(method.getName())) {
+                        return path;
+                    }
+                    if ("listChildren".equals(method.getName())) {
+                        final Iterator<Resource> source = children.iterator();
+                        return new Iterator<Resource>() {
+                            @Override
+                            public boolean hasNext() {
+                                return source.hasNext();
+                            }
+
+                            @Override
+                            public Resource next() {
+                                advances.incrementAndGet();
+                                return source.next();
+                            }
+                        };
+                    }
+                    if ("toString".equals(method.getName())) {
+                        return path;
+                    }
+                    return null;
+                });
     }
 }
