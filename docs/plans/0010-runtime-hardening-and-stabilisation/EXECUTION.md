@@ -1982,3 +1982,8 @@ required checks and the complete gate, then commit the completed task.
     `AgentSession` reference and compare-and-set unbind; removal immediately revokes readiness and
     prevents a stale provider from being used by the next maintenance pass. The new provider-removal
     test and complete core verification pass.
+
+152. Re-ran the complete `scripts/quality` gate after the lifecycle and console changes. The pinned
+    dependency cache and all five interoperability images were validated, then formatting,
+    compilation, PMD, and SpotBugs passed for core, AEM, development, and interop. This confirms no
+    cross-module regression; owner-supplied acceptance tiers remain separately unproved.
