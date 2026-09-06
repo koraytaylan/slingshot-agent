@@ -4,23 +4,22 @@
 package rs.slingshot.agent.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.List;
-import rs.slingshot.agent.contract.AgentContract;
-import rs.slingshot.agent.contract.ContractLimit;
+import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
 import rs.slingshot.agent.continuation.KeyRing;
 import rs.slingshot.agent.continuation.KeyRingRefusal;
-import rs.slingshot.agent.continuation.ContinuationToken;
+import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.DocumentValue;
-import org.junit.jupiter.api.Test;
 
 /** Covers the shared paging decision at its initial, continuation, and refusal boundaries. */
 final class PagingSupportTest {
@@ -57,6 +56,19 @@ final class PagingSupportTest {
         final PagingSupport.Accepted<?> accepted = (PagingSupport.Accepted<?>) outcome;
         assertEquals(1, accepted.page().rows().size());
         assertFalse(accepted.page().continuationToken().isEmpty());
+    }
+
+    @Test
+    void signedContinuationResumesAtTheValidatedPosition() {
+        final CallerContext paging = availableContext();
+        final PagingSupport.Accepted<?> first = (PagingSupport.Accepted<?>) PagingSupport.page(
+                List.of("a", "b"), new ResultWindow.Initial(0, 1), "query_paths", empty(),
+                paging, CONTRACT);
+        final PagingSupport.Outcome<String> resumed = PagingSupport.page(
+                List.of("a", "b"), new ResultWindow.Continuation(first.page().continuationToken()),
+                "query_paths", empty(), paging, CONTRACT);
+        final PagingSupport.Accepted<?> accepted = (PagingSupport.Accepted<?>) resumed;
+        assertEquals(List.of("b"), accepted.page().rows());
     }
 
     private static DocumentValue.Mapping empty() {
