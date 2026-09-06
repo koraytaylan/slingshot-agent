@@ -1972,3 +1972,8 @@ required checks and the complete gate, then commit the completed task.
     authorization-first `ConsoleDataSource` boundary and leaves disconnected stores unreadable;
     the focused assembly test passes. Actual Sling rendering and operation-detail transport remain
     acceptance work for 4503/4601.
+
+150. Re-reviewed the console assembly against the installed operation page. Added the operation
+    detail factory alongside the four resource-type bindings, preserving one authorization-wrapped
+    source per requested identifier. The review caught the digest fixture and policy line-length
+    issues; focused tests and core verification pass.

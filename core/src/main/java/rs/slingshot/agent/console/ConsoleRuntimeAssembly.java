@@ -5,6 +5,7 @@ package rs.slingshot.agent.console;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.contract.AgentContract;
@@ -33,6 +34,18 @@ public final class ConsoleRuntimeAssembly {
 
     private ConsoleRuntimeAssembly() {
         // Utility class.
+    }
+
+    /**
+     * Creates the operation-detail source for one requested operation.
+     *
+     * @param operationIdentifier requested operation identifier
+     * @param assembly live operation snapshot reader
+     * @return authorization-wrapped operation-detail source
+     */
+    public static ConsoleDataSource operation(String operationIdentifier,
+            Function<String, OperationDetailDataSource.Assembly> assembly) {
+        return new ConsoleDataSource(new OperationDetailDataSource(operationIdentifier, assembly));
     }
 
     /**
