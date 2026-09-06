@@ -1464,3 +1464,9 @@ required checks and the complete gate, then commit the completed task.
     failed lifecycle continues to advertise `NOT_READY` and the compatibility generation. The
     capability and lifecycle suites pass (11 cases), with core Checkstyle and PMD clean. Commit
     `d10b7c5` records this review loop.
+
+59. Embedded all 64 committed immediate command rows in the core bundle under a deterministic
+    index and added a classloader-backed `CommandRegistry.read` path. The registry suite now proves
+    installed-resource loading without the repository filesystem (13 cases); core Checkstyle and
+    PMD pass. Handler construction and runtime dependency assembly remain the open part of 4502.
+    Commit `db96240` records this review loop.
