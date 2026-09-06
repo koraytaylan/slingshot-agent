@@ -186,7 +186,7 @@ public final class OperationLookupServlet extends AgentServlet {
         // invoking the command again.
         try {
             final Optional<ExecutionOutcome.Result> answer = TerminalCommit.answerIn(session, operation);
-            answer.map(OperationLookupServlet::resultDocument).ifPresent(result ->
+            answer.flatMap(OperationLookupServlet::resultDocument).ifPresent(result ->
                     members.put("result", result));
         } catch (RepositoryException ignored) {
             return Optional.empty();
@@ -198,7 +198,7 @@ public final class OperationLookupServlet extends AgentServlet {
                 : Optional.empty();
     }
 
-    private static DocumentValue resultDocument(ExecutionOutcome.Result result) {
+    private static Optional<DocumentValue> resultDocument(ExecutionOutcome.Result result) {
         final SequencedMap<String, DocumentValue> delivery = new LinkedHashMap<>();
         if (result instanceof ExecutionOutcome.Inline inline) {
             delivery.put("delivery", new DocumentValue.Text("inline"));
@@ -209,9 +209,9 @@ public final class OperationLookupServlet extends AgentServlet {
             delivery.put("artifact_slot", new DocumentValue.Text(published.slot().name()));
             delivery.put("delivery", new DocumentValue.Text("artifact"));
         } else {
-            return null;
+            return Optional.empty();
         }
-        return new DocumentValue.Mapping(delivery);
+        return Optional.of(new DocumentValue.Mapping(delivery));
     }
 
     private static long generationOf(StatePath operation) {
