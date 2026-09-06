@@ -141,6 +141,8 @@ public final class RepositoryReach {
 
     private static boolean mentions(Resource held, String address) {
         return held.getValueMap().values().stream()
-                .anyMatch(value -> value instanceof final String text && text.equals(address));
+                .anyMatch(value -> value instanceof final String text && text.equals(address)
+                        || value instanceof final String[] several
+                        && java.util.Arrays.asList(several).contains(address));
     }
 }
