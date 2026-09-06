@@ -78,7 +78,8 @@ public record PagedQuery(String commandWireName, DigestValue targetDigest,
      */
     public static <R> Page<R> pageOf(List<R> found, long limit, long at) {
         final boolean more = found.size() > limit;
-        final List<R> served = more ? List.copyOf(found.subList(0, (int) limit))
+        final int requested = limit >= found.size() ? found.size() : Math.toIntExact(limit);
+        final List<R> served = more ? List.copyOf(found.subList(0, requested))
                 : List.copyOf(found);
         return new Page<>(served, more ? new More(at + served.size()) : new Nothing());
     }
