@@ -1636,3 +1636,7 @@ required checks and the complete gate, then commit the completed task.
     continuation target and generation from the accepted operation identity. The adapter exposes a
     real authority provider seam; Checkstyle and PMD pass after keeping runtime dependencies
     transient as required by the servlet's serializable contract.
+
+90. Re-ran compilation and Checkstyle after adding the adapter's legacy overload; compilation and
+    Checkstyle pass. The repository-wide PMD invocation is currently stopped by four pre-existing
+    `MaintenanceSweepTest` assertion-order findings, outside the changed adapter.

@@ -36,6 +36,13 @@ public final class DispatchCommands implements SubmitServlet.Commands {
     }
 
     @Override
+    public ExecutionOutcome.Completion run(LogicalOperation operation,
+                                           DocumentValue.Mapping submission,
+                                           javax.jcr.Session session) {
+        return ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE;
+    }
+
+    @Override
     public Optional<CallerContext.Paging> paging(LogicalOperation operation,
                                                   rs.slingshot.agent.contract.AgentContract contract) {
         return Optional.of(new CallerContext.Paging(authority,
