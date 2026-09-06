@@ -1837,3 +1837,9 @@ required checks and the complete gate, then commit the completed task.
      generated cache digest record, and completed its 453 development-test and packaging review
      successfully. The offline gate can now verify this prepared input instead of failing on the
      missing plugin class.
+
+132. With the refreshed cache, the gate passed every policy stage and all 1,138 core tests, then
+     reached the JaCoCo floor. It refused because the new `DefaultCommandRuntime`, `PagingSupport`,
+     and several migrated paging handlers remain below the enforced 80% per-class line threshold.
+     This is the next implementation review: add execution coverage for the new runtime and paging
+     paths before claiming the gate is green.
