@@ -1439,3 +1439,15 @@ required checks and the complete gate, then commit the completed task.
 53. Completed the source-policy cleanup loop for executor null sentinels and resource ownership. Commits `4c6b87f`, `aba9dcf`, `ea62e02`, `aebd9b0`, and `e3c9ba7` close the event-header, request-body, and artifact executors, remove sneaky-throw suppressions, and replace HTTP `submit` null-return callables with checked-exception adapters. Focused HTTP and stream tests plus offline Checkstyle and PMD pass; the remaining checked-action adapter in `StreamWriter` is still under review.
 
 54. Completed the follow-up source-policy review loops after the initial runtime hardening pass. Commits `0794dbc`, `2f44171`, `3afe96f`, `d335e65`, `84dd4a1`, and `0d91f22` centralize monotonic clock reads, name bounded completion states, and reduce package/reference traversal complexity. Focused tests and offline static analysis pass for each changed slice; remaining method-shape findings are limited to transfer nesting and the still-pending dense-bucket sweep design.
+
+55. Simplified `BoundedRequestBody.read` resource scope by letting the executor's
+    try-with-resources own shutdown and handling transfer I/O failures at the outer boundary.
+    The six-case bounded-body suite passes offline, and the change removes the redundant nested
+    exception/finally shape. Commit `cb67d42` records this review loop; the regular Maven gate is
+    unable to write its user cache in the restricted sandbox.
+
+56. Removed the indexed loop from `MaintenanceSweep.run` in favor of an equivalent explicit
+    bounded while traversal, satisfying the allocation policy's outside-sensitive-path rule
+    without changing cursor or bucket calculations. The 58-case sweep suite still reproduces the
+    two known dense-bucket successor failures (bound-one advances two nodes; resumption rereads
+    three), so 4105 remains pending. Commit `829e656` records the review loop.
