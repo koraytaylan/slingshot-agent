@@ -140,7 +140,7 @@ final class CrashConsistencyScenario {
                 .toList();
         assertEquals(spellings.size(), spellings.stream().distinct().count(),
                 "two crash points are spelled the same, so a report cannot say which one broke");
-        assertEquals(7, spellings.size(), "a crash point was added or lost");
+        assertEquals(8, spellings.size(), "a crash point was added or lost");
         for (final CrashInjector.Point point : CrashInjector.Point.values()) {
             assertEquals(point, CrashInjector.Point.named(point.spelling()).orElseThrow(),
                     point + " is not the point its own spelling names");

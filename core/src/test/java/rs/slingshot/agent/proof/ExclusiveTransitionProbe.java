@@ -106,6 +106,11 @@ public final class ExclusiveTransitionProbe extends SlingAllMethodsServlet imple
             throws RepositoryException, IOException {
         return switch (action) {
             case "prepare" -> prepare(session);
+            case "intake-prepare" -> IntakePublicationProbe.prepare(session);
+            case "intake-view" -> IntakePublicationProbe.view(session);
+            case "intake-retry" -> IntakePublicationProbe.write(session);
+            case "intake-before", "intake-after" -> IntakePublicationProbe.paused(session,
+                    "intake-after".equals(action), () -> await(fixture));
             case "generation-prepare" -> GenerationRotationProbe.prepare(session);
             case "generation-view" -> GenerationRotationProbe.view(session);
             case "generation-lose" -> {

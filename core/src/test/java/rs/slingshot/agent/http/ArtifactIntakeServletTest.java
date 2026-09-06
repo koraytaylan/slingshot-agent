@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -136,6 +137,136 @@ final class ArtifactIntakeServletTest {
         capacity(session, 1);
         assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), SLOT).getStatus(),
                 "the slot could not be filled after a refusal");
+    }
+
+    @Test
+    void anIndependentReaderNeverSeesAMismatchedDigestAtAnySave()
+            throws RepositoryException, IOException, ServletException, LoginException {
+        final byte[] other = new byte[payload().length];
+        java.util.Arrays.fill(other, (byte) 'x');
+        rejectedPublication(other, IntakeSlotWrite.IntakeRefusal.DIGEST_MISMATCH);
+    }
+
+    @Test
+    void anIndependentReaderNeverSeesATruncatedBodyAtAnySave()
+            throws RepositoryException, IOException, ServletException, LoginException {
+        rejectedPublication(java.util.Arrays.copyOf(payload(), payload().length - 1),
+                IntakeSlotWrite.IntakeRefusal.LENGTH_MISMATCH);
+    }
+
+    private void rejectedPublication(byte[] body, IntakeSlotWrite.IntakeRefusal refusal)
+            throws RepositoryException, IOException, ServletException, LoginException {
+        final Session session = submitted();
+        final var observations = new java.util.concurrent.atomic.AtomicInteger();
+        try (var reader = sling.resourceResolver().clone(java.util.Map.of())) {
+            final Session observer = java.util.Objects.requireNonNull(reader.adaptTo(Session.class));
+            final Session watched = rs.slingshot.agent.store.SaveInterleaving.beforeEverySave(session, () -> {
+                observePublication(observer, false);
+                observations.incrementAndGet();
+                if (session.nodeExists(slot(SLOT).under(operation()).path())) {
+                    session.save();
+                    observePublication(observer, false);
+                    throw new RepositoryException("stopped at invalid artifact publication");
+                }
+            });
+            assertEquals(refusal, assertInstanceOf(IntakeSlotWrite.Refused.class,
+                    writePayload(watched, body)).refusal());
+            assertTrue(observations.get() > 0, "no persistence boundary was observed");
+            observePublication(observer, false);
+            assertInstanceOf(IntakeSlotWrite.Written.class, writePayload(session, payload()));
+            observePublication(observer, true);
+        }
+    }
+
+    @Test
+    void independentReadersSeeTheReusablePromiseAfterPublicationFailsBeforeCommit()
+            throws RepositoryException, IOException, ServletException, LoginException {
+        interruptedIntakePublication(false);
+    }
+
+    @Test
+    void independentReadersSeeCompleteBytesAfterThePublicationReplyIsLost()
+            throws RepositoryException, IOException, ServletException, LoginException {
+        interruptedIntakePublication(true);
+    }
+
+    private void interruptedIntakePublication(boolean committed)
+            throws RepositoryException, IOException, ServletException, LoginException {
+        final Session session = submitted();
+        final var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
+        try (var reader = sling.resourceResolver().clone(java.util.Map.of())) {
+            final Session observer = java.util.Objects.requireNonNull(reader.adaptTo(Session.class));
+            final Session watched = rs.slingshot.agent.store.SaveInterleaving.beforeEverySave(session, () -> {
+                if (session.nodeExists(slot(SLOT).under(operation()).path())
+                        && interrupted.compareAndSet(false, true)) {
+                    observePublication(observer, false);
+                    if (committed) {
+                        session.save();
+                        observePublication(observer, true);
+                    }
+                    throw new RepositoryException("intake publication interrupted");
+                }
+            });
+            assertThrows(RepositoryException.class, () -> writePayload(watched, payload()));
+            assertTrue(interrupted.get(), "the publication boundary was not interrupted");
+            observePublication(observer, committed);
+            final IntakeSlotWrite.Outcome retry = writePayload(session, payload());
+            if (committed) {
+                assertEquals(IntakeSlotWrite.IntakeRefusal.ALREADY_COMPLETE,
+                        assertInstanceOf(IntakeSlotWrite.Refused.class, retry).refusal());
+            } else {
+                assertInstanceOf(IntakeSlotWrite.Written.class, retry);
+            }
+            observePublication(observer, true);
+        }
+    }
+
+    @Test
+    void competingCompletionPublishesOneArtifactAndTransfersThePromiseOnce()
+            throws RepositoryException, IOException, ServletException, LoginException {
+        final Session session = submitted();
+        final var inserted = new java.util.concurrent.atomic.AtomicBoolean();
+        try (var peer = sling.resourceResolver().clone(java.util.Map.of());
+                var reader = sling.resourceResolver().clone(java.util.Map.of())) {
+            final Session other = java.util.Objects.requireNonNull(peer.adaptTo(Session.class));
+            final Session observer = java.util.Objects.requireNonNull(reader.adaptTo(Session.class));
+            final Session watched = rs.slingshot.agent.store.SaveInterleaving.beforeEverySave(session, () -> {
+                if (session.nodeExists(slot(SLOT).under(operation()).path())
+                        && inserted.compareAndSet(false, true)) {
+                    observePublication(observer, false);
+                    assertInstanceOf(IntakeSlotWrite.Written.class, writePayload(other, payload()));
+                    observePublication(observer, true);
+                }
+            });
+            assertInstanceOf(IntakeSlotWrite.Refused.class, writePayload(watched, payload()));
+            assertTrue(inserted.get(), "the competing completion did not run");
+            observePublication(observer, true);
+            assertEquals(IntakeSlotWrite.IntakeRefusal.ALREADY_COMPLETE,
+                    assertInstanceOf(IntakeSlotWrite.Refused.class,
+                            writePayload(session, payload())).refusal());
+        }
+    }
+
+    private IntakeSlotWrite.Outcome writePayload(Session session, byte[] body) throws RepositoryException {
+        return IntakeSlotWrite.write(session, caller(), new IntakeSlotWrite.Arriving(operation(), slot(SLOT),
+                new java.io.ByteArrayInputStream(body), System.currentTimeMillis()), CONTRACT);
+    }
+
+    private void observePublication(Session observer, boolean completed) throws RepositoryException {
+        observer.refresh(false);
+        assertEquals(completed, ArtifactStore.read(observer, operation(), slot(SLOT)).isPresent());
+        assertEquals(completed ? 0 : 1, IntakeSlotWrite.outstanding(observer, operation()));
+        capacity(observer, completed ? 0 : 1);
+        final Node resource = observer.getNode(completed ? slot(SLOT).under(operation()).path()
+                : operation().child(IntakeSlotWrite.NODE).child(SLOT).path());
+        assertTrue(CapacityReservation.ofResource(observer, resource).isPresent());
+        if (completed) {
+            try (InputStream held = ArtifactStore.open(observer, operation(), slot(SLOT)).orElseThrow()) {
+                assertArrayEquals(payload(), held.readAllBytes());
+            } catch (final IOException failure) {
+                throw new UncheckedIOException(failure);
+            }
+        }
     }
 
     @Test

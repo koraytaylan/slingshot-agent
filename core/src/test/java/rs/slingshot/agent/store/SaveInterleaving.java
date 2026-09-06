@@ -92,7 +92,12 @@ public final class SaveInterleaving {
 
     /** Injects a persistence failure on every attempt, including retries from fresh state. */
     public static Session beforeEverySave(Session session, Action action) {
-        return (Session) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+        return beforeEverySave(session, action, Thread.currentThread().getContextClassLoader());
+    }
+
+    /** Uses the hosting bundle's interface loader for every intercepted save. */
+    public static Session beforeEverySave(Session session, Action action, ClassLoader loader) {
+        return (Session) Proxy.newProxyInstance(loader,
                 new Class<?>[] {Session.class}, (proxy, method, arguments) -> {
                     if ("save".equals(method.getName())) {
                         action.run();
