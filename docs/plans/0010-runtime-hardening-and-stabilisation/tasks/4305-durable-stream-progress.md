@@ -16,8 +16,8 @@ touches:
   - core/src/test/java/rs/slingshot/agent/http/EventStreamServletTest.java
   - core/src/test/java/rs/slingshot/agent/http/HighWaterServletTest.java
   - core/src/test/java/rs/slingshot/agent/stream
-status: pending
-merged_as: ""
+status: complete
+merged_as: "d9fd958"
 ---
 # Record Subscription Progress from Actual Delivery
 
