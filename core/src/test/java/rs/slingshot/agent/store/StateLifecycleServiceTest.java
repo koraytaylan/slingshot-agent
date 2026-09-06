@@ -31,4 +31,13 @@ final class StateLifecycleServiceTest {
                 StateLifecycleService.observed().availability());
         service.deactivate();
     }
+
+    @Test
+    void snapshotAndRunValuesRemainObservable() {
+        final StateLifecycleService.Snapshot snapshot = new StateLifecycleService.Snapshot(
+                StateLifecycleService.Availability.READY, 4, "ok");
+        assertEquals(StateLifecycleService.Availability.READY, snapshot.availability());
+        assertEquals(4, snapshot.generation());
+        assertEquals("ok", snapshot.detail());
+    }
 }
