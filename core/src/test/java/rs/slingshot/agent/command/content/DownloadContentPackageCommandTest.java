@@ -69,7 +69,7 @@ final class DownloadContentPackageCommandTest {
         // what closing asked for — and a suite that relied on the handler having closed it would
         // leave the staging behind on the day the handler stopped doing so.
         try (StagingArea built = staging(under.resolve("built"))) {
-            assertInstanceOf(CommandHandler.Produced.class,
+            assertInstanceOf(CommandHandler.Artifact.class,
                     new DownloadContentPackageHandler(CONTRACT, rooms(built))
                             .run(argument(List.of("/content/site")), readOnly(),
                                     context()),
@@ -116,7 +116,7 @@ final class DownloadContentPackageCommandTest {
                 "the resolver handed to this handler can reach a session, and this command is not"
                         + " the exception to a handler obtaining nothing");
         try (StagingArea room = staging(under)) {
-            assertInstanceOf(CommandHandler.Produced.class,
+            assertInstanceOf(CommandHandler.Artifact.class,
                     new DownloadContentPackageHandler(CONTRACT, rooms(room))
                             .run(argument(List.of("/content/site")), readOnly(),
                                     context()));
@@ -149,7 +149,7 @@ final class DownloadContentPackageCommandTest {
         corpus();
         final DocumentValue.Mapping result;
         try (StagingArea room = staging(under)) {
-            result = assertInstanceOf(CommandHandler.Produced.class,
+            result = assertInstanceOf(CommandHandler.Artifact.class,
                     new DownloadContentPackageHandler(CONTRACT, rooms(room))
                             .run(argument(List.of("/content/site"), List.of(),
                                     List.of("/content/site/private")), readOnly(), context()),

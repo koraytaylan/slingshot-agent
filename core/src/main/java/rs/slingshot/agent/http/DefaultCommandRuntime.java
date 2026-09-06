@@ -14,13 +14,16 @@ import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.OverflowPublication;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.execution.ExecutionOutcome;
 import rs.slingshot.agent.execution.LogicalOperation;
+import rs.slingshot.agent.execution.OperationStore;
 import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.wire.CommandFailure;
 
 /** Adapts a verified command dispatch to the submission servlet's execution contract. */
@@ -70,8 +73,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
      * @throws ClassNotFoundException if a serialized state type is unavailable
      */
     private void readObject(ObjectInputStream input) throws IOException, ClassNotFoundException {
-        input.defaultReadObject();
-    }
+        input.defaultReadObject(); }
 
     @Override
     public boolean serves(String wireName) {
@@ -101,7 +103,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         final CommandHandler.Answer answer = activeDispatch.run(operation.commandContract(),
                 CommandContractIdentity.Bounds.from(activeContract), arguments.orElseThrow(), resolver,
                 context);
-        return completion(answer);
+        return completion(answer, operation, session, activeContract);
     }
 
     @Override
@@ -143,11 +145,39 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                 .map(DocumentValue.Mapping.class::cast);
     }
 
-    private static ExecutionOutcome.Completion completion(CommandHandler.Answer answer) {
+    private static ExecutionOutcome.Completion completion(CommandHandler.Answer answer,
+                                                          LogicalOperation operation,
+                                                          javax.jcr.Session session,
+                                                          AgentContract contract) {
         return switch (answer) {
             case CommandHandler.Produced produced -> rendered(produced.result());
+            case CommandHandler.Artifact artifact -> artifact(artifact, operation, session, contract);
             case CommandHandler.Failed failed -> failed(failed.category());
         };
+    }
+
+    private static ExecutionOutcome.Completion artifact(CommandHandler.Artifact artifact,
+                                                        LogicalOperation operation,
+                                                        javax.jcr.Session session,
+                                                        AgentContract contract) {
+        final ArtifactSlot.Outcome slot = ArtifactSlot.of(artifact.slot());
+        if (!(slot instanceof ArtifactSlot.Held held)) {
+            return ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE;
+        }
+        try {
+            final OverflowPublication.Outcome published = OverflowPublication.publish(session,
+                    operation.caller(), OperationStore.pathOf(operation.identity()),
+                    new rs.slingshot.agent.command.ResultAssembly.Overflowed(
+                            artifact.bytes().length,
+                            rs.slingshot.agent.digest.Digest.of(artifact.bytes())),
+                    artifact.bytes(), System.currentTimeMillis(), contract);
+            return published instanceof OverflowPublication.Published value
+                    ? new ExecutionOutcome.Succeeded(new ExecutionOutcome.Published(held.slot(),
+                            value.delivery().byteCount(), value.delivery().digest()))
+                    : ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE;
+        } catch (final javax.jcr.RepositoryException failure) {
+            return ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE;
+        }
     }
 
     private static ExecutionOutcome.Completion rendered(DocumentValue.Mapping result) {

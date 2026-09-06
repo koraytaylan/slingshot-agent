@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.SequencedMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandDispatch;
@@ -81,12 +82,13 @@ final class DefaultCommandRuntimeTest {
         final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
                 CommandRegistry.read(FIXTURES)).registry();
         final SequencedMap<String, CommandHandler> handlers = new LinkedHashMap<>();
+        final AtomicBoolean fail = new AtomicBoolean(true);
         registry.rows().forEach(row -> handlers.put(row.wireName(), new CommandHandler() {
             @Override
             public Answer run(DocumentValue.Mapping arguments,
                               org.apache.sling.api.resource.ResourceResolver resolver,
                               CallerContext context) {
-                if ("query_paths".equals(row.wireName())) {
+                if ("query_paths".equals(row.wireName()) && fail.getAndSet(false)) {
                     return new Failed(row.failureCategories().getFirst(), "test failure");
                 }
                 return new Produced(new DocumentValue.Mapping(new LinkedHashMap<>()));
@@ -100,19 +102,82 @@ final class DefaultCommandRuntimeTest {
         final DefaultCommandRuntime runtime = new DefaultCommandRuntime(
                 assertInstanceOf(CommandDispatch.Held.class,
                         CommandDispatch.of(registry, handlers)).dispatch(), CONTRACT);
+        final CommandHandler.Artifact offered = new CommandHandler.Artifact(
+                new DocumentValue.Mapping(new LinkedHashMap<>()), "bad/slot",
+                new byte[] {1, 2, 3});
+        assertTrue(java.util.Arrays.equals(new byte[] {1, 2, 3}, offered.bytes()));
         final LogicalOperation operation = operation();
         final SequencedMap<String, DocumentValue> submissionMembers = new LinkedHashMap<>();
         submissionMembers.put(SubmitServlet.ARGUMENTS, new DocumentValue.Text("{}"));
         final DocumentValue.Mapping submission = new DocumentValue.Mapping(submissionMembers);
         assertInstanceOf(ExecutionOutcome.Completion.class,
                 runtime.run(operation, submission, null, null, context()));
-        assertInstanceOf(ExecutionOutcome.Completion.class,
+        assertInstanceOf(ExecutionOutcome.Succeeded.class,
                 runtime.run(operation, submission, null, null));
         final SequencedMap<String, DocumentValue> malformedMembers = new LinkedHashMap<>();
         malformedMembers.put(SubmitServlet.ARGUMENTS, new DocumentValue.Text("{"));
         assertInstanceOf(ExecutionOutcome.Uncertain.class,
                 runtime.run(operation, new DocumentValue.Mapping(malformedMembers), null, null,
                         context()));
+    }
+
+    @Test
+    void artifactWithAnInvalidSlotFailsClosedBeforeRepositoryAccess() throws java.io.IOException {
+        final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
+                CommandRegistry.read(FIXTURES)).registry();
+        final SequencedMap<String, CommandHandler> handlers = new LinkedHashMap<>();
+        registry.rows().forEach(row -> handlers.put(row.wireName(), new CommandHandler() {
+            @Override
+            public Answer run(DocumentValue.Mapping arguments,
+                              org.apache.sling.api.resource.ResourceResolver resolver,
+                              CallerContext context) {
+                return "query_paths".equals(row.wireName())
+                        ? new Artifact(new DocumentValue.Mapping(new LinkedHashMap<>()), "bad/slot",
+                                new byte[] {1, 2, 3})
+                        : new Produced(new DocumentValue.Mapping(new LinkedHashMap<>()));
+            }
+
+            @Override
+            public List<String> categories() {
+                return row.failureCategories();
+            }
+        }));
+        final DefaultCommandRuntime runtime = new DefaultCommandRuntime(
+                assertInstanceOf(CommandDispatch.Held.class,
+                        CommandDispatch.of(registry, handlers)).dispatch(), CONTRACT);
+        final LogicalOperation operation = operation();
+        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        members.put(SubmitServlet.ARGUMENTS, new DocumentValue.Text("{}"));
+        assertInstanceOf(ExecutionOutcome.Uncertain.class,
+                runtime.run(operation, new DocumentValue.Mapping(members), null, null, context()));
+    }
+
+    @Test
+    void serializationTemporarilyRemovesPlatformRuntimeState() throws java.io.IOException {
+        final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
+                CommandRegistry.read(FIXTURES)).registry();
+        final SequencedMap<String, CommandHandler> handlers = new LinkedHashMap<>();
+        registry.rows().forEach(row -> handlers.put(row.wireName(), new CommandHandler() {
+            @Override
+            public Answer run(DocumentValue.Mapping arguments,
+                              org.apache.sling.api.resource.ResourceResolver resolver,
+                              CallerContext context) {
+                return new Produced(new DocumentValue.Mapping(new LinkedHashMap<>()));
+            }
+
+            @Override
+            public List<String> categories() {
+                return row.failureCategories();
+            }
+        }));
+        final DefaultCommandRuntime runtime = new DefaultCommandRuntime(
+                assertInstanceOf(CommandDispatch.Held.class,
+                        CommandDispatch.of(registry, handlers)).dispatch(), CONTRACT);
+        try (java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+             java.io.ObjectOutputStream output = new java.io.ObjectOutputStream(bytes)) {
+            output.writeObject(runtime);
+        }
+        assertTrue(runtime.serves(registry.wireNames().getFirst()));
     }
 
     private static LogicalOperation operation() throws java.io.IOException {
