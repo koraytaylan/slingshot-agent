@@ -26,14 +26,27 @@ public final class RepositoryReach {
      * Reference discovery result, including whether the visibility budget covered the tree.
      *
      * @param found resources that mention the address
-     * @param complete whether the bounded walk reached its end
+     * @param completeness whether the bounded walk reached its end
      */
-    public record References(List<Resource> found, boolean complete) {
+    public record References(List<Resource> found, Completeness completeness) {
+
+        /** Whether the bounded walk reached its end. */
+        public boolean complete() {
+            return completeness == Completeness.COMPLETE;
+        }
 
         /** Holds the discovered resources independently of the traversal's mutable list. */
         public References {
             found = List.copyOf(found);
         }
+    }
+
+    /** Whether bounded reference discovery reached the end of its visible tree. */
+    public enum Completeness {
+        /** Every visible resource was examined. */
+        COMPLETE,
+        /** The caller's examination bound stopped discovery. */
+        INCOMPLETE
     }
 
     private RepositoryReach() {
@@ -104,7 +117,7 @@ public final class RepositoryReach {
     public static References references(ResourceResolver session, String address, long budget) {
         final Resource root = session.getResource(CONTENT_ROOT);
         if (root == null) {
-            return new References(List.of(), true);
+            return new References(List.of(), Completeness.COMPLETE);
         }
         final List<Resource> found = new ArrayList<>();
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
@@ -128,7 +141,8 @@ public final class RepositoryReach {
                 }
             }
         }
-        return new References(List.copyOf(found), pending.isEmpty() && held.isEmpty());
+        return new References(List.copyOf(found), pending.isEmpty() && held.isEmpty()
+                ? Completeness.COMPLETE : Completeness.INCOMPLETE);
     }
 
     /**
