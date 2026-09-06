@@ -241,8 +241,11 @@ public final class EventStreamServlet extends AgentServlet {
         })) {
             try {
                 io.submit(() -> {
-                    response.flushBuffer();
-                    return null;
+                    try {
+                        response.flushBuffer();
+                    } catch (final IOException failed) {
+                        throw new java.io.UncheckedIOException(failed);
+                    }
                 }).get(TransferDeadlines.totalMilliseconds(contract), TimeUnit.MILLISECONDS);
             } catch (final TimeoutException timeout) {
                 throw withCause("stream response exceeded its transfer deadline", timeout);
