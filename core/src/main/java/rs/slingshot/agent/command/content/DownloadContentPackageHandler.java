@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.apache.sling.api.resource.Resource;
@@ -172,7 +174,7 @@ public final class DownloadContentPackageHandler implements CommandHandler {
             }
             selected.addAll(selection.found());
         }
-        return staged(command, selected);
+        return staged(command, selected, resolver);
     }
 
     /**
@@ -228,7 +230,8 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         return new Selection(Collections.unmodifiableList(found), Ending.NOTHING_LEFT_TO_SELECT);
     }
 
-    private Answer staged(DownloadContentPackageCommand command, List<String> selected) {
+    private Answer staged(DownloadContentPackageCommand command, List<String> selected,
+                          ResourceResolver resolver) {
         final Optional<StagingArea> opened = rooms.open();
         if (opened.isEmpty()) {
             return new Failed(PACKAGE_FAILED, "this command has nowhere to work: the room its"
@@ -241,7 +244,7 @@ public final class DownloadContentPackageHandler implements CommandHandler {
             final String manifest = manifestOf(command, selected);
             final byte[] packageBytes;
             try {
-                packageBytes = packageBytes(manifest);
+                packageBytes = packageBytes(manifest, resolver, selected);
             } catch (final IOException invalidPackage) {
                 return new Failed(PACKAGE_FAILED, "the package archive could not be built: "
                         + invalidPackage.getMessage());
@@ -259,13 +262,55 @@ public final class DownloadContentPackageHandler implements CommandHandler {
     }
 
     static byte[] packageBytes(String manifest) throws IOException {
+        return packageBytes(manifest, null, List.of());
+    }
+
+    static byte[] packageBytes(String manifest, ResourceResolver resolver, List<String> selected)
+            throws IOException {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream archive = new ZipOutputStream(bytes)) {
             archive.putNextEntry(new ZipEntry("META-INF/vault/filter.xml"));
             archive.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             archive.closeEntry();
+            if (resolver != null) {
+                selected.stream().sorted().forEach(path -> writeContentEntry(archive, resolver, path));
+            }
         }
         return bytes.toByteArray();
+    }
+
+    private static void writeContentEntry(ZipOutputStream archive, ResourceResolver resolver,
+                                          String path) {
+        final Resource resource = resolver.getResource(path);
+        if (resource == null) {
+            return;
+        }
+        final String name = path.substring(1) + "/.content.xml";
+        try {
+            archive.putNextEntry(new ZipEntry(name));
+            archive.write(contentXml(resource).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            archive.closeEntry();
+        } catch (final IOException failure) {
+            throw new java.io.UncheckedIOException("content entry could not be written", failure);
+        }
+    }
+
+    private static String contentXml(Resource resource) {
+        final Map<String, Object> sorted = new TreeMap<>(resource.getValueMap());
+        final StringBuilder xml = new StringBuilder(128);
+        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?><jcr:root "
+                + "xmlns:jcr=\"http://www.jcp.org/jcr/1.0\"");
+        sorted.forEach((name, value) -> {
+            if (value instanceof String text) {
+                xml.append(String.format(" %s=\"%s\"", name, escaped(text)));
+            }
+        });
+        return xml.append("/>").toString();
+    }
+
+    private static String escaped(String value) {
+        return value.replace("&", "&amp;").replace("\"", "&quot;")
+                .replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /**
