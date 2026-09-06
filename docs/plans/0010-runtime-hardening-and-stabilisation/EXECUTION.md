@@ -1298,3 +1298,9 @@ required checks and the complete gate, then commit the completed task.
     caller ownership, and `ArtifactStore.publish`. The handler receives only a staging-room handle
     and a read-only resolver, so producing synthetic ZIP bytes would still leave no durable artifact
     route. 4405 remains pending until the runtime supplies the publication boundary.
+
+28. Re-ran `scripts/quality` against the current tree. The gate stopped at locked dependency cache
+    verification because nine locally generated reactor artifacts (parent, core, and AEM POM/JAR,
+    sources, and javadocs) are present in the cache but absent from the committed record. No source
+    or policy stage ran after this refusal; the cache preparation command remains the required next
+    step before a complete gate result can be claimed.
