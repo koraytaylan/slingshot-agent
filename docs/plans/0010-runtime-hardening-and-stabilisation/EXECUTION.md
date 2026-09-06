@@ -1360,3 +1360,8 @@ required checks and the complete gate, then commit the completed task.
     changes. It still stops at locked-dependency-cache verification before any source or policy
     stage: the same nine locally generated reactor artifacts are present but absent from the
     committed support record. No gate result beyond this cache refusal is claimed.
+
+38. Re-ran the complete 4402 mutation regression set after adding multivalue repointing. All
+    mutation and reference-reach cases pass, preserving conservative incomplete-scan refusal,
+    ownership checks, and scalar behavior alongside array updates. No new failure or policy
+    suppression was introduced.
