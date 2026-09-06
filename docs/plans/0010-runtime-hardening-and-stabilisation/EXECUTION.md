@@ -1908,3 +1908,13 @@ required checks and the complete gate, then commit the completed task.
      links, or a tail, and adding a static fallback would violate the fail-closed console contract.
      The missing assembly belongs after 4502 supplies the command/state service graph; 4503 remains
      pending until that graph and an installed authorized/denied render run exist.
+
+142. Audited 4502's production composition boundary. The embedded registry contains 64 command
+     rows, and `CommandDispatch.of/from` deliberately refuses a dispatch when any row has no handler
+     or when a handler has no declared row. `DefaultCommandRuntime` currently accepts an already
+     validated dispatch through its constructor, but no production DS component registers the
+     handler set or assembles the required platform adapters. Constructing a partial map would make
+     supported commands disappear or violate the registry correspondence check; constructing a
+     permissive fallback would accept work with no implementation. The runtime therefore remains
+     safely fail-closed, but 4502 is incomplete until the full handler/adaptor graph is registered
+     and an installed command executes successfully.
