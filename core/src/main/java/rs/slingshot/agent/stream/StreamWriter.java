@@ -151,7 +151,6 @@ public record StreamWriter(StreamSession session, AgentContract contract,
             closeQuietly();
         }
 
-        @SuppressWarnings("PMD.PreserveStackTrace")
         private void run(IoAction action) throws IOException {
             final Future<?> pending = executor.submit(() -> {
                 action.run();
@@ -162,18 +161,25 @@ public record StreamWriter(StreamSession session, AgentContract contract,
             } catch (final TimeoutException timeout) {
                 pending.cancel(true);
                 closeQuietly();
-                throw new IOException("stream response exceeded its transfer deadline", timeout);
+                throw withCause("stream response exceeded its transfer deadline", timeout);
             } catch (final InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 closeQuietly();
-                throw new IOException("stream response was interrupted", interrupted);
+                throw withCause("stream response was interrupted", interrupted);
             } catch (final ExecutionException failed) {
                 final Throwable cause = failed.getCause();
                 if (cause instanceof RuntimeException runtime) {
                     throwUnchecked(runtime);
                 }
-                throw new IOException("stream response failed", cause);
+                throw withCause("stream response failed", failed);
             }
+        }
+
+
+        private IOException withCause(String message, Throwable cause) {
+            final IOException failure = new IOException(message);
+            failure.initCause(cause);
+            return failure;
         }
 
         private long timeoutMilliseconds() {
