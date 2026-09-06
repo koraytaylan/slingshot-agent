@@ -139,14 +139,10 @@ public final class RepositoryReach {
                     values.put(property.getKey(), to);
                     moved = moved + 1;
                 } else if (property.getValue() instanceof final String[] several) {
-                    final String[] rewritten = several.clone();
-                    long replacements = 0;
-                    for (int index = 0; index < rewritten.length; index++) {
-                        if (from.equals(rewritten[index])) {
-                            rewritten[index] = to;
-                            replacements = replacements + 1;
-                        }
-                    }
+                    final long replacements = java.util.Arrays.stream(several)
+                            .filter(from::equals).count();
+                    final String[] rewritten = java.util.Arrays.stream(several)
+                            .map(value -> from.equals(value) ? to : value).toArray(String[]::new);
                     if (replacements > 0) {
                         values.put(property.getKey(), rewritten);
                         moved = moved + replacements;
