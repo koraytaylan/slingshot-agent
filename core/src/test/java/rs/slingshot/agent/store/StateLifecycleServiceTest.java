@@ -25,6 +25,7 @@ final class StateLifecycleServiceTest {
     @Test
     void activationRefusesUntilTheMaintenanceIdentityIsBound() {
         final StateLifecycleService service = new StateLifecycleService();
+        service.available(null);
         service.activate();
         assertEquals(StateLifecycleService.Availability.UNAVAILABLE,
                 StateLifecycleService.observed().availability());
