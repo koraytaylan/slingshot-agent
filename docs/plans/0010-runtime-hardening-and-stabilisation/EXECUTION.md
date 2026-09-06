@@ -1061,3 +1061,126 @@ Review and correction loop:
    atomic publication remains unchanged. The new scenario is cataloged as a store property and its
    longer observation bound explicitly covers repository recovery. The staged diff and whitespace
    checks passed. Task 4303 is complete; starting fully received intake work remains task 4304.
+
+## 4305 — durable stream progress
+
+Review and correction loop:
+
+1. Reproduced the original R06 behavior in the stream fixture: event writes advanced only the
+   in-memory replay cursor, leaving the durable subscription `NOTHING_SHOWN_YET`. Stream delivery
+   now advances the owned subscription after each successful write and flush, so a disconnect
+   cannot move the cursor beyond the last acknowledged event.
+2. Review found that `HighWaterMark.advance` saved the cursor and activity timestamp separately.
+   A post-commit response loss could therefore leave partial progress. The transition now stamps,
+   compares, writes both fields, and commits them in one bounded retry loop. Initial snapshot and
+   reset notices use the same durable advancement point.
+3. Added independent-session regressions for successful terminal delivery, initial snapshot,
+   reset, disconnect after one event, and high-water saves interrupted before and after commit.
+   The stream, resumption, servlet, high-water and subscription suites passed 53 checks at
+   10:57 CEST on 2026-09-06. The checks prove cursor/activity agreement and preserve exactly the
+   acknowledged position across reconnect boundaries.
+
+Task 4305 is complete. The repository-wide gate remains to be rerun after the in-progress 4105
+maintenance traversal is repaired; its current dense-bucket regressions are unrelated to stream
+progress.
+
+
+## 4105 — bounded maintenance pages (in progress)
+
+Review and correction loop:
+
+1. The existing bound-one test uses three different buckets and therefore does not exercise the
+   bound inside a bucket. Added three valid identities with the same bucket prefix and a real-Oak
+   iterator observer. Separate tests check examined records and actual operation iterator advances.
+   Both fail with three where the bound permits one. Evidence:
+   `interop/target/plan10-4105-dense-red.log`, two tests, two assertion failures at 00:05 CEST on
+   2026-09-06. Production traversal and cursor code are unchanged at this stage.
+
+2. Added a retained-first-record case: a live lease protects the first operation while later
+   operations must be collected across bounded passes. All three dense-bucket regressions fail on
+   current traversal. Evidence: `interop/target/plan10-4105-resumption-red.log`. The later coverage
+   and accounting assertions remain unproved because the read-bound assertion fails first.
+3. Inspected the cached Jackrabbit `RangeIteratorAdapter` bytecode: `skip(n)` loops through `next()`.
+   Extended the real-Oak observer to count skipped records and verified it with a passing test at
+   00:09 CEST on 2026-09-06 in `interop/target/plan10-4105-observer.log`. Resumption by offset must
+   therefore account for skipped reads; merely adding a limit after a skip would not satisfy this
+   task. No production traversal or cursor change has been made yet.
+
+4. Added a persisted within-bucket record position and an independent cursor version. Advancement
+   compares the complete previously read cursor and writes bucket, record, timestamp, and version
+   in one fenced commit. Equal positions and timestamps cannot make an older pass current again.
+   Four focused cursor cases passed at 00:12 CEST on 2026-09-06 in
+   `interop/target/plan10-4105-cursor.log`; production traversal does not yet use the record position.
+5. Review found the initial cursor claim's contention outcome needed to be propagated before
+   accessing its node. Added a reproducing contention case and handled that outcome. Cursor
+   advancement now has two persistence boundaries on first use (creation plus atomic advancement),
+   so the cleanup interruption matrix covers its five actual saves instead of the former six.
+   The full `MaintenanceSweepTest` ran 45 cases: 42 passed, with only the three known dense-bucket
+   regressions failing. Evidence: `interop/target/plan10-4105-cursor-review.log`. Corrected one long
+   test line after this run. Full-core verification and the full gate have not run for this task.
+
+6. Replaced whole-bucket materialization with one-record transactional steps. A retained record
+   moves to the back of its bucket using a temporary ordering neighbour which is removed before
+   commit; no marker node is persisted. The cursor remembers the first retained record as the cycle
+   boundary. Cleanup, ordering, and cursor progress commit together. Bucket discovery now uses the
+   fixed numeric bucket namespace rather than materializing bucket iterators. The stored record
+   field is named `cycle_start_record` to reflect this algorithm.
+7. The first two dense-bucket cases passed immediately. The retained-first case then reached its
+   later assertions and exposed a fixture error: a lease does not extend whole-operation retention
+   under the existing cleanup rules. Gave the first fixture an unexpired request-start window as
+   well as a lease. All three dense-bucket regressions then passed. The full maintenance suite
+   identified obsolete fifth-save injection points and cursor-creation contention handling; adjusted
+   the matrix to its four actual boundaries and added bounded cursor-creation retries.
+8. Review made contention rereads consume the same record budget, checked the staged cursor outcome,
+   and resets a cycle anchor if its record has disappeared. All 41 maintenance tests passed in
+   `interop/target/plan10-4105-first-green.log`. Full-core verification ran 978 tests with zero
+   failures/errors/skips, then PMD required the new test loop to use foreach. Corrected that loop.
+   Evidence: `interop/target/plan10-4105-core-review.log`, 00:19 CEST on 2026-09-06. Broader dense
+   cycle, interruption, concurrency, and read-bound review is still required before task completion.
+
+9. Added interruption before and after all five saves of a dense cycle with a retained first
+   record (cursor creation, three record steps, and cycle completion). Independent sessions check
+   actual artifact rows and bytes against total and caller counters, resume cleanup, and confirm
+   the temporary ordering neighbour never persists. An overlapping bound-one rotation test proves
+   a stale sweep cannot move the winning cursor or prevent collection of later records. All 52
+   maintenance cases passed in `interop/target/plan10-4105-durable-rotation.log`.
+10. Added an all-retained dense cycle followed by expiry and complete collection, and a bound-one
+    contention case which verifies that retries cannot advance another operation node. Core
+    verification passed all 991 tests, coverage, formatting, PMD, and SpotBugs at 00:23 CEST on
+    2026-09-06. Evidence: `interop/target/plan10-4105-core-rotation.log`. The complete argument-free
+    gate is running with captured runtime diagnostics.
+
+11. The full gate stopped at method shape: the combined transaction method exceeded the committed
+    complexity ceilings. Split transaction preparation, first-record processing, rotation, and
+    anchor derivation while keeping the enclosing save/refresh boundary intact. All 54 maintenance
+    cases passed after extraction; the focused policy check then identified a boolean helper
+    parameter. Replaced that argument with the retained name and grouped the observed iterator
+    facts in a record. Evidence: `interop/target/plan10-4105-complete-quality.log` and
+    `interop/target/plan10-4105-method-review.log`. Focused rechecking is running before the next gate.
+
+12. The checker also treats record constructor booleans as parameters, so the intermediate facts
+    record was removed. The rotation helper now observes the cycle anchor and remaining iterator
+    directly. All 54 maintenance cases and nine method-shape policy cases passed at 00:29 CEST on
+    2026-09-06 in `interop/target/plan10-4105-method-final.log`. The complete gate is running again
+    in `interop/target/plan10-4105-method-quality.log`.
+
+13. Final review rejected the rotation algorithm despite its passing iterator tests. The exact
+    test runtime uses Oak 1.68.0. Its `AbstractMutableTree.orderBefore` allocates an ArrayList,
+    enumerates `:childOrder` (or child names), and retains the sibling names before updating order.
+    The observer counted JCR iterator advances but could not see that internal work. Evidence from
+    the cached dependency: `interop/target/plan10-4105-oak-ordering-bytecode.txt`. Therefore the
+    rotation implementation does not prove the required retained-work bound and cannot complete
+    this task. The gate also failed InjectionAuditTest for the temporary addNode name; its result
+    is `interop/target/plan10-4105-method-quality.log`. No policy exception was added.
+14. Removed the rejected rotation implementation, restoring `MaintenanceSweep` to task 4104's
+    committed behavior. Preserved the atomic versioned cursor and the regression tests. The rejected
+    source is retained only as ignored diagnostic evidence in
+    `interop/target/plan10-4105-rejected-rotation.java`. Focused rechecking ran six cases: the three
+    cursor cases passed and the three dense-bucket cases reproduced the original bound failure.
+    Evidence: `interop/target/plan10-4105-rotation-rejected.log`. Earlier green rotation results do
+    not describe the current implementation and are insufficient evidence for task completion.
+
+Remaining: implement traversal which bounds retained work as well as visible iterator advances,
+review final cursor integration, prove eventual
+coverage and exact accounting across repeated passes, review failure/concurrency boundaries, run
+required checks and the complete gate, then commit the completed task.

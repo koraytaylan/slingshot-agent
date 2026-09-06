@@ -24,3 +24,6 @@ Finding(s): R14 in [FINDINGS.md](../FINDINGS.md).
 3. Prove successive bounded passes eventually cover the eligible set without missing or double-releasing entries.
 
 - **Done when:** Each sweep respects its declared read/work bound even in one dense bucket, and repeated passes collect the entire eligible set with correct accounting.
+
+Direct implementation is in progress; regression evidence and review loops are recorded in
+[EXECUTION.md](../EXECUTION.md#4105--bounded-maintenance-pages-in-progress).
