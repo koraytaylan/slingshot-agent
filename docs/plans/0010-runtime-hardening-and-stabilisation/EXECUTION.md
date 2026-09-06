@@ -1435,3 +1435,5 @@ required checks and the complete gate, then commit the completed task.
     separately evidenced in the cache-preparation review. Commit follows this review loop.
 
 52. Reopened 4105 after the completion claim failed current verification. The full core suite currently executes 1,122 tests with two dense-bucket failures: a bound-one pass advances two operation nodes, and cursor resumption rereads three. The child-iterator successor implementation therefore does not satisfy the declared read bound; 4105 is pending again until a bounded successor lookup is implemented and reviewed.
+
+53. Completed the source-policy cleanup loop for executor null sentinels and resource ownership. Commits `4c6b87f`, `aba9dcf`, `ea62e02`, `aebd9b0`, and `e3c9ba7` close the event-header, request-body, and artifact executors, remove sneaky-throw suppressions, and replace HTTP `submit` null-return callables with checked-exception adapters. Focused HTTP and stream tests plus offline Checkstyle and PMD pass; the remaining checked-action adapter in `StreamWriter` is still under review.
