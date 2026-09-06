@@ -157,7 +157,7 @@ public final class SubmitServlet extends AgentServlet {
      *
      * <p>A declarative-services component is one object the container hands to every caller at
      * once, so nothing is held between requests: every value this answers with is read from the
-     * record it just wrote, under the caller's own session.</p>
+     * record it just wrote, under a scoped state session.</p>
      */
     public SubmitServlet() {
         this(NOTHING_REGISTERED);
@@ -225,7 +225,7 @@ public final class SubmitServlet extends AgentServlet {
             return;
         }
         recorded(request, response, new Arriving(caller, ((BoundedRequestBody.Read) body).bytes(),
-                contract));
+                contract, asking.get()));
     }
 
     /**
@@ -234,8 +234,9 @@ public final class SubmitServlet extends AgentServlet {
      * @param caller who is asking
      * @param body the bytes that arrived, already bounded
      * @param contract the authenticated contract, which declares every bound
+     * @param effects the original caller's session, used only for requested content effects
      */
-    private record Arriving(CallerIdentity caller, byte[] body, AgentContract contract) {
+    private record Arriving(CallerIdentity caller, byte[] body, AgentContract contract, Session effects) {
     }
 
     private void recorded(SlingHttpServletRequest request, SlingHttpServletResponse response,
@@ -247,38 +248,21 @@ public final class SubmitServlet extends AgentServlet {
             refuse(response, REFUSED);
             return;
         }
-        final Optional<Session> session = sessionOf(request);
-        if (session.isEmpty()) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        final Optional<SubmissionAdmission.Submission> asked = submissionOf(submission, arriving,
+                text(request.getHeader(IDEMPOTENCY_KEY)));
+        if (asked.isEmpty() || !commands.serves(asked.get().commandContract().wireName())) {
+            refuse(response, REFUSED);
             return;
         }
-        try {
-            admitted(response, submission, arriving, session.get(),
-                    text(request.getHeader(IDEMPOTENCY_KEY)));
-        } catch (final RepositoryException unwritable) {
-            // The store could not answer. Nothing was written that a resend would not write again,
-            // and a caller told nothing at all is a caller that cannot act.
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
-        }
+        withState(response, state -> admitted(response, submission, arriving, state, asked.get()));
     }
 
     private void admitted(SlingHttpServletResponse response, DocumentValue.Mapping submission,
-                          Arriving arriving, Session session, String suppliedKey)
+                          Arriving arriving, Session session, SubmissionAdmission.Submission asked)
             throws IOException, RepositoryException {
-        final Optional<SubmissionAdmission.Submission> asked =
-                submissionOf(submission, arriving, suppliedKey);
-        if (asked.isEmpty()) {
-            refuse(response, REFUSED);
-            return;
-        }
-        if (!commands.serves(asked.get().commandContract().wireName())) {
-            // A command this build does not run is refused before anything durable is written: a
-            // record for work nothing will ever do is a client waiting on an answer nobody owes.
-            refuse(response, REFUSED);
-            return;
-        }
-        final IntakeSlotWrite.Admission intake = IntakeSlotWrite.admit(session, asked.get(),
-                declaredSlots(submission), System.currentTimeMillis(), arriving.contract());
+        final IntakeSlotWrite.Admission intake = SubmissionRegistration.admit(session,
+                new SubmissionRegistration.Request(asked, text(submission, SUBSCRIPTION),
+                        declaredSlots(submission)), System.currentTimeMillis(), arriving.contract());
         if (intake instanceof IntakeSlotWrite.AtCapacity || intake instanceof IntakeSlotWrite.NotCounted) {
             refuse(response, AT_CAPACITY);
             return;
@@ -362,7 +346,7 @@ public final class SubmitServlet extends AgentServlet {
             return;
         }
         final rs.slingshot.agent.execution.ExecutionOutcome.Result produced =
-                commands.run(running.operation(), submission, session);
+                commands.run(running.operation(), submission, arriving.effects());
         final rs.slingshot.agent.execution.ExecutionOutcome.Outcome ended =
                 rs.slingshot.agent.execution.ExecutionOutcome.of(
                         rs.slingshot.agent.execution.OperationState.SUCCEEDED, produced,

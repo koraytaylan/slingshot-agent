@@ -6,6 +6,7 @@ package rs.slingshot.agent.store;
 import java.nio.charset.StandardCharsets;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
+import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.wire.EventSequence;
 
@@ -23,11 +24,21 @@ import rs.slingshot.agent.wire.EventSequence;
  *
  * @param identifier the following daemon's own name for this subscription
  * @param generation the incarnation of the store it follows
+ * @param binding the caller and operation this subscription follows
  * @param cursor how far the subscriber has been shown
  * @param lastAdvancedAtUnixMilliseconds when the cursor last moved
  */
 public record SubscriptionRecord(Identifier identifier, EventStoreGeneration generation,
-                                 Cursor cursor, long lastAdvancedAtUnixMilliseconds) {
+                                 Binding binding, Cursor cursor, long lastAdvancedAtUnixMilliseconds) {
+
+    /**
+     * The immutable caller and operation assignment carried by a subscription.
+     *
+     * @param caller the submitting caller charged for this subscription
+     * @param operation the only operation whose cursor this subscription may advance
+     */
+    public record Binding(StatePath.Caller caller, AgentOperationIdentifier operation) {
+    }
 
     /** The property the subscriber's own name is written in. */
     public static final String IDENTIFIER = "subscription_identifier";
@@ -176,6 +187,8 @@ public record SubscriptionRecord(Identifier identifier, EventStoreGeneration gen
      */
     public long bytes() {
         return identifier.rendered().getBytes(StandardCharsets.UTF_8).length
+                + (long) binding.caller().name().getBytes(StandardCharsets.UTF_8).length
+                + binding.operation().rendered().getBytes(StandardCharsets.UTF_8).length
                 + (long) Long.BYTES * WHOLE_NUMBERS_HELD;
     }
 

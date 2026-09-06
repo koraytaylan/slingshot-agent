@@ -189,6 +189,10 @@ public final class AuthorizationGate {
         if (required.get() == RouteAuthority.ANY_AUTHENTICATED_CALLER) {
             return new Admitted(required.get());
         }
+        if (required.get() == RouteAuthority.THE_SUBMITTING_CALLER_OR_A_MEMBER
+                && request.ownership() == Ownership.THE_CALLERS_OWN) {
+            return new Admitted(required.get());
+        }
         return againstTheGroups(request, required.get());
     }
 
@@ -208,14 +212,6 @@ public final class AuthorizationGate {
             if (standing == Standing.A_MEMBER) {
                 return new Admitted(required);
             }
-        }
-        return againstOwnership(request, required);
-    }
-
-    private static Outcome againstOwnership(Request request, RouteAuthority required) {
-        if (required == RouteAuthority.THE_SUBMITTING_CALLER_OR_A_MEMBER
-                && request.ownership() == Ownership.THE_CALLERS_OWN) {
-            return new Admitted(required);
         }
         return new Refused(Refusal.NOT_PERMITTED, "this caller is in none of the permitted groups"
                 + " and this is " + (request.ownership() == Ownership.NOT_ABOUT_AN_OPERATION

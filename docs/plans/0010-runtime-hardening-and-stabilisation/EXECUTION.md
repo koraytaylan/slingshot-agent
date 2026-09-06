@@ -738,3 +738,140 @@ Review and correction loop:
     refusal outcomes. The actual installed product handled configuration changes without bundle
     lifecycle events, and no test probe classes appear in the product jar. Task 4201 is complete;
     state-route ownership/session separation and full runtime/console assembly remain later tasks.
+
+
+## 4202 — state access and ownership
+
+Internal state routes use scoped service sessions and authorize from durable operation ownership
+and current operator membership. The original caller session supplies identity, membership, and
+content effects. Subscriptions persist and verify caller/operation binding; new operation, binding,
+and intake declarations publish together, and foreign callers cannot recognise an owner's resend.
+
+Review and correction loop:
+
+1. Reproduced cross-caller snapshot disclosure using a real Oak user with only state-tree read
+   access. The caller could see the record and received another caller's accepted snapshot with
+   200, where the regression requires the same empty 404 as an unknown operation. The focused
+   regression failed as expected at 02:56 CEST on 2026-09-06 in
+   `interop/target/plan10-4202-visibility-reproduction.log`.
+2. Added a shared durable-owner/current-operator authorization helper and used it before snapshot
+   reads. Ownership now satisfies owner-or-operator routes even when the configured operator set is
+   empty or names an unknown group; submission still requires a configured group. All 13 focused
+   snapshot and pure authorization tests passed at 02:58 CEST in
+   `interop/target/plan10-4202-snapshot-owner.log`.
+3. Added a DS-bound current state-session source to `AgentSession`, a checked scoped state-work
+   callback, and a servlet helper that closes the service resolver on every exit. Snapshot reads
+   now use that internal session while identity and membership still come from the original caller.
+   All 19 focused snapshot, authorization, and session tests passed at 03:00 CEST in
+   `interop/target/plan10-4202-snapshot-service.log`. This is partial implementation only: the other
+   state routes, subscription/operation binding, submission content-session separation, lifecycle
+   and authorization matrices, installed-runtime proof, and full gate are still required.
+4. Extended scoped state access and durable-owner/current-operator checks to physical jobs,
+   artifact download, and intake. Intake uses the persisted operation owner for prepaid capacity,
+   even when the requester is an operator. Initial contention tests intercepted the old caller
+   session and therefore no longer injected a state failure; moved those seams to the service
+   source and preserved their 503/retry/reservation assertions. Submission validation still precedes
+   state acquisition, bookkeeping uses the service session, and command execution receives the
+   original caller's session. All 44 focused route tests passed at 03:08 CEST in
+   `interop/target/plan10-4202-separated-submission.log`.
+5. Added explicit original-session identity and scoped resolver lifetime checks. Completed work,
+   repository failure, and transport failure close the service resolver while leaving the original
+   caller resolver live; inactive access runs no work. All 17 focused session/submission tests
+   passed at 03:11 CEST in `interop/target/plan10-4202-session-lifecycle.log`.
+6. Subscription records now persist caller/operation binding and include those bytes in accounting.
+   Existing-name and creation-race resumes compare caller, operation, and generation; incomplete
+   bindings are refused. High-water and stream authorization use the stored binding and operation
+   owner. Stream fixtures now have separate subscriptions for separate operations. The initial
+   ledger/stream/high-water run passed 50 tests at 03:14 CEST in
+   `interop/target/plan10-4202-subscription-binding.log`.
+7. The subsequent 36-test stream run passed assertions but logged a closed-session exception in an
+   async worker. Review treated that as a real failure: a request-scoped service resolver closed
+   before asynchronous writing/release finished. Moved service-session acquisition, state admission,
+   and writing into the async worker, with async completion after scoped cleanup. Added an assertion
+   that stream capacity is zero before async completion is observed. All 18 focused async/session
+   tests passed without the closed-session warning at 03:19 CEST in
+   `interop/target/plan10-4202-async-state-lifetime.log`.
+8. Added regressions for foreign caller/operation bindings, a creation loser encountering a foreign
+   binding with no leaked charge, and legacy/malformed binding refusal. Corrected a missing test
+   import. A rerun exposed a peer-session fixture whose resolver was not retained, allowing cleanup
+   to close it early; the fixture now retains and explicitly closes peer resolvers. All 17 ledger
+   tests passed at 03:25 CEST in `interop/target/plan10-4202-binding-races-scoped.log`.
+   Task 4202 remains incomplete: atomic submission/binding publication, caller-matched resend
+   recognition, full authorization matrices, actual narrow-service runtime proof, and full gate
+   remain required. No task 4202 commit or completion is claimed.
+9. Reproduced another caller's identical resend being recognised as the owner's operation. Added
+   caller equality to the shared comparison, preserving the owner's record on conflict. The failing
+   regression is `interop/target/plan10-4202-resend-owner-reproduction.log` (03:31 CEST).
+10. Added subscription registration to submission admission. New operation, binding, and intake
+    declarations publish in one acceptance commit; capacity is reserved beforehand and abandoned
+    reservations are cancelled. Matching existing bindings are fenced and rechecked in that commit;
+    recognised owned operations can register another subscription without executing again. A
+    subscription conflict or capacity refusal cannot strand a newly accepted operation. Save-failure
+    tests verify operation and binding appear or disappear together, and a real competing subscription
+    claim rolls back the losing operation and manifest without leaking their charges. All 56 focused
+    tests passed at 03:37 CEST in `interop/target/plan10-4202-registration-race.log`.
+11. Full core testing exposed an alias fixture still missing the new state source; bound it in the
+    fixture. All 1036 core tests then passed. Packaging review found line-length/indentation issues,
+    which were corrected. These intermediate verification runs were not full gate passes.
+12. The public tier now installs the committed repository-initialization and service-user mapping
+    files and waits for the product's scoped state route to answer. Added an isolated running-instance
+    scenario whose test fixture loader delegates product classes to the installed bundle, preserving
+    its actual DS source. Initial probe startup failed on test-only JCR security imports; corrected
+    the probe imports and fallback loader without changing product imports.
+13. The real narrow service identity then exposed `OperationStore.bucketsFor` inspecting `/var`, which
+    lies outside its read grant, and failing with a substring exception. Anchored traversal at the
+    state root instead. Added a real Oak principal regression whose grants stop at that root and
+    verified it cannot see `/var`. All 40 focused tests and core packaging passed at 03:54 CEST in
+    `interop/target/plan10-4202-state-root-traversal.log`. The actual runtime reproduction is
+    `interop/target/plan10-4202-live-state-root-reproduction.log`.
+14. The installed-runtime matrix passed at 03:55 CEST in
+    `interop/target/plan10-4202-live-state-access-diagnostic.log`: owner and configured operator read
+    snapshot, jobs, high-water, streams, and referenced artifacts; each can upload declared intake.
+    Unrelated state readers and removed members retain direct state visibility but receive empty
+    unknown-operation responses; anonymous requests are refused. Another operator cannot recognise
+    the owner's submission. A permitted non-admin with explicit state/content write denials submitted
+    successfully through the installed servlet and actual service mapping; its test command received
+    the original caller session, attempted a content write, and was denied. Content readback remained
+    byte-identical. Service access separately proved state write permission and absence of content
+    write permission. Full gate and final review remain required; task 4202 is not complete yet.
+
+15. Static review corrected fixture resolver ownership, nullable probe lookups, source-policy
+    identifiers and numeric literals, and registered the two new stateless policy types. No checker,
+    rule, exclusion, or coverage floor was weakened. The full gate reached runtime tests with all
+    1037 core tests and coverage passing, but failed two old security scenarios and one Mongo startup
+    at 04:22 CEST (`interop/target/plan10-4202-security-assumptions-quality.log`). The ownership
+    matrix passed in that run. Task 4202 remained unaccepted.
+16. Review found the raw-state scenario had used the administrator against an absent tree and had
+    checked the wrong key-ring path. It now uses an isolated provisioned runtime, verifies fixture
+    presence as administrator, and checks authenticated ungranted and anonymous callers against all
+    tested spellings. Canary values populate the actual key-ring path; a denied write must leave
+    readback byte-identical. All three checks passed at 04:29 CEST. The crash-consistency rerun also
+    passed both tests; the prior failure occurred before product work during Mongo readiness.
+17. The log scan now identifies framework INFO registry and repository-initialization announcements
+    by the structured logger prefix. Regression checks retain product messages, embedded framework
+    names, warnings, and unstructured lines. This stricter scan exposed a startup probe preceding
+    the installed service mapping. The harness now provisions and observes state configuration
+    before installing the product bundle, then verifies the scoped route. The five redaction checks
+    passed at 04:31 CEST (`interop/target/plan10-4202-security-review.log`). Scenario descriptions now
+    state their actual proof boundaries. A complete gate remains required before acceptance.
+
+18. The next complete run passed core, coverage, policy, security, ownership, and every cluster
+    scenario, but one fresh shared runtime refused its first configuration-folder creation before
+    the scenario could run (04:42 CEST, `interop/target/plan10-4202-folder-readiness-quality.log`).
+    Folder setup had bypassed the harness's existing servlet-registration retry and explicit referrer
+    path. It now uses that path and retains the platform status and response on refusal. The old
+    failure omitted those details, so its exact platform cause is not claimed. No product assertion
+    or readiness deadline was weakened; full gate acceptance is still pending.
+
+19. The 12 focused fresh-runtime checks passed at 04:43 CEST. The complete argument-free
+    `scripts/quality` then passed at 04:55:32 CEST on 2026-09-06: 1037 core tests and 464 interop
+    tests, zero failures/errors/skips, both bundle coverage checks, all static and repository policy
+    checks, package/release checks, and all public runtime and cluster scenarios. Evidence is
+    `interop/target/plan10-4202-quality.log`. The gate explicitly reports owner-supplied Adobe
+    quickstart and sibling-client tiers as not run; no claim about those tiers is made here.
+20. Final review checked all three task steps against production routing, scoped resolver lifetime,
+    atomic subscription admission, original-session content execution, and the installed-runtime
+    matrix. Test probe classes remain outside the shipped bundle, the service grants remain limited
+    to the state tree, and policy rules/checkers/exclusions are unchanged. Reviewed the complete diff
+    and whitespace. Task 4202 is complete. Accepted-request execution after saturation, intake
+    completion execution, and full command/console assembly remain separate plan tasks.

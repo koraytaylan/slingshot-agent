@@ -144,33 +144,48 @@ public final class EventStreamServlet extends AgentServlet {
             refuse(response, AuthenticationGate.STATUS);
             return;
         }
-        try {
-            opened(request, response, admitted.caller(), held.contract());
-        } catch (final RepositoryException unreadable) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        dispatch(request, response, admitted.caller(), held.contract());
+    }
+
+    private void dispatch(SlingHttpServletRequest request, SlingHttpServletResponse response,
+                          CallerIdentity caller, AgentContract contract) throws IOException {
+        if (StreamHandoff.from(request, contract) == StreamHandoff.Outcome.THE_THREAD_IS_RELEASED) {
+            final javax.servlet.AsyncContext released = request.getAsyncContext();
+            StreamExecutor.open().execute(() -> {
+                try {
+                    withState(response, state -> opened(request, response, caller, contract, state));
+                } catch (final IOException disconnected) {
+                    // Transport failed; scoped state and reservation cleanup already ran.
+                    return;
+                } finally {
+                    released.complete();
+                }
+            });
+            return;
         }
+        withState(response, state -> opened(request, response, caller, contract, state));
     }
 
     private void opened(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                        CallerIdentity caller, AgentContract contract)
+                        CallerIdentity caller, AgentContract contract, Session store)
             throws IOException, RepositoryException {
-        final Optional<Session> store = sessionOf(request);
+        final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
         final Optional<StatePath.Caller> counted = caller.counted();
-        if (store.isEmpty() || counted.isEmpty()) {
-            refuse(response, store.isEmpty() ? NOTHING_THIS_BUILD_CAN_SERVE : REFUSED);
+        if (viewer.isEmpty() || counted.isEmpty()) {
+            refuse(response, viewer.isEmpty() ? NOTHING_THIS_BUILD_CAN_SERVE : REFUSED);
             return;
         }
-        final StreamSession.Outcome opening = StreamSession.of(store.get(),
+        final StreamSession.Outcome opening = StreamSession.of(store,
                 new StreamSession.Asked(text(request.getParameter(SUBSCRIPTION)),
                         text(request.getParameter(OPERATION)),
                         whole(request.getParameter(GENERATION)), counted.get()),
-                contract);
+                contract, viewer.get().groups());
         final Optional<StreamSession.Refused> refused = StreamSession.refusalIn(opening);
         if (refused.isPresent()) {
             refuse(response, statusFor(refused.get().refusal()));
             return;
         }
-        admitted(request, response, store.get(), ((StreamSession.Held) opening).session(),
+        admitted(request, response, store, ((StreamSession.Held) opening).session(),
                 contract);
     }
 
@@ -220,25 +235,10 @@ public final class EventStreamServlet extends AgentServlet {
         final StreamWriter writer = new StreamWriter(session, contract, admitted);
         final java.io.Writer bytes = response.getWriter();
         final String resumption = text(request.getHeader(StreamResumption.RESUMPTION_HEADER));
-        if (StreamHandoff.from(request, contract)
-                == StreamHandoff.Outcome.THE_THREAD_IS_RELEASED) {
-            // The request thread goes back to the pool here, before anything is waited for.
-            final javax.servlet.AsyncContext released = request.getAsyncContext();
-            StreamExecutor.open().execute(() -> {
-                try {
-                    writer.serve(bytes, store, ticker, resumption);
-                } finally {
-                    released.complete();
-                }
-            });
-            return;
-        }
         writer.serve(bytes, store, ticker, resumption);
     }
 
-    private static Optional<Session> sessionOf(SlingHttpServletRequest request) {
-        return Optional.ofNullable(request.getResourceResolver().adaptTo(Session.class));
-    }
+
 
     private static String text(String value) {
         return value == null ? "" : value;

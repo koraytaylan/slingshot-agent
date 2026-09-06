@@ -102,6 +102,63 @@ final class AgentSessionTest {
         assertTrue(refused.detail().contains("no mapping"), refused.detail());
     }
 
+    @Test
+    void scopedStateClosesOnlyItsOwnResolverOnEveryExit() throws LoginException,
+            javax.jcr.RepositoryException, IOException {
+        for (final String exit : List.of("completed", "repository", "transport")) {
+            final var closed = new java.util.concurrent.atomic.AtomicInteger();
+            final ResourceResolver resolver = new org.apache.sling.api.wrappers.ResourceResolverWrapper(
+                    sling.resourceResolver().clone(java.util.Map.of())) {
+                @Override
+                public void close() {
+                    closed.incrementAndGet();
+                    super.close();
+                }
+            };
+            final AgentSession source = new AgentSession(subservice -> {
+                assertEquals(AgentSession.STATE_SUBSERVICE, subservice);
+                return resolver;
+            });
+            final AgentSession.StateWork work = state -> {
+                assertTrue(state.isLive());
+                if ("repository".equals(exit)) {
+                    throw new javax.jcr.RepositoryException("state failure");
+                }
+                if ("transport".equals(exit)) {
+                    throw new IOException("transport failure");
+                }
+            };
+            switch (exit) {
+                case "completed" -> assertEquals(AgentSession.Completion.COMPLETED, source.withState(work));
+                case "repository" -> org.junit.jupiter.api.Assertions.assertThrows(
+                        javax.jcr.RepositoryException.class, () -> source.withState(work));
+                case "transport" -> org.junit.jupiter.api.Assertions.assertThrows(
+                        IOException.class, () -> source.withState(work));
+                default -> throw new AssertionError(exit);
+            }
+            assertEquals(1, closed.get(), exit);
+            assertTrue(sling.resourceResolver().isLive(), "the original caller's resolver was closed");
+        }
+    }
+
+    @Test
+    void inactiveStateAccessRefusesWithoutExecutingWork() throws javax.jcr.RepositoryException, IOException {
+        final AgentSession component = new AgentSession();
+        component.stopped();
+        final AgentSession.StateWork refused = state -> {
+            throw new AssertionError("inactive state access ran work");
+        };
+        assertEquals(AgentSession.Completion.UNAVAILABLE, AgentSession.current().withState(refused));
+        component.available(sling.getService(ResourceResolverFactory.class));
+        try {
+            assertEquals(AgentSession.Completion.COMPLETED,
+                    AgentSession.current().withState(state -> assertTrue(state.isLive())));
+        } finally {
+            component.stopped();
+        }
+        assertEquals(AgentSession.Completion.UNAVAILABLE, AgentSession.current().withState(refused));
+    }
+
     private AgentSession agentSession() {
         return AgentSession.usingPlatform(sling.getService(ResourceResolverFactory.class));
     }

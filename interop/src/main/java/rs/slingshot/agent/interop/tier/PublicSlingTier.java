@@ -69,6 +69,13 @@ public final class PublicSlingTier implements InteropTier {
     /** The caller this tier authenticates as, by the path the user manager knows them at. */
     private static final String AUTHENTICATED_CALLER_PATH = "/system/userManager/user/admin";
 
+    /** An unknown operation proves the state source is usable without creating work. */
+    private static final String ABSENT_OPERATION =
+            "0000000000000000000000000000000000000000000000000000000000000000";
+
+    /** A scoped state lookup with no corresponding operation answers this status. */
+    private static final int UNKNOWN_OPERATION = 404;
+
     private final ContainerHarness harness;
     private final ContainerHandle handle;
     private final TierRequests requests;
@@ -94,20 +101,21 @@ public final class PublicSlingTier implements InteropTier {
             return new Refused(Failure.INPUT_ABSENT, image
                     + " is not held by this engine; run scripts/prepare_interop_images");
         }
-        return startWith(harness, TierRequests.open(), image, bundle);
+        return startWith(harness, TierRequests.open(), image, bundle, root);
     }
 
     /**
      * Starts the pinned image with a client already built, and installs what this tier can resolve.
      *
      * @param harness the wrapper the container is started through
-     * @param client what every request to the running instance is made with
+     * @param requests what every request to the running instance is made with
      * @param image the pinned image, at the digest it was prepared at
      * @param bundle the built Sling-only bundle to install
+     * @param root the checkout holding the committed service configuration
      * @return the running tier, or the one reason there is none
      */
     private static Outcome startWith(ContainerHarness harness, TierRequests requests, String image,
-                                     Path bundle) {
+                                     Path bundle, Path root) {
         // Ready means a request is served the way a caller's would be, not merely that something
         // is answering. The console answers while the platform is still assembling itself, and the
         // root answers with a redirect the moment the web layer is up - both of them before the
@@ -136,6 +144,11 @@ public final class PublicSlingTier implements InteropTier {
         }
         final ContainerHandle running = ((ContainerHarness.Started) started).handle();
         final PublicSlingTier tier = new PublicSlingTier(harness, running, requests);
+        final Optional<String> configured = tier.configureState(root);
+        if (configured.isPresent()) {
+            tier.stop();
+            return new Refused(Failure.NOT_INSTALLED, configured.get());
+        }
         final Optional<String> installed = tier.install(bundle);
         if (installed.isPresent()) {
             tier.stop();
@@ -146,12 +159,68 @@ public final class PublicSlingTier implements InteropTier {
             tier.stop();
             return new Refused(Failure.NOT_INSTALLED, permitted.get());
         }
+        final Optional<String> state = tier.awaitStateRoute();
+        if (state.isPresent()) {
+            tier.stop();
+            return new Refused(Failure.NOT_INSTALLED, state.get());
+        }
         final Optional<String> answering = tier.awaitTheAgentsOwnRoutes();
         if (answering.isPresent()) {
             tier.stop();
             return new Refused(Failure.NOT_INSTALLED, answering.get());
         }
         return new Running(tier);
+    }
+
+    private Optional<String> configureState(Path root) {
+        final String tree = "/apps/slingshot-agent/osgiconfig/config";
+        final List<String> folders = List.of("/apps/slingshot-agent",
+                "/apps/slingshot-agent/osgiconfig", tree);
+        final Optional<String> refusedFolder = folders.stream().map(this::configurationFolder)
+                .flatMap(Optional::stream).findFirst();
+        if (refusedFolder.isPresent()) {
+            return refusedFolder;
+        }
+        final Path committed = root.resolve("ui.config/src/main/content/jcr_root" + tree);
+        final List<String> names = List.of(
+                "org.apache.sling.jcr.repoinit.RepositoryInitializer~slingshot-agent.cfg.json",
+                "org.apache.sling.serviceusermapping.impl."
+                        + "ServiceUserMapperImpl.amended~slingshot-agent.cfg.json");
+        final Optional<String> refused = names.stream().filter(name -> upload(tree + "/", "./" + name,
+                committed.resolve(name)).statusCode() >= BAD_REQUEST).findFirst();
+        if (refused.isPresent()) {
+            return Optional.of("the platform refused service configuration " + refused.get());
+        }
+        final boolean ready = IntStream.range(0, INSTALL_ATTEMPTS).anyMatch(attempt -> {
+            if (attempt > 0) {
+                pause();
+            }
+            return readAsAuthenticatedUser("/var/slingshot-agent.json").statusCode() < BAD_REQUEST
+                    && readAsAuthenticatedUser("/system/console/configMgr/"
+                    + "org.apache.sling.serviceusermapping.impl."
+                    + "ServiceUserMapperImpl.amended~slingshot-agent.json").body()
+                    .contains("rs.slingshot.agent.core:state=[slingshot-agent-state]");
+        });
+        return ready ? Optional.empty() : Optional.of("the state configuration never became available");
+    }
+
+    private Optional<String> configurationFolder(String path) {
+        final HttpResponse<String> answer = submitOnceRegistered(path,
+                List.of("jcr:primaryType", "sling:Folder"));
+        return answer.statusCode() < BAD_REQUEST ? Optional.empty()
+                : Optional.of("the platform refused configuration folder " + path + " with "
+                        + answer.statusCode() + ": " + said(answer));
+    }
+
+    private Optional<String> awaitStateRoute() {
+        final boolean ready = IntStream.range(0, INSTALL_ATTEMPTS).anyMatch(attempt -> {
+            if (attempt > 0) {
+                pause();
+            }
+            return readAsAuthenticatedUser("/bin/slingshot/agent/snapshot?agent_operation_identifier="
+                    + ABSENT_OPERATION).statusCode() == UNKNOWN_OPERATION;
+        });
+        return ready ? Optional.empty() : Optional.of("the configured state service never became available");
     }
 
     /**

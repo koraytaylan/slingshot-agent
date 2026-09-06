@@ -95,35 +95,31 @@ public final class ArtifactIntakeServlet extends AgentServlet {
             refuse(response, AuthenticationGate.STATUS);
             return;
         }
-        try {
-            answer(request, response, admitted.caller(), held.contract());
-        } catch (final RepositoryException unwritable) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
-        }
+        withState(response, state -> answer(request, response, admitted.caller(), held.contract(), state));
     }
 
     /** What a request is answered with when this build cannot read its own contract or store. */
     private static final int NOTHING_THIS_BUILD_CAN_SERVE = 500;
 
     private void answer(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                        CallerIdentity caller, AgentContract contract)
+                        CallerIdentity caller, AgentContract contract, Session session)
             throws IOException, RepositoryException {
         final Optional<AgentOperationIdentifier> named = identifierIn(
                 request.getParameter(OPERATION_QUERY_MEMBER), contract);
         final Optional<ArtifactSlot> slot = slotIn(request.getParameter(SLOT_QUERY_MEMBER));
-        final Optional<Session> session = sessionOf(request);
         final Optional<StatePath.Caller> counted = caller.counted();
         if (named.isEmpty() || slot.isEmpty() || counted.isEmpty()) {
             refuse(response, REFUSED);
             return;
         }
-        if (session.isEmpty()) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        final StatePath operation = StatePath.operation(serving(session), named.get());
+        final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
+        if (viewer.isEmpty() || !StateAuthority.operation(session, operation, viewer.get(), ROUTE_NAME)) {
+            refuse(response, NOT_WAITED_FOR);
             return;
         }
-        written(response, session.get(), counted.get(),
-                new IntakeSlotWrite.Arriving(
-                        StatePath.operation(serving(session.get()), named.get()), slot.get(),
+        written(response, session, StateAuthority.owner(session, operation).orElseThrow(),
+                new IntakeSlotWrite.Arriving(operation, slot.get(),
                         request.getInputStream(), System.currentTimeMillis()),
                 contract);
     }
@@ -194,9 +190,7 @@ public final class ArtifactIntakeServlet extends AgentServlet {
                         .of(EventStoreGeneration.FIRST)).generation();
     }
 
-    private static Optional<Session> sessionOf(SlingHttpServletRequest request) {
-        return Optional.ofNullable(request.getResourceResolver().adaptTo(Session.class));
-    }
+
 
     /**
      * The route this servlet answers, read from the committed table.

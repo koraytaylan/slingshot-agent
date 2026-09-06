@@ -20,6 +20,8 @@ import org.apache.sling.servlethelpers.MockSlingHttpServletResponse;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +51,17 @@ final class RouteAliasTest {
             "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8";
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @BeforeEach
+    void bindStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
+    }
+
+    @AfterEach
+    void closeStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().stopped();
+    }
 
     @Test
     @DisplayName("nothing serves an alias until a deployment says to")

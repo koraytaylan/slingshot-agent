@@ -3,12 +3,20 @@
 
 package rs.slingshot.agent.repository;
 
+import java.io.IOException;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import javax.jcr.RepositoryException;
+import javax.jcr.Session;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Reference;
 
 /**
  * The only place a session is obtained, and there are exactly two of them.
@@ -23,6 +31,7 @@ import org.apache.sling.api.resource.ResourceResolverFactory;
  * own and there is nothing to borrow. An agent that executed later would have needed a standing
  * privilege over other people's identities, and somebody would then have had to justify it.</p>
  */
+@Component(service = AgentSession.class, immediate = true)
 public final class AgentSession {
 
     /** The subservice the durable store writes under. */
@@ -57,6 +66,86 @@ public final class AgentSession {
          *     installed or a repository that is not ready
          */
         ResourceResolver open(String subservice) throws LoginException;
+    }
+
+    private static final ServiceSessionSource UNAVAILABLE = subservice -> {
+        throw new LoginException("the state session source is inactive");
+    };
+
+    private static final AtomicReference<ServiceSessionSource> CURRENT =
+            new AtomicReference<>(UNAVAILABLE);
+
+    /** Holds the DS component before its required platform source is bound. */
+    public AgentSession() {
+        this(subservice -> CURRENT.get().open(subservice));
+    }
+
+    /**
+     * Binds the required platform source for subsequent state requests.
+     *
+     * @param factory the platform's resolver factory
+     */
+    @Reference
+    public void available(ResourceResolverFactory factory) {
+        CURRENT.set(subservice -> factory.getServiceResourceResolver(Map.of(SUBSERVICE_KEY, subservice)));
+    }
+
+    /** Refuses new state requests after the component stops. */
+    @Deactivate
+    public void stopped() {
+        CURRENT.set(UNAVAILABLE);
+    }
+
+    /**
+     * Captures the currently bound state-session source.
+     *
+     * @return access to a scoped service session, refusing requests while inactive
+     */
+    public static AgentSession current() {
+        return new AgentSession(CURRENT.get());
+    }
+
+    /** Work confined to an internal state session, which cannot be used for caller content effects. */
+    @FunctionalInterface
+    public interface StateWork {
+
+        /**
+         * Performs internal bookkeeping while its service resolver is open.
+         *
+         * @param state the internal state session
+         * @throws RepositoryException if the state repository fails
+         * @throws IOException if the response or payload transport fails
+         */
+        void run(Session state) throws RepositoryException, IOException;
+    }
+
+    /** Whether a request could obtain and use an internal state session. */
+    public enum Completion {
+        /** Work completed and the service resolver closed. */
+        COMPLETED,
+        /** The service login or JCR adaptation was unavailable; no work ran. */
+        UNAVAILABLE
+    }
+
+    /**
+     * Runs internal state work and closes only its service resolver, on every exit path.
+     *
+     * @param work the bookkeeping to perform
+     * @return completion or unavailable service access
+     * @throws RepositoryException if the state repository fails during work
+     * @throws IOException if response or payload transport fails during work
+     */
+    public Completion withState(StateWork work) throws RepositoryException, IOException {
+        try (ResourceResolver resolver = sessions.open(STATE_SUBSERVICE)) {
+            final Optional<Session> state = Optional.ofNullable(resolver.adaptTo(Session.class));
+            if (state.isEmpty()) {
+                return Completion.UNAVAILABLE;
+            }
+            work.run(state.get());
+            return Completion.COMPLETED;
+        } catch (final LoginException refused) {
+            return Completion.UNAVAILABLE;
+        }
     }
 
     private final ServiceSessionSource sessions;

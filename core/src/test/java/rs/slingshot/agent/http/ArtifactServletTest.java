@@ -30,6 +30,8 @@ import org.apache.sling.servlethelpers.MockSlingHttpServletResponse;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,6 +78,17 @@ final class ArtifactServletTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @BeforeEach
+    void bindStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
+    }
+
+    @AfterEach
+    void stopStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().stopped();
+    }
 
     @Test
     @DisplayName("a small and a large artifact both transfer byte for byte, and verify themselves")
@@ -330,6 +343,9 @@ final class ArtifactServletTest {
         GenerationStore.establish(session);
         ArtifactStore.prepare(session, caller());
         walked(session, operation().path());
+        session.getNode(operation().path()).setProperty(
+                rs.slingshot.agent.execution.OperationStore.CALLER, caller().name());
+        session.save();
         return session;
     }
 

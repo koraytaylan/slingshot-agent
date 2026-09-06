@@ -71,6 +71,10 @@ final class StreamAdmissionTest {
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
+    private static rs.slingshot.agent.identity.AgentOperationIdentifier boundOperation() {
+        return event("accepted.json").identifier();
+    }
+
     @Test
     @DisplayName("admission succeeds at exactly the caller's bound and is refused one past it")
     void admissionSucceedsAtTheBoundAndIsRefusedPastIt() throws RepositoryException {
@@ -296,13 +300,22 @@ final class StreamAdmissionTest {
         walked(session, StatePath.ROOT);
         walked(session, operation("accepted.json").path());
         walked(session, operation("nothing-waiting.json").path());
+        session.getNode(operation("accepted.json").path()).setProperty(
+                rs.slingshot.agent.execution.OperationStore.CALLER, caller().name());
+        session.getNode(operation("nothing-waiting.json").path()).setProperty(
+                rs.slingshot.agent.execution.OperationStore.CALLER, caller().name());
+        session.save();
         GenerationStore.establish(session);
         SubscriptionLedger.prepare(session, caller());
         StreamAdmission.prepare(session, caller());
         LedgerAdmission.prepare(session, caller());
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), NOW,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
+                        boundOperation(), NOW,
                         CONTRACT), "the subscription was not taken");
+        assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION + "-empty", generation(),
+                        event("nothing-waiting.json").identifier(), NOW, CONTRACT));
         return session;
     }
 
@@ -319,7 +332,9 @@ final class StreamAdmissionTest {
 
     private StreamSession following(String operation) throws RepositoryException {
         return assertInstanceOf(StreamSession.Held.class,
-                StreamSession.of(session(), new StreamSession.Asked(SUBSCRIPTION, operation,
+                StreamSession.of(session(), new StreamSession.Asked(
+                        operation.equals(boundOperation().rendered())
+                        ? SUBSCRIPTION : SUBSCRIPTION + "-empty", operation,
                         EventStoreGeneration.FIRST, caller()), CONTRACT),
                 "the stream was not opened").session();
     }

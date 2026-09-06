@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "state-access-and-ownership"
+kind = "property"
+feature = "repository-access"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.StateAccessOwnershipScenario"
+reason = "Real owner, operator, unrelated state reader, removed member and anonymous requests exercise every state route with the committed service mapping. A test command supplied to the installed submission servlet attempts a denied content write under the original caller, while the narrow service session publishes state."

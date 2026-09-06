@@ -18,17 +18,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
 /**
- * Every direction the architecture makes possible, attacked on a running instance.
+ * A caller without repository grants cannot read or alter the provisioned state tree.
  *
- * <p>This runs inside somebody else's author, with a service user, in the same process as their
- * content. That combination is the shape of a privilege escalation, and the directions worth
- * attacking are the ones the design permits rather than the ones that seem likely — the likely ones
- * are the ones that were already thought about.</p>
- *
- * <p>The strongest guard needs no guard: there is no impersonation call anywhere in either bundle,
- * so there is no path by which a command runs as anybody but the requesting user. What is proved
- * here is that a real instance behaves that way — the agent's own tree is unreachable through every
- * route, alias, path spelling and console resource, and the key ring is unreachable at all.</p>
+ * <p>The instance administrator seeds and verifies the fixtures. Original caller content access
+ * and explicit state readers' agent-route refusals are exercised by StateAccessOwnershipScenario.</p>
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 final class PrivilegeEscalationScenario {
@@ -47,54 +40,71 @@ final class PrivilegeEscalationScenario {
     /** The first status that is a refusal rather than an answer. */
     private static final int BAD_REQUEST = 400;
 
+    private static final String STATE = "/var/slingshot-agent";
+
+    private static final String KEY_RING = STATE + "/key-ring";
+
+    private static final String CURRENT_CANARY = "proof-current-key-material";
+
+    private static final String PRIOR_CANARY = "proof-prior-key-material";
+
     private final TierRequests requests = TierRequests.open();
 
     private InteropTier tier;
 
     @BeforeAll
     void install() {
+        SharedPublicSlingTier.release();
         final InteropTier.Outcome outcome =
-                SharedPublicSlingTier.get(REPOSITORY, IMAGE, builtBundle());
+                PublicSlingTier.start(REPOSITORY, IMAGE, builtBundle());
         tier = assertInstanceOf(InteropTier.Running.class, outcome,
                 "the tier did not come up: " + outcome).tier();
     }
 
     @AfterAll
     void leaveNothingBehind() {
-        // The shared runtime stays for the scenario after this one and goes when the test runtime
-        // ends. What has to hold here is that nothing else was left behind.
+        if (tier != null) {
+            tier.stop();
+        }
         assertEquals(List.of(), SharedPublicSlingTier.leftBeside(REPOSITORY),
                 "something other than the shared runtime was left running");
     }
 
     @Test
-    @DisplayName("the agent's own tree is unreachable through every spelling a request can take")
+    @DisplayName("an ungranted caller cannot read the provisioned state through any tested spelling")
     void theagentsOwnTreeIsUnreachable() {
-        final List<String> reached = new ArrayList<>();
-        for (final String spelling : spellingsOf("/var/slingshot-agent")) {
-            if (requests.readAsAuthenticatedUser(tier.address() + spelling).statusCode()
-                    < BAD_REQUEST) {
-                reached.add(spelling);
-            }
-        }
-        assertEquals(List.of(), reached,
-                "the agent's own state is readable through a request, which is a caller reading"
-                        + " the bookkeeping that decides what they are allowed to do: " + reached);
+        assertTrue(requests.readAsAuthenticatedUser(tier.address() + STATE + ".json")
+                .statusCode() < BAD_REQUEST, "the state fixture must exist before checking denial");
+        assertUnreachable(STATE);
     }
 
     @Test
-    @DisplayName("the key ring is unreachable, which is a stronger claim than the tree being so")
+    @DisplayName("an ungranted caller cannot read or alter populated key-ring storage")
     void thekeyRingIsUnreachable() {
+        assertTrue(requests.submit(tier.address() + KEY_RING,
+                List.of("jcr:primaryType", "nt:unstructured", "current", CURRENT_CANARY,
+                        "prior", PRIOR_CANARY)).statusCode() < BAD_REQUEST);
+        final String before = requests.readAsAuthenticatedUser(
+                tier.address() + KEY_RING + ".json").body();
+        assertTrue(before.contains(CURRENT_CANARY) && before.contains(PRIOR_CANARY));
+        assertUnreachable(KEY_RING);
+        assertTrue(requests.postAsUnpermittedUser(tier.address() + KEY_RING,
+                "current=changed", "application/x-www-form-urlencoded").statusCode() >= BAD_REQUEST);
+        assertEquals(before, requests.readAsAuthenticatedUser(
+                tier.address() + KEY_RING + ".json").body());
+    }
+
+    private void assertUnreachable(String path) {
         final List<String> reached = new ArrayList<>();
-        for (final String spelling : spellingsOf("/var/slingshot-agent/keys")) {
-            final String body = requests.readAsAuthenticatedUser(tier.address() + spelling).body();
-            if (body.contains("current") && body.contains("prior")) {
+        for (final String spelling : spellingsOf(path)) {
+            final var answer = requests.readAsUnpermittedUser(tier.address() + spelling);
+            if (answer.statusCode() < BAD_REQUEST || answer.body().contains(CURRENT_CANARY)
+                    || answer.body().contains(PRIOR_CANARY)) {
                 reached.add(spelling);
             }
+            assertTrue(requests.readAsNobody(tier.address() + spelling).statusCode() >= BAD_REQUEST);
         }
-        assertEquals(List.of(), reached,
-                "the ring this agent signs continuation tokens with is readable, which makes every"
-                        + " token forgeable: " + reached);
+        assertEquals(List.of(), reached, "ungranted callers reached protected state: " + reached);
     }
 
     @Test
