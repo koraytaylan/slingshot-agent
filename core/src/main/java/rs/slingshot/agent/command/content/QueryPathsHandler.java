@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
@@ -89,12 +90,11 @@ public final class QueryPathsHandler implements CommandHandler {
                     + context.discovery().limit() + " nodes it is allowed, and stopped rather than"
                     + " going on");
         }
-        final PagedQuery query = context.paging().map(paging ->
-                new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(), paging.generation()))
-                .orElse(null);
-        final QueryDigest.Outcome digest = query == null
-                ? QueryDigest.of(QueryPathsCommand.WIRE_NAME, arguments)
-                : query.digestOf(arguments);
+        final Optional<PagedQuery> query = context.paging() instanceof CallerContext.Available paging
+                ? Optional.of(new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(),
+                        paging.generation())) : Optional.empty();
+        final QueryDigest.Outcome digest = query.map(value -> value.digestOf(arguments))
+                .orElseGet(() -> QueryDigest.of(QueryPathsCommand.WIRE_NAME, arguments));
         if (!(digest instanceof final QueryDigest.Held held)) {
             return new Failed("continuation_token_malformed", "the query arguments cannot be"
                     + " represented canonically");
@@ -112,20 +112,22 @@ public final class QueryPathsHandler implements CommandHandler {
                 ? initial.limit()
                 : contract.value(rs.slingshot.agent.contract.ContractLimit.DEFAULT_RESULT_LIMIT);
         final PagedQuery.Page<String> page = PagedQuery.pageOf(gathered.paths(), limit, offset);
-        final String token = nextToken(page, held.digest(), context);
-        if (token == null) {
+        final Optional<String> token = nextToken(page, held.digest(), context);
+        if (token.isEmpty()) {
+            if (command.window() instanceof ResultWindow.Initial) {
+                return new Produced(QueryPathsResult.documentOf(page.rows(), ""));
+            }
             return new Failed("continuation_token_integrity_invalid", "continuation authority is"
                     + " unavailable");
         }
-        return new Produced(QueryPathsResult.documentOf(page.rows(), token));
+        return new Produced(QueryPathsResult.documentOf(page.rows(), token.orElseThrow()));
     }
 
     private long continuationOffset(ResultWindow.Continuation continuation, QueryDigest query,
                                     CallerContext context) {
-        if (context.paging().isEmpty()) {
+        if (!(context.paging() instanceof CallerContext.Available paging)) {
             return -1;
         }
-        final CallerContext.Paging paging = context.paging().orElseThrow();
         final BoundedDocumentReader.Outcome read = BoundedDocumentReader.read(
                 continuation.continuationToken().getBytes(StandardCharsets.UTF_8),
                 BoundedDocumentReader.Bounds.from(contract));
@@ -147,21 +149,20 @@ public final class QueryPathsHandler implements CommandHandler {
                 ? decoded.token().unvalidatedState().position() : -1;
     }
 
-    private String nextToken(PagedQuery.Page<String> page, QueryDigest query,
-                             CallerContext context) {
+    private Optional<String> nextToken(PagedQuery.Page<String> page, QueryDigest query,
+                                       CallerContext context) {
         if (page.following() instanceof PagedQuery.Nothing) {
-            return "";
+            return Optional.of("");
         }
-        if (context.paging().isEmpty()) {
-            return "";
+        if (!(context.paging() instanceof CallerContext.Available paging)) {
+            return Optional.empty();
         }
-        final CallerContext.Paging paging = context.paging().orElseThrow();
         if (!(paging.authority().read() instanceof ContinuationKeyAuthority.Read read)) {
-            return null;
+            return Optional.empty();
         }
         return new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(), paging.generation())
                 .tokenFor(page, query, read.ring(), paging.nowUnixMilliseconds(), contract)
-                .orElseThrow().rendered();
+                .map(ContinuationToken::rendered);
     }
 
     /**

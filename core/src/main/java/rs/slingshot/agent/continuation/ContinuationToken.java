@@ -125,15 +125,26 @@ public final class ContinuationToken {
     public sealed interface ReadOutcome permits Read, Unreadable {
     }
 
-    /** A token document whose shape is valid but whose signature is not yet checked. */
+    /**
+     * A token document whose shape is valid but whose signature is not yet checked.
+     *
+     * @param token the decoded token
+     */
     public record Read(ContinuationToken token) implements ReadOutcome {
     }
 
-    /** A token document that cannot be decoded. */
+    /**
+     * A token document that cannot be decoded.
+     *
+     * @param detail why the document could not be decoded
+     */
     public record Unreadable(String detail) implements ReadOutcome {
     }
 
-    /** Renders this token as the canonical JSON document carried by a result window. */
+    /**
+     * Renders this token as the canonical JSON document carried by a result window.
+     * @return the canonical token document
+     */
     public String rendered() {
         final SequencedMap<String, DocumentValue> token = new java.util.LinkedHashMap<>();
         token.put(INTEGRITY, new DocumentValue.Text(integrity.rendered()));
@@ -146,7 +157,11 @@ public final class ContinuationToken {
         return bytes.rendered();
     }
 
-    /** Decodes the canonical token document, leaving signature validation to {@link #validate}. */
+    /**
+     * Decodes the canonical token document, leaving signature validation to {@link #validate}.
+     * @param document the received token document
+     * @return the decoded token or a shape refusal
+     */
     public static ReadOutcome read(DocumentValue document) {
         if (!(document instanceof final DocumentValue.Mapping mapping)
                 || !mapping.members().keySet().equals(java.util.Set.copyOf(MEMBERS))) {
