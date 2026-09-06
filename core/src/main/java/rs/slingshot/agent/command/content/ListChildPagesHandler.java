@@ -10,6 +10,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -76,11 +77,11 @@ public final class ListChildPagesHandler implements CommandHandler {
         if (asked instanceof final ListChildPagesCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return listed(((ListChildPagesCommand.Held) asked).command(), resolver, context);
+        return listed(((ListChildPagesCommand.Held) asked).command(), arguments, resolver, context);
     }
 
-    private Answer listed(ListChildPagesCommand command, ResourceResolver resolver,
-                          CallerContext context) {
+    private Answer listed(ListChildPagesCommand command, DocumentValue.Mapping arguments,
+                          ResourceResolver resolver, CallerContext context) {
         final Resource parent = resolver.getResource(command.rootPath());
         if (parent == null) {
             return new Failed(ROOT_NOT_FOUND, whyNothingIsListed(Absence.NOTHING_IS_THERE,
@@ -95,8 +96,16 @@ public final class ListChildPagesHandler implements CommandHandler {
             return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this parent holds more than the "
                     + context.discovery().limit() + " children this caller may examine");
         }
-        return new Produced(PageListingResult.documentOf(
-                pageOf(gathered.children(), command.window(), contract), ""));
+        final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
+                gathered.children(), command.window(), ListChildPagesCommand.WIRE_NAME, arguments,
+                context, contract);
+        if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<PageListingResult.Page> accepted =
+                ((PagingSupport.Accepted<PageListingResult.Page>) page).page();
+        return new Produced(PageListingResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     private record Gathered(List<PageListingResult.Page> children, BudgetState state) {

@@ -13,6 +13,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -70,11 +71,12 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
         if (asked instanceof final FindPagesUsingComponentsCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return searched(((FindPagesUsingComponentsCommand.Held) asked).command(), resolver,
-                context);
+        return searched(((FindPagesUsingComponentsCommand.Held) asked).command(), arguments,
+                resolver, context);
     }
 
-    private Answer searched(FindPagesUsingComponentsCommand command, ResourceResolver resolver,
+    private Answer searched(FindPagesUsingComponentsCommand command,
+                            DocumentValue.Mapping arguments, ResourceResolver resolver,
                             CallerContext context) {
         final Resource root = resolver.getResource(command.rootPath());
         if (root == null) {
@@ -89,8 +91,16 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
                     + " refused rather than shortened, because a partial list of pages using a"
                     + " component reads as the complete one and a migration would miss the rest");
         }
-        return new Produced(PageListingResult.documentOf(
-                pageOf(search.found(command.matchMode()), command.window(), contract), ""));
+        final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
+                search.found(command.matchMode()), command.window(),
+                FindPagesUsingComponentsCommand.WIRE_NAME, arguments, context, contract);
+        if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<PageListingResult.Page> accepted =
+                ((PagingSupport.Accepted<PageListingResult.Page>) page).page();
+        return new Produced(PageListingResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /**

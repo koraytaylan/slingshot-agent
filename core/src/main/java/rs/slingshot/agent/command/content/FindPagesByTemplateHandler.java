@@ -11,6 +11,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -65,11 +66,12 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
         if (asked instanceof final FindPagesByTemplateCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return searched(((FindPagesByTemplateCommand.Held) asked).command(), resolver, context);
+        return searched(((FindPagesByTemplateCommand.Held) asked).command(), arguments, resolver,
+                context);
     }
 
-    private Answer searched(FindPagesByTemplateCommand command, ResourceResolver resolver,
-                            CallerContext context) {
+    private Answer searched(FindPagesByTemplateCommand command, DocumentValue.Mapping arguments,
+                            ResourceResolver resolver, CallerContext context) {
         final Resource root = resolver.getResource(command.rootPath());
         if (root == null) {
             return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
@@ -85,8 +87,16 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
                     + " refused rather than shortened, for the same reason an empty answer to a"
                     + " wrong root is refused");
         }
-        return new Produced(PageListingResult.documentOf(
-                pageOf(search.found(), command.window(), contract), ""));
+        final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
+                search.found(), command.window(), FindPagesByTemplateCommand.WIRE_NAME, arguments,
+                context, contract);
+        if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<PageListingResult.Page> accepted =
+                ((PagingSupport.Accepted<PageListingResult.Page>) page).page();
+        return new Produced(PageListingResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /** One search of one subtree, carrying what it has examined and what it has found. */
