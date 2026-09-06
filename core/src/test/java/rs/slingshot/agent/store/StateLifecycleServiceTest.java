@@ -47,7 +47,13 @@ final class StateLifecycleServiceTest {
     @Test
     void boundOakMaintenancePassPublishesItsDurableObservation() {
         final ResourceResolver shared = sling.resourceResolver();
+        if (shared == null) {
+            throw new AssertionError("the Sling context did not provide a resource resolver");
+        }
         final Session session = shared.adaptTo(Session.class);
+        if (session == null) {
+            throw new AssertionError("the Oak resolver did not expose its JCR session");
+        }
         try {
             session.getRootNode().addNode("var").addNode("slingshot-agent");
             session.save();
