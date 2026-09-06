@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.apache.sling.api.resource.Resource;
@@ -262,24 +263,24 @@ public final class DownloadContentPackageHandler implements CommandHandler {
     }
 
     static byte[] packageBytes(String manifest) throws IOException {
-        return packageBytes(manifest, Optional.empty(), List.of());
+        return packageBytes(manifest, archive -> { });
     }
 
     /** Builds the deterministic archive, including each selected resource when provided. */
     static byte[] packageBytes(String manifest, ResourceResolver resolver, List<String> selected)
             throws IOException {
-        return packageBytes(manifest, Optional.of(resolver), selected);
+        return packageBytes(manifest, archive -> selected.stream().sorted()
+                .forEach(path -> writeContentEntry(archive, resolver, path)));
     }
 
-    private static byte[] packageBytes(String manifest, Optional<ResourceResolver> resolver,
-                                      List<String> selected) throws IOException {
+    private static byte[] packageBytes(String manifest, Consumer<ZipOutputStream> entries)
+            throws IOException {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream archive = new ZipOutputStream(bytes)) {
             archive.putNextEntry(entry("META-INF/vault/filter.xml"));
             archive.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             archive.closeEntry();
-            resolver.ifPresent(held -> selected.stream().sorted()
-                    .forEach(path -> writeContentEntry(archive, held, path)));
+            entries.accept(archive);
         }
         return bytes.toByteArray();
     }
