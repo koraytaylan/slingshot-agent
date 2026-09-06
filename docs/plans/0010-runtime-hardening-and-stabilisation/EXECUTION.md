@@ -1957,3 +1957,11 @@ required checks and the complete gate, then commit the completed task.
      review still proves activation/deactivation fail closed, and the complete core gate passes with
      all static, documentation, coverage, and test checks. Platform inventory, replication, workflow,
      job, and staging handlers remain withheld until their adapters are registered.
+
+148. Connected active runtime identities to discovery. `CommandRuntime` exposes its verified command
+     contracts, `DefaultCommandRuntime` derives them from the selected dispatch, and
+     `CapabilityServlet` dynamically advertises the bound identities while returning to an empty
+     list when the runtime disappears. The review caught and fixed list-identity unbinding and a
+     test fixture serialization warning. Core verification passes all checks, including the active
+     command and discovery tests; unavailable handlers remain absent from both submission and
+     discovery.

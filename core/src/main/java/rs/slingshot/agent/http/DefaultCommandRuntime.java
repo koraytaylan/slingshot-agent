@@ -197,6 +197,13 @@ public final class DefaultCommandRuntime implements CommandRuntime {
     }
 
     @Override
+    public java.util.List<CommandContractIdentity> commandContracts() {
+        return state.get() instanceof final Active active
+                ? active.dispatch().commandContracts(CommandContractIdentity.Bounds.from(
+                        active.contract())) : java.util.List.of();
+    }
+
+    @Override
     public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, javax.jcr.Session session) {
         return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
