@@ -79,6 +79,45 @@ final class CapabilityServletTest {
     }
 
     @Test
+    @DisplayName("discovery follows the commands supplied by the active runtime")
+    void discoveryAdvertisesActiveRuntimeCommands() {
+        final DefaultCommandRuntime runtime = new DefaultCommandRuntime();
+        runtime.activate();
+        final CapabilityServlet servlet = new CapabilityServlet();
+        servlet.available(runtime);
+        final String rendered = CapabilityServlet.document(CapabilityServlet.readiness(),
+                servlet.commandContracts()).render();
+        assertTrue(rendered.contains("query_paths"), rendered);
+        assertFalse(rendered.contains("download_content_package"), rendered);
+        servlet.unavailable(runtime);
+        assertTrue(CapabilityServlet.document(CapabilityServlet.readiness(),
+                servlet.commandContracts()).render().contains("\"command_contracts\":[]"));
+        runtime.deactivate();
+    }
+
+    @Test
+    void anUnassembledRuntimeAdvertisesNoCommands() {
+        assertTrue(new EmptyRuntime().commandContracts().isEmpty());
+    }
+
+    private static final class EmptyRuntime implements CommandRuntime {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public boolean serves(String wireName) {
+            return false;
+        }
+
+        @Override
+        public rs.slingshot.agent.execution.ExecutionOutcome.Completion run(
+                rs.slingshot.agent.execution.LogicalOperation operation,
+                rs.slingshot.agent.json.DocumentValue.Mapping submission,
+                javax.jcr.Session session) {
+            return rs.slingshot.agent.execution.ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
+        }
+    }
+
+    @Test
     @DisplayName("the answer is bounded by the contract accessor, and the bound is not written here")
     void theAnswerIsBoundedByTheContract() {
         final AgentContract contract = contract();

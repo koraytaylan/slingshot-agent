@@ -3,6 +3,9 @@
 
 package rs.slingshot.agent.http;
 
+import java.util.List;
+import rs.slingshot.agent.identity.CommandContractIdentity;
+
 /**
  * The packaged command runtime supplied to {@link SubmitServlet} by declarative services.
  *
@@ -11,4 +14,13 @@ package rs.slingshot.agent.http;
  * installed descriptor; an absent provider leaves the servlet on its fail-closed empty surface.</p>
  */
 public interface CommandRuntime extends SubmitServlet.Commands {
+
+    /**
+     * Returns the command identities whose handlers are active.
+     *
+     * @return active command contracts in wire order
+     */
+    default List<CommandContractIdentity> commandContracts() {
+        return List.of();
+    }
 }
