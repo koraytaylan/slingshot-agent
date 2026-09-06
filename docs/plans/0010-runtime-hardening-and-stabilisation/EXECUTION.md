@@ -2002,3 +2002,9 @@ required checks and the complete gate, then commit the completed task.
     now published as one immutable binding; unbinding compares the exact runtime instance and
     cannot interleave into stale command advertisement. The review caught PMD's intentional identity
     comparison and documented the narrow suppression; focused tests and core verification pass.
+
+156. Re-ran both owner-tier entrypoints against the host environment. The quickstart tier passed all
+    10 refusal/acknowledgement tests, and the pinned client conformance tier passed all 5 tests.
+    These runs establish explicit missing-input behavior and the pinned client contract checks;
+    neither claims a licensed AEM install or sibling binary round trip when those owner inputs are
+    absent.
