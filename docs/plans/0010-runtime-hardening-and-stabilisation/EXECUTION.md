@@ -1649,3 +1649,9 @@ required checks and the complete gate, then commit the completed task.
     the gate stops at pinned interop images because this container engine does not hold the five
     prepared images, even after `scripts/prepare_interop_images` recorded their digests. No source
     assertion failed in this run; the remaining refusal is an external image-store state.
+
+93. The first full host-context gate reached SpotBugs and exposed that the provisional
+    `DispatchCommands` adapter could not satisfy the repository's serializable servlet contract
+    without unsafe live service state. That provisional class was removed pending a proper OSGi
+    registration design. Preparation and verification scripts now share a writable Podman runtime
+    directory under `/tmp`; host-context image verification succeeds for all five images.
