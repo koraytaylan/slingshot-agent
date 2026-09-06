@@ -282,23 +282,26 @@ public final class ArtifactServlet extends AgentServlet {
         final byte[] buffer = new byte[Digest.READ_BUFFER_BYTES];
         final long startedAt = ticker.milliseconds();
         final long monotonicStarted = System.nanoTime();
+        long monotonicLastMoved = monotonicStarted;
         long lastMovedAt = startedAt;
         long moved = 0;
         try {
-            int read = read(io, reading, buffer, monotonicStarted, contract);
+            int read = read(io, reading, buffer, monotonicStarted, monotonicLastMoved, contract);
             while (read >= 0) {
                 if (read > 0) {
-                    if (!write(io, writing, buffer, read, monotonicStarted, contract)) {
+                    if (!write(io, writing, buffer, read, monotonicStarted, monotonicLastMoved,
+                            contract)) {
                         return moved;
                     }
                     moved = moved + read;
                     lastMovedAt = ticker.milliseconds();
+                    monotonicLastMoved = System.nanoTime();
                 }
                 if (!TransferDeadlines.isMoving(startedAt, lastMovedAt, ticker.milliseconds(),
                         contract)) {
                     return moved;
                 }
-                read = read(io, reading, buffer, monotonicStarted, contract);
+                read = read(io, reading, buffer, monotonicStarted, monotonicLastMoved, contract);
             }
             return moved;
         } finally {
@@ -308,11 +311,11 @@ public final class ArtifactServlet extends AgentServlet {
 
     @SuppressWarnings("PMD.PreserveStackTrace")
     private static int read(ExecutorService io, InputStream reading, byte[] buffer,
-                            long monotonicStarted, AgentContract contract)
+                            long monotonicStarted, long monotonicLastMoved, AgentContract contract)
             throws IOException {
         final Future<Integer> pending = io.submit(() -> reading.read(buffer));
         try {
-            return pending.get(timeoutNanos(monotonicStarted, contract),
+            return pending.get(timeoutNanos(monotonicStarted, monotonicLastMoved, contract),
                     TimeUnit.NANOSECONDS);
         } catch (final TimeoutException timeout) {
             pending.cancel(true);
@@ -329,7 +332,8 @@ public final class ArtifactServlet extends AgentServlet {
 
     @SuppressWarnings("PMD.PreserveStackTrace")
     private static boolean write(ExecutorService io, OutputStream writing, byte[] buffer, int count,
-                                 long monotonicStarted, AgentContract contract)
+                                 long monotonicStarted, long monotonicLastMoved,
+                                 AgentContract contract)
             throws IOException {
         final Future<?> pending = io.submit(() -> {
             writing.write(buffer, 0, count);
@@ -337,7 +341,7 @@ public final class ArtifactServlet extends AgentServlet {
             return null;
         });
         try {
-            pending.get(timeoutNanos(monotonicStarted, contract),
+            pending.get(timeoutNanos(monotonicStarted, monotonicLastMoved, contract),
                     TimeUnit.NANOSECONDS);
             return true;
         } catch (final TimeoutException timeout) {
@@ -353,13 +357,15 @@ public final class ArtifactServlet extends AgentServlet {
         }
     }
 
-    private static long timeoutNanos(long monotonicStarted, AgentContract contract) {
+    private static long timeoutNanos(long monotonicStarted, long monotonicLastMoved,
+                                     AgentContract contract) {
         final long total = TimeUnit.MILLISECONDS.toNanos(
                 TransferDeadlines.totalMilliseconds(contract));
         final long idle = TimeUnit.MILLISECONDS.toNanos(
                 TransferDeadlines.idleMilliseconds(contract));
         final long elapsed = System.nanoTime() - monotonicStarted;
-        return Math.max(1, Math.min(total - elapsed, idle));
+        final long idleElapsed = System.nanoTime() - monotonicLastMoved;
+        return Math.max(1, Math.min(total - elapsed, idle - idleElapsed));
     }
 
     private static void closeQuietly(Closeable closeable) {
