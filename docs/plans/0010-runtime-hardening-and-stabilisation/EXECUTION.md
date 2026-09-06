@@ -1253,3 +1253,7 @@ required checks and the complete gate, then commit the completed task.
     node beyond the caller's bound, and reference discovery uses the same bounded traversal. The
     command suite passed (361 cases), with compilation, Checkstyle, and PMD green. Commit `ab862d8`
     records this step; query/list/package handler integration and measured wide/deep fixtures remain.
+    QueryPathsHandler now uses the same depth-bounded iterator stack, preserving sorted results and
+    explicit budget exhaustion. Its focused query and child-list suites passed (17 cases), followed
+    by Checkstyle and PMD. Commit `d374f6d` records the query integration; child-list and package
+    handlers still need equivalent retained-work treatment and measured fixtures.
