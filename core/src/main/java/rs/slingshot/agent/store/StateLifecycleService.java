@@ -3,11 +3,11 @@
 
 package rs.slingshot.agent.store;
 
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.Optional;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import org.apache.sling.api.resource.ResourceResolver;

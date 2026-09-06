@@ -146,7 +146,11 @@ public final class BoundedRequestBody {
         private static final long serialVersionUID = 1L;
         private final long amount;
         private final long bound;
-        private BoundExceeded(long amount, long bound) { this.amount = amount; this.bound = bound; }
+
+        private BoundExceeded(long amount, long bound) {
+            this.amount = amount;
+            this.bound = bound;
+        }
     }
 
     private static int read(ExecutorService io, InputStream body, byte[] chunk,
