@@ -1247,3 +1247,9 @@ required checks and the complete gate, then commit the completed task.
     deadline operation and retained runtime exception propagation. The event-stream servlet suite
     passed (10 cases). Commit `3763d6d` records the flush path; task 4307 still needs an integrated
     end-to-end transfer review before status can advance.
+
+22. Began 4401 by replacing the shared `RepositoryReach` breadth-first resource queue with an
+    iterator stack. Wide trees now retain only the active depth while still stopping at the first
+    node beyond the caller's bound, and reference discovery uses the same bounded traversal. The
+    command suite passed (361 cases), with compilation, Checkstyle, and PMD green. Commit `ab862d8`
+    records this step; query/list/package handler integration and measured wide/deep fixtures remain.
