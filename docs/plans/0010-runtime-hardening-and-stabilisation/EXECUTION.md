@@ -1831,3 +1831,9 @@ required checks and the complete gate, then commit the completed task.
      `maven-source-plugin:3.3.1`: `org.codehaus.plexus.archiver.ArchiverException` is absent from
      the cached plugin classpath. The source Javadoc warnings were corrected before this failure,
      and the issue is environmental rather than a source-policy or test failure.
+
+131. Ran the prescribed `scripts/prepare_locked_dependency_cache` with network access. It restored
+     the complete current plugin dependency closure, including `plexus-archiver`, rewrote the
+     generated cache digest record, and completed its 453 development-test and packaging review
+     successfully. The offline gate can now verify this prepared input instead of failing on the
+     missing plugin class.
