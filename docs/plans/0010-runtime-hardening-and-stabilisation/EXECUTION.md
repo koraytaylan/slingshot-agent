@@ -1330,3 +1330,10 @@ required checks and the complete gate, then commit the completed task.
     traversal suite. Both prove the bounded DFS returns exactly the permitted prefix, including the
     explicit one-past bound marker, and the four-case suite passes. This strengthens 4401 evidence;
     measured iterator-call instrumentation and final handler integration remain open.
+
+33. Prototyped durable maintenance successor links on operation records and a direct successor
+    sweep. The dense maintenance suite improved from seven failures to three, including passing
+    the per-pass read bounds, but review found that sparse-bucket wrap semantics and interruption
+    save boundaries still diverged from the cursor contract. The link schema and sweep changes were
+    reverted; task 4105 remains pending until successor state and cursor reporting are designed
+    together.
