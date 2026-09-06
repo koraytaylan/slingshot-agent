@@ -60,11 +60,17 @@ public final class CapabilityServlet extends AgentServlet {
     public static final long EVENT_STORE_GENERATION = EventStoreGeneration.FIRST;
 
     private static final long serialVersionUID = 1L;
-    /** The active command identities, empty until a runtime is bound. */
-    private final AtomicReference<List<CommandContractIdentity>> commands =
-            new AtomicReference<>(List.of());
-    /** The runtime instance currently supplying those identities. */
-    private final AtomicReference<CommandRuntime> runtime = new AtomicReference<>();
+    /** The active runtime and its identities, empty until a runtime is bound. */
+    private final AtomicReference<Binding> binding = new AtomicReference<>(Binding.EMPTY);
+
+    /** An atomic runtime-to-identities publication. */
+    private record Binding(CommandRuntime runtime, List<CommandContractIdentity> commands) {
+        private static final Binding EMPTY = new Binding(null, List.of());
+
+        private Binding {
+            commands = List.copyOf(commands);
+        }
+    }
 
     /**
      * Holds a servlet with nothing in it.
@@ -84,8 +90,7 @@ public final class CapabilityServlet extends AgentServlet {
      */
     @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
     public void available(CommandRuntime activeRuntime) {
-        runtime.set(activeRuntime);
-        this.commands.set(List.copyOf(activeRuntime.commandContracts()));
+        binding.set(new Binding(activeRuntime, activeRuntime.commandContracts()));
     }
 
     /**
@@ -93,14 +98,14 @@ public final class CapabilityServlet extends AgentServlet {
      *
      * @param stoppedRuntime the runtime being removed
      */
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     public void unavailable(CommandRuntime stoppedRuntime) {
-        if (runtime.compareAndSet(stoppedRuntime, null)) {
-            this.commands.set(List.of());
-        }
+        binding.updateAndGet(current -> current.runtime() == stoppedRuntime
+                ? Binding.EMPTY : current);
     }
 
     List<CommandContractIdentity> commandContracts() {
-        return commands.get();
+        return binding.get().commands();
     }
 
     /** What a request refused for its method is answered with. */
@@ -161,7 +166,7 @@ public final class CapabilityServlet extends AgentServlet {
             refuse(response, AuthenticationGate.STATUS);
             return;
         }
-        final String document = document(readiness(), commands.get()).render();
+        final String document = document(readiness(), binding.get().commands()).render();
         response.setContentType(route.mediaType());
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(document);
