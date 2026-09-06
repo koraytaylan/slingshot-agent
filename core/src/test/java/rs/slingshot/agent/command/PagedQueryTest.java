@@ -116,6 +116,14 @@ final class PagedQueryTest {
                 continuationRefusal("a\tb"));
         assertEquals(ResultWindow.Refusal.TOKEN_TOO_LONG, continuationRefusal("t".repeat(
                 (int) CONTRACT.value(ContractLimit.MAXIMUM_CONTINUATION_TOKEN_BYTES) + 1)));
+        final SequencedMap<String, DocumentValue> unknown = new LinkedHashMap<>();
+        unknown.put(ResultWindow.MODE, new DocumentValue.Text(ResultWindow.INITIAL_MODE));
+        unknown.put(ResultWindow.OFFSET, new DocumentValue.Whole(0));
+        unknown.put(ResultWindow.LIMIT, new DocumentValue.Whole(1));
+        unknown.put("unexpected", new DocumentValue.Text("ignored"));
+        assertEquals(ResultWindow.Refusal.UNKNOWN_MODE,
+                ((ResultWindow.Refused) ResultWindow.of(new DocumentValue.Mapping(unknown), CONTRACT))
+                        .refusal());
     }
 
     @Test
