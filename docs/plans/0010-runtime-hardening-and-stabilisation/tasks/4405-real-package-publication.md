@@ -14,8 +14,8 @@ touches:
   - aem/src/main/java/rs/slingshot/agent/aem
   - core/src/test/java/rs/slingshot/agent/command/content
   - interop/src/test/java/rs/slingshot/agent/interop/tier/DownloadContentPackageScenario.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: "c9f91b9"
 ---
 # Build and Publish Actual Content Package Bytes
 
