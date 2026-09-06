@@ -13,6 +13,12 @@ touches:
   - core/src/main/java/rs/slingshot/agent/store/RetainedGeneration.java
   - core/src/test/java/rs/slingshot/agent/store/GenerationRotationTest.java
   - core/src/test/java/rs/slingshot/agent/store/GenerationStoreTest.java
+  - core/src/test/java/rs/slingshot/agent/execution/SubmissionAdmissionTest.java
+  - core/src/test/java/rs/slingshot/agent/proof/ExclusiveTransitionProbe.java
+  - core/src/test/java/rs/slingshot/agent/proof/GenerationRotationProbe.java
+  - interop/src/test/java/rs/slingshot/agent/interop/harness/ExclusiveTransitionRuntime.java
+  - interop/src/test/java/rs/slingshot/agent/interop/harness/GenerationRotationCrashScenario.java
+  - interop/scenarios/generation-rotation-crash.toml
 status: pending
 merged_as: ""
 ---
@@ -27,3 +33,6 @@ Finding(s): R09 in [FINDINGS.md](../FINDINGS.md).
 3. Test every save boundary and competing rotations; read retained operation/snapshot/artifact state after restart.
 
 - **Done when:** An interrupted or competing rotation never publishes a serving generation without matching history and retention, and previously retained work remains readable until its actual retention deadline.
+
+Direct implementation is complete; review loops, real process-loss/restart proof, and full-gate
+verification are recorded in [EXECUTION.md](../EXECUTION.md#4108--atomic-generation-rotation).

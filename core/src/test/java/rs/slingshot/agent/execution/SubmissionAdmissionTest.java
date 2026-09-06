@@ -152,7 +152,7 @@ final class SubmissionAdmissionTest {
     @DisplayName("a foreign generation is refused before any record is read, distinctly")
     void aforeignGenerationIsRefusedBeforeAnythingIsRead() throws RepositoryException {
         final Session session = prepared();
-        GenerationStore.rotate(session, generationOf(2));
+        rs.slingshot.agent.store.GenerationRotation.rotate(session, generationOf(2), NOW, CONTRACT);
         final AdmissionOutcome.Refused unknown = assertInstanceOf(AdmissionOutcome.Refused.class,
                 admit(session, submission("operation.json", "command-contract.json",
                         "a submission")),

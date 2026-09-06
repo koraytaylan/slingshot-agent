@@ -106,6 +106,13 @@ public final class ExclusiveTransitionProbe extends SlingAllMethodsServlet imple
             throws RepositoryException, IOException {
         return switch (action) {
             case "prepare" -> prepare(session);
+            case "generation-prepare" -> GenerationRotationProbe.prepare(session);
+            case "generation-view" -> GenerationRotationProbe.view(session);
+            case "generation-lose" -> {
+                final String outcome = GenerationRotationProbe.interrupt(session);
+                await(fixture);
+                yield outcome;
+            }
             case "capacity-source" -> capacitySource(session);
             case "capacity-live" -> capacityLive(session);
             case "capacity-view" -> capacityView(session);
@@ -261,7 +268,7 @@ public final class ExclusiveTransitionProbe extends SlingAllMethodsServlet imple
         }
     }
 
-    private static SubmissionAdmission.Submission submission(String fixture) throws IOException {
+    static SubmissionAdmission.Submission submission(String fixture) throws IOException {
         final String original = resource("operation.json");
         final String identifier = Digest.of(fixture.getBytes(StandardCharsets.UTF_8)).rendered();
         final String rewritten = original.replace(
