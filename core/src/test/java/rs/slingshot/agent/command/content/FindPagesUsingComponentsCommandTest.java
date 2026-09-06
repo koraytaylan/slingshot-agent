@@ -42,6 +42,13 @@ import rs.slingshot.agent.json.DocumentValue;
 @ExtendWith(SlingContextExtension.class)
 final class FindPagesUsingComponentsCommandTest {
 
+    @Test
+    void handlerRefusesMalformedArgumentsBeforePlatformAccess() {
+        assertInstanceOf(CommandHandler.Failed.class,
+                new FindPagesUsingComponentsHandler(CONTRACT).run(new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
+                "malformed arguments reached the platform handler");
+    }
+
     private static final AgentContract CONTRACT = contract();
 
     private static final Path REPOSITORY = repositoryRoot();
