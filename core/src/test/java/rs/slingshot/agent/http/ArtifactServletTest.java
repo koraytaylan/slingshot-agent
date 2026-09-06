@@ -8,12 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -197,6 +199,30 @@ final class ArtifactServletTest {
                 "a transfer that stopped moving was carried to the end anyway");
         assertTrue(some.toByteArray().length > 0,
                 "a stalled transfer sent nothing at all, so it was refused rather than ended");
+    }
+
+    @Test
+    @DisplayName("read and write failures are returned with their transfer context")
+    void readAndWriteFailuresCarryTransferContext() {
+        final ArtifactServlet servlet = new ArtifactServlet(new AdvancingTicker(0));
+        final IOException unreadable = assertThrows(IOException.class,
+                () -> servlet.transfer(new InputStream() {
+                    @Override
+                    public int read() throws IOException {
+                        throw new IOException("read failed");
+                    }
+                }, new ByteArrayOutputStream(), CONTRACT));
+        assertEquals("artifact read failed", unreadable.getMessage());
+
+        final IOException unwritable = assertThrows(IOException.class,
+                () -> servlet.transfer(new ByteArrayInputStream(new byte[] {1}),
+                        new OutputStream() {
+                            @Override
+                            public void write(int value) throws IOException {
+                                throw new IOException("write failed");
+                            }
+                        }, CONTRACT));
+        assertEquals("artifact write failed", unwritable.getMessage());
     }
 
     @Test
