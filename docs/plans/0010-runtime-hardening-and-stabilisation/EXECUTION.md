@@ -1876,3 +1876,9 @@ required checks and the complete gate, then commit the completed task.
     handlers, signed continuation-resumption coverage, and a valid runtime dispatch fixture.
     Core verification now passes all 1,152 tests, JaCoCo line/branch floors, Checkstyle, PMD,
     SpotBugs, Javadocs, and source packaging. Commit: `514bcaf`.
+
+138. Ran the complete `scripts/quality` gate after clearing only stale interoperability test
+    containers from an interrupted run. Every policy stage, core and interop suite, coverage
+    floor, static analysis, and packaging stage passed; the gate finished with `BUILD SUCCESS` in
+    45 seconds. The remaining plan work is now the six pending runtime/package integration tasks,
+    rather than a quality-gate failure.
