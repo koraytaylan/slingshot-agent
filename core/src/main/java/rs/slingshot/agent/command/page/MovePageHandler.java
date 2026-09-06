@@ -130,7 +130,7 @@ public final class MovePageHandler implements CommandHandler {
                 == MoveRequest.ReferenceAdjustment.FOLLOWED
                 ? RepositoryReach.references(session, command.sourcePath(),
                         context.discovery().limit())
-                : new RepositoryReach.References(List.of(), true);
+                : new RepositoryReach.References(List.of(), RepositoryReach.Completeness.COMPLETE);
         if (!discovered.complete()) {
             return new MutationOutcome.Refused(ADJUSTMENT_BUDGET_EXCEEDED,
                     "reference discovery exceeded the visibility budget and the move was refused");
