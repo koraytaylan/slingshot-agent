@@ -1534,3 +1534,16 @@ required checks and the complete gate, then commit the completed task.
     `ArtifactServletTest` suite passes all eight cases and the change is committed as `d1aacf8`.
     Full-floor verification is the next review step; lifecycle and stream coverage remain under
     the 80% class threshold at the last gate.
+
+71. Added interrupted-writer coverage and lifecycle failure-path coverage. The focused stream,
+    artifact, and lifecycle suites pass; the core bundle now runs 1,131 tests with all JaCoCo floors
+    met. Commit `5bb37bc` covers the timed writer interruption and commit `bc130f1` covers refused
+    maintenance login, missing sessions, and resolver ownership cleanup.
+
+72. Re-ran the full quality gate. Formatting, compilation, static analysis, all source policies,
+    the complete core suite, and every core coverage floor pass. Interop reaches 466 tests but has
+    three runtime-only failures: a generation probe route returns 404 after a container handoff,
+    a state-access high-water request receives a stale/expired 410, and the public capability
+    assertion still expected the pre-lifecycle readiness value. The last assertion is corrected in
+    commit `3f0530c`; the two container failures are isolated to interop runtime setup and do not
+    reproduce in core tests.
