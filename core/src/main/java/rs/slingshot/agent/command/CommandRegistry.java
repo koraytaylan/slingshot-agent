@@ -143,8 +143,10 @@ public final class CommandRegistry {
 
     private static Outcome readRows(ClassLoader loader, BufferedReader lines) throws IOException {
         final SequencedMap<String, RegistryRow> byName = new LinkedHashMap<>();
-        for (String file = lines.readLine(); file != null; file = lines.readLine()) {
+        String file = lines.readLine();
+        while (file != null) {
             if (file.isBlank()) {
+                file = lines.readLine();
                 continue;
             }
             final Optional<byte[]> row = resource(loader, REGISTRY_RESOURCE_DIRECTORY + file);
@@ -160,6 +162,7 @@ public final class CommandRegistry {
                 return new Refused(Failure.DUPLICATE_WIRE_NAME, value.wireName()
                         + " is declared by more than one embedded file");
             }
+            file = lines.readLine();
         }
         return new Loaded(new CommandRegistry(byName.values().stream()
                 .sorted(java.util.Comparator.comparing(RegistryRow::wireName)).toList()));
