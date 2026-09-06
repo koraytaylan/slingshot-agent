@@ -1559,3 +1559,10 @@ required checks and the complete gate, then commit the completed task.
     existing unavailable snapshot and returns without leaking a scheduler. The five-case
     `StateLifecycleServiceTest` suite passes, including the missing-provider and Oak success paths.
     This commit records the lifecycle resource-boundary review loop.
+
+75. Re-ran `scripts/quality` after the timestamp and lifecycle fixes. All cache, image, formatting,
+    compilation, policy, static-analysis, core-test, and coverage stages passed. Interop reached
+    `GenerationRotationCrashScenario`, where the shared WiredTiger document store remained in
+    checkpoint progress and never became ready within its five-minute startup bound; the isolated
+    rebuilt-bundle scenario passes, so this gate result is an environment startup timeout rather
+    than a product failure.
