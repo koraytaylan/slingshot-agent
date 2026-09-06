@@ -131,7 +131,6 @@ public final class BoundedRequestBody {
         return againstTheDeclaration(held.toByteArray(), declaredLength);
     }
 
-    @SuppressWarnings("PMD.PreserveStackTrace")
     private static int read(ExecutorService io, InputStream body, byte[] chunk,
                             long started, long moved, AgentContract contract) throws IOException {
         final Future<Integer> pending = io.submit(() -> body.read(chunk));
@@ -148,13 +147,19 @@ public final class BoundedRequestBody {
             } catch (final IOException ignored) {
                 // The deadline has already ended the request.
             }
-            throw new IOException("request body exceeded its transfer deadline", timeoutFailure);
+            throw withCause("request body exceeded its transfer deadline", timeoutFailure);
         } catch (final InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            throw new IOException("request body was interrupted", interrupted);
+            throw withCause("request body was interrupted", interrupted);
         } catch (final ExecutionException failed) {
-            throw new IOException("request body read failed", failed.getCause());
+            throw withCause("request body read failed", failed);
         }
+    }
+
+    private static IOException withCause(String message, Throwable cause) {
+        final IOException failure = new IOException(message);
+        failure.initCause(cause);
+        return failure;
     }
 
     private static Outcome againstTheDeclaration(byte[] bytes, long declaredLength) {
