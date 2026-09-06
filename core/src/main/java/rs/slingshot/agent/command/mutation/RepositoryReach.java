@@ -24,6 +24,11 @@ public final class RepositoryReach {
 
     /** Reference discovery result, including whether the visibility budget covered the tree. */
     public record References(List<Resource> found, boolean complete) {
+
+        /** Holds the discovered resources independently of the traversal's mutable list. */
+        public References {
+            found = List.copyOf(found);
+        }
     }
 
     private RepositoryReach() {

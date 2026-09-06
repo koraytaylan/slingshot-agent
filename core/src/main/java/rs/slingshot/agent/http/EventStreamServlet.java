@@ -256,12 +256,18 @@ public final class EventStreamServlet extends AgentServlet {
                 throw ioFailure;
             }
             if (cause instanceof RuntimeException runtime) {
-                throw runtime;
+                throwUnchecked(runtime);
             }
             throw new IOException("stream response flush failed", cause);
         } finally {
             io.shutdownNow();
         }
+    }
+
+    /** Re-raises a response failure without changing the servlet's established runtime contract. */
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void throwUnchecked(final Throwable failure) throws T {
+        throw (T) failure;
     }
 
     private void writing(SlingHttpServletRequest request, SlingHttpServletResponse response,

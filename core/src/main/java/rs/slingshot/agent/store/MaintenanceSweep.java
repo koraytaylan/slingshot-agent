@@ -10,8 +10,6 @@ import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
-import javax.jcr.query.Query;
-import javax.jcr.query.QueryResult;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.identity.EventStoreGeneration;
@@ -183,19 +181,17 @@ public final class MaintenanceSweep {
             final NodeIterator records = session.getNode(bucket.path()).getNodes();
             return records.hasNext() ? records.nextNode() : null;
         }
-        final String statement = "SELECT * FROM [nt:base] AS record WHERE ISCHILDNODE(record, "
-                + quote(bucket.path()) + ") AND NAME(record) > " + quote(after)
-                + " ORDER BY NAME(record)";
-        final Query query = session.getWorkspace().getQueryManager().createQuery(statement,
-                Query.JCR_SQL2);
-        query.setLimit(1);
-        final QueryResult result = query.execute();
-        final NodeIterator records = result.getNodes();
-        return records.hasNext() ? records.nextNode() : null;
-    }
-
-    private static String quote(String value) {
-        return "'" + value.replace("'", "''") + "'";
+        final NodeIterator records = session.getNode(bucket.path()).getNodes();
+        Node successor = null;
+        while (records.hasNext()) {
+            final Node candidate = records.nextNode();
+            if (candidate.getName().compareTo(after) > 0) {
+                if (successor == null || candidate.getName().compareTo(successor.getName()) < 0) {
+                    successor = candidate;
+                }
+            }
+        }
+        return successor;
     }
 
     private static void examine(Session session, Pass pass, StatePath record)
