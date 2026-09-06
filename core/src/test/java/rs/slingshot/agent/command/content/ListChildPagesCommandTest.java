@@ -34,7 +34,12 @@ import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
+import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
+import rs.slingshot.agent.continuation.KeyRing;
+import rs.slingshot.agent.continuation.KeyRingRefusal;
+import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
+import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -289,7 +294,33 @@ final class ListChildPagesCommandTest {
         return new CallerContext(operation(), Budget.discovery(CONTRACT), Budget.time(CONTRACT),
                 new Budget(Budget.Kind.RESULT,
                         CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
-                ProgressSink.under(CONTRACT));
+                ProgressSink.under(CONTRACT), new CallerContext.Available(authority(), target(),
+                        generation(), 1_000L));
+    }
+
+    private static ContinuationKeyAuthority authority() {
+        return new ContinuationKeyAuthority() {
+            @Override
+            public ReadOutcome read() {
+                return new Read(KeyRing.initial("paging-test-key"));
+            }
+
+            @Override
+            public WriteOutcome compareAndSet(KeyRing expected, KeyRing next, Lease lease,
+                                              long nowUnixMilliseconds) {
+                return new NotWritten(new KeyRingRefusal(KeyRingRefusal.Failure.ABSENT, "test"));
+            }
+        };
+    }
+
+    private static DigestValue target() {
+        return assertInstanceOf(DigestValue.Held.class,
+                DigestValue.of("b".repeat(DigestValue.RENDERED_LENGTH))).digest();
+    }
+
+    private static EventStoreGeneration generation() {
+        return assertInstanceOf(EventStoreGeneration.Held.class,
+                EventStoreGeneration.of(EventStoreGeneration.FIRST)).generation();
     }
 
     private static AgentOperationIdentifier operation() {

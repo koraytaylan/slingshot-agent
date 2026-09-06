@@ -95,7 +95,7 @@ public final class PagingSupport {
         final PagedQuery.Page<R> page = PagedQuery.pageOf(fromOffset, limit, offset);
         final Optional<String> token = token(page, wireName, held.digest(), context, contract);
         if (page.following() instanceof PagedQuery.More
-                && context.paging() instanceof CallerContext.Available) {
+                && context.paging() instanceof CallerContext.Unavailable) {
             return new Refused<>("continuation_token_integrity_invalid",
                     "continuation authority is unavailable");
         }
