@@ -11,6 +11,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.platform.ControlCapability;
 import rs.slingshot.agent.command.platform.PlatformControl;
@@ -115,12 +116,20 @@ public final class WorkflowHandler implements CommandHandler {
             return new Failed(refused.category(), refused.detail());
         }
         final List<WorkflowService.Model> models = ((WorkflowService.Models) found).models();
-        return models.size() > context.discovery().limit()
-                ? new Failed(WorkflowHandlers.DISCOVERY_BUDGET_EXCEEDED, models.size()
-                        + " models is more than the " + context.discovery().limit()
-                        + " this caller may examine")
-                : new Produced(WorkflowResults.modelsOf(pageOf(models, command.window()),
-                        WorkflowResults.NO_MORE_PAGES));
+        if (models.size() > context.discovery().limit()) {
+            return new Failed(WorkflowHandlers.DISCOVERY_BUDGET_EXCEEDED, models.size()
+                    + " models is more than the " + context.discovery().limit()
+                    + " this caller may examine");
+        }
+        final PagingSupport.Outcome<WorkflowService.Model> page = PagingSupport.page(models,
+                command.window(), ListWorkflowModelsCommand.WIRE_NAME, arguments, context,
+                contract);
+        if (page instanceof final PagingSupport.Refused<WorkflowService.Model> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<WorkflowService.Model> accepted =
+                ((PagingSupport.Accepted<WorkflowService.Model>) page).page();
+        return new Produced(WorkflowResults.modelsOf(accepted.rows(), accepted.continuationToken()));
     }
 
     private Answer instances(DocumentValue.Mapping arguments, ResourceResolver resolver,
@@ -141,12 +150,21 @@ public final class WorkflowHandler implements CommandHandler {
         }
         final List<WorkflowService.Instance> instances =
                 ((WorkflowService.Instances) found).instances();
-        return instances.size() > context.discovery().limit()
-                ? new Failed(WorkflowHandlers.DISCOVERY_BUDGET_EXCEEDED, instances.size()
-                        + " instances is more than the " + context.discovery().limit()
-                        + " this caller may examine")
-                : new Produced(WorkflowResults.instancesOf(pageOf(instances, command.window()),
-                        WorkflowResults.NO_MORE_PAGES));
+        if (instances.size() > context.discovery().limit()) {
+            return new Failed(WorkflowHandlers.DISCOVERY_BUDGET_EXCEEDED, instances.size()
+                    + " instances is more than the " + context.discovery().limit()
+                    + " this caller may examine");
+        }
+        final PagingSupport.Outcome<WorkflowService.Instance> page = PagingSupport.page(instances,
+                command.window(), FindWorkflowInstancesCommand.WIRE_NAME, arguments, context,
+                contract);
+        if (page instanceof final PagingSupport.Refused<WorkflowService.Instance> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<WorkflowService.Instance> accepted =
+                ((PagingSupport.Accepted<WorkflowService.Instance>) page).page();
+        return new Produced(WorkflowResults.instancesOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /**
