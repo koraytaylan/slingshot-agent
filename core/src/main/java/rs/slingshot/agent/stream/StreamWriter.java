@@ -7,9 +7,16 @@ import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.http.TransferDeadlines;
 import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.store.HighWaterMark;
 import rs.slingshot.agent.store.ReplayCursor;
@@ -95,13 +102,96 @@ public record StreamWriter(StreamSession session, AgentContract contract,
      * @return how it ended
      */
     public Ending serve(Writer writer, Session store, StreamTicker ticker, String resumption) {
-        try {
-            return written(writer, store, ticker, resumption);
+        try (TimedWriter timed = new TimedWriter(writer, contract)) {
+            return written(timed, store, ticker, resumption);
         } finally {
             // One path for every ending there is: the bytes stop, and then the room goes back. An
             // ending that skipped it would leak a room nobody would miss until an instance had run
             // out of them.
             release(store, closed(writer));
+        }
+    }
+
+    /** A response writer whose blocked operation cannot outlive the transfer contract. */
+    private static final class TimedWriter extends Writer {
+        private final Writer delegate;
+        private final AgentContract contract;
+        private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
+            final Thread worker = new Thread(runnable, "slingshot-stream-transfer");
+            worker.setDaemon(true);
+            return worker;
+        });
+        private final long started = System.nanoTime();
+        private long moved = started;
+
+        TimedWriter(Writer delegate, AgentContract contract) {
+            this.delegate = delegate;
+            this.contract = contract;
+        }
+
+        @Override
+        public void write(char[] characters, int offset, int length) throws IOException {
+            run(() -> delegate.write(characters, offset, length));
+            moved = System.nanoTime();
+        }
+
+        @Override
+        public void flush() throws IOException {
+            run(delegate::flush);
+            moved = System.nanoTime();
+        }
+
+        @Override
+        public void close() {
+            executor.shutdownNow();
+            closeQuietly();
+        }
+
+        @SuppressWarnings("PMD.PreserveStackTrace")
+        private void run(IoAction action) throws IOException {
+            final Future<?> pending = executor.submit(() -> {
+                action.run();
+                return null;
+            });
+            try {
+                pending.get(timeoutNanos(), TimeUnit.NANOSECONDS);
+            } catch (final TimeoutException timeout) {
+                pending.cancel(true);
+                closeQuietly();
+                throw new IOException("stream response exceeded its transfer deadline", timeout);
+            } catch (final InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                closeQuietly();
+                throw new IOException("stream response was interrupted", interrupted);
+            } catch (final ExecutionException failed) {
+                final Throwable cause = failed.getCause();
+                if (cause instanceof RuntimeException runtime) {
+                    throw runtime;
+                }
+                throw new IOException("stream response failed", cause);
+            }
+        }
+
+        private long timeoutNanos() {
+            final long total = TimeUnit.MILLISECONDS.toNanos(
+                    TransferDeadlines.totalMilliseconds(contract));
+            final long idle = TimeUnit.MILLISECONDS.toNanos(
+                    TransferDeadlines.idleMilliseconds(contract));
+            return Math.max(1, Math.min(total - (System.nanoTime() - started),
+                    idle - (System.nanoTime() - moved)));
+        }
+
+        private void closeQuietly() {
+            try {
+                delegate.close();
+            } catch (final IOException ignored) {
+                // The deadline has already ended the stream.
+            }
+        }
+
+        @FunctionalInterface
+        private interface IoAction {
+            void run() throws IOException;
         }
     }
 
