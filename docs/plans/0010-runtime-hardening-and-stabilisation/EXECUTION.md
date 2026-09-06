@@ -683,3 +683,58 @@ Review and correction loop:
     original application processes were gone. Serving, history, and retention publish together;
     the public retention-free rotation path is gone. Test probes stay outside product bundles.
     Task 4108 is complete. Task 4105 and the remaining plan tasks are still required.
+
+
+## 4201 — live operator configuration
+
+1. Review confirmed the shipped `AuthorizationGate` PID had no DS component, submission returned
+   a literal administrator list, and console requests carried an independent permitted-group list.
+   Added the immediate component under the existing PID, typed metatype configuration, activate and
+   modified publication of an immutable snapshot, and fail-closed deactivation. The bundle-local
+   snapshot also reaches manually constructed compatibility-alias servlets. Configuration replaces
+   the complete group set; administrators have no separate exemption.
+2. Submission and console authorization now read that source for each decision. Removed the group
+   list from console requests so a request constructed before revocation cannot retain old grants.
+   The pure authorization decision retains distinct unknown-group and nonmember refusals. Added
+   lifecycle, immutable-snapshot, empty-set, revocation, and refusal tests; adapted affected servlet
+   and console fixtures to activate authorization explicitly.
+3. First focused checks passed. Full core execution passed 1025 tests with no failures/errors/skips,
+   then formatting rejected 16 import-order and whitespace findings in adapted tests. Corrected
+   those findings without changing policy. Evidence: `interop/target/plan10-4201-core.log`.
+4. Installed the product bundle in an isolated pinned public Sling runtime, created two dedicated
+   users and groups, and changed the real Config Admin PID. Verified grant to group one, replacement
+   by group two, removal of administrator access, unknown-group and empty-set refusal, and default
+   restoration after configuration deletion. The test observed zero product bundle lifecycle events.
+   A test-only adapter calls the installed product's private console data-source API; it copies no
+   product classes and does not replace their configuration or decisions. Submission admission is
+   evidenced by reaching malformed-body validation (400), versus authorization refusal (403).
+   This is not proof of command execution or complete console rendering, which have later tasks.
+   The focused runtime proof passed at 02:34 CEST on 2026-09-06 in
+   `interop/target/plan10-4201-runtime.log`. Registered its tier-a scenario. Starting the full gate.
+5. The full gate's formatting stage found one 111-character runtime-test line against the
+   110-character limit. Wrapped it; preserved the rejected run in
+   `interop/target/plan10-4201-formatting-quality.log`. Resuming the complete gate.
+6. PMD rejected the test adapter's Hashtable declaration/construction and direct class-loader
+   lookup. Replaced them with the OSGi map-to-dictionary adapter and the product bundle's
+   `BundleWiring` loader, adding that package to the test bundle manifest. Preserved the rejected
+   run in `interop/target/plan10-4201-pmd-quality.log`. Rechecking the changed runtime adapter.
+7. The revised runtime adapter passed again at 02:38 CEST in
+   `interop/target/plan10-4201-runtime-reviewed.log`. The next gate passed core static analysis but
+   found two literal-order comparisons in the interop scenario. Corrected them and refreshed test
+   bytecode before rerunning all stages; evidence: `interop/target/plan10-4201-comparison-quality.log`.
+8. Formatting and PMD passed. SpotBugs found the scenario's broad `Exception` declaration;
+   narrowed it to `IOException` and `InterruptedException` and refreshed bytecode. The rejected
+   run is `interop/target/plan10-4201-throws-quality.log`. No production behavior changed.
+9. The complete argument-free `scripts/quality` passed at 02:52 CEST on 2026-09-06.
+   Core ran 1025 tests and interoperability ran 462, with zero failures, errors, or skips.
+   All policy, coverage, static-analysis, scenario-inventory, and packaging stages passed. The new
+   live-configuration scenario passed within this full run, as did the crash/restart, concurrent
+   write, cluster handover, and clock-chaos scenarios. Authoritative evidence:
+   `interop/target/plan10-4201-quality.log`. Owner-supplied Adobe quickstart and sibling-client
+   end-to-end tiers did not run.
+10. Final review checked the generated DS descriptor against the shipped PID/property, full-set
+    replacement including administrator removal, atomic immutable publication, inactive denial,
+    both current authorization consumers, removal of stale console grants, and distinct pure
+    refusal outcomes. The actual installed product handled configuration changes without bundle
+    lifecycle events, and no test probe classes appear in the product jar. Task 4201 is complete;
+    state-route ownership/session separation and full runtime/console assembly remain later tasks.

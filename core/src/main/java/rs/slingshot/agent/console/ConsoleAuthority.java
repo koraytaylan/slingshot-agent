@@ -3,7 +3,6 @@
 
 package rs.slingshot.agent.console;
 
-import java.util.List;
 import rs.slingshot.agent.http.AuthorizationGate;
 
 /**
@@ -43,13 +42,11 @@ public final class ConsoleAuthority {
     /**
      * Whether this person may see the console at all.
      *
-     * @param permitted the groups an operator has permitted, in the order they configured them
      * @param groups where this person stands with respect to each of them
      * @return whether to show them the entry
      */
-    public static Visibility visibility(List<String> permitted,
-                                        AuthorizationGate.Groups groups) {
-        return admits(permitted, groups) ? Visibility.SHOWN : Visibility.HIDDEN;
+    public static Visibility visibility(AuthorizationGate.Groups groups) {
+        return admits(groups) ? Visibility.SHOWN : Visibility.HIDDEN;
     }
 
     /**
@@ -59,12 +56,12 @@ public final class ConsoleAuthority {
      * console that hides its entry and answers anyway is a console whose access control is the
      * navigation, and navigation is not access control.</p>
      *
-     * @param permitted the groups an operator has permitted
      * @param groups where this person stands with respect to each of them
      * @return whether they may
      */
-    public static boolean admits(List<String> permitted, AuthorizationGate.Groups groups) {
-        return AuthorizationGate.of(new AuthorizationGate.Request(ROUTE, permitted, groups,
+    public static boolean admits(AuthorizationGate.Groups groups) {
+        return AuthorizationGate.of(new AuthorizationGate.Request(ROUTE,
+                AuthorizationGate.permittedGroups(), groups,
                 AuthorizationGate.Ownership.NOT_ABOUT_AN_OPERATION)) instanceof AuthorizationGate.Admitted;
     }
 }

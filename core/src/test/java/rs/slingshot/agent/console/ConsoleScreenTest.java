@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.apache.sling.testing.mock.osgi.MockOsgi;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.command.AccessClass;
@@ -36,8 +39,6 @@ import rs.slingshot.agent.store.ArtifactSlot;
  */
 final class ConsoleScreenTest {
 
-    private static final List<String> PERMITTED = List.of("slingshot-agent-operators");
-
     private static final long BOUND = 200;
 
     private static final String OPERATION = "4ccf24ff28333528";
@@ -45,6 +46,18 @@ final class ConsoleScreenTest {
     /** A digest, stood up once so the fixtures below say what they are about rather than this. */
     private static final String DIGEST =
             "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8";
+
+
+    @BeforeEach
+    void configureOperators() {
+        MockOsgi.activate(new AuthorizationGate(), MockOsgi.newBundleContext(),
+                java.util.Map.of("permitted.groups", new String[] { "administrators" }));
+    }
+
+    @AfterEach
+    void revokeOperators() {
+        new AuthorizationGate().stopped();
+    }
 
     @Test
     @DisplayName("the operations list pages what it holds and says when nobody counted the rest")
@@ -417,7 +430,7 @@ final class ConsoleScreenTest {
 
     private static ConsoleDataSource.Request request(AuthorizationGate.Standing standing,
                                                      long offset, long window) {
-        return new ConsoleDataSource.Request(PERMITTED, group -> standing, offset, window, BOUND);
+        return new ConsoleDataSource.Request(group -> standing, offset, window, BOUND);
     }
 
     /**

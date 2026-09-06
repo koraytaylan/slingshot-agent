@@ -3,7 +3,6 @@
 
 package rs.slingshot.agent.console;
 
-import java.util.List;
 import rs.slingshot.agent.http.AuthorizationGate;
 
 /**
@@ -103,25 +102,19 @@ public final class ConsoleDataSource {
      * @return the rows, or the one reason there are none
      */
     public Answer answer(Request request) {
-        return ConsoleAuthority.admits(request.permitted(), request.groups())
+        return ConsoleAuthority.admits(request.groups())
                 ? rows.of(request) : new Denied();
     }
 
     /**
      * One console request, as everything that decides it.
      *
-     * @param permitted the groups an operator has permitted, in the order they configured them
      * @param groups where this viewer stands with respect to each of them
      * @param offset how many rows to skip
      * @param window how many to take, which is clamped to the bound
      * @param bound the most one page may carry, which the contract states
      */
-    public record Request(List<String> permitted, AuthorizationGate.Groups groups, long offset,
+    public record Request(AuthorizationGate.Groups groups, long offset,
                           long window, long bound) {
-
-        /** Holds a request whose permitted groups nothing can change afterwards. */
-        public Request {
-            permitted = List.copyOf(permitted);
-        }
     }
 }

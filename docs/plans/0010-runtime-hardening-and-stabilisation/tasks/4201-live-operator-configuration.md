@@ -9,6 +9,10 @@ touches:
   - core/src/main/java/rs/slingshot/agent/http/AuthorizationGate.java
   - core/src/main/java/rs/slingshot/agent/http/SubmitServlet.java
   - core/src/main/java/rs/slingshot/agent/console/ConsoleAuthority.java
+  - core/src/main/java/rs/slingshot/agent/console/ConsoleDataSource.java
+  - core/src/test/java/rs/slingshot/agent/proof/OperatorAuthorizationProbe.java
+  - interop/src/test/java/rs/slingshot/agent/interop/tier/LiveOperatorConfigurationScenario.java
+  - interop/scenarios/live-operator-configuration.toml
   - core/src/test/java/rs/slingshot/agent/http
   - core/src/test/java/rs/slingshot/agent/console
   - ui.config/src/main/content/jcr_root/apps/slingshot-agent/osgiconfig/config/rs.slingshot.agent.http.AuthorizationGate.cfg.json
@@ -26,3 +30,6 @@ Finding(s): R03 in [FINDINGS.md](../FINDINGS.md).
 3. Install the bundle and change configuration with dedicated users/groups, including removal of administrators from the configured set.
 
 - **Done when:** Live configuration changes admit a newly permitted group and revoke a removed group on subsequent requests without a bundle restart or hardcoded administrator bypass.
+
+Direct implementation is complete; review loops, live Config Admin and dedicated-user proof, and
+full-gate verification are recorded in [EXECUTION.md](../EXECUTION.md#4201--live-operator-configuration).
