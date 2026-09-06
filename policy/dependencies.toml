@@ -301,6 +301,14 @@ modules = ["development"]
 reason = "The reader that resolves a build model, so an edge inherited from the aggregator is seen."
 
 [[artifact]]
+group = "com.github.spotbugs"
+name = "spotbugs-annotations"
+version = "4.10.4"
+scope = "provided"
+modules = ["core"]
+reason = "The static-analysis suppression annotation for the two methods that intentionally preserve runtime exception identity across an IOException boundary. It is compile-time metadata and is not a runtime bundle dependency."
+
+[[artifact]]
 group = "org.apache.sling"
 name = "org.apache.sling.adapter"
 version = "2.1.10"
@@ -875,4 +883,3 @@ version = "0.1.0"
 scope = "test"
 modules = ["aem", "development", "interop"]
 reason = "The Sling-only bundle, taken by the Adobe bundle at provided scope and by the two tooling modules at test scope."
-
