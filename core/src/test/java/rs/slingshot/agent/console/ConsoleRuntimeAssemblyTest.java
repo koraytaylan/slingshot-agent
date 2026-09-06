@@ -20,9 +20,9 @@ final class ConsoleRuntimeAssemblyTest {
                 ((rs.slingshot.agent.identity.EventStoreGeneration.Held)
                         rs.slingshot.agent.identity.EventStoreGeneration.of(1)).generation();
         final rs.slingshot.agent.digest.DigestValue canonical =
-                rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[] {1});
+                rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[32]);
         final rs.slingshot.agent.digest.DigestValue transport =
-                rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[] {2});
+                rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[32]);
         final Map<String, ConsoleDataSource> sources = ConsoleRuntimeAssembly.assemble(
                 () -> new AdvertisedCapabilities(generation, canonical, List.of(),
                         AdvertisedCapabilities.ContinuationAuthority.READY, transport),
@@ -34,5 +34,7 @@ final class ConsoleRuntimeAssemblyTest {
                 () -> new OperationListDataSource.Unavailable("operations unavailable"),
                 contract);
         assertEquals(4, sources.size());
+        assertEquals(ConsoleDataSource.class, ConsoleRuntimeAssembly.operation("op",
+                ignored -> new OperationDetailDataSource.Unavailable("unavailable")).getClass());
     }
 }
