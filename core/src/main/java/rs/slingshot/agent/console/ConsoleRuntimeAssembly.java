@@ -6,9 +6,9 @@ package rs.slingshot.agent.console;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
+import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
-import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.route.RouteAlias;
 
 /**
@@ -45,6 +45,7 @@ public final class ConsoleRuntimeAssembly {
      * @param maintenance live maintenance state
      * @param retention live retention state
      * @param operations live operation listing
+     * @param contract authenticated contract used by retention
      * @return immutable resource type map
      */
     public static Map<String, ConsoleDataSource> assemble(

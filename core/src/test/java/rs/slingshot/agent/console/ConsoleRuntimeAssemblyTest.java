@@ -10,16 +10,22 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
-import rs.slingshot.agent.identity.OperationIdentity;
 
 final class ConsoleRuntimeAssemblyTest {
 
     @Test
     void assemblesLiveResourceTypesAndKeepsUnavailableStateUnreadable() {
         final AgentContract contract = ((AgentContract.Loaded) AgentContract.load()).contract();
+        final rs.slingshot.agent.identity.EventStoreGeneration generation =
+                ((rs.slingshot.agent.identity.EventStoreGeneration.Held)
+                        rs.slingshot.agent.identity.EventStoreGeneration.of(1)).generation();
+        final rs.slingshot.agent.digest.DigestValue canonical =
+                rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[] {1});
+        final rs.slingshot.agent.digest.DigestValue transport =
+                rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[] {2});
         final Map<String, ConsoleDataSource> sources = ConsoleRuntimeAssembly.assemble(
-                () -> new AdvertisedCapabilities(((rs.slingshot.agent.identity.EventStoreGeneration.Held) rs.slingshot.agent.identity.EventStoreGeneration.of(1)).generation(), rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[] {1}), List.of(),
-                        AdvertisedCapabilities.ContinuationAuthority.READY, rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[] {2})),
+                () -> new AdvertisedCapabilities(generation, canonical, List.of(),
+                        AdvertisedCapabilities.ContinuationAuthority.READY, transport),
                 () -> new BuildIdentityDataSource.Build("v", "c", "row",
                         BuildIdentityDataSource.Claim.CLAIMED),
                 List::of, List::of,
