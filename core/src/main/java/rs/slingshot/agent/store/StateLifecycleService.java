@@ -98,6 +98,7 @@ public final class StateLifecycleService {
     @Deactivate
     public void deactivate() {
         scheduler.getAndSet(Optional.empty()).ifPresent(Scheduler::stop);
+        sessions.set(null);
         OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                 "state lifecycle has stopped"));
     }

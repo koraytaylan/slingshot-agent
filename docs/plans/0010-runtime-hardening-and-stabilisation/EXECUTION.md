@@ -1987,3 +1987,8 @@ required checks and the complete gate, then commit the completed task.
     dependency cache and all five interoperability images were validated, then formatting,
     compilation, PMD, and SpotBugs passed for core, AEM, development, and interop. This confirms no
     cross-module regression; owner-supplied acceptance tiers remain separately unproved.
+
+153. Re-reviewed 4501 lifecycle teardown. Deactivation now clears the bound state-session provider as
+    well as stopping scheduling and revoking readiness; a subsequent activation cannot reuse a stale
+    provider. The regression test covers the second activation and the complete core verification
+    passes.
