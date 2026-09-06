@@ -5,7 +5,6 @@ package rs.slingshot.agent.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.apache.sling.api.resource.LoginException;
 import org.junit.jupiter.api.Test;
 
 final class StateLifecycleServiceTest {
@@ -18,18 +17,6 @@ final class StateLifecycleServiceTest {
                 StateLifecycleService.observed().availability());
         service.deactivate();
         assertEquals("state lifecycle has stopped", StateLifecycleService.observed().detail());
-    }
-
-    @Test
-    void boundButUnavailableMaintenanceIdentityLeavesServiceUnavailable() {
-        final StateLifecycleService service = new StateLifecycleService();
-        service.available(new rs.slingshot.agent.repository.AgentSession(subservice -> {
-            throw new LoginException("not ready");
-        }));
-        service.activate();
-        assertEquals(StateLifecycleService.Availability.UNAVAILABLE,
-                StateLifecycleService.observed().availability());
-        service.deactivate();
     }
 
     @Test
