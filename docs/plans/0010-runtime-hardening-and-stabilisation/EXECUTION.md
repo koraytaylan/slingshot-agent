@@ -1640,3 +1640,7 @@ required checks and the complete gate, then commit the completed task.
 90. Re-ran compilation and Checkstyle after adding the adapter's legacy overload; compilation and
     Checkstyle pass. The repository-wide PMD invocation is currently stopped by four pre-existing
     `MaintenanceSweepTest` assertion-order findings, outside the changed adapter.
+
+91. Corrected the four PMD assertion-order findings in `MaintenanceSweepTest`. The focused
+    maintenance suite passes all 58 cases, and the repository Checkstyle/PMD gate now passes with
+    only its existing unmatched-exclusion warnings.
