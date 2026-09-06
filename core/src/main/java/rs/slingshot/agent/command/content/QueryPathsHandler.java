@@ -3,6 +3,7 @@
 
 package rs.slingshot.agent.command.content;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -10,8 +11,13 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagedQuery;
 import rs.slingshot.agent.command.ResultWindow;
+import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
+import rs.slingshot.agent.continuation.ContinuationToken;
+import rs.slingshot.agent.continuation.QueryDigest;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -66,10 +72,11 @@ public final class QueryPathsHandler implements CommandHandler {
         if (asked instanceof final QueryPathsCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return searched(((QueryPathsCommand.Held) asked).command(), resolver, context);
+        return searched(((QueryPathsCommand.Held) asked).command(), arguments, resolver, context);
     }
 
-    private Answer searched(QueryPathsCommand command, ResourceResolver resolver,
+    private Answer searched(QueryPathsCommand command, DocumentValue.Mapping arguments,
+                            ResourceResolver resolver,
                             CallerContext context) {
         final Resource root = resolver.getResource(command.rootPath());
         if (root == null) {
@@ -82,11 +89,79 @@ public final class QueryPathsHandler implements CommandHandler {
                     + context.discovery().limit() + " nodes it is allowed, and stopped rather than"
                     + " going on");
         }
-        // Apply the requested window at the handler boundary.  Returning the complete gathered
-        // set here made the command silently ignore a valid initial limit and defeated the
-        // result bound that ResultWindow had already enforced.
-        return new Produced(QueryPathsResult.documentOf(
-                pageOf(gathered.paths(), command.window(), contract), ""));
+        final PagedQuery query = context.paging().map(paging ->
+                new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(), paging.generation()))
+                .orElse(null);
+        final QueryDigest.Outcome digest = query == null
+                ? QueryDigest.of(QueryPathsCommand.WIRE_NAME, arguments)
+                : query.digestOf(arguments);
+        if (!(digest instanceof final QueryDigest.Held held)) {
+            return new Failed("continuation_token_malformed", "the query arguments cannot be"
+                    + " represented canonically");
+        }
+        final long offset = switch (command.window()) {
+            case ResultWindow.Initial initial -> initial.offset();
+            case ResultWindow.Continuation continuation -> continuationOffset(continuation,
+                    held.digest(), context);
+        };
+        if (offset < 0) {
+            return new Failed("continuation_token_malformed", "the continuation token was not"
+                    + " accepted");
+        }
+        final long limit = command.window() instanceof ResultWindow.Initial initial
+                ? initial.limit()
+                : contract.value(rs.slingshot.agent.contract.ContractLimit.DEFAULT_RESULT_LIMIT);
+        final PagedQuery.Page<String> page = PagedQuery.pageOf(gathered.paths(), limit, offset);
+        final String token = nextToken(page, held.digest(), context);
+        if (token == null) {
+            return new Failed("continuation_token_integrity_invalid", "continuation authority is"
+                    + " unavailable");
+        }
+        return new Produced(QueryPathsResult.documentOf(page.rows(), token));
+    }
+
+    private long continuationOffset(ResultWindow.Continuation continuation, QueryDigest query,
+                                    CallerContext context) {
+        if (context.paging().isEmpty()) {
+            return -1;
+        }
+        final CallerContext.Paging paging = context.paging().orElseThrow();
+        final BoundedDocumentReader.Outcome read = BoundedDocumentReader.read(
+                continuation.continuationToken().getBytes(StandardCharsets.UTF_8),
+                BoundedDocumentReader.Bounds.from(contract));
+        if (!(read instanceof final BoundedDocumentReader.Read parsed)) {
+            return -1;
+        }
+        final ContinuationToken.ReadOutcome token = ContinuationToken.read(parsed.value());
+        if (!(token instanceof final ContinuationToken.Read decoded)) {
+            return -1;
+        }
+        if (!(paging.authority().read() instanceof ContinuationKeyAuthority.Read authorityRead)) {
+            return -1;
+        }
+        final ContinuationToken.Outcome validated = decoded.token().validate(
+                authorityRead.ring(),
+                paging.targetDigest(), query, paging.generation(), paging.nowUnixMilliseconds(),
+                contract);
+        return validated instanceof ContinuationToken.Honoured
+                ? decoded.token().unvalidatedState().position() : -1;
+    }
+
+    private String nextToken(PagedQuery.Page<String> page, QueryDigest query,
+                             CallerContext context) {
+        if (page.following() instanceof PagedQuery.Nothing) {
+            return "";
+        }
+        if (context.paging().isEmpty()) {
+            return "";
+        }
+        final CallerContext.Paging paging = context.paging().orElseThrow();
+        if (!(paging.authority().read() instanceof ContinuationKeyAuthority.Read read)) {
+            return null;
+        }
+        return new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(), paging.generation())
+                .tokenFor(page, query, read.ring(), paging.nowUnixMilliseconds(), contract)
+                .orElseThrow().rendered();
     }
 
     /**
