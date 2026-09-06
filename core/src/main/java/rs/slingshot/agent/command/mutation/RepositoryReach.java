@@ -30,7 +30,7 @@ public final class RepositoryReach {
      */
     public record References(List<Resource> found, Completeness completeness) {
 
-        /**
+        /** Reports whether the bounded traversal reached its natural end.
          * @return whether traversal covered every visible resource
          */
         public boolean complete() {
