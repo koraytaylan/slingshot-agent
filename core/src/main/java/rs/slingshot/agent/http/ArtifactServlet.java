@@ -280,7 +280,7 @@ public final class ArtifactServlet extends AgentServlet {
         })) {
             final byte[] buffer = new byte[Digest.READ_BUFFER_BYTES];
             final long startedAt = ticker.milliseconds();
-            final long monotonicStarted = System.nanoTime();
+            final long monotonicStarted = DefaultStreamTicker.monotonicNanoseconds();
             long monotonicLastMoved = monotonicStarted;
             long lastMovedAt = startedAt;
             long moved = 0;
@@ -294,7 +294,7 @@ public final class ArtifactServlet extends AgentServlet {
                         }
                         moved = moved + read;
                         lastMovedAt = ticker.milliseconds();
-                        monotonicLastMoved = System.nanoTime();
+                        monotonicLastMoved = DefaultStreamTicker.monotonicNanoseconds();
                     }
                     if (!TransferDeadlines.isMoving(startedAt, lastMovedAt, ticker.milliseconds(),
                             contract)) {
@@ -372,8 +372,8 @@ public final class ArtifactServlet extends AgentServlet {
                 TransferDeadlines.totalMilliseconds(contract));
         final long idle = TimeUnit.MILLISECONDS.toNanos(
                 TransferDeadlines.idleMilliseconds(contract));
-        final long elapsed = System.nanoTime() - monotonicStarted;
-        final long idleElapsed = System.nanoTime() - monotonicLastMoved;
+        final long elapsed = DefaultStreamTicker.monotonicNanoseconds() - monotonicStarted;
+        final long idleElapsed = DefaultStreamTicker.monotonicNanoseconds() - monotonicLastMoved;
         return Math.max(1, Math.min(total - elapsed, idle - idleElapsed));
     }
 

@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
+import rs.slingshot.agent.stream.DefaultStreamTicker;
 
 /**
  * A request body read as it arrives, refused the moment the next byte would cross the bound.
@@ -107,7 +108,7 @@ public final class BoundedRequestBody {
             worker.setDaemon(true);
             return worker;
         })) {
-            final long started = System.nanoTime();
+            final long started = DefaultStreamTicker.monotonicNanoseconds();
             long moved = started;
             try {
                 int arrived = read(io, body, chunk, started, moved, contract);
@@ -118,7 +119,7 @@ public final class BoundedRequestBody {
                                 + bound + " bytes, found at the byte that crossed it", read);
                     }
                     held.write(chunk, 0, arrived);
-                    moved = System.nanoTime();
+                    moved = DefaultStreamTicker.monotonicNanoseconds();
                     arrived = read(io, body, chunk, started, moved, contract);
                 }
             } catch (final IOException stopped) {
@@ -136,8 +137,9 @@ public final class BoundedRequestBody {
         final Future<Integer> pending = io.submit(() -> body.read(chunk));
         final long total = TimeUnit.MILLISECONDS.toNanos(TransferDeadlines.totalMilliseconds(contract));
         final long idle = TimeUnit.MILLISECONDS.toNanos(TransferDeadlines.idleMilliseconds(contract));
-        final long timeout = Math.max(1, Math.min(total - (System.nanoTime() - started),
-                idle - (System.nanoTime() - moved)));
+        final long timeout = Math.max(1, Math.min(
+                total - (DefaultStreamTicker.monotonicNanoseconds() - started),
+                idle - (DefaultStreamTicker.monotonicNanoseconds() - moved)));
         try {
             return pending.get(timeout, TimeUnit.NANOSECONDS);
         } catch (final TimeoutException timeoutFailure) {
