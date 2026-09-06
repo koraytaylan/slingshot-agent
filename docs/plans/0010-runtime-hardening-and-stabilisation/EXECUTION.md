@@ -1693,3 +1693,9 @@ required checks and the complete gate, then commit the completed task.
     runtime authority retain the existing compatibility behavior; continuation calls still require
     a supplied authority and are rejected when it is absent. The remaining paged command families
     are still unreviewed, so 4404 is not closed.
+
+103. Completed the content-side pagination pass for `FindAssetsReferencedByPageHandler`,
+    `ListAssetRenditionsHandler`, and `ListResourceMappingsHandler`. Focused suites pass all 19
+    cases after compilation; each handler now preserves its full argument digest and uses the same
+    continuation validation and successor issuance rules. Framework, configuration, job, principal,
+    replication, and workflow paged handlers remain to be migrated before task 4404 can close.

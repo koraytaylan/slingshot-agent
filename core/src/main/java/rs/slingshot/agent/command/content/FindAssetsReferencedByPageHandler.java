@@ -14,6 +14,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -75,12 +76,12 @@ public final class FindAssetsReferencedByPageHandler implements CommandHandler {
         if (asked instanceof final FindAssetsReferencedByPageCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return walked(((FindAssetsReferencedByPageCommand.Held) asked).command(), resolver,
-                context);
+        return walked(((FindAssetsReferencedByPageCommand.Held) asked).command(), arguments,
+                resolver, context);
     }
 
-    private Answer walked(FindAssetsReferencedByPageCommand command, ResourceResolver resolver,
-                          CallerContext context) {
+    private Answer walked(FindAssetsReferencedByPageCommand command, DocumentValue.Mapping arguments,
+                          ResourceResolver resolver, CallerContext context) {
         final Resource page = resolver.getResource(command.pagePath());
         if (page == null) {
             return new Failed(PAGE_NOT_FOUND, command.pagePath() + " is not there");
@@ -96,8 +97,16 @@ public final class FindAssetsReferencedByPageHandler implements CommandHandler {
             return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this page holds more than the "
                     + context.discovery().limit() + " nodes this caller may examine");
         }
-        return new Produced(FindAssetsReferencedByPageResult.documentOf(
-                pageOf(walk.found(), command.window(), contract), ""));
+        final PagingSupport.Outcome<FindAssetsReferencedByPageResult.ReferencedAsset> pagingPage =
+                PagingSupport.page(walk.found(), command.window(),
+                        FindAssetsReferencedByPageCommand.WIRE_NAME, arguments, context, contract);
+        if (pagingPage instanceof final PagingSupport.Refused<FindAssetsReferencedByPageResult.ReferencedAsset> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<FindAssetsReferencedByPageResult.ReferencedAsset> accepted =
+                ((PagingSupport.Accepted<FindAssetsReferencedByPageResult.ReferencedAsset>) pagingPage).page();
+        return new Produced(FindAssetsReferencedByPageResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /** One walk of one page, gathering every reference to an asset it is asked to look for. */
