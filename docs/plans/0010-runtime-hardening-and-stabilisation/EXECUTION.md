@@ -1385,3 +1385,7 @@ required checks and the complete gate, then commit the completed task.
     `.content.xml` entries for each selected resource, with XML escaping and stable property order;
     tests verify both the Vault filter entry and a selected content entry. The package suite,
     Checkstyle, and PMD pass. Publication into `ArtifactStore` remains a runtime integration task.
+
+43. Finalized package byte determinism by fixing every ZIP entry timestamp to the epoch. A new
+    byte-for-byte regression proves identical filter inputs produce identical archives and digests;
+    the package suite, Checkstyle, and PMD pass.
