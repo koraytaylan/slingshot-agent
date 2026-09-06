@@ -1284,3 +1284,6 @@ required checks and the complete gate, then commit the completed task.
     passed (12 cases), with compilation and Checkstyle green; PMD reports only the known maintenance
     test argument-order baseline. Commit `bbf94c0` records this step; dedicated wrong-kind and
     over-budget fixtures remain.
+    Added a direct wrong-kind boundary case proving an ordinary folder and its child remain byte
+    stable when deletion is refused; the component suite now passes 13 cases. Commit `146b315`
+    records the fixture. An over-budget component-tree case is still required.
