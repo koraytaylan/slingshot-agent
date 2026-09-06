@@ -1318,3 +1318,10 @@ required checks and the complete gate, then commit the completed task.
     resubmission, handler uncertainty, and missing-result recovery are covered by the focused
     `SubmitServletTest` and `ArtifactIntakeServletTest` suites (46 cases), all passing. This closes
     task 4304; the implementation is spread across commits `e0d4a99`, `81c4c62`, and `6bb7d69`.
+
+31. Reviewed task 4105 against the dense-bucket fixtures. A bounded iterator prototype reduced the
+    initial over-read but failed five of the 58 maintenance cases: resumption reread skipped nodes,
+    a retained record could hide an eligible successor, and interruption boundaries no longer
+    preserved the expected cursor transaction. The prototype was reverted; no unsafe sweep change
+    was committed. The remaining implementation needs a durable within-bucket successor that can
+    be read without spending the next pass's record budget.
