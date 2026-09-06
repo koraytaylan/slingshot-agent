@@ -1304,3 +1304,9 @@ required checks and the complete gate, then commit the completed task.
     sources, and javadocs) are present in the cache but absent from the committed record. No source
     or policy stage ran after this refusal; the cache preparation command remains the required next
     step before a complete gate result can be claimed.
+
+29. Ran `scripts/prepare_locked_dependency_cache` with approval. Dependency resolution completed,
+    but its required non-interop verification stopped at the core JaCoCo floor with broad uncovered
+    classes, so the script did not rewrite the committed cache record. This confirms the generated
+    artifacts are available locally but the preparation command cannot complete until coverage is
+    restored; no quality-gate result beyond this preparation failure is claimed.
