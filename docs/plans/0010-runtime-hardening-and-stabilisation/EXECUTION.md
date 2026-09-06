@@ -1630,3 +1630,9 @@ required checks and the complete gate, then commit the completed task.
 88. Re-ran the servlet execution review after threading the context through accepted operations.
     `SubmitServletTest` passes all 24 cases, and Checkstyle/PMD pass for the updated servlet. The
     bridge now has every input required by a registered runtime provider; no provider is bundled yet.
+
+89. Added `DispatchCommands`, a concrete servlet bridge that resolves command identities through
+    `CommandDispatch`, converts handler answers to bounded inline execution results, and derives
+    continuation target and generation from the accepted operation identity. The adapter exposes a
+    real authority provider seam; Checkstyle and PMD pass after keeping runtime dependencies
+    transient as required by the servlet's serializable contract.
