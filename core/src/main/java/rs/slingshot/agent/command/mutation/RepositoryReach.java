@@ -31,7 +31,7 @@ public final class RepositoryReach {
     public record References(List<Resource> found, Completeness completeness) {
 
         /**
-         * @return true when the bounded walk reached its end
+         * @return whether traversal covered every visible resource
          */
         public boolean complete() {
             return completeness == Completeness.COMPLETE;

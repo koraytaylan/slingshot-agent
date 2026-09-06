@@ -7,6 +7,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.Optional;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -52,7 +53,7 @@ public final class StateLifecycleService {
     private static final AtomicReference<Snapshot> OBSERVED = new AtomicReference<>(STARTING);
 
     private final AtomicReference<AgentSession> sessions = new AtomicReference<>();
-    private final AtomicReference<Scheduler> scheduler = new AtomicReference<>();
+    private final AtomicReference<Optional<Scheduler>> scheduler = new AtomicReference<>(Optional.empty());
 
     /** Creates the declarative-services component. */
     public StateLifecycleService() {
@@ -69,20 +70,17 @@ public final class StateLifecycleService {
     /** Starts recovery immediately and schedules bounded maintenance afterward. */
     @Activate
     public void activate() {
-        scheduler.set(Scheduler.open());
+        scheduler.set(Optional.of(Scheduler.open()));
         runOnce();
         final AgentContract.Loaded contract = contract();
         final long interval = RestartRecovery.intervalMilliseconds(contract.contract());
-        scheduler.get().schedule(this::runOnce, interval);
+        scheduler.get().orElseThrow().schedule(this::runOnce, interval);
     }
 
     /** Stops scheduled work and revokes readiness before the component is released. */
     @Deactivate
     public void deactivate() {
-        final Scheduler running = scheduler.get();
-        if (running != null && scheduler.compareAndSet(running, null)) {
-            running.stop();
-        }
+        scheduler.getAndSet(Optional.empty()).ifPresent(Scheduler::stop);
         OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                 "state lifecycle has stopped"));
     }
