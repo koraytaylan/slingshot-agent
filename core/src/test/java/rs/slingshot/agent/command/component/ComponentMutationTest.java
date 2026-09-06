@@ -230,6 +230,24 @@ final class ComponentMutationTest {
     }
 
     @Test
+    @DisplayName("an oversized component subtree is refused before deletion")
+    void anoversizedComponentIsUnchanged() {
+        page();
+        component("wide");
+        sling.create().resource(CONTENT + "/wide/child", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, AddComponentHandler.ORDERED_TYPE));
+
+        final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
+                run(new ComponentPathHandler(CONTRACT, ComponentPathCommand.Shape.DELETE),
+                        pathArgument(CONTENT + "/wide", new LinkedHashMap<>(), List.of()), 1),
+                "an oversized component subtree was deleted");
+
+        assertEquals(ComponentPathHandler.COMPONENT_INVALID, refused.category());
+        assertTrue(sling.resourceResolver().getResource(CONTENT + "/wide/child") != null,
+                "an over-budget component deletion changed the repository");
+    }
+
+    @Test
     @DisplayName("a commit the repository refuses leaves the page as it was")
     void arefusedCommitChangesNothing() {
         page();
@@ -354,7 +372,12 @@ final class ComponentMutationTest {
     }
 
     private CommandHandler.Answer run(CommandHandler handler, DocumentValue.Mapping arguments) {
-        return handler.run(arguments, sling.resourceResolver(), context());
+        return run(handler, arguments, CONTRACT.value(ContractLimit.MAINTENANCE_SWEEP_WORK_BOUND_ROWS));
+    }
+
+    private CommandHandler.Answer run(CommandHandler handler, DocumentValue.Mapping arguments,
+                                      long discoveryLimit) {
+        return handler.run(arguments, sling.resourceResolver(), context(discoveryLimit));
     }
 
     private static DocumentValue before(String sibling) {
@@ -433,7 +456,12 @@ final class ComponentMutationTest {
     }
 
     private static CallerContext context() {
-        return new CallerContext(operation(), Budget.discovery(CONTRACT), Budget.time(CONTRACT),
+        return context(CONTRACT.value(ContractLimit.MAINTENANCE_SWEEP_WORK_BOUND_ROWS));
+    }
+
+    private static CallerContext context(long discoveryLimit) {
+        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, discoveryLimit),
+                Budget.time(CONTRACT),
                 new Budget(Budget.Kind.RESULT,
                         CONTRACT.value(ContractLimit.MAXIMUM_MUTATION_SUCCESS_RESULT_BYTES)),
                 ProgressSink.under(CONTRACT));

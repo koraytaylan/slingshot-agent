@@ -89,7 +89,8 @@ public final class ComponentPathHandler implements CommandHandler {
             case ComponentPathCommand.Held held -> MutationAnswer.of(
                     SingleCommit.around(SingleCommit.Expectation.ONE_COMMIT, resolver,
                             session -> acted(held.command(), session,
-                                    contract.value(ContractLimit.MAXIMUM_DELETED_NODES))),
+                                    Math.min(contract.value(ContractLimit.MAXIMUM_DELETED_NODES),
+                                            context.discovery().limit()))),
                     COMMIT_FAILED, SingleCommit.OUTCOME_UNKNOWN);
             case ComponentPathCommand.Placed placed -> MutationAnswer.of(
                     SingleCommit.around(SingleCommit.Expectation.ONE_COMMIT, resolver,
