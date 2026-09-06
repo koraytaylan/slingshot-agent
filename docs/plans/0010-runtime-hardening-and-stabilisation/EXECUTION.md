@@ -1965,3 +1965,10 @@ required checks and the complete gate, then commit the completed task.
      test fixture serialization warning. Core verification passes all checks, including the active
      command and discovery tests; unavailable handlers remain absent from both submission and
      discovery.
+
+149. Added the console datasource composition root. `ConsoleRuntimeAssembly` binds the shipped
+    operations, maintenance, retention, and identity resource types to live suppliers and requires
+    the authenticated contract for retention bounds. The assembly preserves the existing
+    authorization-first `ConsoleDataSource` boundary and leaves disconnected stores unreadable;
+    the focused assembly test passes. Actual Sling rendering and operation-detail transport remain
+    acceptance work for 4503/4601.
