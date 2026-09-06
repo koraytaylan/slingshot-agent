@@ -1882,3 +1882,11 @@ required checks and the complete gate, then commit the completed task.
     floor, static analysis, and packaging stage passed; the gate finished with `BUILD SUCCESS` in
     45 seconds. The remaining plan work is now the six pending runtime/package integration tasks,
     rather than a quality-gate failure.
+
+139. Audited the remaining task boundaries after the green gate. `StateLifecycleService` is already
+    a DS component with scheduler/recovery and Oak-backed tests, while
+    `DownloadContentPackageHandler` builds a deterministic ZIP and closes staging. The missing
+    evidence is installed composition: 4405 still has no caller session/operation publication
+    boundary, 4501 has no installed restart/maintenance acceptance run, and 4502–4602 still need
+    runtime DS wiring and positive owner-tier execution. No task is marked complete without that
+    evidence.
