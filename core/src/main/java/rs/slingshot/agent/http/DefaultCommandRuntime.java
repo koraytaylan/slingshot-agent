@@ -11,10 +11,39 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.CommandRegistry;
 import rs.slingshot.agent.command.OverflowPublication;
+import rs.slingshot.agent.command.content.FindAssetsByMetadataCommand;
+import rs.slingshot.agent.command.content.FindAssetsByMetadataHandler;
+import rs.slingshot.agent.command.content.FindAssetsReferencedByPageCommand;
+import rs.slingshot.agent.command.content.FindAssetsReferencedByPageHandler;
+import rs.slingshot.agent.command.content.FindPagesByTemplateCommand;
+import rs.slingshot.agent.command.content.FindPagesByTemplateHandler;
+import rs.slingshot.agent.command.content.FindPagesContainingPhraseCommand;
+import rs.slingshot.agent.command.content.FindPagesContainingPhraseHandler;
+import rs.slingshot.agent.command.content.FindPagesUsingComponentsCommand;
+import rs.slingshot.agent.command.content.FindPagesUsingComponentsHandler;
+import rs.slingshot.agent.command.content.ListAssetRenditionsCommand;
+import rs.slingshot.agent.command.content.ListAssetRenditionsHandler;
+import rs.slingshot.agent.command.content.ListChildPagesCommand;
+import rs.slingshot.agent.command.content.ListChildPagesHandler;
+import rs.slingshot.agent.command.content.ListResourceMappingsCommand;
+import rs.slingshot.agent.command.content.ListResourceMappingsHandler;
+import rs.slingshot.agent.command.content.LoadContentHandler;
+import rs.slingshot.agent.command.content.MapResourcePathCommand;
+import rs.slingshot.agent.command.content.MapResourcePathHandler;
+import rs.slingshot.agent.command.content.QueryPathsCommand;
+import rs.slingshot.agent.command.content.QueryPathsHandler;
+import rs.slingshot.agent.command.content.ReadContentFragmentCommand;
+import rs.slingshot.agent.command.content.ReadContentFragmentHandler;
+import rs.slingshot.agent.command.content.ResolveResourcePathCommand;
+import rs.slingshot.agent.command.content.ResolveResourcePathHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.execution.ExecutionOutcome;
 import rs.slingshot.agent.execution.LogicalOperation;
@@ -27,6 +56,7 @@ import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.wire.CommandFailure;
 
 /** Adapts a verified command dispatch to the submission servlet's execution contract. */
+@Component(service = CommandRuntime.class, immediate = true)
 public final class DefaultCommandRuntime implements CommandRuntime {
 
     private static final String ARGUMENTS = SubmitServlet.ARGUMENTS;
@@ -52,6 +82,71 @@ public final class DefaultCommandRuntime implements CommandRuntime {
     public DefaultCommandRuntime(CommandDispatch dispatch, AgentContract contract) {
         state.set(new Active(java.util.Objects.requireNonNull(dispatch, "dispatch"),
                 java.util.Objects.requireNonNull(contract, "contract")));
+    }
+
+    /** Creates the fail-closed runtime before declarative-services activation. */
+    public DefaultCommandRuntime() {
+    }
+
+    /** Loads and activates the complete stateless handler subset available in this bundle. */
+    @Activate
+    public void activate() {
+        final AgentContract.Outcome loaded = AgentContract.load();
+        if (!(loaded instanceof final AgentContract.Loaded present)) {
+            return;
+        }
+        final CommandRegistry.Outcome rows = CommandRegistry.read(
+                Thread.currentThread().getContextClassLoader());
+        if (!(rows instanceof final CommandRegistry.Loaded embedded)) {
+            return;
+        }
+        final java.util.List<CommandDispatch.Registration> registrations = registrations(
+                present.contract());
+        final CommandRegistry.Outcome active = embedded.registry().active(registrations.stream()
+                .map(CommandDispatch.Registration::wireName).toList());
+        if (!(active instanceof final CommandRegistry.Loaded selected)) {
+            return;
+        }
+        final CommandDispatch.Outcome dispatch = CommandDispatch.from(selected.registry(), registrations);
+        if (dispatch instanceof final CommandDispatch.Held ready) {
+            state.set(new Active(ready.dispatch(), present.contract()));
+        }
+    }
+
+    /** Revokes the runtime before the DS component is released. */
+    @Deactivate
+    public void deactivate() {
+        state.set(Missing.INSTANCE);
+    }
+
+    private static java.util.List<CommandDispatch.Registration> registrations(AgentContract contract) {
+        return java.util.List.of(
+                new CommandDispatch.Registration(FindAssetsByMetadataCommand.WIRE_NAME,
+                        new FindAssetsByMetadataHandler(contract)),
+                new CommandDispatch.Registration(FindAssetsReferencedByPageCommand.WIRE_NAME,
+                        new FindAssetsReferencedByPageHandler(contract)),
+                new CommandDispatch.Registration(FindPagesByTemplateCommand.WIRE_NAME,
+                        new FindPagesByTemplateHandler(contract)),
+                new CommandDispatch.Registration(FindPagesContainingPhraseCommand.WIRE_NAME,
+                        new FindPagesContainingPhraseHandler(contract)),
+                new CommandDispatch.Registration(FindPagesUsingComponentsCommand.WIRE_NAME,
+                        new FindPagesUsingComponentsHandler(contract)),
+                new CommandDispatch.Registration(ListAssetRenditionsCommand.WIRE_NAME,
+                        new ListAssetRenditionsHandler(contract)),
+                new CommandDispatch.Registration(ListChildPagesCommand.WIRE_NAME,
+                        new ListChildPagesHandler(contract)),
+                new CommandDispatch.Registration(ListResourceMappingsCommand.WIRE_NAME,
+                        new ListResourceMappingsHandler(contract)),
+                new CommandDispatch.Registration("load_content_as_json",
+                        new LoadContentHandler()),
+                new CommandDispatch.Registration(MapResourcePathCommand.WIRE_NAME,
+                        new MapResourcePathHandler(contract)),
+                new CommandDispatch.Registration(QueryPathsCommand.WIRE_NAME,
+                        new QueryPathsHandler(contract)),
+                new CommandDispatch.Registration(ReadContentFragmentCommand.WIRE_NAME,
+                        new ReadContentFragmentHandler(contract)),
+                new CommandDispatch.Registration(ResolveResourcePathCommand.WIRE_NAME,
+                        new ResolveResourcePathHandler(contract)));
     }
 
     /** Writes only the fail-closed state because dispatch and contract are platform objects.
