@@ -15,6 +15,7 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.execution.RestartRecovery;
@@ -62,9 +63,19 @@ public final class StateLifecycleService {
     /** Binds the scoped state-session provider.
      * @param source the provider used for maintenance work
      */
-    @Reference
+    @Reference(policy = ReferencePolicy.DYNAMIC)
     public void available(AgentSession source) {
         sessions.set(source);
+    }
+
+    /** Clears a provider that has left the service registry.
+     * @param source the provider being removed
+     */
+    public void unavailable(AgentSession source) {
+        if (sessions.compareAndSet(source, null)) {
+            OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
+                    "state session provider is not bound"));
+        }
     }
 
     /** Starts recovery immediately and schedules bounded maintenance afterward. */

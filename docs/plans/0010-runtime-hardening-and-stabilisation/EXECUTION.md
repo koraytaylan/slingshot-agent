@@ -1977,3 +1977,8 @@ required checks and the complete gate, then commit the completed task.
     detail factory alongside the four resource-type bindings, preserving one authorization-wrapped
     source per requested identifier. The review caught the digest fixture and policy line-length
     issues; focused tests and core verification pass.
+
+151. Re-reviewed lifecycle service loss handling for 4501. `StateLifecycleService` now uses a dynamic
+    `AgentSession` reference and compare-and-set unbind; removal immediately revokes readiness and
+    prevents a stale provider from being used by the next maintenance pass. The new provider-removal
+    test and complete core verification pass.
