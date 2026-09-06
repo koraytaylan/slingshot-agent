@@ -11,6 +11,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -77,11 +78,12 @@ public final class ListResourceMappingsHandler implements CommandHandler {
         if (asked instanceof final ListResourceMappingsCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return listed(((ListResourceMappingsCommand.Held) asked).command(), resolver, context);
+        return listed(((ListResourceMappingsCommand.Held) asked).command(), arguments, resolver,
+                context);
     }
 
-    private Answer listed(ListResourceMappingsCommand command, ResourceResolver resolver,
-                          CallerContext context) {
+    private Answer listed(ListResourceMappingsCommand command, DocumentValue.Mapping arguments,
+                          ResourceResolver resolver, CallerContext context) {
         final Resource inventory = resolver.getResource(MAPPING_ROOT);
         if (inventory == null) {
             return new Failed(INVENTORY_FAILED, "the mapping inventory at " + MAPPING_ROOT
@@ -94,8 +96,16 @@ public final class ListResourceMappingsHandler implements CommandHandler {
             return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this inventory holds more than the "
                     + context.discovery().limit() + " entries this caller may examine");
         }
-        return new Produced(ListResourceMappingsResult.documentOf(
-                pageOf(entries, command.window(), contract), ""));
+        final PagingSupport.Outcome<ListResourceMappingsResult.MappingEntry> page =
+                PagingSupport.page(entries, command.window(), ListResourceMappingsCommand.WIRE_NAME,
+                        arguments, context, contract);
+        if (page instanceof final PagingSupport.Refused<ListResourceMappingsResult.MappingEntry> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<ListResourceMappingsResult.MappingEntry> accepted =
+                ((PagingSupport.Accepted<ListResourceMappingsResult.MappingEntry>) page).page();
+        return new Produced(ListResourceMappingsResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /**
