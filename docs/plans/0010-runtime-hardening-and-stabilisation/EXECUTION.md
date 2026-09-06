@@ -1898,3 +1898,13 @@ required checks and the complete gate, then commit the completed task.
     `ArtifactStore.publish` requires the caller session, state path, and operation boundary supplied
     by 4502. The task remains pending until that boundary is connected; no fabricated success was
     recorded.
+
+141. Audited 4503 against the installed ui.apps content. The identity, maintenance, operation, and
+     retention pages reference `slingshot-agent/datasource/{identity,maintenance,operation,retention}`
+     resource types, but neither the core nor AEM bundle registers a Sling servlet or Granite
+     `DataSource` for any of those types. The four core data-source classes are deliberately pure
+     authorized readers whose suppliers must be assembled from live state services; they cannot be
+     instantiated by the repository content. Consequently an installed page cannot render rows,
+     links, or a tail, and adding a static fallback would violate the fail-closed console contract.
+     The missing assembly belongs after 4502 supplies the command/state service graph; 4503 remains
+     pending until that graph and an installed authorized/denied render run exist.
