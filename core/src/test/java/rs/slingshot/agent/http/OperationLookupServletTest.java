@@ -120,6 +120,25 @@ final class OperationLookupServletTest {
     }
 
     @Test
+    @DisplayName("a recovered artifact result carries the slot needed by the download route")
+    void terminalLookupCarriesArtifactSlot() throws RepositoryException, IOException,
+            ServletException {
+        final Session session = recorded();
+        appended(session, JobEventKind.SUCCEEDED);
+        session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_KIND, "published");
+        session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_SLOT, "result");
+        session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_BYTE_COUNT, 7L);
+        session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_DIGEST,
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        session.save();
+
+        final MockSlingHttpServletResponse answer = lookup(identifier(), "");
+        assertEquals(OperationLookupServlet.SERVED, answer.getStatus());
+        assertTrue(answer.getOutputAsString().contains("\"artifact_slot\":\"result\""),
+                answer.getOutputAsString());
+    }
+
+    @Test
     @DisplayName("an operation nothing holds is not yet, with the contract's own grace as the hint")
     void anoperationNothingHoldsIsNotYet() throws RepositoryException, IOException,
             ServletException {

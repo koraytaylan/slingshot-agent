@@ -31,9 +31,11 @@ public sealed interface ResultDelivery permits ResultDelivery.Inline, ResultDeli
 
     /** The member an artifact's digest is carried in. */
     String ARTIFACT_DIGEST = "artifact_digest";
+    /** The artifact slot, when the producer has one. */
+    String ARTIFACT_SLOT = "artifact_slot";
 
     /** Every member a delivery may carry, across both cases. */
-    List<String> MEMBERS = List.of(ARTIFACT_DIGEST, BYTE_COUNT, DELIVERY, INLINE);
+    List<String> MEMBERS = List.of(ARTIFACT_DIGEST, ARTIFACT_SLOT, BYTE_COUNT, DELIVERY, INLINE);
 
     /**
      * How this delivery is spelled on the wire.
@@ -85,7 +87,12 @@ public sealed interface ResultDelivery permits ResultDelivery.Inline, ResultDeli
      * @param byteCount how many bytes it comes to
      * @param digest what those bytes digest to, so a fetch can be checked
      */
-    record Artifact(long byteCount, DigestValue digest) implements ResultDelivery {
+    record Artifact(long byteCount, DigestValue digest, String slot) implements ResultDelivery {
+
+        /** Keeps the original generic artifact construction for producers without a slot. */
+        public Artifact(long byteCount, DigestValue digest) {
+            this(byteCount, digest, "");
+        }
 
         @Override
         public String spelling() {
@@ -207,7 +214,8 @@ public sealed interface ResultDelivery permits ResultDelivery.Inline, ResultDeli
         if (held instanceof final DigestValue.Refused refused) {
             return new Refused(Refusal.NOT_A_DIGEST, refused.refusal().toString());
         }
-        return new Held(new Artifact(count.get(), ((DigestValue.Held) held).digest()));
+        return new Held(new Artifact(count.get(), ((DigestValue.Held) held).digest(),
+                text(mapping, ARTIFACT_SLOT).orElse("")));
     }
 
     private static Optional<String> text(DocumentValue.Mapping mapping, String member) {
