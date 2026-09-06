@@ -67,7 +67,7 @@ public record Budget(Kind kind, long limit) {
      * @return whether it may go on
      */
     public boolean allows(long spent) {
-        return spent <= limit;
+        return spent >= 0 && spent <= limit;
     }
 
     /**

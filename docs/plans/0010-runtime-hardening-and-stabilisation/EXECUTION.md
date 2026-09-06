@@ -1365,3 +1365,8 @@ required checks and the complete gate, then commit the completed task.
     mutation and reference-reach cases pass, preserving conservative incomplete-scan refusal,
     ownership checks, and scalar behavior alongside array updates. No new failure or policy
     suppression was introduced.
+
+39. Hardened the shared `Budget` primitive used by bounded traversal: a negative spend is now
+    outside the budget instead of being accepted as valid progress. The command-context, reach,
+    query, and child-list suites pass, with Checkstyle and PMD clean. This closes the underflow
+    boundary without changing any declared contract limits.
