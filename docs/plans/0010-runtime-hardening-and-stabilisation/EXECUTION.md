@@ -1260,3 +1260,7 @@ required checks and the complete gate, then commit the completed task.
     ListChildPagesHandler now stops child examination at the discovery budget and reports exhaustion
     explicitly, avoiding a partial page presented as complete. Its seven-case suite passed. Commit
     `d55f9e2` records this step; package traversal and wide/deep measured fixtures remain.
+    DownloadContentPackageHandler now selects package paths with the same iterator stack, keeping
+    retained traversal state proportional to active depth while preserving pre-staging budget
+    refusal. Its eight-case package suite passed. Commit `b74d8a7` records the package step; measured
+    wide/deep fixtures and final 4401 integration review remain.
