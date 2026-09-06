@@ -6,16 +6,21 @@ package rs.slingshot.agent.http;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.servlet.Servlet;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.CommittedResource;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
 import rs.slingshot.agent.discovery.CapabilityDocument;
+import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.route.AgentRoute;
 import rs.slingshot.agent.route.AgentRouteTable;
@@ -55,6 +60,9 @@ public final class CapabilityServlet extends AgentServlet {
     public static final long EVENT_STORE_GENERATION = EventStoreGeneration.FIRST;
 
     private static final long serialVersionUID = 1L;
+    /** The active command identities, empty until a runtime is bound. */
+    private final AtomicReference<List<CommandContractIdentity>> commands =
+            new AtomicReference<>(List.of());
 
     /**
      * Holds a servlet with nothing in it.
@@ -65,6 +73,29 @@ public final class CapabilityServlet extends AgentServlet {
      */
     public CapabilityServlet() {
         super();
+    }
+
+    /**
+     * Binds the active runtime whose command identities discovery may advertise.
+     *
+     * @param activeRuntime the active runtime
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
+    public void available(CommandRuntime activeRuntime) {
+        this.commands.set(List.copyOf(activeRuntime.commandContracts()));
+    }
+
+    /**
+     * Removes a stopped runtime and restores an empty capability surface.
+     *
+     * @param stoppedRuntime the runtime being removed
+     */
+    public void unavailable(CommandRuntime stoppedRuntime) {
+        this.commands.set(List.of());
+    }
+
+    List<CommandContractIdentity> commandContracts() {
+        return commands.get();
     }
 
     /** What a request refused for its method is answered with. */
@@ -125,7 +156,7 @@ public final class CapabilityServlet extends AgentServlet {
             refuse(response, AuthenticationGate.STATUS);
             return;
         }
-        final String document = document(readiness()).render();
+        final String document = document(readiness(), commands.get()).render();
         response.setContentType(route.mediaType());
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(document);
@@ -157,6 +188,18 @@ public final class CapabilityServlet extends AgentServlet {
      *     that it can be used
      */
     public static CapabilityDocument document(AdvertisedCapabilities.Readiness observing) {
+        return document(observing, List.of());
+    }
+
+    /**
+     * Builds discovery with the command identities currently supplied by DS.
+     *
+     * @param observing where continuation readiness is read
+     * @param commands active command identities
+     * @return the bounded discovery document
+     */
+    public static CapabilityDocument document(AdvertisedCapabilities.Readiness observing,
+                                              List<CommandContractIdentity> commands) {
         final AgentContract.Outcome outcome = AgentContract.load();
         if (outcome instanceof final AgentContract.Refused refused) {
             throw new IllegalStateException("no contract: " + refused.failure() + refused.detail());
@@ -165,7 +208,7 @@ public final class CapabilityServlet extends AgentServlet {
         final AdvertisedCapabilities capabilities = new AdvertisedCapabilities(
                 generation(),
                 canonicalContractDigest(),
-                List.of(),
+                commands,
                 observing.observe(),
                 digest(AgentContract.transportContractDigest()));
         final CapabilityDocument.Outcome built = CapabilityDocument.of(capabilities,

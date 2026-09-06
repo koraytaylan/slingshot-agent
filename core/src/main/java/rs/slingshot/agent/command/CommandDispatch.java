@@ -219,6 +219,20 @@ public final class CommandDispatch {
     }
 
     /**
+     * Returns the verified command identities in dispatch order.
+     *
+     * @param bounds the contract bounds used to derive each identity
+     * @return identities for every active row
+     */
+    public List<CommandContractIdentity> commandContracts(CommandContractIdentity.Bounds bounds) {
+        return registry.rows().stream().map(row -> row.identity(bounds))
+                .filter(CommandContractIdentity.Held.class::isInstance)
+                .map(CommandContractIdentity.Held.class::cast)
+                .map(CommandContractIdentity.Held::identity)
+                .toList();
+    }
+
+    /**
      * The one reason there is no dispatch, where there is none.
      *
      * @param outcome what registering produced
