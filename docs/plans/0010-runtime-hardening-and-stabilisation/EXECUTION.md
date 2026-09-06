@@ -1426,3 +1426,10 @@ required checks and the complete gate, then commit the completed task.
     wraps without gaps, while preserving the existing compare-and-set and save-interruption cadence.
     The complete `MaintenanceSweepTest` suite (58 cases), full core suite (1,122 cases), Checkstyle,
     and PMD pass. Commit follows this review loop.
+
+51. Completed 4401 after the measured traversal review. The shared reach traversal bounds iterator
+    advancement and retained work across wide, deep, and nonmatching trees; affected query-path,
+    child-page, and package handlers propagate incomplete discovery as an explicit refusal.
+    Proxy-backed iterator fixtures cover a 10,000-child tree and a 100-level tree, and the seven-case
+    reach suite plus handler integration suites pass. Repository-wide quality failures remain
+    separately evidenced in the cache-preparation review. Commit follows this review loop.
