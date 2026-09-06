@@ -213,6 +213,23 @@ final class ComponentMutationTest {
     }
 
     @Test
+    @DisplayName("deleting an ordinary folder is refused without changing it")
+    void anordinaryFolderIsNotAComponent() {
+        page();
+        sling.create().resource(CONTENT + "/folder", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, "nt:folder"));
+        sling.create().resource(CONTENT + "/folder/child", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, AddComponentHandler.ORDERED_TYPE));
+
+        final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
+                delete(CONTENT + "/folder"), "an ordinary folder was deleted as a component");
+
+        assertEquals(ComponentPathHandler.COMPONENT_INVALID, refused.category());
+        assertTrue(sling.resourceResolver().getResource(CONTENT + "/folder/child") != null,
+                "a wrong-kind deletion removed the folder's child");
+    }
+
+    @Test
     @DisplayName("a commit the repository refuses leaves the page as it was")
     void arefusedCommitChangesNothing() {
         page();
