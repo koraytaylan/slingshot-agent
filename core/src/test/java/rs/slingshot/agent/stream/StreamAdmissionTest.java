@@ -17,14 +17,18 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import org.apache.sling.api.resource.LoginException;
+import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,10 +42,14 @@ import rs.slingshot.agent.store.AccountedQuantity;
 import rs.slingshot.agent.store.CapacityLedger;
 import rs.slingshot.agent.store.EventLedger;
 import rs.slingshot.agent.store.GenerationStore;
+import rs.slingshot.agent.store.HighWaterMark;
 import rs.slingshot.agent.store.LedgerAdmission;
+import rs.slingshot.agent.store.SaveInterleaving;
 import rs.slingshot.agent.store.SnapshotStore;
 import rs.slingshot.agent.store.StatePath;
 import rs.slingshot.agent.store.SubscriptionLedger;
+import rs.slingshot.agent.store.SubscriptionRecord;
+import rs.slingshot.agent.wire.EventSequence;
 import rs.slingshot.agent.wire.JobEvent;
 
 /**
@@ -70,6 +78,13 @@ final class StreamAdmissionTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    private final List<org.apache.sling.api.resource.ResourceResolver> opened = new ArrayList<>();
+
+    @AfterEach
+    void closePeerResolvers() {
+        opened.forEach(org.apache.sling.api.resource.ResourceResolver::close);
+    }
 
     private static rs.slingshot.agent.identity.AgentOperationIdentifier boundOperation() {
         return event("accepted.json").identifier();
@@ -172,6 +187,105 @@ final class StreamAdmissionTest {
     }
 
     @Test
+    @DisplayName("events acknowledged on the wire advance the durable subscription cursor")
+    void deliveredEventsAdvanceDurableCursor() throws RepositoryException, LoginException {
+        final Session session = recorded();
+        final StreamSession stream = following(identifierOf("accepted.json"));
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        assertEquals(StreamWriter.Ending.REACHED_THE_SESSION_BOUND,
+                new StreamWriter(stream, CONTRACT, admission)
+                        .serve(new StringWriter(), session, new AdvancingTicker(), "1:0"));
+        final Session observer = second();
+        assertEquals(new SubscriptionRecord.Shown(sequence(2)),
+                HighWaterMark.read(observer, stream.subscription()),
+                "successful event delivery did not become durable subscription progress");
+        assertEquals(NOW, observer.getNode(SubscriptionRecord.pathOf(stream.subscription()).path())
+                        .getProperty(SubscriptionRecord.LAST_ADVANCED_AT).getLong(),
+                "cursor progress and activity were not committed together");
+    }
+
+    @Test
+    @DisplayName("the initial snapshot notice advances the durable cursor")
+    void initialSnapshotNoticeAdvancesDurableCursor() throws RepositoryException, LoginException {
+        final Session session = recorded();
+        final StreamSession stream = following(identifierOf("accepted.json"));
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        new StreamWriter(stream, CONTRACT, admission)
+                .serve(new StringWriter(), session, new AdvancingTicker(), "");
+        final Session observer = second();
+        assertEquals(new SubscriptionRecord.Shown(sequence(2)),
+                HighWaterMark.read(observer, stream.subscription()),
+                "the snapshot shown on an initial connection did not advance the cursor");
+    }
+
+    @Test
+    @DisplayName("a reset notice advances the durable cursor to its replacement snapshot")
+    void resetNoticeAdvancesDurableCursor() throws RepositoryException, LoginException {
+        final Session session = recorded();
+        final StreamSession stream = following(identifierOf("accepted.json"));
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        new StreamWriter(stream, CONTRACT, admission)
+                .serve(new StringWriter(), session, new AdvancingTicker(), "2:0");
+        final Session observer = second();
+        assertEquals(new SubscriptionRecord.Shown(sequence(2)),
+                HighWaterMark.read(observer, stream.subscription()),
+                "the replacement snapshot did not become durable progress after reset");
+    }
+
+    @Test
+    @DisplayName("a disconnect after one event preserves only the event that was acknowledged")
+    void disconnectAfterOneEventPreservesAcknowledgedProgress()
+            throws RepositoryException, LoginException {
+        final Session session = recorded();
+        final StreamSession stream = following(identifierOf("accepted.json"));
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        assertEquals(StreamWriter.Ending.THE_CLIENT_WENT_AWAY,
+                new StreamWriter(stream, CONTRACT, admission)
+                        .serve(new DisconnectAfterWrites(1), session, new AdvancingTicker(), "1:0"));
+        final Session observer = second();
+        assertEquals(new SubscriptionRecord.Shown(sequence(1)),
+                HighWaterMark.read(observer, stream.subscription()),
+                "a disconnect moved the cursor past the last acknowledged event");
+    }
+
+    @Test
+    @DisplayName("a high-water save interrupted before commit leaves no progress")
+    void highWaterSaveInterruptedBeforeCommitLeavesNoProgress()
+            throws RepositoryException, LoginException {
+        interruptedHighWaterSave(false);
+    }
+
+    @Test
+    @DisplayName("a high-water save interrupted after commit preserves its progress")
+    void highWaterSaveInterruptedAfterCommitPreservesProgress()
+            throws RepositoryException, LoginException {
+        interruptedHighWaterSave(true);
+    }
+
+    private void interruptedHighWaterSave(boolean committed)
+            throws RepositoryException, LoginException {
+        final Session session = recorded();
+        final StreamSession stream = following(identifierOf("accepted.json"));
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        assertEquals(StreamWriter.Ending.THE_STORE_STOPPED_ANSWERING,
+                new StreamWriter(stream, CONTRACT, admission)
+                        .serve(new StringWriter(),
+                                SaveInterleaving.interruptSave(session, 1, committed),
+                                new AdvancingTicker(), "1:0"));
+        final Session observer = second();
+        assertEquals(committed ? new SubscriptionRecord.Shown(sequence(1))
+                        : SubscriptionRecord.Unread.NOTHING_SHOWN_YET,
+                HighWaterMark.read(observer, stream.subscription()),
+                "durable progress did not match the "
+                        + (committed ? "committed" : "uncommitted") + " boundary");
+    }
+
+    @Test
     void uncertainAdmissionIsCancelledWithoutDebitingAnExistingStream() throws RepositoryException {
         final Session session = recorded();
         final StreamAdmission.Admitted existing = assertInstanceOf(StreamAdmission.Admitted.class,
@@ -232,6 +346,33 @@ final class StreamAdmissionTest {
         @Override
         public void close() throws IOException {
             throw new IOException("the client is gone");
+        }
+    }
+
+    /** A client that accepts exactly the first event write before disconnecting. */
+    private static final class DisconnectAfterWrites extends Writer {
+
+        private final int allowed;
+        private int writes;
+
+        private DisconnectAfterWrites(int allowed) {
+            this.allowed = allowed;
+        }
+
+        @Override
+        public void write(char[] buffer, int from, int length) throws IOException {
+            if (writes == allowed) {
+                throw new IOException("the client is gone");
+            }
+            writes = writes + 1;
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
         }
     }
 
@@ -322,6 +463,22 @@ final class StreamAdmissionTest {
     private Session session() {
         return java.util.Objects.requireNonNull(sling.resourceResolver().adaptTo(Session.class),
                 "the resolver has no session, which is a repository that did not start");
+    }
+
+    private Session second() throws LoginException {
+        opened.add(anotherResolver());
+        return java.util.Objects.requireNonNull(opened.getLast().adaptTo(Session.class),
+                "the peer resolver has no session");
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver anotherResolver() throws LoginException {
+        return java.util.Objects.requireNonNull(sling.getService(ResourceResolverFactory.class),
+                "the resolver factory was not registered").getResourceResolver(java.util.Map.of());
+    }
+
+    private static EventSequence sequence(long number) {
+        return assertInstanceOf(EventSequence.Held.class, EventSequence.of(number),
+                "the sequence was refused").sequence();
     }
 
     private StatePath.Caller caller() {
