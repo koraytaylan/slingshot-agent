@@ -1343,3 +1343,9 @@ required checks and the complete gate, then commit the completed task.
     Maven run completed without failures), confirming depth-first selection, ordering, and explicit
     discovery-budget refusal across the affected callers. Task 4401 remains pending because the
     required measured iterator-call evidence and full quality gate are still outstanding.
+
+35. Closed a multivalue reference-adjustment gap in 4402. Reference discovery already recognized
+    string arrays, but repointing only changed scalar values; moves could therefore leave array
+    entries targeting the old address. Repointing now rewrites every matching array entry and
+    reports each replacement. `RepositoryReachTest` plus the page, asset, and fragment mutation
+    suites pass, and offline PMD reports no violations.

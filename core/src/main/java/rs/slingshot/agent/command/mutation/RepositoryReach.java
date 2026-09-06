@@ -133,6 +133,19 @@ public final class RepositoryReach {
                 if (from.equals(property.getValue())) {
                     values.put(property.getKey(), to);
                     moved = moved + 1;
+                } else if (property.getValue() instanceof final String[] several) {
+                    final String[] rewritten = several.clone();
+                    long replacements = 0;
+                    for (int index = 0; index < rewritten.length; index++) {
+                        if (from.equals(rewritten[index])) {
+                            rewritten[index] = to;
+                            replacements = replacements + 1;
+                        }
+                    }
+                    if (replacements > 0) {
+                        values.put(property.getKey(), rewritten);
+                        moved = moved + replacements;
+                    }
                 }
             }
         }
