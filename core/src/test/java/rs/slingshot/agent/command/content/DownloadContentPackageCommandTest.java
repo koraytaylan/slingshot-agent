@@ -205,6 +205,17 @@ final class DownloadContentPackageCommandTest {
     }
 
     @Test
+    void manifestEscapesXmlAttributeValues() {
+        final DownloadContentPackageCommand command = new DownloadContentPackageCommand(
+                "safe", List.of("/content/a&b"), List.of("/content/\"quoted\""),
+                List.of("/content/<private>"));
+        assertEquals("<workspaceFilter version=\"1.0\"><filter root=\"/content/a&amp;b\"/>"
+                + "<include pattern=\"/content/&quot;quoted&quot;\"/>"
+                + "<exclude pattern=\"/content/&lt;private&gt;\"/></workspaceFilter>",
+                DownloadContentPackageHandler.manifestOf(command, List.of()));
+    }
+
+    @Test
     @DisplayName("an exclusion keeps its subtree out of an included root")
     void anexclusionCarvesOutOfARoot() {
         final DownloadContentPackageCommand command = assertInstanceOf(

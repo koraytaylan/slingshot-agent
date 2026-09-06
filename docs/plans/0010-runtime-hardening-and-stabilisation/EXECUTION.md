@@ -1389,3 +1389,9 @@ required checks and the complete gate, then commit the completed task.
 43. Finalized package byte determinism by fixing every ZIP entry timestamp to the epoch. A new
     byte-for-byte regression proves identical filter inputs produce identical archives and digests;
     the package suite, Checkstyle, and PMD pass.
+
+44. Closed the remaining package-manifest serialization gap: roots and include/exclude patterns are
+    now XML-escaped before entering `filter.xml`, so valid repository names containing `&`, quotes,
+    or angle brackets cannot corrupt the archive manifest. The focused package suite passes (including
+    the attribute-escaping regression), with offline Checkstyle and PMD clean. Durable
+    `ArtifactStore.publish` integration remains a runtime boundary for task 4405.
