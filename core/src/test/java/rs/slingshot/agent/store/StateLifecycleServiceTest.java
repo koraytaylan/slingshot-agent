@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -50,10 +51,10 @@ final class StateLifecycleServiceTest {
         try {
             session.getRootNode().addNode("var").addNode("slingshot-agent");
             session.save();
-        } catch (final Exception prepared) {
+        } catch (final RepositoryException prepared) {
             throw new AssertionError("the lifecycle tree could not be prepared", prepared);
         }
-        final ResourceResolver isolated = (ResourceResolver) Proxy.newProxyInstance(
+        try (ResourceResolver isolated = (ResourceResolver) Proxy.newProxyInstance(
                 Thread.currentThread().getContextClassLoader(),
                 new Class<?>[] {ResourceResolver.class}, (proxy, method, arguments) -> {
                     if ("close".equals(method.getName())) {
@@ -64,14 +65,16 @@ final class StateLifecycleServiceTest {
                     } catch (final InvocationTargetException failed) {
                         throw failed.getCause();
                     }
-                });
-        final StateLifecycleService service = new StateLifecycleService();
-        service.available(new rs.slingshot.agent.repository.AgentSession(subservice -> isolated));
-        service.activate();
-        assertEquals(StateLifecycleService.Availability.READY,
-                StateLifecycleService.observed().availability(),
-                StateLifecycleService.observed().detail());
-        service.deactivate();
+                })) {
+            final StateLifecycleService service = new StateLifecycleService();
+            service.available(new rs.slingshot.agent.repository.AgentSession(
+                    subservice -> isolated));
+            service.activate();
+            assertEquals(StateLifecycleService.Availability.READY,
+                    StateLifecycleService.observed().availability(),
+                    StateLifecycleService.observed().detail());
+            service.deactivate();
+        }
     }
 
     @Test
