@@ -1502,3 +1502,9 @@ required checks and the complete gate, then commit the completed task.
     successor lookup rescans the child iterator to decide whether more records exist, so a bound-one
     pass advances two nodes and a resumed pass advances three. This is the remaining 4105 blocker;
     no code change is claimed from the reverted experiment.
+
+65. Completed task 4105 after replacing within-bucket successor rescans with one ordered JCR query
+    for resumed records and a single iterator for a fresh bucket. The 58-case maintenance suite now
+    passes, including bound-one reads, contention retries, dense-bucket resumption, and interruption
+    accounting; the complete core suite passes all 1,124 tests. Checkstyle and PMD remain clean.
+    Commit `432d4a2` records this implementation and review loop.

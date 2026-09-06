@@ -10,8 +10,8 @@ touches:
   - core/src/main/java/rs/slingshot/agent/store/MaintenanceSweep.java
   - core/src/main/java/rs/slingshot/agent/store/SweepCursor.java
   - core/src/test/java/rs/slingshot/agent/store/MaintenanceSweepTest.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: "432d4a2"
 ---
 # Enforce Maintenance Bounds Inside Buckets
 
