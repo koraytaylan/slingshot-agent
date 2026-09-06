@@ -2114,3 +2114,8 @@ reason = "Retention is the setting that is invisible until the day somebody goes
 name = "ExecutionJournal"
 pattern = "stateless-policy"
 reason = "The first completion is selected against durable execution state and retained for publication retries without retaining a handler or caller session."
+
+[[type]]
+name = "PagingSupport"
+pattern = "stateless-policy"
+reason = "Paging validation and token issuance carry no per-call state, so one stateless decision point keeps every handler aligned about windows, authority and query identity."
