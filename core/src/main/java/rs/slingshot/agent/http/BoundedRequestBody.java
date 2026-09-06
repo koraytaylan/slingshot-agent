@@ -110,7 +110,7 @@ public final class BoundedRequestBody {
         })) {
             final long started = DefaultStreamTicker.monotonicNanoseconds();
             long moved = started;
-            read = transfer(io, body, chunk, started, moved, contract, bound, held);
+            read = transfer(new Transfer(io, body, chunk, started, moved, contract, bound, held));
             return againstTheDeclaration(held.toByteArray(), declaredLength);
         } catch (final BoundExceeded exceeded) {
             return new Refused(Refusal.PAST_THE_BOUND, "this body is past the bound of "
@@ -121,19 +121,23 @@ public final class BoundedRequestBody {
         }
     }
 
-    private static long transfer(ExecutorService io, InputStream body, byte[] chunk,
-                                 long started, long moved, AgentContract contract, long bound,
-                                 ByteArrayOutputStream held) throws IOException {
+    private record Transfer(ExecutorService io, InputStream body, byte[] chunk, long started,
+                             long moved, AgentContract contract, long bound,
+                             ByteArrayOutputStream held) { }
+
+    private static long transfer(Transfer transfer) throws IOException {
         long total = 0;
-        int arrived = read(io, body, chunk, started, moved, contract);
+        int arrived = read(transfer.io(), transfer.body(), transfer.chunk(), transfer.started(),
+                transfer.moved(), transfer.contract());
         while (arrived >= 0) {
             total = total + arrived;
-            if (total > bound) {
-                throw new BoundExceeded(total, bound);
+            if (total > transfer.bound()) {
+                throw new BoundExceeded(total, transfer.bound());
             }
-            held.write(chunk, 0, arrived);
-            moved = DefaultStreamTicker.monotonicNanoseconds();
-            arrived = read(io, body, chunk, started, moved, contract);
+            transfer.held().write(transfer.chunk(), 0, arrived);
+            final long moved = DefaultStreamTicker.monotonicNanoseconds();
+            arrived = read(transfer.io(), transfer.body(), transfer.chunk(), transfer.started(),
+                    moved, transfer.contract());
         }
         return total;
     }
