@@ -16,7 +16,7 @@ not been rewritten by this review.
 - Registration/integration: not attempted; no validated Phase R base or integration OID claimed.
 - Review evidence: [EVIDENCE.md](EVIDENCE.md).
 - Full gate baseline: cache-preparation verification is refused by the locked-cache precondition; direct development policy review still reports source-policy failures;
-  core tests run 1122 / 2 failures, both in dense-bucket maintenance sweep successor accounting;
+  core tests run 1124 / 2 failures, both in dense-bucket maintenance sweep successor accounting;
   the Maven dependency cache is also read-only in this sandbox. See EXECUTION.md and the Surefire
   reports.
 
