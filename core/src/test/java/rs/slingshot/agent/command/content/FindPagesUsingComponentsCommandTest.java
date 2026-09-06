@@ -47,6 +47,10 @@ final class FindPagesUsingComponentsCommandTest {
         assertInstanceOf(CommandHandler.Failed.class,
                 new FindPagesUsingComponentsHandler(CONTRACT).run(new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
                 "malformed arguments reached the platform handler");
+        assertInstanceOf(CommandHandler.Failed.class,
+                new FindPagesUsingComponentsHandler(CONTRACT).run(
+                        argument("/content/missing", List.of(TEASER), 100), readOnly(), context()),
+                "a missing root was answered as an empty result");
     }
 
     private static final AgentContract CONTRACT = contract();
