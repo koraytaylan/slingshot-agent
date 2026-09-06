@@ -212,23 +212,26 @@ public final class DownloadContentPackageHandler implements CommandHandler {
             if (already + found.size() >= budget) {
                 return Selection.OVER_THE_BUDGET;
             }
-            if (command.contains(current.getPath())) {
-                found.add(current.getPath());
-                pending.push(current.listChildren());
-                resource = Optional.empty();
-                while (!pending.isEmpty() && resource.isEmpty()) {
-                    final Iterator<Resource> children = pending.peek();
-                    if (children.hasNext()) {
-                        resource = Optional.of(children.next());
-                    } else {
-                        pending.pop();
-                    }
-                }
-            } else {
-                resource = Optional.empty();
+            if (!command.contains(current.getPath())) {
+                return new Selection(Collections.unmodifiableList(found),
+                        Ending.NOTHING_LEFT_TO_SELECT);
             }
+            found.add(current.getPath());
+            pending.push(current.listChildren());
+            resource = next(pending);
         }
         return new Selection(Collections.unmodifiableList(found), Ending.NOTHING_LEFT_TO_SELECT);
+    }
+
+    private static Optional<Resource> next(java.util.Deque<Iterator<Resource>> pending) {
+        while (!pending.isEmpty()) {
+            final Iterator<Resource> children = pending.peek();
+            if (children.hasNext()) {
+                return Optional.of(children.next());
+            }
+            pending.pop();
+        }
+        return Optional.empty();
     }
 
     private Answer staged(DownloadContentPackageCommand command, List<String> selected,
