@@ -170,6 +170,10 @@ public final class StateLifecycleService {
                 + refused.detail());
     }
 
+    /** Result of one durable lifecycle pass.
+     * @param generation the generation processed
+     * @param detail the pass detail
+     */
     record Run(EventStoreGeneration generation, String detail) {
     }
 
