@@ -152,10 +152,13 @@ public record StreamWriter(StreamSession session, AgentContract contract,
         }
 
         private void run(IoAction action) throws IOException {
-            final Future<?> pending = executor.submit(() -> {
-                action.run();
-                return null;
-            });
+            final Future<?> pending = java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    action.run();
+                } catch (final IOException failed) {
+                    throw new java.io.UncheckedIOException(failed);
+                }
+            }, executor);
             try {
                 pending.get(timeoutMilliseconds(), TimeUnit.MILLISECONDS);
             } catch (final TimeoutException timeout) {
@@ -168,6 +171,9 @@ public record StreamWriter(StreamSession session, AgentContract contract,
                 throw withCause("stream response was interrupted", interrupted);
             } catch (final ExecutionException failed) {
                 final Throwable cause = failed.getCause();
+                if (cause instanceof java.io.UncheckedIOException) {
+                    throw new IOException("stream response failed", failed);
+                }
                 if (cause instanceof RuntimeException runtime) {
                     throwUnchecked(runtime);
                 }
