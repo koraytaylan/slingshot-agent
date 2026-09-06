@@ -1865,3 +1865,9 @@ required checks and the complete gate, then commit the completed task.
     and `ListChildPagesCommandTest` now runs its multi-page fixture with an authority. All 1,148
     core tests pass; JaCoCo reports `PagingSupport` at 65%, leaving additional branch coverage for
     the next loop. Commit: `37da8da`.
+
+136. Added missing-root handler scenarios for the remaining migrated search handlers. The focused
+    scenarios and the full 1,148-test core run pass; JaCoCo moved
+    `FindAssetsByMetadataHandler` to 77% and `FindPagesUsingComponentsHandler`/`FindPagesByTemplateHandler`
+    to 75%. The remaining floor failures are now the untested discovery-budget/continuation paths
+    plus `PagingSupport` and the runtime adapter. Commit: `ed76883`.
