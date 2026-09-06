@@ -10,11 +10,15 @@ Probe sources and observed outputs are preserved in [EVIDENCE.md](EVIDENCE.md).
 command runs (274–278). A real installed, Active core bundle answered capabilities with an empty
 command_contracts array and rejected a locally validated query_paths submission with HTTP 400. That response corroborates the source
 finding; the probe did not instrument the exact rejection branch.
-The bundle contains eight DS components, all routes/alias, and no command registry TOML resources.
+The bundle contains eight DS components, all routes/alias, and embeds the 64 command registry TOML
+rows through the core build. It still has no DS composition that binds those rows to a
+`SubmitServlet.Commands` implementation, so the installed servlet falls back to
+`NOTHING_REGISTERED` and advertises no executable commands.
 
 CapabilityServlet (54, 143–144, 162–167, 181–186) also supplies fixed generation 1 and readiness false instead of
-reading the durable generation/key authority. CommandRegistry.read (93) requires a filesystem policy
-directory. Aem's ReplicatorAdmission has no DS registration; required platform adapters lack production
+reading the durable generation/key authority. The classloader form of `CommandRegistry.read` is
+available and the rows are embedded, but no production composition invokes it and supplies the handler
+map. Aem's ReplicatorAdmission has no DS registration; required platform adapters lack production
 registrations. Console resources reference slingshot-agent/datasource types with no
 registered renderers. Scheduler configuration files do not themselves connect the maintenance or
 recovery classes.
