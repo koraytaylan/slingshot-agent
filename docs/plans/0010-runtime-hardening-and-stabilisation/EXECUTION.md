@@ -1782,3 +1782,9 @@ required checks and the complete gate, then commit the completed task.
     preserving a fail-closed surface. `SubmitServletTest` passes all 25 cases, the packaged core
     bundle builds successfully, and its SCR descriptor contains the expected `0..1` dynamic
     reference. The handler and adapter graph itself remains a separate pending composition step.
+
+120. Added `DispatchCommandRuntime`, the concrete adapter from a validated `CommandDispatch` to
+    `SubmitServlet.Commands`. It bounds and parses canonical arguments, preserves typed produced and
+    failed execution outcomes, and refuses malformed or unknown results as uncertainty. Focused
+    servlet/dispatch tests pass 32 cases; compile, PMD and Checkstyle pass, and the packaged SCR
+    descriptor contains the dynamic `CommandRuntime` reference.
