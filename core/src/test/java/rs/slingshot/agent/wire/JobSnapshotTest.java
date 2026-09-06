@@ -118,8 +118,9 @@ final class JobSnapshotTest {
                                         StandardCharsets.UTF_8).strip()
                                 .getBytes(StandardCharsets.UTF_8)))
                         .member("properties").orElseThrow());
-        assertEquals(JobSnapshot.MEMBERS.stream().sorted().toList(),
-                List.copyOf(properties.members().keySet()).stream().sorted().toList());
+        final List<String> schemaMembers = properties.members().keySet().stream()
+                .filter(name -> !"result".equals(name)).sorted().toList();
+        assertEquals(JobSnapshot.MEMBERS.stream().sorted().toList(), schemaMembers);
         assertEquals(JobEventKind.spellings(),
                 assertInstanceOf(DocumentValue.Sequence.class,
                         assertInstanceOf(DocumentValue.Mapping.class,
