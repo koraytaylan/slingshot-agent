@@ -22,7 +22,13 @@ public final class PagingSupport {
     private PagingSupport() {
     }
 
-    /** One page decision, including the token that reaches its successor where one exists. */
+    /**
+     * One page decision, including the token that reaches its successor where one exists.
+     *
+     * @param <R> the result row type
+     * @param rows the rows to return
+     * @param continuationToken the successor token, or empty at the end
+     */
     public record Page<R>(List<R> rows, String continuationToken) {
 
         /** Holds rows apart from the mutable list used to assemble them. */
@@ -35,11 +41,22 @@ public final class PagingSupport {
     public sealed interface Outcome<R> permits Accepted, Refused {
     }
 
-    /** A page that was validated and may be returned. */
+    /**
+     * A page that was validated and may be returned.
+     *
+     * @param <R> the result row type
+     * @param page the accepted page
+     */
     public record Accepted<R>(Page<R> page) implements Outcome<R> {
     }
 
-    /** A paging request that could not be honoured. */
+    /**
+     * A paging request that could not be honoured.
+     *
+     * @param <R> the result row type
+     * @param category the declared refusal category
+     * @param detail the observed reason
+     */
     public record Refused<R>(String category, String detail) implements Outcome<R> {
     }
 
