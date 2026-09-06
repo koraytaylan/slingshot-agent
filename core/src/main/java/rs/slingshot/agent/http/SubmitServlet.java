@@ -39,6 +39,11 @@ import rs.slingshot.agent.store.StatePath;
  * believing the one a caller sent, and answering with the record's own values so that a client
  * comparing them against what it sent finds them equal or finds a real disagreement.</p>
  *
+ * <p>An accepted operation with complete intake may wait for execution capacity. An identical
+ * owner resend tries to start that operation inside the new authorized request; it never borrows
+ * the original request's session. Saturation or a start conflict with no observed winner returns
+ * a retryable refusal. Running and terminal operations are acknowledged without executing again.</p>
+ *
  * <p>An acknowledgement naming a different operation, generation, target, or digest is never sent,
  * because the client is built to treat exactly that as evidence its request may or may not have
  * run — which is the one answer nobody can act on.</p>
@@ -269,29 +274,33 @@ public final class SubmitServlet extends AgentServlet {
         }
         final AdmissionOutcome outcome = ((IntakeSlotWrite.Decided) intake).outcome();
         if (outcome instanceof final AdmissionOutcome.Accepted accepted) {
-            if (IntakeSlotWrite.outstanding(session,
-                    rs.slingshot.agent.execution.OperationStore.pathOf(
-                            accepted.operation().identity())) > 0) {
-                // The record is the claim and the manifest is what it is waiting for. Nothing
-                // starts until the last declared slot completes, so a command never runs against a
-                // payload that is still arriving.
-                answered(response, accepted.operation(), submission, arriving,
-                        SubmissionResponse.Acceptance.THE_FIRST_TIME);
-                return;
-            }
-            executed(response, accepted.operation(), submission, arriving, session);
+            progress(response, accepted.operation(), submission, arriving, session,
+                    SubmissionResponse.Acceptance.THE_FIRST_TIME);
             return;
         }
         if (outcome instanceof final AdmissionOutcome.Recognised recognised) {
-            answered(response, recognised.operation(), submission, arriving,
+            progress(response, recognised.operation(), submission, arriving, session,
                     SubmissionResponse.Acceptance.ALREADY_HELD);
             return;
         }
         refuse(response, outcome instanceof AdmissionOutcome.Conflicting ? CONFLICT : REFUSED);
     }
 
+    private void progress(SlingHttpServletResponse response, LogicalOperation operation,
+                          DocumentValue.Mapping submission, Arriving arriving, Session session,
+                          SubmissionResponse.Acceptance acceptance) throws IOException, RepositoryException {
+        if (operation.state() != rs.slingshot.agent.execution.OperationState.ACCEPTED
+                || IntakeSlotWrite.outstanding(session,
+                        rs.slingshot.agent.execution.OperationStore.pathOf(operation.identity())) > 0) {
+            answered(response, operation, submission, arriving, acceptance);
+            return;
+        }
+        executed(response, operation, submission, arriving, session, acceptance);
+    }
+
     private void executed(SlingHttpServletResponse response, LogicalOperation accepted,
-                          DocumentValue.Mapping submission, Arriving arriving, Session session)
+                          DocumentValue.Mapping submission, Arriving arriving, Session session,
+                          SubmissionResponse.Acceptance acceptance)
             throws IOException, RepositoryException {
         final Optional<StatePath.Caller> caller = arriving.caller().counted();
         if (caller.isEmpty()) {
@@ -311,7 +320,7 @@ public final class SubmitServlet extends AgentServlet {
             return;
         }
         try {
-            running(response, accepted, submission, arriving, session);
+            running(response, accepted, submission, arriving, session, acceptance);
         } finally {
             rs.slingshot.agent.store.CapacityLedger.release(session, reserved.reservation(),
                     arriving.contract());
@@ -331,18 +340,15 @@ public final class SubmitServlet extends AgentServlet {
     private static final long MILLISECONDS_IN_A_SECOND = 1000;
 
     private void running(SlingHttpServletResponse response, LogicalOperation accepted,
-                         DocumentValue.Mapping submission, Arriving arriving, Session session)
+                         DocumentValue.Mapping submission, Arriving arriving, Session session,
+                         SubmissionResponse.Acceptance acceptance)
             throws IOException, RepositoryException {
         final rs.slingshot.agent.execution.OperationStore.Outcome started =
                 rs.slingshot.agent.execution.OperationStore.move(session, accepted,
                         rs.slingshot.agent.execution.OperationState.RUNNING);
         if (!(started instanceof
                 final rs.slingshot.agent.execution.OperationStore.Held running)) {
-            // Somebody else started it between admission and here. The compare-and-set is the whole
-            // of the mutual exclusion an immediate command needs, and the loser answers from the
-            // record rather than running the work a second time.
-            answered(response, accepted, submission, arriving,
-                    SubmissionResponse.Acceptance.ALREADY_HELD);
+            startRefused(response, accepted, submission, arriving, session);
             return;
         }
         final rs.slingshot.agent.execution.ExecutionOutcome.Result produced =
@@ -358,8 +364,21 @@ public final class SubmitServlet extends AgentServlet {
         rs.slingshot.agent.execution.TerminalCommit.commit(session,
                 arriving.caller().counted().orElseThrow(), running.operation(),
                 outcome.outcome(), arriving.contract());
-        answered(response, running.operation(), submission, arriving,
-                SubmissionResponse.Acceptance.THE_FIRST_TIME);
+        answered(response, running.operation(), submission, arriving, acceptance);
+    }
+
+    private void startRefused(SlingHttpServletResponse response, LogicalOperation accepted,
+                              DocumentValue.Mapping submission, Arriving arriving, Session session)
+            throws IOException, RepositoryException {
+        final var current = rs.slingshot.agent.execution.OperationStore.read(session, accepted.identity());
+        if (current instanceof final rs.slingshot.agent.execution.OperationStore.Held held
+                && held.operation().state() != rs.slingshot.agent.execution.OperationState.ACCEPTED) {
+            answered(response, held.operation(), submission, arriving,
+                    SubmissionResponse.Acceptance.ALREADY_HELD);
+            return;
+        }
+        response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
+        refuse(response, AT_CAPACITY);
     }
 
     private void answered(SlingHttpServletResponse response, LogicalOperation operation,
