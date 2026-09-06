@@ -19,6 +19,8 @@ import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.CommandRegistry;
 import rs.slingshot.agent.command.OverflowPublication;
+import rs.slingshot.agent.command.component.AddComponentCommand;
+import rs.slingshot.agent.command.component.AddComponentHandler;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataCommand;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataHandler;
 import rs.slingshot.agent.command.content.FindAssetsReferencedByPageCommand;
@@ -44,6 +46,14 @@ import rs.slingshot.agent.command.content.ReadContentFragmentCommand;
 import rs.slingshot.agent.command.content.ReadContentFragmentHandler;
 import rs.slingshot.agent.command.content.ResolveResourcePathCommand;
 import rs.slingshot.agent.command.content.ResolveResourcePathHandler;
+import rs.slingshot.agent.command.page.CreatePageCommand;
+import rs.slingshot.agent.command.page.CreatePageHandler;
+import rs.slingshot.agent.command.page.DeletePageCommand;
+import rs.slingshot.agent.command.page.DeletePageHandler;
+import rs.slingshot.agent.command.page.MovePageCommand;
+import rs.slingshot.agent.command.page.MovePageHandler;
+import rs.slingshot.agent.command.page.UpdatePageCommand;
+import rs.slingshot.agent.command.page.UpdatePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.execution.ExecutionOutcome;
 import rs.slingshot.agent.execution.LogicalOperation;
@@ -146,7 +156,17 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                 new CommandDispatch.Registration(ReadContentFragmentCommand.WIRE_NAME,
                         new ReadContentFragmentHandler(contract)),
                 new CommandDispatch.Registration(ResolveResourcePathCommand.WIRE_NAME,
-                        new ResolveResourcePathHandler(contract)));
+                        new ResolveResourcePathHandler(contract)),
+                new CommandDispatch.Registration(AddComponentCommand.WIRE_NAME,
+                        new AddComponentHandler(contract)),
+                new CommandDispatch.Registration(CreatePageCommand.WIRE_NAME,
+                        new CreatePageHandler(contract)),
+                new CommandDispatch.Registration(DeletePageCommand.WIRE_NAME,
+                        new DeletePageHandler(contract)),
+                new CommandDispatch.Registration(MovePageCommand.WIRE_NAME,
+                        new MovePageHandler(contract)),
+                new CommandDispatch.Registration(UpdatePageCommand.WIRE_NAME,
+                        new UpdatePageHandler(contract)));
     }
 
     /** Writes only the fail-closed state because dispatch and contract are platform objects.
