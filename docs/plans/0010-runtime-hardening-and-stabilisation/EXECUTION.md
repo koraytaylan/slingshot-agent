@@ -1950,3 +1950,10 @@ required checks and the complete gate, then commit the completed task.
      Runtime activation/deactivation tests pass, and the full core gate passes all 1,155 tests and
      every coverage/static-analysis/documentation check. Commands needing platform adapters or
      staging remain intentionally outside this active subset pending their own assembly.
+
+147. Expanded the 4502 DS assembly with the contract-only page mutation and component-addition
+     handlers. These handlers execute through the caller's resolver and require no platform service
+     inventory, so they can be activated under the same registry correspondence guard. The runtime
+     review still proves activation/deactivation fail closed, and the complete core gate passes with
+     all static, documentation, coverage, and test checks. Platform inventory, replication, workflow,
+     job, and staging handlers remain withheld until their adapters are registered.
