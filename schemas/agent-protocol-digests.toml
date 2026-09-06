@@ -84,7 +84,7 @@ unpublished = "The client publishes no result document of its own. What a result
 [[schema]]
 path = "schemas/agent-protocol/job/snapshot.json"
 model = "core/src/main/java/rs/slingshot/agent/wire/JobSnapshot.java"
-digest = "869543f8b91d2aff60d9c6ac5998e526eccf366eb904e16113feaf4f9978e836"
+digest = "b3485c0bc6b473e9c21eb60f01a84c41f734f6677273c106603f8a0e67e0f0b1"
 reason = "What the store holds about one job, in the event document's own vocabulary."
 
 # Where a schema states a length and the model reads a bound, the two are the same number and
