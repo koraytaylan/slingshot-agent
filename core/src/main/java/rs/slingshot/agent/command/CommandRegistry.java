@@ -127,34 +127,39 @@ public final class CommandRegistry {
         if (index.isEmpty()) {
             return new Refused(Failure.UNREADABLE, REGISTRY_RESOURCE_INDEX + " is not embedded");
         }
-        final SequencedMap<String, RegistryRow> byName = new LinkedHashMap<>();
         try (BufferedReader lines = new BufferedReader(new InputStreamReader(
                 new java.io.ByteArrayInputStream(index.get()),
                 StandardCharsets.UTF_8))) {
-            String file;
-            file = lines.readLine();
-            while (file != null) {
-                if (file.isBlank()) {
-                    continue;
-                }
-                final Optional<byte[]> row = resource(loader, REGISTRY_RESOURCE_DIRECTORY + file);
-                if (row.isEmpty()) {
-                    return new Refused(Failure.UNREADABLE, file + " is not embedded");
-                }
-                final Outcome read = row(file, row.get());
-                if (read instanceof Refused) {
-                    return read;
-                }
-                final RegistryRow value = ((Loaded) read).registry().rows().getFirst();
-                if (byName.put(value.wireName(), value) != null) {
-                    return new Refused(Failure.DUPLICATE_WIRE_NAME, value.wireName()
-                            + " is declared by more than one embedded file");
-                }
-                file = lines.readLine();
+            final Outcome rows = readRows(loader, lines);
+            if (rows instanceof Refused) {
+                return rows;
             }
+            return rows;
         } catch (final IOException unreadable) {
             return new Refused(Failure.UNREADABLE, "embedded command rows could not be read: "
                     + unreadable.getMessage());
+        }
+    }
+
+    private static Outcome readRows(ClassLoader loader, BufferedReader lines) throws IOException {
+        final SequencedMap<String, RegistryRow> byName = new LinkedHashMap<>();
+        for (String file = lines.readLine(); file != null; file = lines.readLine()) {
+            if (file.isBlank()) {
+                continue;
+            }
+            final Optional<byte[]> row = resource(loader, REGISTRY_RESOURCE_DIRECTORY + file);
+            if (row.isEmpty()) {
+                return new Refused(Failure.UNREADABLE, file + " is not embedded");
+            }
+            final Outcome read = row(file, row.get());
+            if (read instanceof Refused) {
+                return read;
+            }
+            final RegistryRow value = ((Loaded) read).registry().rows().getFirst();
+            if (byName.put(value.wireName(), value) != null) {
+                return new Refused(Failure.DUPLICATE_WIRE_NAME, value.wireName()
+                        + " is declared by more than one embedded file");
+            }
         }
         return new Loaded(new CommandRegistry(byName.values().stream()
                 .sorted(java.util.Comparator.comparing(RegistryRow::wireName)).toList()));
