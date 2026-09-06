@@ -34,6 +34,22 @@ final class StateLifecycleServiceTest {
     }
 
     @Test
+    void deactivationClearsProviderBeforeASecondActivation() {
+        final StateLifecycleService service = new StateLifecycleService();
+        service.available(new rs.slingshot.agent.repository.AgentSession(subservice -> {
+            throw new LoginException("not ready");
+        }));
+        service.activate();
+        service.deactivate();
+        service.activate();
+        assertEquals(StateLifecycleService.Availability.UNAVAILABLE,
+                StateLifecycleService.observed().availability());
+        assertEquals("state session provider is not bound",
+                StateLifecycleService.observed().detail());
+        service.deactivate();
+    }
+
+    @Test
     void providerRemovalRevokesLifecycleAvailability() {
         final StateLifecycleService service = new StateLifecycleService();
         final rs.slingshot.agent.repository.AgentSession source =
