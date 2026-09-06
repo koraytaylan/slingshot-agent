@@ -1566,3 +1566,8 @@ required checks and the complete gate, then commit the completed task.
     checkpoint progress and never became ready within its five-minute startup bound; the isolated
     rebuilt-bundle scenario passes, so this gate result is an environment startup timeout rather
     than a product failure.
+
+76. Reworked content-package archive entry writing to preserve checked `IOException` propagation.
+    Resource or ZIP entry failures now reach the handler's declared `PACKAGE_FAILED` result instead
+    of escaping as an uncategorized `UncheckedIOException`. The 12-case package command suite
+    passes after the refactor, including deterministic archive and selected-content checks.
