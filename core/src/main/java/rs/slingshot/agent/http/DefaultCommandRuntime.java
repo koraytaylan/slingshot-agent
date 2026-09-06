@@ -5,8 +5,11 @@ package rs.slingshot.agent.http;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandDispatch;
@@ -21,13 +24,13 @@ import rs.slingshot.agent.json.DocumentValue;
 import rs.slingshot.agent.wire.CommandFailure;
 
 /** Adapts a verified command dispatch to the submission servlet's execution contract. */
-public final class DispatchCommandRuntime implements CommandRuntime {
+public final class DefaultCommandRuntime implements CommandRuntime {
 
     private static final String ARGUMENTS = SubmitServlet.ARGUMENTS;
     private static final long serialVersionUID = 1L;
-    private transient State state;
+    private final AtomicReference<State> state = new AtomicReference<>(Missing.INSTANCE);
 
-    private sealed interface State permits Active, Missing {
+    private sealed interface State extends Serializable permits Active, Missing {
     }
 
     private record Active(CommandDispatch dispatch, AgentContract contract) implements State {
@@ -42,20 +45,29 @@ public final class DispatchCommandRuntime implements CommandRuntime {
      * @param dispatch the validated registry/handler dispatch
      * @param contract the authenticated contract
      */
-    public DispatchCommandRuntime(CommandDispatch dispatch, AgentContract contract) {
-        this.state = new Active(java.util.Objects.requireNonNull(dispatch, "dispatch"),
-                java.util.Objects.requireNonNull(contract, "contract"));
+    public DefaultCommandRuntime(CommandDispatch dispatch, AgentContract contract) {
+        state.set(new Active(java.util.Objects.requireNonNull(dispatch, "dispatch"),
+                java.util.Objects.requireNonNull(contract, "contract")));
+    }
+
+    /** Writes only the fail-closed state because dispatch and contract are platform objects. */
+    private void writeObject(ObjectOutputStream output) throws IOException {
+        final State active = state.getAndSet(Missing.INSTANCE);
+        try {
+            output.defaultWriteObject();
+        } finally {
+            state.set(active);
+        }
     }
 
     /** Clears non-serializable platform state when a servlet is deserialized. */
     private void readObject(ObjectInputStream input) throws IOException, ClassNotFoundException {
         input.defaultReadObject();
-        state = Missing.INSTANCE;
     }
 
     @Override
     public boolean serves(String wireName) {
-        return state instanceof final Active active
+        return state.get() instanceof final Active active
                 && active.dispatch().wireNames().contains(wireName);
     }
 
@@ -69,7 +81,7 @@ public final class DispatchCommandRuntime implements CommandRuntime {
     public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, javax.jcr.Session session,
                                            ResourceResolver resolver, CallerContext context) {
-        if (!(state instanceof final Active active)) {
+        if (!(state.get() instanceof final Active active)) {
             return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
         }
         final AgentContract activeContract = active.contract();
@@ -88,7 +100,7 @@ public final class DispatchCommandRuntime implements CommandRuntime {
     public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, javax.jcr.Session session,
                                            ResourceResolver resolver) {
-        if (!(state instanceof final Active active)) {
+        if (!(state.get() instanceof final Active active)) {
             return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
         }
         final AgentContract activeContract = active.contract();

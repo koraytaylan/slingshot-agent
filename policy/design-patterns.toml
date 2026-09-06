@@ -2119,3 +2119,13 @@ reason = "The first completion is selected against durable execution state and r
 name = "PagingSupport"
 pattern = "stateless-policy"
 reason = "Paging validation and token issuance carry no per-call state, so one stateless decision point keeps every handler aligned about windows, authority and query identity."
+
+[[type]]
+name = "CommandRuntime"
+pattern = "strategy"
+reason = "The submission servlet depends on one runtime contract while the installed composition supplies the dispatch-backed implementation, keeping transport independent from command assembly."
+
+[[type]]
+name = "DefaultCommandRuntime"
+pattern = "accessor"
+reason = "The default runtime adapts the validated command dispatch to the servlet contract and is the registered implementation used by the packaged bundle."
