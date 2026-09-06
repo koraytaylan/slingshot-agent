@@ -1709,3 +1709,7 @@ required checks and the complete gate, then commit the completed task.
 105. Applied verified paging to the configuration inventory listing. Its focused 17-case suite and
     compilation pass, and the result now carries a real successor token when the bounded inventory
     has another page. Job, principal, replication, and workflow listings remain outstanding.
+
+106. Applied verified paging to the job queue and job inventory listings, preserving their distinct
+    query wire names. `JobCommandTest` passes all 12 cases after recompilation. Principal,
+    replication, and workflow listings remain to be migrated.

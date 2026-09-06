@@ -7,6 +7,7 @@ import java.util.List;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.platform.ControlCapability;
 import rs.slingshot.agent.command.platform.JobInventory;
@@ -81,13 +82,20 @@ public final class JobHandler implements CommandHandler {
             return new Failed(refused.category(), refused.detail());
         }
         final List<JobInventory.Queue> queues = ((JobInventory.Queues) found).queues();
-        return queues.size() > context.discovery().limit()
-                ? new Failed(JobCommands.DISCOVERY_BUDGET_EXCEEDED, queues.size() + " queues is"
-                        + " more than the " + context.discovery().limit()
-                        + " this caller may examine")
-                : new Produced(JobResults.queuesOf(
-                        pageOf(queues, ((JobCommands.QueueWindow) asked).window()),
-                        JobResults.NO_MORE_PAGES));
+        if (queues.size() > context.discovery().limit()) {
+            return new Failed(JobCommands.DISCOVERY_BUDGET_EXCEEDED, queues.size() + " queues is"
+                    + " more than the " + context.discovery().limit()
+                    + " this caller may examine");
+        }
+        final PagingSupport.Outcome<JobInventory.Queue> page = PagingSupport.page(queues,
+                ((JobCommands.QueueWindow) asked).window(), JobCommands.QUEUES_WIRE_NAME, arguments,
+                context, contract);
+        if (page instanceof final PagingSupport.Refused<JobInventory.Queue> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<JobInventory.Queue> accepted =
+                ((PagingSupport.Accepted<JobInventory.Queue>) page).page();
+        return new Produced(JobResults.queuesOf(accepted.rows(), accepted.continuationToken()));
     }
 
     private Answer jobs(DocumentValue.Mapping arguments, CallerContext context) {
@@ -102,11 +110,18 @@ public final class JobHandler implements CommandHandler {
             return new Failed(refused.category(), refused.detail());
         }
         final List<JobInventory.Job> jobs = ((JobInventory.Jobs) found).jobs();
-        return jobs.size() > context.discovery().limit()
-                ? new Failed(JobCommands.DISCOVERY_BUDGET_EXCEEDED, jobs.size() + " jobs is more"
-                        + " than the " + context.discovery().limit() + " this caller may examine")
-                : new Produced(JobResults.jobsOf(pageOf(jobs, search.window()),
-                        JobResults.NO_MORE_PAGES));
+        if (jobs.size() > context.discovery().limit()) {
+            return new Failed(JobCommands.DISCOVERY_BUDGET_EXCEEDED, jobs.size() + " jobs is more"
+                    + " than the " + context.discovery().limit() + " this caller may examine");
+        }
+        final PagingSupport.Outcome<JobInventory.Job> page = PagingSupport.page(jobs,
+                search.window(), JobCommands.JOBS_WIRE_NAME, arguments, context, contract);
+        if (page instanceof final PagingSupport.Refused<JobInventory.Job> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<JobInventory.Job> accepted =
+                ((PagingSupport.Accepted<JobInventory.Job>) page).page();
+        return new Produced(JobResults.jobsOf(accepted.rows(), accepted.continuationToken()));
     }
 
     /**
