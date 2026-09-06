@@ -239,26 +239,31 @@ public final class EventStreamServlet extends AgentServlet {
             worker.setDaemon(true);
             return worker;
         })) {
-            try {
-                io.submit(() -> {
-                    try {
-                        response.flushBuffer();
-                    } catch (final IOException failed) {
-                        throw new java.io.UncheckedIOException(failed);
-                    }
-                }).get(TransferDeadlines.totalMilliseconds(contract), TimeUnit.MILLISECONDS);
-            } catch (final TimeoutException timeout) {
-                throw withCause("stream response exceeded its transfer deadline", timeout);
-            } catch (final InterruptedException interrupted) {
-                Thread.currentThread().interrupt();
-                throw withCause("stream response flush was interrupted", interrupted);
-            } catch (final ExecutionException failed) {
-                final Throwable cause = failed.getCause();
-                if (cause instanceof RuntimeException runtime) {
-                    throwUnchecked(runtime);
+            flush(response, contract, io);
+        }
+    }
+
+    private static void flush(SlingHttpServletResponse response, AgentContract contract,
+                              java.util.concurrent.ExecutorService io) throws IOException {
+        try {
+            io.submit(() -> {
+                try {
+                    response.flushBuffer();
+                } catch (final IOException failed) {
+                    throw new java.io.UncheckedIOException(failed);
                 }
-                throw withCause("stream response flush failed", failed);
+            }).get(TransferDeadlines.totalMilliseconds(contract), TimeUnit.MILLISECONDS);
+        } catch (final TimeoutException timeout) {
+            throw withCause("stream response exceeded its transfer deadline", timeout);
+        } catch (final InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw withCause("stream response flush was interrupted", interrupted);
+        } catch (final ExecutionException failed) {
+            final Throwable cause = failed.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throwUnchecked(runtime);
             }
+            throw withCause("stream response flush failed", failed);
         }
     }
 
