@@ -5,8 +5,8 @@ package rs.slingshot.agent.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.junit.jupiter.api.Test;
 import org.apache.sling.api.resource.LoginException;
+import org.junit.jupiter.api.Test;
 
 final class StateLifecycleServiceTest {
 
