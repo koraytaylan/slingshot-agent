@@ -1597,3 +1597,10 @@ required checks and the complete gate, then commit the completed task.
 82. Added a regression case that invokes `QueryPathsHandler.run` against a multi-page Oak corpus and
     asserts the response contains exactly the requested initial limit. The focused suite now passes
     all 11 cases, proving the fix through the handler rather than only through its helper.
+
+83. Added an optional per-call paging context to `CallerContext`, preserving the existing
+    five-argument constructor while exposing continuation authority, target digest, generation, and
+    clock data to handlers. `QueryPathsHandler` now decodes and validates canonical continuation
+    tokens, resumes at their signed position, and issues a signed next token when authority is
+    present. The focused 11-case suite passes and Checkstyle/PMD pass; runtime assembly still needs
+    to populate the context.
