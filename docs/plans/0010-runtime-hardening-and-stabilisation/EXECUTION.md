@@ -1593,3 +1593,7 @@ required checks and the complete gate, then commit the completed task.
 
 81. Re-ran Checkstyle and PMD after the paging handoff. Both pass with no findings for the changed
     handler; PMD emits only the repository's existing unmatched-exclusion warnings.
+
+82. Added a regression case that invokes `QueryPathsHandler.run` against a multi-page Oak corpus and
+    asserts the response contains exactly the requested initial limit. The focused suite now passes
+    all 11 cases, proving the fix through the handler rather than only through its helper.
