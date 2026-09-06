@@ -1798,3 +1798,8 @@ required checks and the complete gate, then commit the completed task.
      deserialized adapter with no live contract now returns an uncertain outcome instead of
      throwing. `SubmitServletTest` and `CommandDispatchTest` pass all 32 focused cases, and the
      core compile, PMD, SpotBugs, and Checkstyle checks pass with zero findings.
+
+123. Re-ran `scripts/quality` to capture the current gate boundary. The locked dependency cache
+     passes, then `pinned-interop-images` stops because all five recorded images are absent from
+     the active Podman engine. The gate names `scripts/prepare_interop_images` as the required
+     preparation command; no later quality stage was run in this attempt.
