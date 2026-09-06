@@ -322,7 +322,7 @@ public final class AssetMutationHandler implements CommandHandler {
                                             long bound, long budget, String parent) {
         final var discovered = command.adjustReferences() == MoveRequest.ReferenceAdjustment.FOLLOWED
                 ? RepositoryReach.references(session, command.sourcePath(), budget)
-                : new RepositoryReach.References(List.of(), true);
+                : new RepositoryReach.References(List.of(), RepositoryReach.Completeness.COMPLETE);
         if (!discovered.complete()) {
             return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
                     "reference discovery exceeded the visibility budget and the move was refused");
