@@ -28,6 +28,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
 
     private static final String ARGUMENTS = SubmitServlet.ARGUMENTS;
     private static final long serialVersionUID = 1L;
+    /** Runtime state, which is temporarily replaced by the fail-closed state during serialization. */
     private final AtomicReference<State> state = new AtomicReference<>(Missing.INSTANCE);
 
     private sealed interface State extends Serializable permits Active, Missing {
@@ -50,7 +51,10 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                 java.util.Objects.requireNonNull(contract, "contract")));
     }
 
-    /** Writes only the fail-closed state because dispatch and contract are platform objects. */
+    /** Writes only the fail-closed state because dispatch and contract are platform objects.
+     * @param output the serialization stream
+     * @throws IOException if the state cannot be written
+     */
     private void writeObject(ObjectOutputStream output) throws IOException {
         final State active = state.getAndSet(Missing.INSTANCE);
         try {
@@ -60,7 +64,11 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         }
     }
 
-    /** Clears non-serializable platform state when a servlet is deserialized. */
+    /** Clears non-serializable platform state when a servlet is deserialized.
+     * @param input the serialization stream
+     * @throws IOException if the state cannot be read
+     * @throws ClassNotFoundException if a serialized state type is unavailable
+     */
     private void readObject(ObjectInputStream input) throws IOException, ClassNotFoundException {
         input.defaultReadObject();
     }
