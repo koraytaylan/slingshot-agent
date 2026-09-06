@@ -1717,3 +1717,7 @@ required checks and the complete gate, then commit the completed task.
 107. Applied verified paging to principal group membership listing. `PrincipalCommandTest` passes
     all 14 cases after recompilation, with the membership query digest kept distinct from the other
     principal operations. Replication and workflow listings remain outstanding.
+
+108. Applied verified paging to replication-agent and replication-queue listings, preserving their
+    separate query identities. `AgentCommandTest` passes all 12 cases after recompilation. Workflow
+    listings are the last remaining handler family in task 4404.
