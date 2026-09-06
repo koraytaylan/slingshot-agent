@@ -358,7 +358,7 @@ public record StreamWriter(StreamSession session, AgentContract contract,
     private void advance(StreamSession streamSession, Session store, ReplayCursor position,
                         StreamTicker ticker) throws RepositoryException {
         HighWaterMark.advance(store, streamSession.subscription(), position.sequence(),
-                ticker.elapsedMilliseconds());
+                ticker.milliseconds());
     }
 
     private void advanceCurrent(Session store, StreamTicker ticker,
