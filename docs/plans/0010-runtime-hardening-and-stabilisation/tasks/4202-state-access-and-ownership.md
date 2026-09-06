@@ -25,8 +25,8 @@ touches:
   - core/src/test/java/rs/slingshot/agent/repository
   - core/src/test/java/rs/slingshot/agent/stream
   - ui.config/src/main/content/jcr_root/apps/slingshot-agent/osgiconfig/config
-status: pending
-merged_as: ""
+status: complete
+merged_as: c4e2f86
 ---
 # Separate State Sessions and Enforce Ownership
 

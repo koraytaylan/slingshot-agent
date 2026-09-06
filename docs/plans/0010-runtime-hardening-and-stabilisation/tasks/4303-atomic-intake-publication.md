@@ -20,8 +20,8 @@ touches:
   - interop/src/test/java/rs/slingshot/agent/interop/harness
   - interop/scenarios/intake-publication-crash.toml
   - policy/design-patterns.toml
-status: pending
-merged_as: ""
+status: complete
+merged_as: e0d4a99
 ---
 # Validate Intake Before Publishing a Completed Slot
 

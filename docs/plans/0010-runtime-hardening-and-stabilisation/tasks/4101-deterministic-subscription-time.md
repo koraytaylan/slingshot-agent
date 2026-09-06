@@ -8,8 +8,8 @@ gated: false
 touches:
   - core/src/main/java/rs/slingshot/agent/http/HighWaterServlet.java
   - core/src/test/java/rs/slingshot/agent/http/HighWaterServletTest.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: 2a716c5
 ---
 # Make Subscription Expiry Tests Deterministic
 

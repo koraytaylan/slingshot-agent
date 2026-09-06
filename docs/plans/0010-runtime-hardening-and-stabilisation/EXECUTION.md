@@ -1184,3 +1184,11 @@ Remaining: implement traversal which bounds retained work as well as visible ite
 review final cursor integration, prove eventual
 coverage and exact accounting across repeated passes, review failure/concurrency boundaries, run
 required checks and the complete gate, then commit the completed task.
+
+15. Prototyped a durable predecessor/successor list maintained at operation admission so a sweep
+    could address the next record directly. Review exposed that prepared but empty bucket parents
+    remain in the numeric namespace: a bound-one pass must skip those parents while preserving the
+    cursor's bucket contract. The prototype also changed cycle and interruption behavior before
+    that normalization was complete, so it was reverted. No source from this attempt is retained;
+    the next implementation must normalize to the next populated bucket before committing cursor
+    progress and re-run the dense, cycle, contention, and interruption cases.
