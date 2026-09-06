@@ -183,8 +183,8 @@
               </resources>
             </configuration>
           </execution>
-          <execution>
-            <id>embed-canonical-contract</id>
+        <execution>
+          <id>embed-canonical-contract</id>
             <phase>generate-resources</phase>
             <goals>
               <goal>copy-resources</goal>
@@ -201,9 +201,29 @@
                   <filtering>false</filtering>
                 </resource>
               </resources>
-            </configuration>
-          </execution>
-        </executions>
+          </configuration>
+        </execution>
+        <execution>
+          <id>embed-command-registry</id>
+          <phase>generate-resources</phase>
+          <goals>
+            <goal>copy-resources</goal>
+          </goals>
+          <configuration>
+            <outputDirectory>${project.build.outputDirectory}/rs/slingshot/agent/commands</outputDirectory>
+            <resources>
+              <resource>
+                <directory>${project.basedir}/../policy/commands</directory>
+                <includes>
+                  <include>*.toml</include>
+                  <include>index.txt</include>
+                </includes>
+                <filtering>false</filtering>
+              </resource>
+            </resources>
+          </configuration>
+        </execution>
+      </executions>
       </plugin>
       <plugin>
         <groupId>biz.aQute.bnd</groupId>

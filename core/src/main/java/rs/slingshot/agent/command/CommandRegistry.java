@@ -3,7 +3,10 @@
 
 package rs.slingshot.agent.command;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -38,6 +41,12 @@ public final class CommandRegistry {
 
     /** What one row's file is called, after the command it declares. */
     public static final String ROW_EXTENSION = ".toml";
+
+    /** The embedded deterministic list of command-row resources. */
+    public static final String REGISTRY_RESOURCE_INDEX = "rs/slingshot/agent/commands/index.txt";
+
+    /** The embedded resource directory containing the command rows. */
+    public static final String REGISTRY_RESOURCE_DIRECTORY = "rs/slingshot/agent/commands/";
 
     private final List<RegistryRow> rows;
 
@@ -107,6 +116,58 @@ public final class CommandRegistry {
                 .toList()));
     }
 
+    /**
+     * Reads the command rows embedded in an installed bundle.
+     *
+     * @param loader the bundle class loader
+     * @return the registry, or the one reason its resources cannot be read
+     */
+    public static Outcome read(ClassLoader loader) {
+        final Optional<byte[]> index = resource(loader, REGISTRY_RESOURCE_INDEX);
+        if (index.isEmpty()) {
+            return new Refused(Failure.UNREADABLE, REGISTRY_RESOURCE_INDEX + " is not embedded");
+        }
+        final SequencedMap<String, RegistryRow> byName = new LinkedHashMap<>();
+        try (BufferedReader lines = new BufferedReader(new InputStreamReader(
+                new java.io.ByteArrayInputStream(index.get()),
+                StandardCharsets.UTF_8))) {
+            String file;
+            file = lines.readLine();
+            while (file != null) {
+                if (file.isBlank()) {
+                    continue;
+                }
+                final Optional<byte[]> row = resource(loader, REGISTRY_RESOURCE_DIRECTORY + file);
+                if (row.isEmpty()) {
+                    return new Refused(Failure.UNREADABLE, file + " is not embedded");
+                }
+                final Outcome read = row(file, row.get());
+                if (read instanceof Refused) {
+                    return read;
+                }
+                final RegistryRow value = ((Loaded) read).registry().rows().getFirst();
+                if (byName.put(value.wireName(), value) != null) {
+                    return new Refused(Failure.DUPLICATE_WIRE_NAME, value.wireName()
+                            + " is declared by more than one embedded file");
+                }
+                file = lines.readLine();
+            }
+        } catch (final IOException unreadable) {
+            return new Refused(Failure.UNREADABLE, "embedded command rows could not be read: "
+                    + unreadable.getMessage());
+        }
+        return new Loaded(new CommandRegistry(byName.values().stream()
+                .sorted(java.util.Comparator.comparing(RegistryRow::wireName)).toList()));
+    }
+
+    private static Optional<byte[]> resource(ClassLoader loader, String name) {
+        try (InputStream source = loader.getResourceAsStream(name)) {
+            return source == null ? Optional.empty() : Optional.of(source.readAllBytes());
+        } catch (final IOException unreadable) {
+            return Optional.empty();
+        }
+    }
+
     private static Outcome add(SequencedMap<String, RegistryRow> byName, Path file) {
         final Outcome read = row(file);
         if (read instanceof Refused) {
@@ -127,11 +188,14 @@ public final class CommandRegistry {
      * @return a registry holding that one row, or the one reason there is none
      */
     public static Outcome row(Path file) {
-        final SequencedMap<String, String> stated = stated(text(file));
+        return row(file.getFileName().toString(), text(file).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static Outcome row(String name, byte[] bytes) {
+        final SequencedMap<String, String> stated = stated(new String(bytes, StandardCharsets.UTF_8));
         final Optional<String> missing = Member.absentIn(stated);
         if (missing.isPresent()) {
-            return new Refused(Failure.MEMBER_ABSENT,
-                    file.getFileName() + " states no " + missing.get());
+            return new Refused(Failure.MEMBER_ABSENT, name + " states no " + missing.get());
         }
         final Optional<AccessClass> access = AccessClass.named(stated.get(Member.ACCESS.spelling));
         final Optional<RegistryRow.OperationKey> key =
@@ -139,18 +203,18 @@ public final class CommandRegistry {
         final Optional<ExecutionClass> execution =
                 ExecutionClass.named(stated.get(Member.EXECUTION.spelling));
         if (access.isEmpty() || key.isEmpty() || execution.isEmpty()) {
-            return new Refused(Failure.MEMBER_UNKNOWN, file.getFileName()
+            return new Refused(Failure.MEMBER_UNKNOWN, name
                     + " names a class or a requirement this build does not know");
         }
         if (execution.get() == ExecutionClass.DEFERRED) {
-            return new Refused(Failure.NO_IDENTITY_ANSWER, file.getFileName()
+            return new Refused(Failure.NO_IDENTITY_ANSWER, name
                     + " runs later, in a job, and nothing here answers whose identity it would run"
                     + " under; running as the caller is free only inside the caller's own request");
         }
-        return built(file, stated, access.get(), key.get(), execution.get());
+        return built(name, stated, access.get(), key.get(), execution.get());
     }
 
-    private static Outcome built(Path file, SequencedMap<String, String> stated,
+    private static Outcome built(String name, SequencedMap<String, String> stated,
                                  AccessClass access, RegistryRow.OperationKey key,
                                  ExecutionClass execution) {
         try {
@@ -167,8 +231,7 @@ public final class CommandRegistry {
                     ? new Refused(Failure.DISAGREEING_ROW, disagreement.get())
                     : new Loaded(new CommandRegistry(List.of(row)));
         } catch (final IllegalArgumentException incomplete) {
-            return new Refused(Failure.UNPARSABLE,
-                    file.getFileName() + ": " + incomplete.getMessage());
+            return new Refused(Failure.UNPARSABLE, name + ": " + incomplete.getMessage());
         }
     }
 
