@@ -271,41 +271,42 @@ public final class ArtifactServlet extends AgentServlet {
      * @return how many bytes moved
      * @throws IOException if either side fails
      */
-    @SuppressWarnings("PMD.CloseResource")
     long transfer(InputStream reading, OutputStream writing, AgentContract contract)
             throws IOException {
-        final ExecutorService io = Executors.newSingleThreadExecutor(runnable -> {
+        try (ExecutorService io = Executors.newSingleThreadExecutor(runnable -> {
             final Thread worker = new Thread(runnable, "slingshot-artifact-transfer");
             worker.setDaemon(true);
             return worker;
-        });
-        final byte[] buffer = new byte[Digest.READ_BUFFER_BYTES];
-        final long startedAt = ticker.milliseconds();
-        final long monotonicStarted = System.nanoTime();
-        long monotonicLastMoved = monotonicStarted;
-        long lastMovedAt = startedAt;
-        long moved = 0;
-        try {
-            int read = read(io, reading, buffer, monotonicStarted, monotonicLastMoved, contract);
-            while (read >= 0) {
-                if (read > 0) {
-                    if (!write(io, writing, buffer, read, monotonicStarted, monotonicLastMoved,
+        })) {
+            final byte[] buffer = new byte[Digest.READ_BUFFER_BYTES];
+            final long startedAt = ticker.milliseconds();
+            final long monotonicStarted = System.nanoTime();
+            long monotonicLastMoved = monotonicStarted;
+            long lastMovedAt = startedAt;
+            long moved = 0;
+            try {
+                int read = read(io, reading, buffer, monotonicStarted, monotonicLastMoved, contract);
+                while (read >= 0) {
+                    if (read > 0) {
+                        if (!write(io, writing, buffer, read, monotonicStarted, monotonicLastMoved,
+                                contract)) {
+                            return moved;
+                        }
+                        moved = moved + read;
+                        lastMovedAt = ticker.milliseconds();
+                        monotonicLastMoved = System.nanoTime();
+                    }
+                    if (!TransferDeadlines.isMoving(startedAt, lastMovedAt, ticker.milliseconds(),
                             contract)) {
                         return moved;
                     }
-                    moved = moved + read;
-                    lastMovedAt = ticker.milliseconds();
-                    monotonicLastMoved = System.nanoTime();
+                    read = read(io, reading, buffer, monotonicStarted, monotonicLastMoved,
+                            contract);
                 }
-                if (!TransferDeadlines.isMoving(startedAt, lastMovedAt, ticker.milliseconds(),
-                        contract)) {
-                    return moved;
-                }
-                read = read(io, reading, buffer, monotonicStarted, monotonicLastMoved, contract);
+                return moved;
+            } finally {
+                io.shutdownNow();
             }
-            return moved;
-        } finally {
-            io.shutdownNow();
         }
     }
 
