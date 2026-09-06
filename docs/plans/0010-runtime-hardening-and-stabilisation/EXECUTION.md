@@ -1487,3 +1487,9 @@ required checks and the complete gate, then commit the completed task.
     1,124 tests outside the known maintenance successor cases pass; the same two dense-bucket tests
     fail with iterator advances of two and three against a bound of one. No regression was caused
     by the packaged command resources.
+
+63. Re-ran cache preparation and core SpotBugs after the registry nullability review. The
+    `CommandRegistry` warning was removed in commit `31793a5`; core SpotBugs now reports only the
+    two existing intentional runtime-exception adapters in event delivery. Cache preparation still
+    stops before recording because the locked Maven source-plugin realm lacks its Plexus archiver
+    dependency, so the nine reactor artifacts remain unrecorded.
