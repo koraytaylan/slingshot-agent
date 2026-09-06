@@ -1513,3 +1513,10 @@ required checks and the complete gate, then commit the completed task.
     reports only the two previously reviewed runtime-exception adapter methods in
     `EventStreamServlet` and `StreamWriter`. Their rethrow behavior is covered by the passing
     stream tests, so changing them would alter the established failure contract.
+
+67. Re-ran the complete quality gate after the method-shape, allocation, dependency-lock, and
+    interop-image review loops. Policy checks, dependency verification, image verification,
+    Checkstyle, PMD, SpotBugs, and the full Maven suite pass. JaCoCo remains the only failing stage,
+    with class-line coverage below 80% for `StateLifecycleService` (47%), `StreamWriter.TimedWriter`
+    (76%), `HighWaterMark` (78%), and `ArtifactServlet` (74%). Coverage exclusions are refused for
+    these product classes, so the remaining work is focused behavioral coverage in the four classes.
