@@ -103,15 +103,17 @@ public final class MaintenanceSweep {
         long examined = 0;
         long next = SweepCursor.BUCKETS;
         String nextRecord = "";
-        for (int visited = 0; visited < present.size(); visited++) {
+        int visited = 0;
+        while (visited < present.size()) {
             final BucketStep step = bucket(new BucketInput(session, pass, from, present, start,
                     visited, examined, bound));
-            examined += step.examined();
+            examined = Math.addExact(examined, step.examined());
             next = step.next();
             nextRecord = step.nextRecord();
             if (step.stop() == Stop.YES) {
                 break;
             }
+            visited++;
         }
         return new SweepState(examined, next, nextRecord);
     }
