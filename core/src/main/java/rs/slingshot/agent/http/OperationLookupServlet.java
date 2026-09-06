@@ -206,6 +206,7 @@ public final class OperationLookupServlet extends AgentServlet {
         } else if (result instanceof ExecutionOutcome.Published published) {
             delivery.put("artifact_byte_count", new DocumentValue.Whole(published.byteCount()));
             delivery.put("artifact_digest", new DocumentValue.Text(published.digest().rendered()));
+            delivery.put("artifact_slot", new DocumentValue.Text(published.slot().name()));
             delivery.put("delivery", new DocumentValue.Text("artifact"));
         } else {
             return null;
