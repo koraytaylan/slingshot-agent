@@ -1200,3 +1200,10 @@ required checks and the complete gate, then commit the completed task.
     that normalization was complete, so it was reverted. No source from this attempt is retained;
     the next implementation must normalize to the next populated bucket before committing cursor
     progress and re-run the dense, cycle, contention, and interruption cases.
+
+17. Revisited the durable successor approach with admission-time predecessor/successor properties
+    and direct linked traversal. Review found two additional correctness boundaries before it can be
+    retained: deleting a current record can invalidate a successor observed by a concurrent sweep,
+    and a cursor pointing at a prepared empty bucket must normalize before reporting progress. The
+    prototype was reverted after focused dense-cycle and resumption tests reported a path race and
+    incorrect wrap position. No source from this attempt is retained.
