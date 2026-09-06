@@ -39,15 +39,22 @@ public final class RepositoryReach {
      * @param bound how many nodes one removal may take
      * @return the addresses, which is one longer than the bound where the subtree is over it
      */
+    @SuppressWarnings("PMD.NullAssignment")
     public static List<String> under(Resource root, long bound) {
         final List<String> found = new ArrayList<>();
-        final Deque<Resource> pending = new ArrayDeque<>(List.of(root));
-        while (!pending.isEmpty() && found.size() <= bound) {
-            final Resource held = pending.removeFirst();
+        final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
+        Resource held = root;
+        while (held != null && found.size() <= bound) {
             found.add(held.getPath());
-            final Iterator<Resource> children = held.listChildren();
-            while (children.hasNext()) {
-                pending.addLast(children.next());
+            pending.push(held.listChildren());
+            held = null;
+            while (!pending.isEmpty() && held == null) {
+                final Iterator<Resource> children = pending.peek();
+                if (children.hasNext()) {
+                    held = children.next();
+                } else {
+                    pending.pop();
+                }
             }
         }
         return List.copyOf(found);
@@ -68,24 +75,31 @@ public final class RepositoryReach {
      * @param budget how many nodes this caller may examine
      * @return the nodes that mention it
      */
+    @SuppressWarnings("PMD.NullAssignment")
     public static List<Resource> pointingAt(ResourceResolver session, String address, long budget) {
         final Resource root = session.getResource(CONTENT_ROOT);
         if (root == null) {
             return List.of();
         }
         final List<Resource> found = new ArrayList<>();
-        final Deque<Resource> pending = new ArrayDeque<>(List.of(root));
+        final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
+        Resource held = root;
         long examined = 0;
-        while (!pending.isEmpty() && examined < budget) {
-            final Resource held = pending.removeFirst();
+        while (held != null && examined < budget) {
             examined = examined + 1;
             if (!held.getPath().equals(address) && !held.getPath().startsWith(address + "/")
                     && mentions(held, address)) {
                 found.add(held);
             }
-            final Iterator<Resource> children = held.listChildren();
-            while (children.hasNext()) {
-                pending.addLast(children.next());
+            pending.push(held.listChildren());
+            held = null;
+            while (!pending.isEmpty() && held == null) {
+                final Iterator<Resource> children = pending.peek();
+                if (children.hasNext()) {
+                    held = children.next();
+                } else {
+                    pending.pop();
+                }
             }
         }
         return List.copyOf(found);
