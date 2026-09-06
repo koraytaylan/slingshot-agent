@@ -1721,3 +1721,9 @@ required checks and the complete gate, then commit the completed task.
 108. Applied verified paging to replication-agent and replication-queue listings, preserving their
     separate query identities. `AgentCommandTest` passes all 12 cases after recompilation. Workflow
     listings are the last remaining handler family in task 4404.
+
+109. Applied verified paging to workflow-model and workflow-instance listings, preserving their
+    distinct query wire names. `WorkflowCommandTest` passes all 14 cases after recompilation. All
+    registry paged handler run paths now route through the shared paging operation; task 4404 still
+    needs an end-to-end review of malformed, stale, wrong-query and final-page behavior across the
+    migrated commands before it can be marked complete.
