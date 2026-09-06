@@ -1470,3 +1470,9 @@ required checks and the complete gate, then commit the completed task.
     installed-resource loading without the repository filesystem (13 cases); core Checkstyle and
     PMD pass. Handler construction and runtime dependency assembly remain the open part of 4502.
     Commit `db96240` records this review loop.
+
+60. Reviewed the installed dispatch boundary after embedding the registry. `CommandDispatch` still
+    requires a handler for every row and rejects partial maps; the remaining handlers depend on
+    platform adapters that have no production DS registrations. This review confirms that resource
+    embedding is safe to land while partial command advertisement would be unsound. The registry
+    suite and core static checks remain green.
