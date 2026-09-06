@@ -1213,3 +1213,10 @@ required checks and the complete gate, then commit the completed task.
     `scripts/prepare_interop_images` was attempted and could not initialize Podman because its
     runtime directory is read-only. This is environment evidence only; no interop tier is marked
     proven and no task status was advanced.
+
+19. Review of 4306 identified that an artifact digest and byte count alone cannot address the
+    download route. Extended the result delivery envelope with the optional committed artifact
+    slot, preserved the generic two-argument constructor, synchronized its schema digest, and added
+    a recovery test that asserts the slot survives lookup. The focused lookup, result, and handler
+    suites passed (23 cases), followed by Checkstyle and PMD. Commit `d7b92ab` records the reviewed
+    extension.
