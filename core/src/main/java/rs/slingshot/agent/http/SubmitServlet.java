@@ -241,7 +241,10 @@ public final class SubmitServlet extends AgentServlet {
         commands.compareAndSet(runtime, NOTHING_REGISTERED);
     }
 
-    /** Whether the currently bound runtime serves a command, for activation diagnostics. */
+    /** Whether the currently bound runtime serves a command, for activation diagnostics.
+     * @param wireName the command wire name to check
+     * @return whether the bound runtime serves that name
+     */
     boolean servesCommand(String wireName) {
         return commands.get().serves(wireName);
     }

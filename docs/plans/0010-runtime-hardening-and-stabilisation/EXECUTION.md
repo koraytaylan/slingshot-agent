@@ -1819,3 +1819,9 @@ required checks and the complete gate, then commit the completed task.
 127. Renamed the concrete adapter to `DefaultCommandRuntime`, registered the runtime strategy and
      accessor shapes in the committed pattern policy, and reran the review. `ApiShapePolicyTest`
      passes all 12 cases; core compile, PMD, SpotBugs and Checkstyle also pass with zero findings.
+
+128. The next full-gate review reached documentation and found missing parameter and return
+     descriptions on the servlet diagnostic helper and canonical failure-document factory.
+
+129. Added the required Javadocs and reran the documentation review. `JavadocPolicyTest` passes all
+     10 cases, and core Checkstyle passes with zero violations.
