@@ -166,7 +166,7 @@ public record StreamWriter(StreamSession session, AgentContract contract,
             } catch (final ExecutionException failed) {
                 final Throwable cause = failed.getCause();
                 if (cause instanceof RuntimeException runtime) {
-                    throw runtime;
+                    throwUnchecked(runtime);
                 }
                 throw new IOException("stream response failed", cause);
             }
@@ -193,6 +193,12 @@ public record StreamWriter(StreamSession session, AgentContract contract,
         private interface IoAction {
             void run() throws IOException;
         }
+    }
+
+    /** Re-raises a response failure without changing the stream's established runtime contract. */
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void throwUnchecked(final Throwable failure) throws T {
+        throw (T) failure;
     }
 
     private Ending written(Writer writer, Session store, StreamTicker ticker, String resumption) {

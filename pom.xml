@@ -89,6 +89,7 @@
       refuses the day the two disagree.
     -->
     <coverage.line.minimum>0.80</coverage.line.minimum>
+    <jacoco.skip>false</jacoco.skip>
     <coverage.branch.minimum>0.70</coverage.branch.minimum>
     <!--
       Nothing is published while the owner-supplied publication metadata is absent. This is the
@@ -542,6 +543,7 @@
             </goals>
             <configuration>
               <haltOnFailure>true</haltOnFailure>
+              <skip>${jacoco.skip}</skip>
               <rules>
                 <rule>
                   <element>BUNDLE</element>
