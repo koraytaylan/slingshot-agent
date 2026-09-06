@@ -51,7 +51,7 @@ public final class CapabilityServlet extends AgentServlet {
     public static final String CANONICAL_DIGEST_RESOURCE =
             "/rs/slingshot/agent/contract/command-canonical-json-1.sha256";
 
-    /** The event-store generation this build serves, until Plan 0003 gives it one to rotate. */
+    /** The conservative generation advertised before durable lifecycle state becomes ready. */
     public static final long EVENT_STORE_GENERATION = EventStoreGeneration.FIRST;
 
     private static final long serialVersionUID = 1L;
@@ -134,10 +134,9 @@ public final class CapabilityServlet extends AgentServlet {
     /**
      * Where this build observes the continuation-key authority's readiness.
      *
-     * <p>Nothing in this build implements that authority yet, so what is observed is that it is not
-     * ready. It is observed rather than written into the document because an agent advertising a
-     * readiness it does not have is answered with a paged query whose token nothing can validate —
-     * and this servlet holds no state at all, so there is nowhere for a stale answer to live.</p>
+     * <p>The durable lifecycle service establishes the authority before reporting readiness. It is
+     * observed rather than written into the document because an agent advertising readiness it does
+     * not have would answer a paged query with a token nothing can validate.</p>
      *
      * @return where readiness is read from
      */
