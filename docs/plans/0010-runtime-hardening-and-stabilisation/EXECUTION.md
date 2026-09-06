@@ -1286,6 +1286,9 @@ required checks and the complete gate, then commit the completed task.
     small-bound over-budget fixture now pass in the 14-case component suite; commit `146b315` adds
     the wrong-kind case and `ba7cd58` applies the discovery bound and over-budget case. The evidence
     for 4403 is complete.
-    Added a direct wrong-kind boundary case proving an ordinary folder and its child remain byte
-    stable when deletion is refused; the component suite now passes 13 cases. Commit `146b315`
-    records the fixture. An over-budget component-tree case is still required.
+
+26. Audited 4404's paged handlers and found that `ResultWindow.Continuation` is currently carried as
+    an opaque string: no handler context provides a `KeyRing`, target digest, serving generation, or
+    validation clock, and no runtime path calls `PagedQuery.tokenFor`. Existing continuation branches
+    therefore cannot safely issue or validate authority. This is a confirmed architecture gap, not
+    a handler-local defect; 4404 remains pending until the command runtime carries that authority.
