@@ -86,10 +86,16 @@ public sealed interface ResultDelivery permits ResultDelivery.Inline, ResultDeli
      *
      * @param byteCount how many bytes it comes to
      * @param digest what those bytes digest to, so a fetch can be checked
+     * @param slot the durable result slot containing the bytes
      */
     record Artifact(long byteCount, DigestValue digest, String slot) implements ResultDelivery {
 
-        /** Keeps the original generic artifact construction for producers without a slot. */
+        /**
+         * Keeps the original generic artifact construction for producers without a slot.
+         *
+         * @param byteCount how many bytes the artifact contains
+         * @param digest what the artifact bytes digest to
+         */
         public Artifact(long byteCount, DigestValue digest) {
             this(byteCount, digest, "");
         }
