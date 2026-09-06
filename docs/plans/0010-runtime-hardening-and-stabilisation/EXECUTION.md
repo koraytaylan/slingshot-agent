@@ -1230,3 +1230,11 @@ required checks and the complete gate, then commit the completed task.
     A follow-up review found the idle deadline must reset from monotonic write progress rather than
     the transfer start; `cdc90f5` applies that correction. The seven-case artifact suite, Checkstyle,
     and PMD remain green.
+
+21. Wrapped event-stream response writes and flushes in cancellable, daemon-backed operations using
+    the contract's total and idle transfer deadlines. Runtime review caught that worker-side runtime
+    failures must preserve the existing stream admission semantics; the wrapper now rethrows runtime
+    causes while translating I/O failures to the stream's client-away ending. Compilation and the
+    focused event-stream, admission, and heartbeat suites passed (28 cases). Commit `4e8442d` records
+    this reviewed path. Upload-body handling and the servlet's initial response flush remain pending,
+    so task 4307 is not complete.
