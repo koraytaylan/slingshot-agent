@@ -19,7 +19,7 @@ touches:
   - core/src/main/java/rs/slingshot/agent/command/workflow
   - core/src/test/java/rs/slingshot/agent/command
 status: complete
-merged_as: "2e0f4d5"
+merged_as: "3f47953"
 ---
 # Apply Verified Paging on Every Handler Run Path
 
