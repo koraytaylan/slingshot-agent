@@ -81,7 +81,7 @@ final class WalkingSkeletonScenario {
         assertEquals(200, answered.statusCode(), answered.body());
         assertTrue(answered.body().contains("\"command_contracts\":[]"), answered.body());
         assertTrue(answered.body().contains("\"agent_event_store_generation\":1"), answered.body());
-        assertTrue(answered.body().contains("\"continuation_authority_ready\":false"),
+        assertTrue(answered.body().contains("\"continuation_authority_ready\":true"),
                 answered.body());
         assertTrue(answered.body().contains("\"transport_contract_digest\":\""
                         + SIBLING_TRANSPORT_DIGEST + "\""),
