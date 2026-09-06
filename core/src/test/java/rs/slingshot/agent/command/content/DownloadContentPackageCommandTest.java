@@ -3,6 +3,7 @@
 
 package rs.slingshot.agent.command.content;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -193,6 +194,14 @@ final class DownloadContentPackageCommandTest {
             assertTrue(new String(archive.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
                     .contains("title=\"hello\""));
         }
+    }
+
+    @Test
+    void identicalPackageInputsProduceIdenticalBytes() throws IOException {
+        final String manifest = "<workspaceFilter/>";
+        assertArrayEquals(DownloadContentPackageHandler.packageBytes(manifest),
+                DownloadContentPackageHandler.packageBytes(manifest),
+                "the archive timestamp made identical package inputs produce different bytes");
     }
 
     @Test

@@ -269,7 +269,7 @@ public final class DownloadContentPackageHandler implements CommandHandler {
             throws IOException {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream archive = new ZipOutputStream(bytes)) {
-            archive.putNextEntry(new ZipEntry("META-INF/vault/filter.xml"));
+            archive.putNextEntry(entry("META-INF/vault/filter.xml"));
             archive.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             archive.closeEntry();
             if (resolver != null) {
@@ -287,12 +287,18 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         }
         final String name = path.substring(1) + "/.content.xml";
         try {
-            archive.putNextEntry(new ZipEntry(name));
+            archive.putNextEntry(entry(name));
             archive.write(contentXml(resource).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             archive.closeEntry();
         } catch (final IOException failure) {
             throw new java.io.UncheckedIOException("content entry could not be written", failure);
         }
+    }
+
+    private static ZipEntry entry(String name) {
+        final ZipEntry entry = new ZipEntry(name);
+        entry.setTime(0);
+        return entry;
     }
 
     private static String contentXml(Resource resource) {
