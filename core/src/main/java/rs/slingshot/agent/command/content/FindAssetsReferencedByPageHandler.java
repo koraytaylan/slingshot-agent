@@ -100,11 +100,13 @@ public final class FindAssetsReferencedByPageHandler implements CommandHandler {
         final PagingSupport.Outcome<FindAssetsReferencedByPageResult.ReferencedAsset> pagingPage =
                 PagingSupport.page(walk.found(), command.window(),
                         FindAssetsReferencedByPageCommand.WIRE_NAME, arguments, context, contract);
-        if (pagingPage instanceof final PagingSupport.Refused<FindAssetsReferencedByPageResult.ReferencedAsset> refused) {
+        if (pagingPage instanceof final PagingSupport.Refused<
+                FindAssetsReferencedByPageResult.ReferencedAsset> refused) {
             return new Failed(refused.category(), refused.detail());
         }
         final PagingSupport.Page<FindAssetsReferencedByPageResult.ReferencedAsset> accepted =
-                ((PagingSupport.Accepted<FindAssetsReferencedByPageResult.ReferencedAsset>) pagingPage).page();
+                ((PagingSupport.Accepted<FindAssetsReferencedByPageResult.ReferencedAsset>)
+                        pagingPage).page();
         return new Produced(FindAssetsReferencedByPageResult.documentOf(accepted.rows(),
                 accepted.continuationToken()));
     }

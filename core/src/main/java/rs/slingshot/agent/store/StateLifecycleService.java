@@ -127,8 +127,8 @@ public final class StateLifecycleService {
         } catch (final IllegalStateException refused) {
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                     "state lifecycle failed: " + refused.getMessage()));
-        } catch (final RuntimeException failure) {
-            // A platform adapter may fail with an unchecked exception. Letting it escape would
+        } catch (final IllegalArgumentException failure) {
+            // A platform adapter may reject a call with an illegal argument. Letting it escape would
             // cancel the fixed-delay task and leave discovery reporting the previous READY pass.
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                     "state lifecycle failed unexpectedly: " + failure.getClass().getSimpleName()
