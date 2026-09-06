@@ -14,6 +14,9 @@ import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.osgi.service.component.annotations.Component;
+import rs.slingshot.agent.command.Budget;
+import rs.slingshot.agent.command.CallerContext;
+import rs.slingshot.agent.command.ProgressSink;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.DigestValue;
@@ -125,6 +128,19 @@ public final class SubmitServlet extends AgentServlet {
                 LogicalOperation operation, DocumentValue.Mapping submission, Session session,
                 ResourceResolver resolver) {
             return run(operation, submission, session);
+        }
+
+        /** Supplies request-scoped continuation authority when this runtime has one. */
+        default Optional<CallerContext.Paging> paging(LogicalOperation operation,
+                                                       AgentContract contract) {
+            return Optional.empty();
+        }
+
+        /** Runs with the complete request-scoped handler context. */
+        default rs.slingshot.agent.execution.ExecutionOutcome.Completion run(
+                LogicalOperation operation, DocumentValue.Mapping submission, Session session,
+                ResourceResolver resolver, CallerContext context) {
+            return run(operation, submission, session, resolver);
         }
     }
 
@@ -369,8 +385,15 @@ public final class SubmitServlet extends AgentServlet {
         final StatePath path = rs.slingshot.agent.execution.OperationStore.pathOf(running.identity());
         try (var attempt = rs.slingshot.agent.execution.ExecutionJournal.attempt(session, path,
                 arriving.contract())) {
+            final AgentContract contract = arriving.contract();
+            final CallerContext context = new CallerContext(running.identity().identifier(),
+                    Budget.discovery(contract), Budget.time(contract),
+                    new Budget(Budget.Kind.RESULT,
+                            contract.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
+                    ProgressSink.under(contract),
+                    commands.paging(running, contract));
             attempt.complete(commands.run(running, submission, arriving.effects(),
-                    arriving.resolver()));
+                    arriving.resolver(), context));
         }
         finalised(response, running, submission, arriving, session, acceptance);
     }

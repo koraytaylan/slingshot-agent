@@ -1620,3 +1620,9 @@ required checks and the complete gate, then commit the completed task.
     compatible through delegation, while packaged runtimes can now invoke handlers without trying
     to recover a resolver from a JCR session. `SubmitServletTest` and `ArtifactIntakeServletTest`
     pass all 46 cases.
+
+87. Extended the servlet bridge with an optional paging-context provider and a full-context command
+    overload. The accepted execution path now constructs discovery, time, result, and progress
+    budgets from the authenticated contract and passes the provider's authority context to the
+    handler. Submit servlet tests pass 24/24 and Checkstyle/PMD pass; a concrete provider remains a
+    runtime registration concern.
