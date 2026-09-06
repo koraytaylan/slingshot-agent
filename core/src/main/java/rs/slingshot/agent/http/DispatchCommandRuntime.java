@@ -25,8 +25,17 @@ public final class DispatchCommandRuntime implements CommandRuntime {
 
     private static final String ARGUMENTS = SubmitServlet.ARGUMENTS;
     private static final long serialVersionUID = 1L;
-    private transient Optional<CommandDispatch> dispatch;
-    private transient Optional<AgentContract> contract;
+    private transient State state;
+
+    private sealed interface State permits Active, Missing {
+    }
+
+    private record Active(CommandDispatch dispatch, AgentContract contract) implements State {
+    }
+
+    private enum Missing implements State {
+        INSTANCE
+    }
 
     /**
      * Holds a dispatch and the contract used to bound its argument reader.
@@ -34,20 +43,20 @@ public final class DispatchCommandRuntime implements CommandRuntime {
      * @param contract the authenticated contract
      */
     public DispatchCommandRuntime(CommandDispatch dispatch, AgentContract contract) {
-        this.dispatch = Optional.of(java.util.Objects.requireNonNull(dispatch, "dispatch"));
-        this.contract = Optional.of(java.util.Objects.requireNonNull(contract, "contract"));
+        this.state = new Active(java.util.Objects.requireNonNull(dispatch, "dispatch"),
+                java.util.Objects.requireNonNull(contract, "contract"));
     }
 
     /** Clears non-serializable platform state when a servlet is deserialized. */
     private void readObject(ObjectInputStream input) throws IOException, ClassNotFoundException {
         input.defaultReadObject();
-        dispatch = Optional.empty();
-        contract = Optional.empty();
+        state = Missing.INSTANCE;
     }
 
     @Override
     public boolean serves(String wireName) {
-        return dispatch.filter(value -> value.wireNames().contains(wireName)).isPresent();
+        return state instanceof final Active active
+                && active.dispatch().wireNames().contains(wireName);
     }
 
     @Override
@@ -60,11 +69,11 @@ public final class DispatchCommandRuntime implements CommandRuntime {
     public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, javax.jcr.Session session,
                                            ResourceResolver resolver, CallerContext context) {
-        if (dispatch.isEmpty() || contract.isEmpty()) {
+        if (!(state instanceof final Active active)) {
             return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
         }
-        final AgentContract activeContract = contract.orElseThrow();
-        final CommandDispatch activeDispatch = dispatch.orElseThrow();
+        final AgentContract activeContract = active.contract();
+        final CommandDispatch activeDispatch = active.dispatch();
         final Optional<DocumentValue.Mapping> arguments = argumentsOf(submission, activeContract);
         if (arguments.isEmpty()) {
             return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
@@ -79,10 +88,10 @@ public final class DispatchCommandRuntime implements CommandRuntime {
     public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, javax.jcr.Session session,
                                            ResourceResolver resolver) {
-        if (contract.isEmpty()) {
+        if (!(state instanceof final Active active)) {
             return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
         }
-        final AgentContract activeContract = contract.orElseThrow();
+        final AgentContract activeContract = active.contract();
         return run(operation, submission, session, resolver, new CallerContext(
                 operation.identity().identifier(),
                 rs.slingshot.agent.command.Budget.discovery(activeContract),

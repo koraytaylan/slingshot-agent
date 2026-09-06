@@ -1803,3 +1803,11 @@ required checks and the complete gate, then commit the completed task.
      passes, then `pinned-interop-images` stops because all five recorded images are absent from
      the active Podman engine. The gate names `scripts/prepare_interop_images` as the required
      preparation command; no later quality stage was run in this attempt.
+
+124. Preparing the five pinned interop images succeeded with the network-enabled Podman run, and
+     the recorded digests now match the engine. The next full-gate review reached nullability and
+     found the adapter's transient `Optional` fields disallowed by repository policy.
+
+125. Replaced the adapter's transient optional fields with an explicit active/missing state. The
+     deserialization fallback remains fail closed, while `NullabilityPolicyTest` passes all 10
+     cases and the focused servlet/dispatch suites pass all 32 cases after recompilation.
