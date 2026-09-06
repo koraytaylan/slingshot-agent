@@ -46,6 +46,8 @@ import rs.slingshot.agent.store.CapacityReservation;
 import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.LedgerAdmission;
 import rs.slingshot.agent.store.StatePath;
+import rs.slingshot.agent.store.SubscriptionLedger;
+import rs.slingshot.agent.store.SubscriptionRecord;
 
 /**
  * One route, one record, and an answer whose every value came out of that record.
@@ -72,12 +74,15 @@ final class SubmitServletTest {
 
     @BeforeEach
     void configureOperators() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
         MockOsgi.activate(new AuthorizationGate(), MockOsgi.newBundleContext(),
                 java.util.Map.of("permitted.groups", new String[] { "administrators" }));
     }
 
     @AfterEach
     void revokeOperators() {
+        new rs.slingshot.agent.repository.AgentSession().stopped();
         new AuthorizationGate().stopped();
     }
 
@@ -94,6 +99,13 @@ final class SubmitServletTest {
                         + identifierIn("a-submission.json") + "\""), answered);
         assertTrue(answered.contains("\"" + SubmissionResponse.GENERATION + "\":1"), answered);
         assertEquals(1, commands.ran(), "the command did not run inside its own request");
+        session.refresh(false);
+        final SubscriptionRecord binding = SubscriptionLedger.read(session, subscriptionName(), CONTRACT)
+                .orElseThrow();
+        assertEquals(caller(), binding.binding().caller());
+        assertEquals(identityOf("a-submission.json").identifier(), binding.binding().operation());
+        org.junit.jupiter.api.Assertions.assertSame(session, commands.observed.get(),
+                "requested content effects must use the original caller's session");
         assertEquals(OperationState.SUCCEEDED, stored(session, "a-submission.json").state(),
                 "the operation was not terminal before its acknowledgement was written");
         assertTrue(TerminalCommit.answerIn(session,
@@ -235,12 +247,53 @@ final class SubmitServletTest {
                 "a build with no commands ran something rather than refusing before the record");
     }
 
+    @Test
+    void aSubscriptionBoundToAnotherOperationRefusesBeforeAcceptance()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final var other = assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
+                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
+                        "e".repeat(64), CONTRACT)).identifier();
+        assertInstanceOf(SubscriptionLedger.Subscribed.class, SubscriptionLedger.subscribe(session, caller(),
+                subscriptionName().rendered(), identityOf("a-submission.json").generation(), other,
+                System.currentTimeMillis(), CONTRACT));
+        final Counting commands = new Counting();
+        assertEquals(SubmitServlet.CONFLICT, answering(commands, "a-submission.json").getStatus());
+        session.refresh(false);
+        assertEquals(0, records(session));
+        assertEquals(0, commands.ran());
+        assertEquals(other, SubscriptionLedger.read(session, subscriptionName(), CONTRACT).orElseThrow()
+                .binding().operation());
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+    }
+
+    @Test
+    void subscriptionCapacityRefusesBeforeAcceptance()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final var quantity = AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS;
+        assertInstanceOf(CapacityLedger.Reserved.class, CapacityLedger.take(session, caller(),
+                List.of(new CapacityReservation.Charge(quantity, quantity.admissibleCallerShare(CONTRACT))),
+                CONTRACT));
+        assertEquals(SubmitServlet.AT_CAPACITY, answering(new Counting(), "a-submission.json").getStatus());
+        session.refresh(false);
+        assertEquals(0, records(session));
+        assertTrue(SubscriptionLedger.read(session, subscriptionName(), CONTRACT).isEmpty());
+    }
+
+    private static SubscriptionRecord.Identifier subscriptionName() {
+        return assertInstanceOf(SubscriptionRecord.Held.class,
+                SubscriptionRecord.identifier("following-daemon-one", CONTRACT)).identifier();
+    }
+
     /** A build that runs one command and counts how often it was asked to. */
     private static final class Counting implements SubmitServlet.Commands {
 
         private static final long serialVersionUID = 1L;
 
         private final AtomicInteger ran = new AtomicInteger();
+        private final java.util.concurrent.atomic.AtomicReference<Session> observed =
+                new java.util.concurrent.atomic.AtomicReference<>();
 
         @Override
         public boolean serves(String wireName) {
@@ -250,6 +303,7 @@ final class SubmitServletTest {
         @Override
         public ExecutionOutcome.Result run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, Session session) {
+            observed.set(session);
             ran.incrementAndGet();
             return new ExecutionOutcome.Inline("{\"matches\":[]}");
         }
@@ -418,6 +472,7 @@ final class SubmitServletTest {
         walked(session, StatePath.ROOT);
         GenerationStore.establish(session);
         LedgerAdmission.prepare(session, caller());
+        rs.slingshot.agent.store.SubscriptionLedger.prepare(session, caller());
         CapacityLedger.prepare(session, AccountedQuantity.OPERATION_DETAIL_ROWS, caller());
         CapacityLedger.prepare(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, caller());
         walked(session, StatePath.deployment(StatePath.OPERATIONS).path());

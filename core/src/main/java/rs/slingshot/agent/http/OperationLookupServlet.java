@@ -75,7 +75,7 @@ public final class OperationLookupServlet extends AgentServlet {
     /**
      * Holds a servlet with nothing in it.
      *
-     * <p>Every answer is read from the store at the moment of asking, on the caller's own session,
+     * <p>Every answer is read from the store at the moment of asking, under a scoped state session,
      * so there is nothing for a stale answer to live in.</p>
      */
     public OperationLookupServlet() {
@@ -106,42 +106,42 @@ public final class OperationLookupServlet extends AgentServlet {
             refuse(response, AuthenticationGate.STATUS);
             return;
         }
-        try {
-            answer(request, response, held.contract());
-        } catch (final RepositoryException unreadable) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
-        }
+        withState(response, state -> answer(request, response, held.contract(), state));
     }
 
     /** What a request is answered with when this build cannot read its own contract or store. */
     private static final int NOTHING_THIS_BUILD_CAN_SERVE = 500;
 
     private void answer(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                        AgentContract contract) throws IOException, RepositoryException {
+                        AgentContract contract, Session session) throws IOException, RepositoryException {
         final Optional<AgentOperationIdentifier> asked =
                 identifierIn(request.getParameter(OPERATION_QUERY_MEMBER), contract);
-        final Optional<Session> session = sessionOf(request);
-        if (asked.isEmpty() || session.isEmpty()) {
-            refuse(response, asked.isEmpty() ? REFUSED : NOTHING_THIS_BUILD_CAN_SERVE);
+        if (asked.isEmpty()) {
+            refuse(response, REFUSED);
             return;
         }
-        final EventStoreGeneration named = generationIn(request, session.get());
+        final EventStoreGeneration named = generationIn(request, session);
         final GenerationRotation.Access access =
-                GenerationRotation.accessTo(session.get(), named);
+                GenerationRotation.accessTo(session, named);
         if (access instanceof GenerationRotation.Retired) {
             // An incarnation nothing answers about any more is a thing a client may stop waiting
             // for, and the only answer that lets it stop is one that says so.
             refuse(response, GONE);
             return;
         }
-        found(response, session.get(), StatePath.operation(named, asked.get()), contract);
+        final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
+        final StatePath operation = StatePath.operation(named, asked.get());
+        if (viewer.isEmpty() || !StateAuthority.operation(session, operation, viewer.get(), ROUTE_NAME)) {
+            notYet(response, contract);
+            return;
+        }
+        found(response, session, operation, contract);
     }
 
     private void found(SlingHttpServletResponse response, Session session, StatePath operation,
                        AgentContract contract) throws IOException, RepositoryException {
         final SnapshotStore.Materialised current = SnapshotStore.read(session, operation);
-        if (!(current instanceof final SnapshotStore.Known known)
-                || !readable(session, operation)) {
+        if (!(current instanceof final SnapshotStore.Known known)) {
             // Somebody else's operation is answered exactly as one nobody has: a caller who could
             // tell the two apart could ask this route which identifiers exist.
             notYet(response, contract);
@@ -171,23 +171,6 @@ public final class OperationLookupServlet extends AgentServlet {
 
     /** How many milliseconds a second is, where a header is written in seconds. */
     private static final long MILLISECONDS_IN_A_SECOND = 1000;
-
-    /**
-     * Whether the caller asking may read this record.
-     *
-     * <p>The caller's own session is what reaches the store, so a caller who cannot see the tree
-     * cannot read the record whatever a table says. What is decided here is the other half: whether
-     * a caller who can see it is one this record is about, or one an operator has permitted.</p>
-     *
-     * @param session the caller's own session
-     * @param operation where the record is
-     * @return whether it may be answered with
-     * @throws RepositoryException if the repository fails
-     */
-    private static boolean readable(Session session, StatePath operation)
-            throws RepositoryException {
-        return session.nodeExists(operation.path());
-    }
 
     private static Optional<String> rendered(StatePath operation, SnapshotStore.Snapshot snapshot) {
         final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
@@ -252,9 +235,7 @@ public final class OperationLookupServlet extends AgentServlet {
                 : Optional.empty();
     }
 
-    private static Optional<Session> sessionOf(SlingHttpServletRequest request) {
-        return Optional.ofNullable(request.getResourceResolver().adaptTo(Session.class));
-    }
+
 
     /**
      * The route this servlet answers, read from the committed table.

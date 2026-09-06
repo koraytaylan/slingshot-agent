@@ -104,6 +104,17 @@ final class AuthorizationGateTest {
     }
 
     @Test
+    @DisplayName("ownership remains sufficient when no operator group is usable")
+    void ownWorkDoesNotDependOnOperatorConfiguration() {
+        for (final List<String> permitted : List.of(List.<String>of(), List.of("missing-group"))) {
+            assertInstanceOf(AuthorizationGate.Admitted.class, AuthorizationGate.of(
+                    new AuthorizationGate.Request("operation-lookup", permitted,
+                            group -> AuthorizationGate.Standing.NO_SUCH_GROUP,
+                            AuthorizationGate.Ownership.THE_CALLERS_OWN)));
+        }
+    }
+
+    @Test
     @DisplayName("a caller reads their own work, is refused somebody else's, and a member reads both")
     void acallerReadsTheirOwnAndAmemberReadsBoth() {
         final AuthorizationGate.Groups outside = group -> AuthorizationGate.Standing.NOT_A_MEMBER;

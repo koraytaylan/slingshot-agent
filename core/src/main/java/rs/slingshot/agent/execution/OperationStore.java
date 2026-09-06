@@ -272,8 +272,8 @@ public final class OperationStore {
      * want of a parent nobody has created yet.
      */
     private static void bucketsFor(Session session, StatePath path) throws RepositoryException {
-        final String[] segments = path.path().substring(1).split("/");
-        final StringBuilder walked = new StringBuilder();
+        final String[] segments = path.path().substring(StatePath.ROOT.length() + 1).split("/");
+        final StringBuilder walked = new StringBuilder(StatePath.ROOT);
         int index = 0;
         while (index < segments.length - 1) {
             walked.append('/').append(segments[index]);

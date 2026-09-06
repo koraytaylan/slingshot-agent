@@ -89,6 +89,20 @@ public final class TierRequests {
     }
 
     /**
+     * Reads as an authenticated caller outside the permitted groups.
+     *
+     * @param address where to read
+     * @return what the instance answered
+     */
+    public HttpResponse<String> readAsUnpermittedUser(String address) {
+        return send(HttpRequest.newBuilder(URI.create(address))
+                .header("Authorization", basicFor(UNPERMITTED_USER, UNPERMITTED_PASSWORD))
+                .timeout(Duration.ofSeconds(REQUEST_SECONDS))
+                .GET()
+                .build());
+    }
+
+    /**
      * Sends a document to a route as the authenticated user.
      *
      * @param address where to send it

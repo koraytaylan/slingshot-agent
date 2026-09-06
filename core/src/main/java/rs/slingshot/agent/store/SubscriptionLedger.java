@@ -5,11 +5,13 @@ package rs.slingshot.agent.store;
 
 import java.util.List;
 import java.util.Optional;
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
+import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 
 /**
@@ -31,6 +33,9 @@ public final class SubscriptionLedger {
     /** The property the caller whose share holds this subscription is written in. */
     public static final String SUBSCRIBER = "subscribing_caller";
 
+    /** The operation whose cursor this subscription follows. */
+    public static final String OPERATION = "agent_operation_identifier";
+
     /** How much of a row one subscription costs, which is one row. */
     private static final long ONE_ROW = 1;
 
@@ -46,7 +51,9 @@ public final class SubscriptionLedger {
         /** Its identifier is not one this build will write down. */
         IDENTIFIER_REFUSED,
         /** Its record has not moved for longer than anything this side keeps. */
-        EXPIRED
+        EXPIRED,
+        /** The name belongs to a different caller, operation, or generation, or has no valid binding. */
+        BINDING_DIFFERS
     }
 
     /** What subscribing did. */
@@ -101,14 +108,16 @@ public final class SubscriptionLedger {
      * @param caller whose share the row and its bytes come out of
      * @param subscription the following daemon's own name for it
      * @param generation the incarnation it follows
+     * @param operation the only operation it follows
      * @param nowUnixMilliseconds what this side's clock says
      * @param contract the authenticated contract, which declares every bound
      * @return what subscribing did
      * @throws RepositoryException if the repository fails
      */
     public static Outcome subscribe(Session session, StatePath.Caller caller, String subscription,
-                                    EventStoreGeneration generation, long nowUnixMilliseconds,
-                                    AgentContract contract) throws RepositoryException {
+                                    EventStoreGeneration generation, AgentOperationIdentifier operation,
+                                    long nowUnixMilliseconds, AgentContract contract)
+            throws RepositoryException {
         final SubscriptionRecord.Outcome named =
                 SubscriptionRecord.identifier(subscription, contract);
         if (named instanceof final SubscriptionRecord.Refused refused) {
@@ -123,33 +132,38 @@ public final class SubscriptionLedger {
                     + generation + ", and a cursor into an incarnation nothing serves points at"
                     + " nothing");
         }
-        return againstWhatIsHeld(session, caller, identifier, generation, nowUnixMilliseconds,
-                contract);
-    }
-
-    private static Outcome againstWhatIsHeld(Session session, StatePath.Caller caller,
-                                             SubscriptionRecord.Identifier identifier,
-                                             EventStoreGeneration generation,
-                                             long nowUnixMilliseconds, AgentContract contract)
-            throws RepositoryException {
-        final StatePath path = SubscriptionRecord.pathOf(identifier);
-        if (session.nodeExists(path.path())) {
-            final SubscriptionRecord held = readBack(session, identifier, generation);
-            return expired(held, nowUnixMilliseconds, contract)
-                    ? new Refused(Refusal.EXPIRED, "the mark under " + identifier.rendered()
-                            + " last moved at " + held.lastAdvancedAtUnixMilliseconds()
-                            + ", longer ago than anything this side keeps")
-                    : new Resumed(held);
-        }
-        return admitted(session, caller, identifier, generation, nowUnixMilliseconds, contract);
-    }
-
-    private static Outcome admitted(Session session, StatePath.Caller caller,
-                                    SubscriptionRecord.Identifier identifier,
-                                    EventStoreGeneration generation, long nowUnixMilliseconds,
-                                    AgentContract contract) throws RepositoryException {
         final SubscriptionRecord record = new SubscriptionRecord(identifier, generation,
+                new SubscriptionRecord.Binding(caller, operation),
                 SubscriptionRecord.Unread.NOTHING_SHOWN_YET, nowUnixMilliseconds);
+        return againstWhatIsHeld(session, record, contract);
+    }
+
+    private static Outcome againstWhatIsHeld(Session session, SubscriptionRecord record,
+                                             AgentContract contract) throws RepositoryException {
+        final StatePath path = SubscriptionRecord.pathOf(record.identifier());
+        if (session.nodeExists(path.path())) {
+            return resumed(session, record, contract);
+        }
+        return admitted(session, record, contract);
+    }
+
+    private static Outcome resumed(Session session, SubscriptionRecord asked, AgentContract contract)
+            throws RepositoryException {
+        final Optional<SubscriptionRecord> current = readBack(session.getNode(
+                SubscriptionRecord.pathOf(asked.identifier()).path()), asked.identifier(), contract);
+        if (current.isEmpty() || !current.get().binding().equals(asked.binding())
+                || !current.get().generation().equals(asked.generation())) {
+            return new Refused(Refusal.BINDING_DIFFERS,
+                    "the subscription name is not bound to this caller, operation, and generation");
+        }
+        final SubscriptionRecord held = current.get();
+        return expired(held, asked.lastAdvancedAtUnixMilliseconds(), contract)
+                ? new Refused(Refusal.EXPIRED, "the subscription retention elapsed") : new Resumed(held);
+    }
+
+    private static Outcome admitted(Session session, SubscriptionRecord record, AgentContract contract)
+            throws RepositoryException {
+        final StatePath.Caller caller = record.binding().caller();
         final CapacityLedger.ReservationAdmission admission = CapacityLedger.take(session, caller,
                 List.of(new CapacityReservation.Charge(AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, ONE_ROW),
                         new CapacityReservation.Charge(AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES,
@@ -173,7 +187,7 @@ public final class SubscriptionLedger {
                 return new Subscribed(record);
             }
             if (claimed == WriteOutcome.ALREADY_HELD) {
-                return new Resumed(readBack(session, record.identifier(), record.generation()));
+                return resumed(session, record, contract);
             }
             return new NotCounted(new CapacityLedger.NotCounted(
                     AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, claimed));
@@ -181,35 +195,102 @@ public final class SubscriptionLedger {
     }
 
     private static void write(Node node, SubscriptionRecord record, StatePath.Caller caller,
-                                CapacityReservation reservation) {
-        try {
-            node.setProperty(SubscriptionRecord.IDENTIFIER, record.identifier().rendered());
-            node.setProperty(SubscriptionRecord.GENERATION, record.generation().number());
-            node.setProperty(SubscriptionRecord.EVENTS_SHOWN, record.eventsShown());
-            node.setProperty(SubscriptionRecord.LAST_ADVANCED_AT,
-                    record.lastAdvancedAtUnixMilliseconds());
-            node.setProperty(SUBSCRIBER, caller.name());
-            node.setProperty(BYTE_COUNT, record.bytes());
-            CapacityReservation.retain(node.getSession(), reservation, node);
-        } catch (final RepositoryException unwritable) {
-            throw new IllegalStateException("the subscription could not be written", unwritable);
+                                CapacityReservation reservation) throws RepositoryException {
+        node.setProperty(SubscriptionRecord.IDENTIFIER, record.identifier().rendered());
+        node.setProperty(SubscriptionRecord.GENERATION, record.generation().number());
+        node.setProperty(SubscriptionRecord.EVENTS_SHOWN, record.eventsShown());
+        node.setProperty(SubscriptionRecord.LAST_ADVANCED_AT,
+                record.lastAdvancedAtUnixMilliseconds());
+        node.setProperty(SUBSCRIBER, caller.name());
+        node.setProperty(OPERATION, record.binding().operation().rendered());
+        node.setProperty(BYTE_COUNT, record.bytes());
+        CapacityReservation.retain(node.getSession(), reservation, node);
+    }
+
+    /**
+     * Stages a new binding in the enclosing operation acceptance transaction.
+     *
+     * @param session the publication session, with a prepared subscription parent
+     * @param record the new immutable binding
+     * @param reservation the capacity retained by the new row
+     * @throws RepositoryException if staging fails or the name is already held
+     */
+    public static void stage(Session session, SubscriptionRecord record, CapacityReservation reservation)
+            throws RepositoryException {
+        final Node parent = session.getNode(StatePath.deployment(SubscriptionRecord.NODE).path());
+        CompareAndSet.stamp(parent);
+        final StatePath path = SubscriptionRecord.pathOf(record.identifier());
+        if (session.nodeExists(path.path())) {
+            throw new InvalidItemStateException("the subscription name was claimed concurrently");
+        }
+        final String name = path.path().substring(path.path().lastIndexOf('/') + 1);
+        final Node node = parent.addNode(name, "nt:unstructured");
+        write(node, record, record.binding().caller(), reservation);
+        CompareAndSet.stamp(node);
+    }
+
+    /**
+     * Fences and rechecks an existing binding in the enclosing acceptance transaction.
+     *
+     * @param session the publication session
+     * @param record the binding that admission requires
+     * @param contract the authenticated bounds
+     * @throws RepositoryException if the binding disappeared, changed, expired, or cannot be read
+     */
+    public static void stageHeld(Session session, SubscriptionRecord record, AgentContract contract)
+            throws RepositoryException {
+        final StatePath path = SubscriptionRecord.pathOf(record.identifier());
+        if (!session.nodeExists(path.path())) {
+            throw new InvalidItemStateException("the subscription binding disappeared");
+        }
+        CompareAndSet.stamp(session.getNode(path.path()));
+        if (!(resumed(session, record, contract) instanceof Resumed)) {
+            throw new InvalidItemStateException("the subscription binding changed");
         }
     }
 
-    private static SubscriptionRecord readBack(Session session,
-                                               SubscriptionRecord.Identifier identifier,
-                                               EventStoreGeneration generation)
-            throws RepositoryException {
-        final Node held = session.getNode(SubscriptionRecord.pathOf(identifier).path());
-        final EventStoreGeneration.Outcome stored =
-                EventStoreGeneration.of(held.getProperty(SubscriptionRecord.GENERATION).getLong());
-        return new SubscriptionRecord(identifier,
-                stored instanceof final EventStoreGeneration.Held known
-                        ? known.generation()
-                        : generation,
-                SubscriptionRecord.cursorFor(CompareAndSet.held(held,
-                        SubscriptionRecord.EVENTS_SHOWN)),
-                held.getProperty(SubscriptionRecord.LAST_ADVANCED_AT).getLong());
+    /**
+     * Reads a complete durable subscription and its immutable assignment.
+     *
+     * @param session the internal state session
+     * @param identifier the subscription name
+     * @param contract the authenticated bounds
+     * @return the subscription, or absence for a missing record or invalid binding
+     * @throws RepositoryException if the repository fails
+     */
+    public static Optional<SubscriptionRecord> read(Session session, SubscriptionRecord.Identifier identifier,
+                                                     AgentContract contract) throws RepositoryException {
+        final StatePath path = SubscriptionRecord.pathOf(identifier);
+        return session.nodeExists(path.path())
+                ? readBack(session.getNode(path.path()), identifier, contract) : Optional.empty();
+    }
+
+    private static Optional<SubscriptionRecord> readBack(Node held, SubscriptionRecord.Identifier identifier,
+                                                          AgentContract contract) throws RepositoryException {
+        if (!held.hasProperty(SUBSCRIBER) || !held.hasProperty(OPERATION)
+                || !held.hasProperty(SubscriptionRecord.GENERATION)
+                || !held.hasProperty(SubscriptionRecord.LAST_ADVANCED_AT)) {
+            return Optional.empty();
+        }
+        return decoded(held, identifier, contract);
+    }
+
+    private static Optional<SubscriptionRecord> decoded(Node held, SubscriptionRecord.Identifier identifier,
+                                                         AgentContract contract) throws RepositoryException {
+        final StatePath.Outcome caller = StatePath.caller(held.getProperty(SUBSCRIBER).getString());
+        final AgentOperationIdentifier.Outcome operation = AgentOperationIdentifier.of(
+                held.getProperty(OPERATION).getString(), contract);
+        final EventStoreGeneration.Outcome generation = EventStoreGeneration.of(
+                held.getProperty(SubscriptionRecord.GENERATION).getLong());
+        if (!(caller instanceof final StatePath.Held owner)
+                || !(operation instanceof final AgentOperationIdentifier.Held named)
+                || !(generation instanceof final EventStoreGeneration.Held stored)) {
+            return Optional.empty();
+        }
+        return Optional.of(new SubscriptionRecord(identifier, stored.generation(),
+                new SubscriptionRecord.Binding(owner.caller(), named.identifier()),
+                SubscriptionRecord.cursorFor(CompareAndSet.held(held, SubscriptionRecord.EVENTS_SHOWN)),
+                held.getProperty(SubscriptionRecord.LAST_ADVANCED_AT).getLong()));
     }
 
     /**

@@ -104,36 +104,30 @@ public final class PhysicalJobServlet extends AgentServlet {
             refuse(response, AuthenticationGate.STATUS);
             return;
         }
-        try {
-            answer(request, response, held.contract());
-        } catch (final RepositoryException unreadable) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
-        }
+        withState(response, state -> answer(request, response, held.contract(), state));
     }
 
     /** What a request is answered with when this build cannot read its own contract or store. */
     private static final int NOTHING_THIS_BUILD_CAN_SERVE = 500;
 
     private void answer(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                        AgentContract contract) throws IOException, RepositoryException {
+                        AgentContract contract, Session session) throws IOException, RepositoryException {
         final Optional<AgentOperationIdentifier> asked = identifierIn(
                 request.getParameter(OPERATION_QUERY_MEMBER), contract);
-        final Optional<Session> session = sessionOf(request);
-        if (asked.isEmpty() || session.isEmpty()) {
-            refuse(response, asked.isEmpty()
-                    ? OperationLookupServlet.REFUSED
-                    : NOTHING_THIS_BUILD_CAN_SERVE);
+        if (asked.isEmpty()) {
+            refuse(response, OperationLookupServlet.REFUSED);
             return;
         }
-        final EventStoreGeneration serving = serving(session.get());
+        final EventStoreGeneration serving = serving(session);
         final StatePath operation = StatePath.operation(serving, asked.get());
-        if (!session.get().nodeExists(operation.path())) {
+        final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
+        if (viewer.isEmpty() || !StateAuthority.operation(session, operation, viewer.get(), ROUTE_NAME)) {
             // An operation nobody here holds and one belonging to somebody else are one answer:
             // a caller who could tell them apart could ask this route which identifiers exist.
             refuse(response, OperationLookupServlet.NOT_YET);
             return;
         }
-        answered(response, session.get(), operation, new Asked(asked.get(), serving, contract));
+        answered(response, session, operation, new Asked(asked.get(), serving, contract));
     }
 
     /**
@@ -178,7 +172,7 @@ public final class PhysicalJobServlet extends AgentServlet {
      * and does not know the four other fields an identity carries — and asking the caller for them
      * would be asking them to tell this side what its own record says.</p>
      *
-     * @param session the caller's own session
+     * @param session the scoped internal state session
      * @param operation where the record is
      * @return the job identifiers, in the order the store holds them
      * @throws RepositoryException if the repository fails
@@ -243,9 +237,7 @@ public final class PhysicalJobServlet extends AgentServlet {
                 : Optional.empty();
     }
 
-    private static Optional<Session> sessionOf(SlingHttpServletRequest request) {
-        return Optional.ofNullable(request.getResourceResolver().adaptTo(Session.class));
-    }
+
 
     /**
      * The route this servlet answers, read from the committed table.

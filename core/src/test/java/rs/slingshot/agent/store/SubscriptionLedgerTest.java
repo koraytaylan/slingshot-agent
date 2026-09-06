@@ -14,6 +14,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
@@ -23,6 +24,7 @@ import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -80,6 +82,83 @@ final class SubscriptionLedgerTest {
         } finally {
             observer.logout();
         }
+    }
+
+    private final List<org.apache.sling.api.resource.ResourceResolver> opened = new java.util.ArrayList<>();
+
+    @AfterEach
+    void closePeerResolvers() {
+        opened.forEach(org.apache.sling.api.resource.ResourceResolver::close);
+    }
+
+    private static rs.slingshot.agent.identity.AgentOperationIdentifier boundOperation() {
+        return assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
+                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
+                        "c".repeat(64), CONTRACT)).identifier();
+    }
+
+    @Test
+    void anExistingNameCannotMoveToAnotherCallerOrOperation() throws RepositoryException {
+        final Session session = prepared();
+        final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final var other = assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
+                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
+                        "d".repeat(64), CONTRACT)).identifier();
+        for (final var binding : List.of(new SubscriptionRecord.Binding(caller("another-caller"),
+                boundOperation()), new SubscriptionRecord.Binding(caller(), other))) {
+            final var refused = assertInstanceOf(SubscriptionLedger.Refused.class,
+                    SubscriptionLedger.subscribe(session, binding.caller(), record.identifier().rendered(),
+                            generation(), binding.operation(), NOW, CONTRACT));
+            assertEquals(SubscriptionLedger.Refusal.BINDING_DIFFERS, refused.refusal());
+        }
+        assertEquals(record, SubscriptionLedger.read(session, record.identifier(), CONTRACT).orElseThrow());
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        assertEquals(record.bytes(), CapacityLedger.held(session,
+                AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, CONTRACT));
+    }
+
+    @Test
+    void aCreationLoserChecksTheWinnersBindingAndReleasesItsReservation() throws RepositoryException {
+        final Session session = prepared();
+        final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final StatePath.Caller other = caller("another-caller");
+        SubscriptionLedger.prepare(session, other);
+        final var refused = assertInstanceOf(SubscriptionLedger.Refused.class,
+                SubscriptionLedger.subscribe(blindTo(session,
+                                SubscriptionRecord.pathOf(record.identifier()).path()),
+                        other, record.identifier().rendered(), generation(),
+                        boundOperation(), NOW, CONTRACT));
+        assertEquals(SubscriptionLedger.Refusal.BINDING_DIFFERS, refused.refusal());
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
+                other, CONTRACT));
+    }
+
+    @Test
+    void legacyOrMalformedBindingsAreRefusedRatherThanAdopted() throws RepositoryException {
+        final Session session = prepared();
+        final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final Node node = session.getNode(SubscriptionRecord.pathOf(record.identifier()).path());
+        node.getProperty(SubscriptionLedger.OPERATION).remove();
+        session.save();
+        assertTrue(SubscriptionLedger.read(session, record.identifier(), CONTRACT).isEmpty());
+        assertEquals(SubscriptionLedger.Refusal.BINDING_DIFFERS,
+                assertInstanceOf(SubscriptionLedger.Refused.class,
+                        subscribe(session, "a-new-subscription", CONTRACT)).refusal());
+        node.setProperty(SubscriptionLedger.OPERATION, "invalid");
+        session.save();
+        assertTrue(SubscriptionLedger.read(session, record.identifier(), CONTRACT).isEmpty());
+        node.setProperty(SubscriptionLedger.OPERATION, boundOperation().rendered());
+        node.setProperty(SubscriptionLedger.SUBSCRIBER, "");
+        session.save();
+        assertTrue(SubscriptionLedger.read(session, record.identifier(), CONTRACT).isEmpty());
+        node.setProperty(SubscriptionLedger.SUBSCRIBER, caller().name());
+        node.setProperty(SubscriptionRecord.GENERATION, 0);
+        session.save();
+        assertTrue(SubscriptionLedger.read(session, record.identifier(), CONTRACT).isEmpty());
     }
 
     @Test
@@ -151,7 +230,7 @@ final class SubscriptionLedgerTest {
                 subscribe(session, "a-new-subscription", CONTRACT)).record();
         final SubscriptionLedger.Outcome late = SubscriptionLedger.subscribe(
                 blindTo(session, SubscriptionRecord.pathOf(taken.identifier()).path()), caller(),
-                fixture("a-new-subscription"), generation(), NOW, CONTRACT);
+                fixture("a-new-subscription"), generation(), boundOperation(), NOW, CONTRACT);
         assertInstanceOf(SubscriptionLedger.Resumed.class, late,
                 "a writer that raced for one name took a second subscription");
         assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
@@ -263,7 +342,7 @@ final class SubscriptionLedgerTest {
         assertEquals(2, refused.bound());
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 SubscriptionLedger.subscribe(session, caller("the-other-daemon"),
-                        fixture("at-the-bound"), generation(), NOW, shares),
+                        fixture("at-the-bound"), generation(), boundOperation(), NOW, shares),
                 "a second caller was refused because the first one was busy");
     }
 
@@ -274,7 +353,7 @@ final class SubscriptionLedgerTest {
         final SubscriptionLedger.NotCounted notCounted = assertInstanceOf(
                 SubscriptionLedger.NotCounted.class,
                 SubscriptionLedger.subscribe(session, caller("a-daemon-nobody-prepared"),
-                        fixture("a-new-subscription"), generation(), NOW, CONTRACT),
+                        fixture("a-new-subscription"), generation(), boundOperation(), NOW, CONTRACT),
                 "a store with no counters for this caller said it had room");
         assertEquals(AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
                 notCounted.notCounted().quantity());
@@ -302,7 +381,7 @@ final class SubscriptionLedgerTest {
         final Session session = prepared();
         assertEquals(SubscriptionLedger.Refusal.FOREIGN_GENERATION, SubscriptionLedger.refusalIn(
                 SubscriptionLedger.subscribe(session, caller(), fixture("a-new-subscription"),
-                        generationOf(9), NOW, CONTRACT)).orElseThrow().refusal(),
+                        generationOf(9), boundOperation(), NOW, CONTRACT)).orElseThrow().refusal(),
                 "a cursor into an incarnation nothing serves was written down");
         final SubscriptionRecord taken = assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 subscribe(session, "a-new-subscription", CONTRACT)).record();
@@ -312,7 +391,7 @@ final class SubscriptionLedgerTest {
         assertFalse(SubscriptionLedger.expired(taken, NOW + 1, CONTRACT));
         assertEquals(SubscriptionLedger.Refusal.EXPIRED, SubscriptionLedger.refusalIn(
                 SubscriptionLedger.subscribe(session, caller(), fixture("a-new-subscription"),
-                        generation(), past, CONTRACT)).orElseThrow().refusal(),
+                        generation(), boundOperation(), past, CONTRACT)).orElseThrow().refusal(),
                 "a record older than anything this side keeps was served");
         SubscriptionLedger.end(session, caller(), taken, CONTRACT);
         assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
@@ -341,12 +420,14 @@ final class SubscriptionLedgerTest {
     private SubscriptionLedger.Outcome subscribe(Session session, String fixture,
                                                  AgentContract contract)
             throws RepositoryException {
-        return SubscriptionLedger.subscribe(session, caller(), fixture(fixture), generation(), NOW,
+        return SubscriptionLedger.subscribe(session, caller(), fixture(fixture), generation(),
+                        boundOperation(), NOW,
                 contract);
     }
 
     private static SubscriptionRecord record(String fixture) {
         return new SubscriptionRecord(identifier(fixture), generation(),
+                new SubscriptionRecord.Binding(caller(), boundOperation()),
                 SubscriptionRecord.Unread.NOTHING_SHOWN_YET, NOW);
     }
 
@@ -404,11 +485,14 @@ final class SubscriptionLedgerTest {
     }
 
     private Session second() throws LoginException {
-        return java.util.Objects.requireNonNull(
-                java.util.Objects.requireNonNull(sling.getService(ResourceResolverFactory.class),
-                                "this context registers no resolver factory")
-                        .getResourceResolver(Map.of()).adaptTo(Session.class),
+        opened.add(anotherResolver());
+        return java.util.Objects.requireNonNull(opened.getLast().adaptTo(Session.class),
                 "a second session over the same repository is not available");
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver anotherResolver() throws LoginException {
+        return java.util.Objects.requireNonNull(sling.getService(ResourceResolverFactory.class),
+                "this context registers no resolver factory").getResourceResolver(Map.of());
     }
 
     private Session prepared() throws RepositoryException {

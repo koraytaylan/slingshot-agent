@@ -25,6 +25,8 @@ import org.apache.sling.servlethelpers.MockSlingHttpServletResponse;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,6 +65,23 @@ final class HighWaterServletTest {
     private Clock clock = Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC);
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    private static rs.slingshot.agent.identity.AgentOperationIdentifier boundOperation() {
+        return assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
+                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
+                        "c".repeat(64), CONTRACT)).identifier();
+    }
+
+    @BeforeEach
+    void bindStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
+    }
+
+    @AfterEach
+    void stopStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().stopped();
+    }
 
     @Test
     @DisplayName("a live subscription answers its own cursor and this store's incarnation")
@@ -122,7 +141,7 @@ final class HighWaterServletTest {
         final Session session = subscribed();
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 SubscriptionLedger.subscribe(session, caller(), ANOTHER_SUBSCRIPTION,
-                        generation(), NOW, CONTRACT),
+                        generation(), boundOperation(), NOW, CONTRACT),
                 "the second subscription was not taken");
         final String answered = ask(SUBSCRIPTION, 0).getOutputAsString();
         assertFalse(answered.contains(ANOTHER_SUBSCRIPTION),
@@ -151,7 +170,7 @@ final class HighWaterServletTest {
         clock = Clock.fixed(Instant.parse(date), ZoneOffset.UTC);
         final Session session = prepared();
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), boundOperation(),
                         clock.millis(), CONTRACT));
         assertEquals(OperationLookupServlet.SERVED, ask(SUBSCRIPTION, 0).getStatus());
         final long expiry = clock.millis() + CONTRACT.value(
@@ -187,7 +206,8 @@ final class HighWaterServletTest {
     private Session subscribed() throws RepositoryException {
         final Session session = prepared();
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), NOW,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
+                        boundOperation(), NOW,
                         CONTRACT), "the subscription was not taken");
         return session;
     }
@@ -221,6 +241,11 @@ final class HighWaterServletTest {
                 "the resolver has no session, which is a repository that did not start");
         walked(session, StatePath.ROOT);
         GenerationStore.establish(session);
+        final StatePath operation = StatePath.operation(generation(), boundOperation());
+        walked(session, operation.path());
+        session.getNode(operation.path()).setProperty(
+                rs.slingshot.agent.execution.OperationStore.CALLER, caller().name());
+        session.save();
         SubscriptionLedger.prepare(session, caller());
         return session;
     }

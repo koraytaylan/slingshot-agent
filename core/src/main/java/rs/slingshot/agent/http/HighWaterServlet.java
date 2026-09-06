@@ -118,20 +118,16 @@ public final class HighWaterServlet extends AgentServlet {
             refuse(response, AuthenticationGate.STATUS);
             return;
         }
-        try {
-            answer(request, response, held.contract());
-        } catch (final RepositoryException unreadable) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
-        }
+        withState(response, state -> answer(request, response, held.contract(), state));
     }
 
     /** What a request is answered with when this build cannot read its own contract or store. */
     private static final int NOTHING_THIS_BUILD_CAN_SERVE = 500;
 
     private void answer(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                        AgentContract contract) throws IOException, RepositoryException {
-        final Optional<Session> session = sessionOf(request);
-        if (session.isEmpty()) {
+                        AgentContract contract, Session session) throws IOException, RepositoryException {
+        final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
+        if (viewer.isEmpty()) {
             refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
             return;
         }
@@ -141,11 +137,12 @@ public final class HighWaterServlet extends AgentServlet {
             refuse(response, OperationLookupServlet.REFUSED);
             return;
         }
-        asked(response, session.get(), ((BoundedRequestBody.Read) body).bytes(), contract);
+        asked(response, session, ((BoundedRequestBody.Read) body).bytes(), contract, viewer.get());
     }
 
     private void asked(SlingHttpServletResponse response, Session session, byte[] body,
-                       AgentContract contract) throws IOException, RepositoryException {
+                       AgentContract contract, StateAuthority.Viewer viewer)
+            throws IOException, RepositoryException {
         final rs.slingshot.agent.json.BoundedDocumentReader.Outcome read =
                 rs.slingshot.agent.json.BoundedDocumentReader.read(body,
                         rs.slingshot.agent.json.BoundedDocumentReader.Bounds.from(contract));
@@ -160,12 +157,18 @@ public final class HighWaterServlet extends AgentServlet {
             refuse(response, OperationLookupServlet.REFUSED);
             return;
         }
-        found(response, session, identifier.identifier(), whole(asked, GENERATION), contract);
+        found(response, session, identifier.identifier(), whole(asked, GENERATION), contract, viewer);
     }
 
     private void found(SlingHttpServletResponse response, Session session,
                        SubscriptionRecord.Identifier identifier, long askedGeneration,
-                       AgentContract contract) throws IOException, RepositoryException {
+                       AgentContract contract, StateAuthority.Viewer viewer)
+            throws IOException, RepositoryException {
+        final Optional<SubscriptionRecord> record = SubscriptionLedger.read(session, identifier, contract);
+        if (record.isEmpty() || !StateAuthority.subscription(session, record.get(), viewer, ROUTE_NAME)) {
+            refuse(response, UNKNOWN);
+            return;
+        }
         final EventStoreGeneration serving = serving(session);
         if (askedGeneration > 0 && askedGeneration != serving.number()) {
             // A cursor into an incarnation this store does not serve is not a position at all. The
@@ -173,30 +176,12 @@ public final class HighWaterServlet extends AgentServlet {
             answered(response, identifier, serving, RESET, 0);
             return;
         }
-        final String path = SubscriptionRecord.pathOf(identifier).path();
-        if (!session.nodeExists(path)) {
-            refuse(response, UNKNOWN);
-            return;
-        }
-        if (expired(session.getNode(path), contract)) {
+        if (SubscriptionLedger.expired(record.get(), clock.millis(), contract)) {
             refuse(response, EXPIRED);
             return;
         }
         answered(response, identifier, serving, OperationLookupServlet.SERVED,
                 shownBy(session, identifier));
-    }
-
-    private boolean expired(javax.jcr.Node record, AgentContract contract)
-            throws RepositoryException {
-        final long lastAdvanced = record.hasProperty(SubscriptionRecord.LAST_ADVANCED_AT)
-                ? record.getProperty(SubscriptionRecord.LAST_ADVANCED_AT).getLong()
-                : 0;
-        return SubscriptionLedger.expired(new SubscriptionRecord(
-                        new SubscriptionRecord.Identifier(record.getName()),
-                        ((EventStoreGeneration.Held) EventStoreGeneration
-                                .of(EventStoreGeneration.FIRST)).generation(),
-                        SubscriptionRecord.Unread.NOTHING_SHOWN_YET, lastAdvanced),
-                clock.millis(), contract);
     }
 
     private static long shownBy(Session session, SubscriptionRecord.Identifier identifier)
@@ -248,9 +233,7 @@ public final class HighWaterServlet extends AgentServlet {
                 .orElse(0L);
     }
 
-    private static Optional<Session> sessionOf(SlingHttpServletRequest request) {
-        return Optional.ofNullable(request.getResourceResolver().adaptTo(Session.class));
-    }
+
 
     /**
      * The route this servlet answers, read from the committed table.

@@ -52,8 +52,9 @@ Nothing.
 - No impersonation, as above.
 - No stored credential. No command sets, reads, or carries a password.
 - No token of yours. The only key material this product holds is its own continuation key ring,
-  which signs the tokens a paged read hands back, and which never leaves the repository — not in a
-  response, a log line, an event, a stored artifact, a health check message, or the console.
+  which signs the tokens a paged read hands back. The agent never includes that material in its
+  responses, log lines, events, stored artifacts, health check messages, or console. Repository
+  administrators retain the platform authority to inspect repository storage.
 
 ## What the platform commands can and cannot reach
 
