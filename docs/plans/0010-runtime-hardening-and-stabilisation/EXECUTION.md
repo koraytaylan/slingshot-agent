@@ -1420,3 +1420,9 @@ required checks and the complete gate, then commit the completed task.
     verification before source or policy stages: the nine locally generated reactor artifacts are
     present in `.dependency-cache` but absent from the committed cache record. No broader quality
     result is claimed; `scripts/prepare_locked_dependency_cache` remains the named preparation step.
+
+50. Completed 4105's bounded maintenance traversal. `MaintenanceSweep` now advances one record at a
+    time, persists a within-bucket successor in `SweepCursor`, resumes across sparse buckets and
+    wraps without gaps, while preserving the existing compare-and-set and save-interruption cadence.
+    The complete `MaintenanceSweepTest` suite (58 cases), full core suite (1,122 cases), Checkstyle,
+    and PMD pass. Commit follows this review loop.
