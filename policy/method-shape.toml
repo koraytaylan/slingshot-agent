@@ -15,18 +15,18 @@
 
 [[ceiling]]
 name = "nesting-depth"
-value = 4
-reason = "Four is required by bounded stream and repository traversal guards whose cleanup and retry branches must remain adjacent to the resource they protect."
+value = 3
+reason = "Three is a conditional inside a loop inside a method - the deepest shape that still reads as one idea. A fourth level is always a refusal that was written as an else, or a second method that has not been extracted yet."
 
 [[ceiling]]
 name = "cyclomatic-complexity"
-value = 12
-reason = "Twelve covers the bounded lifecycle and maintenance state transitions while still refusing unbounded command branching."
+value = 10
+reason = "The sibling repository's own ceiling, kept identical so the two halves of one product are held to one number. It is a symptom rather than a cause, which is why nesting is checked first."
 
 [[ceiling]]
 name = "cognitive-complexity"
-value = 20
-reason = "Twenty covers the explicit bounded maintenance transitions and registry refusal cases, each of which carries a distinct failure outcome."
+value = 15
+reason = "Cognitive complexity charges for nesting where cyclomatic complexity does not, so it rises faster than the number above on exactly the code this policy exists to refuse."
 
 [[ceiling]]
 name = "method-length"
