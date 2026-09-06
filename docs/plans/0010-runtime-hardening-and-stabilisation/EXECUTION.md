@@ -1401,3 +1401,8 @@ required checks and the complete gate, then commit the completed task.
     slicing or traversal positions. `PagedQueryTest` and `QueryPathsCommandTest` pass, with offline
     Checkstyle and PMD clean. Continuation authority wiring through the command runtime remains the
     open part of task 4404.
+
+46. Hardened the paging window parser against unknown nested members. A result window now refuses
+    extra fields instead of silently accepting and ignoring them, preserving the strict command
+    contract before any handler dispatch. `PagedQueryTest` passes with the malformed-window
+    regression, and offline Checkstyle and PMD are clean.
