@@ -1644,3 +1644,8 @@ required checks and the complete gate, then commit the completed task.
 91. Corrected the four PMD assertion-order findings in `MaintenanceSweepTest`. The focused
     maintenance suite passes all 58 cases, and the repository Checkstyle/PMD gate now passes with
     only its existing unmatched-exclusion warnings.
+
+92. Re-ran the authoritative `scripts/quality` gate. Its locked dependency cache stage passes, but
+    the gate stops at pinned interop images because this container engine does not hold the five
+    prepared images, even after `scripts/prepare_interop_images` recorded their digests. No source
+    assertion failed in this run; the remaining refusal is an external image-store state.
