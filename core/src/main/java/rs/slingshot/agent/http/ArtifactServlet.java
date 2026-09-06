@@ -309,7 +309,6 @@ public final class ArtifactServlet extends AgentServlet {
         }
     }
 
-    @SuppressWarnings("PMD.PreserveStackTrace")
     private static int read(ExecutorService io, InputStream reading, byte[] buffer,
                             long monotonicStarted, long monotonicLastMoved, AgentContract contract)
             throws IOException {
@@ -324,13 +323,12 @@ public final class ArtifactServlet extends AgentServlet {
         } catch (final InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             closeQuietly(reading);
-            throw new IOException("artifact read was interrupted", interrupted);
+            throw withCause("artifact read was interrupted", interrupted);
         } catch (final ExecutionException failed) {
-            throw new IOException("artifact read failed", failed.getCause());
+            throw withCause("artifact read failed", failed);
         }
     }
 
-    @SuppressWarnings("PMD.PreserveStackTrace")
     private static boolean write(ExecutorService io, OutputStream writing, byte[] buffer, int count,
                                  long monotonicStarted, long monotonicLastMoved,
                                  AgentContract contract)
@@ -351,10 +349,17 @@ public final class ArtifactServlet extends AgentServlet {
         } catch (final InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             closeQuietly(writing);
-            throw new IOException("artifact write was interrupted", interrupted);
+            throw withCause("artifact write was interrupted", interrupted);
         } catch (final ExecutionException failed) {
-            throw new IOException("artifact write failed", failed.getCause());
+            throw withCause("artifact write failed", failed);
         }
+    }
+
+
+    private static IOException withCause(String message, Throwable cause) {
+        final IOException failure = new IOException(message);
+        failure.initCause(cause);
+        return failure;
     }
 
     private static long timeoutNanos(long monotonicStarted, long monotonicLastMoved,
