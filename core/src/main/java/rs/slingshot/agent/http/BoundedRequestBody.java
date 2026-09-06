@@ -97,36 +97,36 @@ public final class BoundedRequestBody {
      * @param contract the authenticated contract, which declares the bound
      * @return what arrived, or the one reason it was not read
      */
-    @SuppressWarnings("PMD.CloseResource")
     public static Outcome read(InputStream body, long declaredLength, AgentContract contract) {
         final long bound = contract.value(ContractLimit.MAXIMUM_REQUEST_BODY_BYTES);
         final ByteArrayOutputStream held = new ByteArrayOutputStream();
         final byte[] chunk = new byte[READ_CHUNK_BYTES];
         long read = 0;
-        final ExecutorService io = Executors.newSingleThreadExecutor(runnable -> {
+        try (ExecutorService io = Executors.newSingleThreadExecutor(runnable -> {
             final Thread worker = new Thread(runnable, "slingshot-request-transfer");
             worker.setDaemon(true);
             return worker;
-        });
-        final long started = System.nanoTime();
-        long moved = started;
-        try {
-            int arrived = read(io, body, chunk, started, moved, contract);
-            while (arrived >= 0) {
-                read = read + arrived;
-                if (read > bound) {
-                    return new Refused(Refusal.PAST_THE_BOUND, "this body is past the bound of "
-                            + bound + " bytes, found at the byte that crossed it", read);
+        })) {
+            final long started = System.nanoTime();
+            long moved = started;
+            try {
+                int arrived = read(io, body, chunk, started, moved, contract);
+                while (arrived >= 0) {
+                    read = read + arrived;
+                    if (read > bound) {
+                        return new Refused(Refusal.PAST_THE_BOUND, "this body is past the bound of "
+                                + bound + " bytes, found at the byte that crossed it", read);
+                    }
+                    held.write(chunk, 0, arrived);
+                    moved = System.nanoTime();
+                    arrived = read(io, body, chunk, started, moved, contract);
                 }
-                held.write(chunk, 0, arrived);
-                moved = System.nanoTime();
-                arrived = read(io, body, chunk, started, moved, contract);
+            } catch (final IOException stopped) {
+                return new Refused(Refusal.TRANSFER_FAILED,
+                        "the bytes stopped arriving: " + stopped.getMessage(), read);
+            } finally {
+                io.shutdownNow();
             }
-        } catch (final IOException stopped) {
-            return new Refused(Refusal.TRANSFER_FAILED,
-                    "the bytes stopped arriving: " + stopped.getMessage(), read);
-        } finally {
-            io.shutdownNow();
         }
         return againstTheDeclaration(held.toByteArray(), declaredLength);
     }
