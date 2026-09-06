@@ -1584,3 +1584,9 @@ required checks and the complete gate, then commit the completed task.
 
 79. Re-ran Checkstyle and PMD for the continuation codec. Both checks pass with no findings for the
     changed classes; the ruleset's existing unmatched-exclusion warnings are unchanged.
+
+80. Repaired the first real handler handoff for paging: `QueryPathsHandler` now applies the parsed
+    result window before constructing its response, so an initial limit is enforced at the command
+    boundary instead of the handler returning the entire gathered subtree. The focused
+    `QueryPathsCommandTest` suite passes all 10 cases; continuation token authority remains the
+    next integration boundary.
