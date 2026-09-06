@@ -1269,14 +1269,14 @@ required checks and the complete gate, then commit the completed task.
     and fragment delete/move guards to refuse before mutation when visibility is exhausted. The
     three mutation suites passed (42 cases); Checkstyle and PMD are green after suppression review.
     Implementation commits are `640961a` and `46a3c9a`. Dedicated insufficient-visibility and
-    multivalue-reference fixtures are still required before 4402 can advance.
+    multivalue-reference fixtures now pass in `RepositoryReachTest`.
 
 24. Extended the 4402 guard review across all reference-adjusting mutation consumers. Incomplete
     scans now refuse asset, page, and fragment moves before relocation or repointing, while delete
     policies refuse incomplete visibility as conservatively as an observed reference. Focused
     mutation coverage passed (42 cases), and the final PMD/Checkstyle pass is green. Commit `640961a`
-    contains the behavior; `46a3c9a` corrects its policy suppression. Dedicated boundary fixtures
-    remain before the task can be marked complete.
+    contains the behavior; `46a3c9a` corrects its policy suppression. The direct boundary fixtures
+    complete the evidence for 4402.
 
 25. Began 4403 by requiring component deletion targets to carry the component node type and by
     counting the complete subtree up to one past the deletion bound before calling delete. Ordinary
