@@ -4,7 +4,6 @@
 package rs.slingshot.agent.stream;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
