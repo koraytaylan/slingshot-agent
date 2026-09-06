@@ -1581,3 +1581,6 @@ required checks and the complete gate, then commit the completed task.
     with shape validation before signature checks. The continuation suite now covers round-trip
     equality and malformed-document refusal (11 cases pass); validation still owns integrity,
     target, query, generation, and expiry decisions.
+
+79. Re-ran Checkstyle and PMD for the continuation codec. Both checks pass with no findings for the
+    changed classes; the ruleset's existing unmatched-exclusion warnings are unchanged.
