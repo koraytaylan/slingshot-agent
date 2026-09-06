@@ -11,6 +11,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -77,11 +78,12 @@ public final class ListAssetRenditionsHandler implements CommandHandler {
         if (asked instanceof final ListAssetRenditionsCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return listed(((ListAssetRenditionsCommand.Held) asked).command(), resolver, context);
+        return listed(((ListAssetRenditionsCommand.Held) asked).command(), arguments, resolver,
+                context);
     }
 
-    private Answer listed(ListAssetRenditionsCommand command, ResourceResolver resolver,
-                          CallerContext context) {
+    private Answer listed(ListAssetRenditionsCommand command, DocumentValue.Mapping arguments,
+                          ResourceResolver resolver, CallerContext context) {
         final Resource asset = resolver.getResource(command.assetPath());
         if (asset == null) {
             return new Failed(ASSET_NOT_FOUND, command.assetPath() + " is not there");
@@ -103,8 +105,16 @@ public final class ListAssetRenditionsHandler implements CommandHandler {
             return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this asset holds more renditions than"
                     + " the " + context.discovery().limit() + " this caller may examine");
         }
-        return new Produced(ListAssetRenditionsResult.documentOf(
-                pageOf(held, command.window(), contract), ""));
+        final PagingSupport.Outcome<ListAssetRenditionsResult.Rendition> page = PagingSupport.page(
+                held, command.window(), ListAssetRenditionsCommand.WIRE_NAME, arguments, context,
+                contract);
+        if (page instanceof final PagingSupport.Refused<ListAssetRenditionsResult.Rendition> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<ListAssetRenditionsResult.Rendition> accepted =
+                ((PagingSupport.Accepted<ListAssetRenditionsResult.Rendition>) page).page();
+        return new Produced(ListAssetRenditionsResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     private static List<ListAssetRenditionsResult.Rendition> renditionsOf(Resource renditions,
