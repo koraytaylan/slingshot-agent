@@ -237,6 +237,20 @@ final class QueryPathsCommandTest {
                 "the search found nothing in a corpus it was pointed at");
     }
 
+    @Test
+    @DisplayName("the handler applies the requested initial page limit")
+    void handlerAppliesInitialWindow() throws RepositoryException {
+        corpus(CORPUS);
+        final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
+                new QueryPathsHandler(CONTRACT).run(
+                        argument("/content/corpus", null, window("initial", 0, PAGE, "")),
+                        readOnly(), context()));
+        final DocumentValue.Sequence matches = assertInstanceOf(DocumentValue.Sequence.class,
+                produced.result().member(QueryPathsResult.MATCHES).orElseThrow());
+        assertEquals(PAGE, matches.items().size(),
+                "the handler returned the whole gathered subtree instead of the requested page");
+    }
+
     private String rendered(DocumentValue.Mapping result) {
         return String.valueOf(result);
     }
