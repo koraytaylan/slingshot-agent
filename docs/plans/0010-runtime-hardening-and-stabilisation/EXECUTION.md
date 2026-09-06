@@ -1604,3 +1604,8 @@ required checks and the complete gate, then commit the completed task.
     tokens, resumes at their signed position, and issues a signed next token when authority is
     present. The focused 11-case suite passes and Checkstyle/PMD pass; runtime assembly still needs
     to populate the context.
+
+84. Re-ran the focused handler suite after adding token decode, validation, and issuance. All 11
+    `QueryPathsCommandTest` cases pass; Checkstyle and PMD pass for the changed context and handler.
+    The remaining integration gap is explicit: `SubmitServlet.Commands` has no production adapter
+    that can construct and populate this per-call paging context.
