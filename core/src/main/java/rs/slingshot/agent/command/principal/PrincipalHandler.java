@@ -7,6 +7,7 @@ import java.util.List;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.mutation.SingleCommit;
 import rs.slingshot.agent.command.platform.ControlCapability;
@@ -251,11 +252,20 @@ public final class PrincipalHandler implements CommandHandler {
         }
         final List<PrincipalDirectory.Member> members =
                 ((PrincipalDirectory.Members) found).members();
-        return members.size() > context.discovery().limit()
-                ? new Failed(DISCOVERY_BUDGET_EXCEEDED, members.size() + " members is more than"
-                        + " the " + context.discovery().limit() + " this caller may examine")
-                : new Produced(PrincipalResults.membersOf(pageOf(members, listing.window()),
-                        PrincipalResults.NO_MORE_PAGES));
+        if (members.size() > context.discovery().limit()) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, members.size() + " members is more than"
+                    + " the " + context.discovery().limit() + " this caller may examine");
+        }
+        final PagingSupport.Outcome<PrincipalDirectory.Member> page = PagingSupport.page(members,
+                listing.window(), PrincipalCommands.LIST_MEMBERS_WIRE_NAME, arguments, context,
+                contract);
+        if (page instanceof final PagingSupport.Refused<PrincipalDirectory.Member> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<PrincipalDirectory.Member> accepted =
+                ((PagingSupport.Accepted<PrincipalDirectory.Member>) page).page();
+        return new Produced(PrincipalResults.membersOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /**
