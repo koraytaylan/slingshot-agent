@@ -16,6 +16,14 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Keep the Maven-launched interoperability tests on the same writable rootless Podman runtime
+# directory as the image preparation and verification commands. Without this export, the test JVM
+# inherits a host /run/user path that may be read-only and can reopen a database created under a
+# different runroot, making stale containers appear as leaks from the current suite.
+export XDG_RUNTIME_DIR="/tmp/slingshot-agent-podman-${UID}"
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}"
+
 readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
 readonly GATE_POLICY="${REPOSITORY_ROOT}/policy/quality-gate.toml"
