@@ -11,8 +11,8 @@ touches:
   - core/src/main/java/rs/slingshot/agent/store/RotationLease.java
   - core/src/main/java/rs/slingshot/agent/continuation
   - core/src/test/java/rs/slingshot/agent/store/DefaultContinuationKeyAuthorityTest.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: 742a39d
 ---
 # Fence Continuation Key Writes with Persisted Ownership
 

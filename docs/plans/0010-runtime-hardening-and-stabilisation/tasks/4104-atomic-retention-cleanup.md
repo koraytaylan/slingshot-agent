@@ -11,8 +11,8 @@ touches:
   - core/src/main/java/rs/slingshot/agent/store/SubscriptionLedger.java
   - core/src/test/java/rs/slingshot/agent/store/MaintenanceSweepTest.java
   - core/src/test/java/rs/slingshot/agent/store/SubscriptionLedgerTest.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: dd2b40c
 ---
 # Make Retention Cleanup Atomic and Idempotent
 

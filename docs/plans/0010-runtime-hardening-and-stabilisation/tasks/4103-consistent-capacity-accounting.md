@@ -13,8 +13,8 @@ touches:
   - core/src/main/java/rs/slingshot/agent/stream/StreamAdmission.java
   - core/src/test/java/rs/slingshot/agent/store/CapacityLedgerTest.java
   - core/src/test/java/rs/slingshot/agent/stream
-status: pending
-merged_as: ""
+status: complete
+merged_as: b655509
 ---
 # Make Capacity Reservations and Releases Consistent
 

@@ -13,8 +13,8 @@ touches:
   - core/src/test/java/rs/slingshot/agent/store
   - core/src/test/java/rs/slingshot/agent/execution
   - interop/src/test/java/rs/slingshot/agent/interop/harness/CrashConsistencyScenario.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: d793160
 ---
 # Establish Exclusive Oak Store Transitions
 

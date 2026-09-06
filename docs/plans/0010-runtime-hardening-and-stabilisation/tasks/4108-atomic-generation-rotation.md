@@ -19,8 +19,8 @@ touches:
   - interop/src/test/java/rs/slingshot/agent/interop/harness/ExclusiveTransitionRuntime.java
   - interop/src/test/java/rs/slingshot/agent/interop/harness/GenerationRotationCrashScenario.java
   - interop/scenarios/generation-rotation-crash.toml
-status: pending
-merged_as: ""
+status: complete
+merged_as: 793456b
 ---
 # Publish Generation Rotation Atomically
 
