@@ -262,11 +262,26 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         }
     }
 
+    /**
+     * Builds an archive containing only the manifest.
+     *
+     * @param manifest the deterministic FileVault filter document
+     * @return the archive bytes
+     * @throws IOException if the archive cannot be written
+     */
     static byte[] packageBytes(String manifest) throws IOException {
         return packageBytes(manifest, archive -> { });
     }
 
-    /** Builds the deterministic archive, including each selected resource when provided. */
+    /**
+     * Builds the deterministic archive, including each selected resource.
+     *
+     * @param manifest the deterministic FileVault filter document
+     * @param resolver the caller's resolver used to read selected resources
+     * @param selected resource paths to include
+     * @return the archive bytes
+     * @throws IOException if the archive cannot be written or a resource cannot be read
+     */
     static byte[] packageBytes(String manifest, ResourceResolver resolver, List<String> selected)
             throws IOException {
         return packageBytes(manifest, archive -> selected.stream().sorted()
