@@ -110,22 +110,39 @@ public final class BoundedRequestBody {
         })) {
             final long started = DefaultStreamTicker.monotonicNanoseconds();
             long moved = started;
-            int arrived = read(io, body, chunk, started, moved, contract);
-            while (arrived >= 0) {
-                read = read + arrived;
-                if (read > bound) {
-                    return new Refused(Refusal.PAST_THE_BOUND, "this body is past the bound of "
-                            + bound + " bytes, found at the byte that crossed it", read);
-                }
-                held.write(chunk, 0, arrived);
-                moved = DefaultStreamTicker.monotonicNanoseconds();
-                arrived = read(io, body, chunk, started, moved, contract);
-            }
+            read = transfer(io, body, chunk, started, moved, contract, bound, held);
             return againstTheDeclaration(held.toByteArray(), declaredLength);
+        } catch (final BoundExceeded exceeded) {
+            return new Refused(Refusal.PAST_THE_BOUND, "this body is past the bound of "
+                    + exceeded.bound + " bytes, found at the byte that crossed it", exceeded.amount);
         } catch (final IOException stopped) {
             return new Refused(Refusal.TRANSFER_FAILED,
                     "the bytes stopped arriving: " + stopped.getMessage(), read);
         }
+    }
+
+    private static long transfer(ExecutorService io, InputStream body, byte[] chunk,
+                                 long started, long moved, AgentContract contract, long bound,
+                                 ByteArrayOutputStream held) throws IOException {
+        long total = 0;
+        int arrived = read(io, body, chunk, started, moved, contract);
+        while (arrived >= 0) {
+            total = total + arrived;
+            if (total > bound) {
+                throw new BoundExceeded(total, bound);
+            }
+            held.write(chunk, 0, arrived);
+            moved = DefaultStreamTicker.monotonicNanoseconds();
+            arrived = read(io, body, chunk, started, moved, contract);
+        }
+        return total;
+    }
+
+    private static final class BoundExceeded extends IOException {
+        private static final long serialVersionUID = 1L;
+        private final long amount;
+        private final long bound;
+        private BoundExceeded(long amount, long bound) { this.amount = amount; this.bound = bound; }
     }
 
     private static int read(ExecutorService io, InputStream body, byte[] chunk,
