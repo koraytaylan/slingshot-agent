@@ -16,6 +16,8 @@ import org.apache.sling.api.SlingHttpServletResponse;
 import org.osgi.service.component.annotations.Component;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
+import rs.slingshot.agent.execution.ExecutionOutcome;
+import rs.slingshot.agent.execution.TerminalCommit;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.CanonicalByteWriter;
@@ -147,7 +149,7 @@ public final class OperationLookupServlet extends AgentServlet {
             notYet(response, contract);
             return;
         }
-        final Optional<String> rendered = rendered(operation, known.snapshot());
+        final Optional<String> rendered = rendered(session, operation, known.snapshot());
         if (rendered.isEmpty()) {
             refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
             return;
@@ -172,17 +174,43 @@ public final class OperationLookupServlet extends AgentServlet {
     /** How many milliseconds a second is, where a header is written in seconds. */
     private static final long MILLISECONDS_IN_A_SECOND = 1000;
 
-    private static Optional<String> rendered(StatePath operation, SnapshotStore.Snapshot snapshot) {
+    private static Optional<String> rendered(Session session, StatePath operation,
+                                             SnapshotStore.Snapshot snapshot) {
         final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
         members.put(JobEvent.GENERATION, new DocumentValue.Whole(generationOf(operation)));
         members.put(JobEvent.IDENTIFIER, new DocumentValue.Text(identifierOf(operation)));
         members.put(JobEvent.KIND, new DocumentValue.Text(snapshot.kind().spelling()));
         members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(snapshot.sequence().number()));
+        // A terminal snapshot is also the durable recovery point for its answer.  Keep the
+        // result in the same response so a lost submission response can be recovered without
+        // invoking the command again.
+        try {
+            final Optional<ExecutionOutcome.Result> answer = TerminalCommit.answerIn(session, operation);
+            answer.map(OperationLookupServlet::resultDocument).ifPresent(result ->
+                    members.put("result", result));
+        } catch (RepositoryException ignored) {
+            return Optional.empty();
+        }
         final CanonicalByteWriter.Outcome written =
                 CanonicalByteWriter.write(new DocumentValue.Mapping(members));
         return written instanceof final CanonicalByteWriter.Written bytes
                 ? Optional.of(bytes.rendered())
                 : Optional.empty();
+    }
+
+    private static DocumentValue resultDocument(ExecutionOutcome.Result result) {
+        final SequencedMap<String, DocumentValue> delivery = new LinkedHashMap<>();
+        if (result instanceof ExecutionOutcome.Inline inline) {
+            delivery.put("delivery", new DocumentValue.Text("inline"));
+            delivery.put("inline_result", new DocumentValue.Text(inline.document()));
+        } else if (result instanceof ExecutionOutcome.Published published) {
+            delivery.put("artifact_byte_count", new DocumentValue.Whole(published.byteCount()));
+            delivery.put("artifact_digest", new DocumentValue.Text(published.digest().rendered()));
+            delivery.put("delivery", new DocumentValue.Text("artifact"));
+        } else {
+            return null;
+        }
+        return new DocumentValue.Mapping(delivery);
     }
 
     private static long generationOf(StatePath operation) {

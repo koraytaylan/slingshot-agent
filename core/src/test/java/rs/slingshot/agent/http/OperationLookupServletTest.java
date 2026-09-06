@@ -33,6 +33,7 @@ import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.execution.LogicalOperation;
 import rs.slingshot.agent.execution.OperationState;
 import rs.slingshot.agent.execution.OperationStore;
+import rs.slingshot.agent.execution.TerminalCommit;
 import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.identity.OperationIdentity;
@@ -98,6 +99,24 @@ final class OperationLookupServletTest {
                             + kind.spelling() + "\""),
                     kind + " is not what the answer says: " + answered.getOutputAsString());
         }
+    }
+
+    @Test
+    @DisplayName("a terminal lookup carries the durable inline result for response recovery")
+    void terminalLookupCarriesInlineResult() throws RepositoryException, IOException,
+            ServletException {
+        final Session session = recorded();
+        appended(session, JobEventKind.SUCCEEDED);
+        session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_KIND, "inline");
+        session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_DOCUMENT,
+                "{\"answer\":true}");
+        session.save();
+
+        final MockSlingHttpServletResponse answer = lookup(identifier(), "");
+        assertEquals(OperationLookupServlet.SERVED, answer.getStatus());
+        assertTrue(answer.getOutputAsString().contains(
+                "\"result\":{\"delivery\":\"inline\",\"inline_result\":\"{\\\"answer\\\":true}\"}"),
+                answer.getOutputAsString());
     }
 
     @Test
