@@ -48,6 +48,8 @@ final class FindPagesByTemplateCommandTest {
         assertInstanceOf(CommandHandler.Failed.class,
                 new FindPagesByTemplateHandler(CONTRACT).run(new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
                 "malformed arguments reached the platform handler");
+        assertInstanceOf(CommandHandler.Failed.class, run("/content/missing", TEMPLATE),
+                "a missing root was answered as an empty result");
     }
 
     private static final AgentContract CONTRACT = contract();

@@ -52,6 +52,10 @@ final class FindAssetsByMetadataCommandTest {
         assertInstanceOf(CommandHandler.Failed.class,
                 new FindAssetsByMetadataHandler(CONTRACT).run(new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
                 "malformed arguments reached the platform handler");
+        assertInstanceOf(CommandHandler.Failed.class,
+                new FindAssetsByMetadataHandler(CONTRACT).run(
+                        argument("/content/missing", new LinkedHashMap<>()), readOnly(), context()),
+                "a missing root was answered as an empty result");
     }
 
     private static final AgentContract CONTRACT = contract();
