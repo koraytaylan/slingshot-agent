@@ -14,6 +14,7 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
+import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.execution.RestartRecovery;
 import rs.slingshot.agent.identity.EventStoreGeneration;
@@ -127,6 +128,15 @@ public final class StateLifecycleService {
                 throw new IllegalStateException("generation unavailable: " + established);
             }
             final EventStoreGeneration generation = held.generation();
+            final DefaultContinuationKeyAuthority.Opening opened =
+                    DefaultContinuationKeyAuthority.open(session, contract);
+            if (!(opened instanceof DefaultContinuationKeyAuthority.Opened authority)) {
+                throw new IllegalStateException("continuation authority unavailable: " + opened);
+            }
+            final ContinuationKeyAuthority.ReadOutcome ring = authority.authority().establish();
+            if (!(ring instanceof ContinuationKeyAuthority.Read)) {
+                throw new IllegalStateException("continuation key ring unavailable: " + ring);
+            }
             final long now = System.currentTimeMillis();
             final RestartRecovery.Reconciliation recovery = RestartRecovery.reconcile(
                     session, generation, now, contract);
