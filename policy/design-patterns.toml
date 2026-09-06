@@ -711,6 +711,11 @@ pattern = "stateless-policy"
 reason = "What may be removed is decided against the record's own retention and the three things that can still be holding an artifact, read from the store on every pass rather than remembered between them."
 
 [[type]]
+name = "StateLifecycleService"
+pattern = "accessor"
+reason = "Lifecycle state is held behind final atomic references, so callers can observe and coordinate it without exposing mutable component fields."
+
+[[type]]
 name = "RecoveryDisposition"
 pattern = "enumeration"
 reason = "Seven answers about unfinished work, closed so that \"we do not know\" is something a client is told rather than something it infers from silence."

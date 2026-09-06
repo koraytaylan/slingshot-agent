@@ -39,7 +39,11 @@ public final class StateLifecycleService {
         UNAVAILABLE
     }
 
-    /** A durable lifecycle observation suitable for discovery and health callers. */
+    /** A durable lifecycle observation suitable for discovery and health callers.
+     * @param availability whether the latest lifecycle pass is ready
+     * @param generation the generation observed by that pass
+     * @param detail a human-readable outcome detail
+     */
     public record Snapshot(Availability availability, long generation, String detail) {
     }
 
@@ -54,7 +58,9 @@ public final class StateLifecycleService {
     public StateLifecycleService() {
     }
 
-    /** Binds the scoped state-session provider. */
+    /** Binds the scoped state-session provider.
+     * @param source the provider used for maintenance work
+     */
     @Reference
     public void available(AgentSession source) {
         sessions.set(source);
@@ -73,15 +79,17 @@ public final class StateLifecycleService {
     /** Stops scheduled work and revokes readiness before the component is released. */
     @Deactivate
     public void deactivate() {
-        final Scheduler running = scheduler.getAndSet(null);
-        if (running != null) {
+        final Scheduler running = scheduler.get();
+        if (running != null && scheduler.compareAndSet(running, null)) {
             running.stop();
         }
         OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                 "state lifecycle has stopped"));
     }
 
-    /** Returns the latest lifecycle observation. */
+    /** Returns the latest lifecycle observation.
+     * @return the most recent lifecycle snapshot
+     */
     public static Snapshot observed() {
         return OBSERVED.get();
     }
