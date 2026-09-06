@@ -39,5 +39,7 @@ final class StateLifecycleServiceTest {
         assertEquals(StateLifecycleService.Availability.READY, snapshot.availability());
         assertEquals(4, snapshot.generation());
         assertEquals("ok", snapshot.detail());
+        final StateLifecycleService.Run run = new StateLifecycleService.Run(null, "detail");
+        assertEquals("detail", run.detail());
     }
 }
