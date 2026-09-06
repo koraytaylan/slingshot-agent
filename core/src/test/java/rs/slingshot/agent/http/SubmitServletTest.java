@@ -24,9 +24,12 @@ import javax.servlet.ServletException;
 import org.apache.sling.servlethelpers.MockRequestPathInfo;
 import org.apache.sling.servlethelpers.MockSlingHttpServletRequest;
 import org.apache.sling.servlethelpers.MockSlingHttpServletResponse;
+import org.apache.sling.testing.mock.osgi.MockOsgi;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,6 +68,18 @@ final class SubmitServletTest {
     private static final String SERVED = "query_paths";
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+
+    @BeforeEach
+    void configureOperators() {
+        MockOsgi.activate(new AuthorizationGate(), MockOsgi.newBundleContext(),
+                java.util.Map.of("permitted.groups", new String[] { "administrators" }));
+    }
+
+    @AfterEach
+    void revokeOperators() {
+        new AuthorizationGate().stopped();
+    }
 
     @Test
     @DisplayName("a first submission is acknowledged with the record's own values")

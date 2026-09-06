@@ -5,6 +5,14 @@ package rs.slingshot.agent.http;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Modified;
+import org.osgi.service.metatype.annotations.AttributeDefinition;
+import org.osgi.service.metatype.annotations.Designate;
+import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
 /**
  * Whether the caller the platform established may use this agent, and for this route.
@@ -15,7 +23,7 @@ import java.util.Optional;
  *
  * <p>The arrangement is the one Adobe operators already recognise from the Groovy Console. The tool
  * is available to administrators and to nobody else until somebody deliberately says otherwise, and
- * what widens it is a configuration naming further groups. A configuration naming no group refuses
+ * the configuration replaces the complete permitted group set. A configuration naming no group refuses
  * every submission rather than admitting everybody — the failure that looks like a broken install
  * is better than the one that looks like nothing — and a configuration naming a group that does not
  * exist is refused naming it, because an operator who believes they have granted access to a group
@@ -25,12 +33,61 @@ import java.util.Optional;
  * anything, because it is theirs; and a member may read anybody's, because that is what operating
  * the thing means. What nobody may do is read work that is not theirs without being permitted.</p>
  */
+@Component(service = AuthorizationGate.class, immediate = true)
+@Designate(ocd = AuthorizationGate.Operators.class)
 public final class AuthorizationGate {
 
     /** What every refused request is answered with, whichever refusal it was. */
     public static final int STATUS = 403;
 
-    private AuthorizationGate() {
+    /**
+     * One snapshot per bundle, including servlets constructed for compatibility aliases.
+     * DS serializes this component's lifecycle callbacks; readers see a complete old or new list.
+     */
+    private static final AtomicReference<List<String>> PERMITTED =
+            new AtomicReference<>(List.of());
+
+    /** The operator groups shared by submission and console authorization. */
+    @ObjectClassDefinition(name = "Slingshot Agent Authorization")
+    public @interface Operators {
+
+        /**
+         * The complete group set; an empty set permits nobody.
+         *
+         * @return configured group identifiers, replacing the default administrator group
+         */
+        @AttributeDefinition(name = "Permitted groups")
+        String[] permitted_groups() default { "administrators" };
+    }
+
+    /** Holds the component that publishes the current operator configuration. */
+    public AuthorizationGate() {
+    }
+
+    /**
+     * Publishes one immutable configuration for subsequent authorization decisions.
+     *
+     * @param operators the complete configured group set
+     */
+    @Activate
+    @Modified
+    public void configured(Operators operators) {
+        PERMITTED.set(List.of(operators.permitted_groups()));
+    }
+
+    /** Revokes operator access when the configuration component stops. */
+    @Deactivate
+    public void stopped() {
+        PERMITTED.set(List.of());
+    }
+
+    /**
+     * The current configuration, shared by every operator authorization entry point.
+     *
+     * @return an immutable snapshot, empty while the component is inactive
+     */
+    public static List<String> permittedGroups() {
+        return PERMITTED.get();
     }
 
     /** Where a caller stands with respect to one group. */

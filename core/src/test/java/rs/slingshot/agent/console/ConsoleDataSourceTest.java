@@ -12,6 +12,9 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.apache.sling.testing.mock.osgi.MockOsgi;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.http.AuthorizationGate;
@@ -26,9 +29,19 @@ import rs.slingshot.agent.http.AuthorizationGate;
  */
 final class ConsoleDataSourceTest {
 
-    private static final List<String> PERMITTED = List.of("slingshot-agent-operators");
-
     private static final long BOUND = 200;
+
+
+    @BeforeEach
+    void configureOperators() {
+        MockOsgi.activate(new AuthorizationGate(), MockOsgi.newBundleContext(),
+                java.util.Map.of("permitted.groups", new String[] { "administrators" }));
+    }
+
+    @AfterEach
+    void revokeOperators() {
+        new AuthorizationGate().stopped();
+    }
 
     @Test
     @DisplayName("authority is decided before the store is touched, and a screen cannot reorder it")
@@ -130,16 +143,17 @@ final class ConsoleDataSourceTest {
     @DisplayName("a viewer who may not use the console is not shown the entry at all")
     void anunpermittedViewerSeesNoEntry() {
         assertEquals(ConsoleAuthority.Visibility.HIDDEN,
-                ConsoleAuthority.visibility(PERMITTED,
+                ConsoleAuthority.visibility(
                         standing(AuthorizationGate.Standing.NOT_A_MEMBER)),
                 "an entry that appears and refuses when clicked teaches an operator that this"
                         + " product is broken; one that is not there teaches them nothing, which"
                         + " is what there is to teach");
         assertEquals(ConsoleAuthority.Visibility.SHOWN,
-                ConsoleAuthority.visibility(PERMITTED,
+                ConsoleAuthority.visibility(
                         standing(AuthorizationGate.Standing.A_MEMBER)));
+        new AuthorizationGate().stopped();
         assertEquals(ConsoleAuthority.Visibility.HIDDEN,
-                ConsoleAuthority.visibility(List.of(),
+                ConsoleAuthority.visibility(
                         standing(AuthorizationGate.Standing.A_MEMBER)),
                 "a deployment where nobody is permitted showed the entry to somebody");
     }
@@ -148,9 +162,9 @@ final class ConsoleDataSourceTest {
     @DisplayName("what a viewer is shown and what they may reach are decided by the same answer")
     void visibilityAndAccessCannotDisagree() {
         for (final AuthorizationGate.Standing standing : AuthorizationGate.Standing.values()) {
-            assertEquals(ConsoleAuthority.visibility(PERMITTED, standing(standing))
+            assertEquals(ConsoleAuthority.visibility(standing(standing))
                             == ConsoleAuthority.Visibility.SHOWN,
-                    ConsoleAuthority.admits(PERMITTED, standing(standing)),
+                    ConsoleAuthority.admits(standing(standing)),
                     "the entry and the console disagree for a viewer who is " + standing
                             + ", which would make navigation the access control — and navigation"
                             + " is not access control");
@@ -193,7 +207,7 @@ final class ConsoleDataSourceTest {
 
     private static ConsoleDataSource.Request request(AuthorizationGate.Groups groups, long offset,
                                                      long window) {
-        return new ConsoleDataSource.Request(PERMITTED, groups, offset, window, BOUND);
+        return new ConsoleDataSource.Request(groups, offset, window, BOUND);
     }
 
     private static AuthorizationGate.Groups standing(AuthorizationGate.Standing standing) {
