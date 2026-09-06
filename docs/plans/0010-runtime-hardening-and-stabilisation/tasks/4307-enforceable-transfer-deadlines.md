@@ -17,8 +17,8 @@ touches:
   - core/src/main/java/rs/slingshot/agent/stream/StreamWriter.java
   - core/src/test/java/rs/slingshot/agent/http
   - interop/src/test/java/rs/slingshot/agent/interop/tier/TransportDisruptionScenario.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: 3763d6d
 ---
 # Enforce Transfer Deadlines During Blocked I/O
 
