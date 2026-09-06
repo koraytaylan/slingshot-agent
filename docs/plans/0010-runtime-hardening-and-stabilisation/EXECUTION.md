@@ -1793,3 +1793,8 @@ required checks and the complete gate, then commit the completed task.
     runtime now restores both as empty optionals on deserialization and returns an explicit
     uncertain outcome until a live composition supplies them. SpotBugs reports zero findings,
     PMD passes, and Checkstyle passes with zero violations after the correction.
+
+122. Re-ran the dispatch adapter review after hardening its short-form execution path: a
+     deserialized adapter with no live contract now returns an uncertain outcome instead of
+     throwing. `SubmitServletTest` and `CommandDispatchTest` pass all 32 focused cases, and the
+     core compile, PMD, SpotBugs, and Checkstyle checks pass with zero findings.

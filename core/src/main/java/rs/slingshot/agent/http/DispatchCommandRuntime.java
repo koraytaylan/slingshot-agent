@@ -79,6 +79,9 @@ public final class DispatchCommandRuntime implements CommandRuntime {
     public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, javax.jcr.Session session,
                                            ResourceResolver resolver) {
+        if (contract.isEmpty()) {
+            return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
+        }
         final AgentContract activeContract = contract.orElseThrow();
         return run(operation, submission, session, resolver, new CallerContext(
                 operation.identity().identifier(),
