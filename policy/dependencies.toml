@@ -605,14 +605,6 @@ modules = ["core"]
 reason = "Resolved through the artifacts above rather than declared: it is on the path because something this build chose put it there, and it is pinned here so it cannot change without somebody seeing it."
 
 [[artifact]]
-group = "com.google.code.findbugs"
-name = "jsr305"
-version = "3.0.2"
-scope = "provided"
-modules = ["core"]
-reason = "A transitive annotation dependency brought by the static-analysis toolchain; it is recorded to make the resolved set explicit and is not packaged at runtime."
-
-[[artifact]]
 group = "org.jetbrains"
 name = "annotations"
 version = "26.1.0"
