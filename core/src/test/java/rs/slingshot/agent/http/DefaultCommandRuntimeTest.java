@@ -180,6 +180,16 @@ final class DefaultCommandRuntimeTest {
         assertTrue(runtime.serves(registry.wireNames().getFirst()));
     }
 
+    @Test
+    void dsActivationAdvertisesOnlyThePackagedStatelessSubset() {
+        final DefaultCommandRuntime runtime = new DefaultCommandRuntime();
+        runtime.activate();
+        assertTrue(runtime.serves("query_paths"));
+        assertFalse(runtime.serves("download_content_package"));
+        runtime.deactivate();
+        assertFalse(runtime.serves("query_paths"));
+    }
+
     private static LogicalOperation operation() throws java.io.IOException {
         final Path fixture = repositoryRoot().resolve(
                 "core/src/test/resources/fixtures/submit-servlet/a-submission.json");
