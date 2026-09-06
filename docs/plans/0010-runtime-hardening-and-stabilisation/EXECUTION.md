@@ -1355,3 +1355,8 @@ required checks and the complete gate, then commit the completed task.
     advances only its active path. The seven-case `RepositoryReachTest` suite, Checkstyle, and
     PMD all pass. This supplies direct iterator-call evidence for 4401; handler-wide timing and
     the full quality gate remain open.
+
+37. Re-ran the complete argument-free `scripts/quality` gate after the traversal and reference
+    changes. It still stops at locked-dependency-cache verification before any source or policy
+    stage: the same nine locally generated reactor artifacts are present but absent from the
+    committed support record. No gate result beyond this cache refusal is claimed.
