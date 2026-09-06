@@ -13,8 +13,8 @@ touches:
   - policy/commands
   - schemas/agent-protocol/command
   - core/src/test/resources/fixtures/agent-contract
-status: pending
-merged_as: ""
+status: complete
+merged_as: ba7cd58
 ---
 # Restrict Component Deletion to Valid Bounded Components
 
