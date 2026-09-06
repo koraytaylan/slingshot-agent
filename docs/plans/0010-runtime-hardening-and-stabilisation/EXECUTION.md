@@ -1482,3 +1482,8 @@ required checks and the complete gate, then commit the completed task.
     row has a handler and its platform adapter. No partial map was introduced; this preserves the
     contract that missing implementations are refused rather than acknowledged. The registry
     review evidence remains green.
+
+62. Re-ran the complete core suite after embedding the registry and adding lifecycle coverage. All
+    1,124 tests outside the known maintenance successor cases pass; the same two dense-bucket tests
+    fail with iterator advances of two and three against a bound of one. No regression was caused
+    by the packaged command resources.
