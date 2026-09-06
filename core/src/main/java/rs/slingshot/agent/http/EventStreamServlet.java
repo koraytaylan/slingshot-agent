@@ -4,7 +4,6 @@
 package rs.slingshot.agent.http;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
