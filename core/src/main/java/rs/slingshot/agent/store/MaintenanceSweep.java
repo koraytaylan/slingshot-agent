@@ -185,10 +185,9 @@ public final class MaintenanceSweep {
         Node successor = null;
         while (records.hasNext()) {
             final Node candidate = records.nextNode();
-            if (candidate.getName().compareTo(after) > 0) {
-                if (successor == null || candidate.getName().compareTo(successor.getName()) < 0) {
-                    successor = candidate;
-                }
+            if (candidate.getName().compareTo(after) > 0
+                    && (successor == null || candidate.getName().compareTo(successor.getName()) < 0)) {
+                successor = candidate;
             }
         }
         return successor;

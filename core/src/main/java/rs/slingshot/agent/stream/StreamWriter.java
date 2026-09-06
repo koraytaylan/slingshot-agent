@@ -102,7 +102,7 @@ public record StreamWriter(StreamSession session, AgentContract contract,
      * @return how it ended
      */
     public Ending serve(Writer writer, Session store, StreamTicker ticker, String resumption) {
-        try (TimedWriter timed = new TimedWriter(writer, contract)) {
+        try (TimedWriter timed = new TimedWriter(writer, contract, ticker)) {
             return written(timed, store, ticker, resumption);
         } finally {
             // One path for every ending there is: the bytes stop, and then the room goes back. An
@@ -116,29 +116,33 @@ public record StreamWriter(StreamSession session, AgentContract contract,
     private static final class TimedWriter extends Writer {
         private final Writer delegate;
         private final AgentContract contract;
+        private final StreamTicker ticker;
         private final ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
             final Thread worker = new Thread(runnable, "slingshot-stream-transfer");
             worker.setDaemon(true);
             return worker;
         });
-        private final long started = System.nanoTime();
-        private long moved = started;
+        private final long started;
+        private final java.util.concurrent.atomic.AtomicLong moved;
 
-        TimedWriter(Writer delegate, AgentContract contract) {
+        TimedWriter(Writer delegate, AgentContract contract, StreamTicker ticker) {
             this.delegate = delegate;
             this.contract = contract;
+            this.ticker = ticker;
+            started = ticker.elapsedMilliseconds();
+            moved = new java.util.concurrent.atomic.AtomicLong(started);
         }
 
         @Override
         public void write(char[] characters, int offset, int length) throws IOException {
             run(() -> delegate.write(characters, offset, length));
-            moved = System.nanoTime();
+            moved.set(ticker.elapsedMilliseconds());
         }
 
         @Override
         public void flush() throws IOException {
             run(delegate::flush);
-            moved = System.nanoTime();
+            moved.set(ticker.elapsedMilliseconds());
         }
 
         @Override
@@ -154,7 +158,7 @@ public record StreamWriter(StreamSession session, AgentContract contract,
                 return null;
             });
             try {
-                pending.get(timeoutNanos(), TimeUnit.NANOSECONDS);
+                pending.get(timeoutMilliseconds(), TimeUnit.MILLISECONDS);
             } catch (final TimeoutException timeout) {
                 pending.cancel(true);
                 closeQuietly();
@@ -172,13 +176,11 @@ public record StreamWriter(StreamSession session, AgentContract contract,
             }
         }
 
-        private long timeoutNanos() {
-            final long total = TimeUnit.MILLISECONDS.toNanos(
-                    TransferDeadlines.totalMilliseconds(contract));
-            final long idle = TimeUnit.MILLISECONDS.toNanos(
-                    TransferDeadlines.idleMilliseconds(contract));
-            return Math.max(1, Math.min(total - (System.nanoTime() - started),
-                    idle - (System.nanoTime() - moved)));
+        private long timeoutMilliseconds() {
+            final long now = ticker.elapsedMilliseconds();
+            return Math.max(1, Math.min(
+                    TransferDeadlines.totalMilliseconds(contract) - (now - started),
+                    TransferDeadlines.idleMilliseconds(contract) - (now - moved.get())));
         }
 
         private void closeQuietly() {

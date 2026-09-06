@@ -201,30 +201,30 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         THE_BUDGET_RAN_OUT
     }
 
-    @SuppressWarnings("PMD.NullAssignment")
     private static Selection select(Resource root, DownloadContentPackageCommand command,
                                     long budget, long already) {
         final List<String> found = new ArrayList<>();
         final java.util.Deque<Iterator<Resource>> pending = new java.util.ArrayDeque<>();
-        Resource resource = root;
-        while (resource != null) {
+        Optional<Resource> resource = Optional.of(root);
+        while (resource.isPresent()) {
+            final Resource current = resource.orElseThrow();
             if (already + found.size() >= budget) {
                 return Selection.OVER_THE_BUDGET;
             }
-            if (command.contains(resource.getPath())) {
-                found.add(resource.getPath());
-                pending.push(resource.listChildren());
-                resource = null;
-                while (!pending.isEmpty() && resource == null) {
+            if (command.contains(current.getPath())) {
+                found.add(current.getPath());
+                pending.push(current.listChildren());
+                resource = Optional.empty();
+                while (!pending.isEmpty() && resource.isEmpty()) {
                     final Iterator<Resource> children = pending.peek();
                     if (children.hasNext()) {
-                        resource = children.next();
+                        resource = Optional.of(children.next());
                     } else {
                         pending.pop();
                     }
                 }
             } else {
-                resource = null;
+                resource = Optional.empty();
             }
         }
         return new Selection(Collections.unmodifiableList(found), Ending.NOTHING_LEFT_TO_SELECT);
@@ -262,33 +262,39 @@ public final class DownloadContentPackageHandler implements CommandHandler {
     }
 
     static byte[] packageBytes(String manifest) throws IOException {
-        return packageBytes(manifest, null, List.of());
+        return packageBytes(manifest, Optional.empty(), List.of());
     }
 
+    /** Builds the deterministic archive, including each selected resource when provided. */
     static byte[] packageBytes(String manifest, ResourceResolver resolver, List<String> selected)
             throws IOException {
+        return packageBytes(manifest, Optional.of(resolver), selected);
+    }
+
+    private static byte[] packageBytes(String manifest, Optional<ResourceResolver> resolver,
+                                      List<String> selected) throws IOException {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream archive = new ZipOutputStream(bytes)) {
             archive.putNextEntry(entry("META-INF/vault/filter.xml"));
             archive.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             archive.closeEntry();
-            if (resolver != null) {
-                selected.stream().sorted().forEach(path -> writeContentEntry(archive, resolver, path));
-            }
+            resolver.ifPresent(held -> selected.stream().sorted()
+                    .forEach(path -> writeContentEntry(archive, held, path)));
         }
         return bytes.toByteArray();
     }
 
     private static void writeContentEntry(ZipOutputStream archive, ResourceResolver resolver,
                                           String path) {
-        final Resource resource = resolver.getResource(path);
-        if (resource == null) {
+        final Optional<Resource> resource = Optional.ofNullable(resolver.getResource(path));
+        if (resource.isEmpty()) {
             return;
         }
         final String name = path.substring(1) + "/.content.xml";
         try {
             archive.putNextEntry(entry(name));
-            archive.write(contentXml(resource).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            archive.write(contentXml(resource.orElseThrow())
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
             archive.closeEntry();
         } catch (final IOException failure) {
             throw new java.io.UncheckedIOException("content entry could not be written", failure);
@@ -303,7 +309,7 @@ public final class DownloadContentPackageHandler implements CommandHandler {
 
     private static String contentXml(Resource resource) {
         final Map<String, Object> sorted = new TreeMap<>(resource.getValueMap());
-        final StringBuilder xml = new StringBuilder(128);
+        final StringBuilder xml = new StringBuilder(XML_BUFFER_SIZE);
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?><jcr:root "
                 + "xmlns:jcr=\"http://www.jcp.org/jcr/1.0\"");
         sorted.forEach((name, value) -> {
@@ -369,6 +375,9 @@ public final class DownloadContentPackageHandler implements CommandHandler {
 
     /** How much markup the filter carries around its roots. */
     private static final int MARKUP_AROUND_THE_FILTER = 64;
+
+    /** Initial capacity for the small content descriptor emitted into each package entry. */
+    private static final int XML_BUFFER_SIZE = 128;
 
     /**
      * Everything this command can fail with, which is a property of the command rather than of a
