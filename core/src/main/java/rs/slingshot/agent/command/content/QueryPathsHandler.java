@@ -116,13 +116,14 @@ public final class QueryPathsHandler implements CommandHandler {
      * @return whether it belongs in the answer
      */
     private static boolean matches(Resource resource, QueryPathsCommand command) {
+        final Resource current = java.util.Objects.requireNonNull(resource);
         if (!QueryPathsCommand.ANY_NODE_TYPE.equals(command.primaryNodeType())
-                && !command.primaryNodeType().equals(typeOf(resource))) {
+                && !command.primaryNodeType().equals(typeOf(current))) {
             return false;
         }
         return command.predicates().stream()
                 .allMatch(predicate -> predicate.isSatisfiedBy(
-                        storedAt(resource, predicate.propertyPath())));
+                        storedAt(current, predicate.propertyPath())));
     }
 
     /**
@@ -152,33 +153,32 @@ public final class QueryPathsHandler implements CommandHandler {
         return one == null ? List.of() : List.of(one);
     }
 
-    @SuppressWarnings("PMD.NullAssignment")
     private static Gathered gather(Resource root, QueryPathsCommand command, long budget) {
         final List<String> found = new ArrayList<>();
         final java.util.Deque<Iterator<Resource>> pending = new java.util.ArrayDeque<>();
-        Resource resource = root;
+        java.util.Optional<Resource> held = java.util.Optional.of(root);
         long examined = 0;
-        while (resource != null) {
+        while (held.isPresent()) {
+            final Resource current = held.orElseThrow();
             examined = examined + 1;
             if (examined > budget) {
                 return new Gathered(List.of(), Ending.THE_BUDGET_RAN_OUT);
             }
-            if (matches(resource, command)) {
-                found.add(resource.getPath());
+            if (matches(current, command)) {
+                found.add(current.getPath());
             }
-            pending.push(resource.listChildren());
-            resource = null;
-            while (!pending.isEmpty() && resource == null) {
+            pending.push(current.listChildren());
+            held = java.util.Optional.empty();
+            while (!pending.isEmpty() && held.isEmpty()) {
                 final Iterator<Resource> children = pending.peek();
                 if (children.hasNext()) {
-                    resource = children.next();
+                    held = java.util.Optional.ofNullable(children.next());
                 } else {
                     pending.pop();
                 }
             }
         }
-        return new Gathered(found.stream().sorted().toList(),
-                Ending.NOTHING_LEFT_TO_EXAMINE);
+        return new Gathered(found.stream().sorted().toList(), Ending.NOTHING_LEFT_TO_EXAMINE);
     }
 
     private static String typeOf(Resource resource) {
