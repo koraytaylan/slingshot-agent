@@ -1337,3 +1337,9 @@ required checks and the complete gate, then commit the completed task.
     save boundaries still diverged from the cursor contract. The link schema and sweep changes were
     reverted; task 4105 remains pending until successor state and cursor reporting are designed
     together.
+
+34. Re-ran the 4401 handler integration review after adding the wide/deep reach fixtures. The
+    query-path, child-page listing, and content-package command suites all pass (the combined
+    Maven run completed without failures), confirming depth-first selection, ordering, and explicit
+    discovery-budget refusal across the affected callers. Task 4401 remains pending because the
+    required measured iterator-call evidence and full quality gate are still outstanding.
