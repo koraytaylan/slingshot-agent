@@ -281,7 +281,7 @@ public final class ArtifactServlet extends AgentServlet {
         });
         final byte[] buffer = new byte[Digest.READ_BUFFER_BYTES];
         final long startedAt = ticker.milliseconds();
-        final long monotonicStarted = System.nanoTime();
+        final long monotonicStarted = ticker.elapsedMilliseconds();
         long monotonicLastMoved = monotonicStarted;
         long lastMovedAt = startedAt;
         long moved = 0;
@@ -295,7 +295,7 @@ public final class ArtifactServlet extends AgentServlet {
                     }
                     moved = moved + read;
                     lastMovedAt = ticker.milliseconds();
-                    monotonicLastMoved = System.nanoTime();
+                    monotonicLastMoved = ticker.elapsedMilliseconds();
                 }
                 if (!TransferDeadlines.isMoving(startedAt, lastMovedAt, ticker.milliseconds(),
                         contract)) {
@@ -310,7 +310,7 @@ public final class ArtifactServlet extends AgentServlet {
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")
-    private static int read(ExecutorService io, InputStream reading, byte[] buffer,
+    private int read(ExecutorService io, InputStream reading, byte[] buffer,
                             long monotonicStarted, long monotonicLastMoved, AgentContract contract)
             throws IOException {
         final Future<Integer> pending = io.submit(() -> reading.read(buffer));
@@ -331,7 +331,7 @@ public final class ArtifactServlet extends AgentServlet {
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")
-    private static boolean write(ExecutorService io, OutputStream writing, byte[] buffer, int count,
+    private boolean write(ExecutorService io, OutputStream writing, byte[] buffer, int count,
                                  long monotonicStarted, long monotonicLastMoved,
                                  AgentContract contract)
             throws IOException {
@@ -357,15 +357,14 @@ public final class ArtifactServlet extends AgentServlet {
         }
     }
 
-    private static long timeoutNanos(long monotonicStarted, long monotonicLastMoved,
+    private long timeoutNanos(long monotonicStarted, long monotonicLastMoved,
                                      AgentContract contract) {
-        final long total = TimeUnit.MILLISECONDS.toNanos(
-                TransferDeadlines.totalMilliseconds(contract));
-        final long idle = TimeUnit.MILLISECONDS.toNanos(
-                TransferDeadlines.idleMilliseconds(contract));
-        final long elapsed = System.nanoTime() - monotonicStarted;
-        final long idleElapsed = System.nanoTime() - monotonicLastMoved;
-        return Math.max(1, Math.min(total - elapsed, idle - idleElapsed));
+        final long total = TransferDeadlines.totalMilliseconds(contract);
+        final long idle = TransferDeadlines.idleMilliseconds(contract);
+        final long now = ticker.elapsedMilliseconds();
+        final long remaining = Math.min(total - (now - monotonicStarted),
+                idle - (now - monotonicLastMoved));
+        return TimeUnit.MILLISECONDS.toNanos(Math.max(1, remaining));
     }
 
     private static void closeQuietly(Closeable closeable) {
