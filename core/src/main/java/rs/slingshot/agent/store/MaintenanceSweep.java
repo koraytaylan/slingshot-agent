@@ -148,7 +148,15 @@ public final class MaintenanceSweep {
         }
     }
 
-    private record SweepProgress(long examined, boolean complete, String nextRecord) {
+    private record SweepProgress(long examined, Completion completion, String nextRecord) {
+        private boolean complete() {
+            return completion == Completion.COMPLETE;
+        }
+    }
+
+    private enum Completion {
+        COMPLETE,
+        MORE
     }
 
     private static SweepProgress sweep(Session session, Pass pass, long bucket, String startRecord,
@@ -160,21 +168,22 @@ public final class MaintenanceSweep {
                 .child(segments.get(0))
                 .child(segments.get(1));
         if (!session.nodeExists(path.path())) {
-            return new SweepProgress(0, true, "");
+            return new SweepProgress(0, Completion.COMPLETE, "");
         }
         long examined = 0;
         String cursor = startRecord;
         while (examined < bound) {
             final Optional<Node> next = nextRecord(session, path, cursor);
             if (next.isEmpty()) {
-                return new SweepProgress(examined, true, "");
+                return new SweepProgress(examined, Completion.COMPLETE, "");
             }
             final Node record = next.orElseThrow();
             cursor = record.getName();
             examined = examined + 1;
             examine(session, pass, path.child(cursor));
         }
-        return new SweepProgress(examined, nextRecord(session, path, cursor).isEmpty(), cursor);
+        return new SweepProgress(examined, nextRecord(session, path, cursor).isEmpty()
+                ? Completion.COMPLETE : Completion.MORE, cursor);
     }
 
     private static Optional<Node> nextRecord(Session session, StatePath bucket, String after)
