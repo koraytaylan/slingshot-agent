@@ -7,10 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -22,8 +19,13 @@ import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.CommandRegistry;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.execution.ExecutionOutcome;
+import rs.slingshot.agent.execution.LogicalOperation;
+import rs.slingshot.agent.identity.OperationIdentity;
+import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.store.StatePath;
 
 /** Covers the servlet runtime's active and fail-closed lifecycle. */
 final class DefaultCommandRuntimeTest {
@@ -51,6 +53,9 @@ final class DefaultCommandRuntimeTest {
             public Answer run(DocumentValue.Mapping arguments,
                               org.apache.sling.api.resource.ResourceResolver resolver,
                               CallerContext context) {
+                if ("query_paths".equals(row.wireName())) {
+                    return new Failed(row.failureCategories().getFirst(), "test failure");
+                }
                 return new Produced(new DocumentValue.Mapping(new LinkedHashMap<>()));
             }
 
@@ -72,7 +77,7 @@ final class DefaultCommandRuntimeTest {
     }
 
     @Test
-    void serializationLeavesASeparateRuntimeFailClosed() throws Exception {
+    void activeRuntimeRunsAValidSubmissionThroughTheDispatch() throws java.io.IOException {
         final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
                 CommandRegistry.read(FIXTURES)).registry();
         final SequencedMap<String, CommandHandler> handlers = new LinkedHashMap<>();
@@ -81,6 +86,9 @@ final class DefaultCommandRuntimeTest {
             public Answer run(DocumentValue.Mapping arguments,
                               org.apache.sling.api.resource.ResourceResolver resolver,
                               CallerContext context) {
+                if ("query_paths".equals(row.wireName())) {
+                    return new Failed(row.failureCategories().getFirst(), "test failure");
+                }
                 return new Produced(new DocumentValue.Mapping(new LinkedHashMap<>()));
             }
 
@@ -92,15 +100,52 @@ final class DefaultCommandRuntimeTest {
         final DefaultCommandRuntime runtime = new DefaultCommandRuntime(
                 assertInstanceOf(CommandDispatch.Held.class,
                         CommandDispatch.of(registry, handlers)).dispatch(), CONTRACT);
-        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        try (ObjectOutputStream output = new ObjectOutputStream(bytes)) {
-            output.writeObject(runtime);
-        }
-        final DefaultCommandRuntime restored;
-        try (ObjectInputStream input = new ObjectInputStream(
-                new ByteArrayInputStream(bytes.toByteArray()))) {
-            restored = assertInstanceOf(DefaultCommandRuntime.class, input.readObject());
-        }
-        assertFalse(restored.serves(registry.wireNames().getFirst()));
+        final LogicalOperation operation = operation();
+        final SequencedMap<String, DocumentValue> submissionMembers = new LinkedHashMap<>();
+        submissionMembers.put(SubmitServlet.ARGUMENTS, new DocumentValue.Text("{}"));
+        final DocumentValue.Mapping submission = new DocumentValue.Mapping(submissionMembers);
+        assertInstanceOf(ExecutionOutcome.Completion.class,
+                runtime.run(operation, submission, null, null, context()));
+        assertInstanceOf(ExecutionOutcome.Completion.class,
+                runtime.run(operation, submission, null, null));
+        final SequencedMap<String, DocumentValue> malformedMembers = new LinkedHashMap<>();
+        malformedMembers.put(SubmitServlet.ARGUMENTS, new DocumentValue.Text("{"));
+        assertInstanceOf(ExecutionOutcome.Uncertain.class,
+                runtime.run(operation, new DocumentValue.Mapping(malformedMembers), null, null,
+                        context()));
+    }
+
+    private static LogicalOperation operation() throws java.io.IOException {
+        final Path fixture = repositoryRoot().resolve(
+                "core/src/test/resources/fixtures/submit-servlet/a-submission.json");
+        final DocumentValue.Mapping document = assertInstanceOf(DocumentValue.Mapping.class,
+                assertInstanceOf(BoundedDocumentReader.Read.class,
+                BoundedDocumentReader.read(Files.readAllBytes(fixture),
+                        BoundedDocumentReader.Bounds.from(CONTRACT))).value());
+        final OperationIdentity identity = assertInstanceOf(OperationIdentity.Held.class,
+                OperationIdentity.of(document.member("operation").orElseThrow(), CONTRACT)).identity();
+        final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
+                CommandRegistry.read(FIXTURES)).registry();
+        final rs.slingshot.agent.identity.CommandContractIdentity contract =
+                assertInstanceOf(rs.slingshot.agent.identity.CommandContractIdentity.Held.class,
+                        registry.row("query_paths").orElseThrow().identity(
+                                rs.slingshot.agent.identity.CommandContractIdentity.Bounds.from(CONTRACT)))
+                        .identity();
+        final StatePath.Caller caller = assertInstanceOf(StatePath.Held.class,
+                StatePath.caller("admin")).caller();
+        return assertInstanceOf(LogicalOperation.Held.class, LogicalOperation.accepted(identity,
+                Digest.of("submission".getBytes(StandardCharsets.UTF_8)), contract, caller,
+                1_000L, 1_000L, CONTRACT)).operation();
+    }
+
+    private static CallerContext context() throws java.io.IOException {
+        return new CallerContext(operation().identity().identifier(),
+                rs.slingshot.agent.command.Budget.discovery(CONTRACT),
+                rs.slingshot.agent.command.Budget.time(CONTRACT),
+                rs.slingshot.agent.command.Budget.result(
+                        assertInstanceOf(CommandRegistry.Loaded.class,
+                                CommandRegistry.read(FIXTURES)).registry().row("query_paths")
+                                .orElseThrow()),
+                rs.slingshot.agent.command.ProgressSink.under(CONTRACT));
     }
 }

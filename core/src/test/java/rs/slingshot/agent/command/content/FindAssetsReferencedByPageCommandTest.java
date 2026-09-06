@@ -46,7 +46,8 @@ final class FindAssetsReferencedByPageCommandTest {
     @Test
     void handlerRefusesMalformedArgumentsBeforePlatformAccess() {
         assertInstanceOf(CommandHandler.Failed.class,
-                new FindAssetsReferencedByPageHandler(CONTRACT).run(new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
+                new FindAssetsReferencedByPageHandler(CONTRACT).run(
+                        new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
                 "malformed arguments reached the platform handler");
     }
 

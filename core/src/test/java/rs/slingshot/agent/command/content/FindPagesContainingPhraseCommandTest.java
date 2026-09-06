@@ -46,7 +46,8 @@ final class FindPagesContainingPhraseCommandTest {
     @Test
     void handlerRefusesMalformedArgumentsBeforePlatformAccess() {
         assertInstanceOf(CommandHandler.Failed.class,
-                new FindPagesContainingPhraseHandler(CONTRACT).run(new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), budgeted(10)),
+                new FindPagesContainingPhraseHandler(CONTRACT).run(
+                        new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), budgeted(10)),
                 "malformed arguments reached the platform handler");
     }
 

@@ -46,10 +46,21 @@ final class FindPagesByTemplateCommandTest {
     @Test
     void handlerRefusesMalformedArgumentsBeforePlatformAccess() {
         assertInstanceOf(CommandHandler.Failed.class,
-                new FindPagesByTemplateHandler(CONTRACT).run(new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
+                new FindPagesByTemplateHandler(CONTRACT).run(
+                        new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
                 "malformed arguments reached the platform handler");
         assertInstanceOf(CommandHandler.Failed.class, run("/content/missing", TEMPLATE),
                 "a missing root was answered as an empty result");
+    }
+
+    @Test
+    void discoveryBudgetIsRefusedRatherThanReturningPartialResults() {
+        corpus();
+        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                new FindPagesByTemplateHandler(CONTRACT).run(
+                        argument("/content/site", TEMPLATE, 100), readOnly(), narrowContext()),
+                "a traversal beyond the discovery budget returned partial results");
+        assertEquals(FindPagesByTemplateHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
     }
 
     private static final AgentContract CONTRACT = contract();
@@ -210,6 +221,14 @@ final class FindPagesByTemplateCommandTest {
 
     private ResourceResolver readOnly() {
         return ReadOnlyResolver.around(sling.resourceResolver());
+    }
+
+    private static CallerContext narrowContext() {
+        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, 1),
+                Budget.time(CONTRACT),
+                new Budget(Budget.Kind.RESULT,
+                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
+                ProgressSink.under(CONTRACT));
     }
 
     private static CallerContext context() {
