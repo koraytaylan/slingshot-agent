@@ -1858,3 +1858,10 @@ required checks and the complete gate, then commit the completed task.
     `PagingSupport`, `FindPagesUsingComponentsHandler`, `FindAssetsByMetadataHandler`, and
     `FindPagesByTemplateHandler`; no coverage policy was weakened. Test increment committed as
     `fbf25c5`; the next review loop remains focused on those uncovered branches.
+
+135. The next paging review found the continuation-authority guard inverted: available authority
+    was refused and unavailable authority was accepted. The guard now refuses only when a page has
+    more rows and authority is unavailable. `PagingSupportTest` proves signed successor issuance,
+    and `ListChildPagesCommandTest` now runs its multi-page fixture with an authority. All 1,148
+    core tests pass; JaCoCo reports `PagingSupport` at 65%, leaving additional branch coverage for
+    the next loop. Commit: `37da8da`.
