@@ -1699,3 +1699,9 @@ required checks and the complete gate, then commit the completed task.
     cases after compilation; each handler now preserves its full argument digest and uses the same
     continuation validation and successor issuance rules. Framework, configuration, job, principal,
     replication, and workflow paged handlers remain to be migrated before task 4404 can close.
+
+104. Applied verified paging to both framework inventory listings (bundles and components), keeping
+    the command-specific wire name in each query digest and returning the issued continuation token
+    through the existing result builders. `FrameworkCommandTest` passes all 11 cases and the module
+    compiles; the remaining configuration, job, principal, replication, and workflow listings still
+    require the same migration.
