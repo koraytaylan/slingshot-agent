@@ -47,8 +47,8 @@ public final class StateLifecycleService {
             "state lifecycle has not initialized");
     private static final AtomicReference<Snapshot> OBSERVED = new AtomicReference<>(STARTING);
 
-    private AgentSession sessions;
-    private Scheduler scheduler;
+    private final AtomicReference<AgentSession> sessions = new AtomicReference<>();
+    private final AtomicReference<Scheduler> scheduler = new AtomicReference<>();
 
     /** Creates the declarative-services component. */
     public StateLifecycleService() {
@@ -57,23 +57,23 @@ public final class StateLifecycleService {
     /** Binds the scoped state-session provider. */
     @Reference
     public void available(AgentSession source) {
-        sessions = source;
+        sessions.set(source);
     }
 
     /** Starts recovery immediately and schedules bounded maintenance afterward. */
     @Activate
     public void activate() {
-        scheduler = Scheduler.open();
+        scheduler.set(Scheduler.open());
         runOnce();
         final AgentContract.Loaded contract = contract();
         final long interval = RestartRecovery.intervalMilliseconds(contract.contract());
-        scheduler.schedule(this::runOnce, interval);
+        scheduler.get().schedule(this::runOnce, interval);
     }
 
     /** Stops scheduled work and revokes readiness before the component is released. */
     @Deactivate
     public void deactivate() {
-        final Scheduler running = scheduler;
+        final Scheduler running = scheduler.getAndSet(null);
         if (running != null) {
             running.stop();
         }
@@ -94,13 +94,14 @@ public final class StateLifecycleService {
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0, refused.getMessage()));
             return;
         }
-        if (sessions == null) {
+        final AgentSession source = sessions.get();
+        if (source == null) {
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                     "state session provider is not bound"));
             return;
         }
         try {
-            final AgentSession.Outcome<Run> outcome = sessions.withAgentState(
+            final AgentSession.Outcome<Run> outcome = source.withAgentState(
                     AgentSession.MAINTENANCE_SUBSERVICE,
                     resolver -> runIn(resolver, loaded.contract()));
             if (outcome instanceof AgentSession.Completed<Run> completed) {
@@ -118,7 +119,10 @@ public final class StateLifecycleService {
     }
 
     private static Run runIn(ResourceResolver resolver, AgentContract contract) {
-        final Session session = resolver.adaptTo(Session.class);
+        return runIn(resolver.adaptTo(Session.class), contract);
+    }
+
+    private static Run runIn(Session session, AgentContract contract) {
         if (session == null) {
             throw new IllegalStateException("maintenance resolver has no JCR session");
         }
