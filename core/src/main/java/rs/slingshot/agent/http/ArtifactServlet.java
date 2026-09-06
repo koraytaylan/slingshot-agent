@@ -335,9 +335,12 @@ public final class ArtifactServlet extends AgentServlet {
                                  AgentContract contract)
             throws IOException {
         final Future<?> pending = io.submit(() -> {
-            writing.write(buffer, 0, count);
-            writing.flush();
-            return null;
+            try {
+                writing.write(buffer, 0, count);
+                writing.flush();
+            } catch (final IOException failed) {
+                throw new java.io.UncheckedIOException(failed);
+            }
         });
         try {
             pending.get(timeoutNanos(monotonicStarted, monotonicLastMoved, contract),
