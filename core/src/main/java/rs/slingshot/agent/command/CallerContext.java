@@ -4,7 +4,10 @@
 package rs.slingshot.agent.command;
 
 import java.util.Optional;
+import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
+import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
+import rs.slingshot.agent.identity.EventStoreGeneration;
 
 /**
  * Everything a handler may reach, and nothing that would let it reach anything else.
@@ -28,7 +31,18 @@ import rs.slingshot.agent.identity.AgentOperationIdentifier;
  * @param progress where its progress goes
  */
 public record CallerContext(AgentOperationIdentifier operation, Budget discovery, Budget time,
-                            Budget result, ProgressSink progress) {
+                            Budget result, ProgressSink progress, Optional<Paging> paging) {
+
+    /** Compatibility constructor for non-paged handlers and existing callers. */
+    public CallerContext(AgentOperationIdentifier operation, Budget discovery, Budget time,
+                         Budget result, ProgressSink progress) {
+        this(operation, discovery, time, result, progress, Optional.empty());
+    }
+
+    /** Per-call authority and identity needed to issue or validate continuation tokens. */
+    public record Paging(ContinuationKeyAuthority authority, DigestValue targetDigest,
+                         EventStoreGeneration generation, long nowUnixMilliseconds) {
+    }
 
     /**
      * Whether one spend is inside every budget this context carries.
