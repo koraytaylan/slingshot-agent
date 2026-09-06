@@ -182,15 +182,13 @@ public final class MaintenanceSweep {
             return records.hasNext() ? records.nextNode() : null;
         }
         final NodeIterator records = session.getNode(bucket.path()).getNodes();
-        Node successor = null;
         while (records.hasNext()) {
             final Node candidate = records.nextNode();
-            if (candidate.getName().compareTo(after) > 0
-                    && (successor == null || candidate.getName().compareTo(successor.getName()) < 0)) {
-                successor = candidate;
+            if (candidate.getName().compareTo(after) > 0) {
+                return candidate;
             }
         }
-        return successor;
+        return null;
     }
 
     private static void examine(Session session, Pass pass, StatePath record)
