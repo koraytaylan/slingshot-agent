@@ -152,13 +152,13 @@ public final class QueryPathsHandler implements CommandHandler {
         return one == null ? List.of() : List.of(one);
     }
 
+    @SuppressWarnings("PMD.NullAssignment")
     private static Gathered gather(Resource root, QueryPathsCommand command, long budget) {
         final List<String> found = new ArrayList<>();
-        final java.util.Deque<Resource> pending = new java.util.ArrayDeque<>();
-        pending.add(root);
+        final java.util.Deque<Iterator<Resource>> pending = new java.util.ArrayDeque<>();
+        Resource resource = root;
         long examined = 0;
-        while (!pending.isEmpty()) {
-            final Resource resource = pending.removeFirst();
+        while (resource != null) {
             examined = examined + 1;
             if (examined > budget) {
                 return new Gathered(List.of(), Ending.THE_BUDGET_RAN_OUT);
@@ -166,9 +166,15 @@ public final class QueryPathsHandler implements CommandHandler {
             if (matches(resource, command)) {
                 found.add(resource.getPath());
             }
-            final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext()) {
-                pending.addLast(children.next());
+            pending.push(resource.listChildren());
+            resource = null;
+            while (!pending.isEmpty() && resource == null) {
+                final Iterator<Resource> children = pending.peek();
+                if (children.hasNext()) {
+                    resource = children.next();
+                } else {
+                    pending.pop();
+                }
             }
         }
         return new Gathered(found.stream().sorted().toList(),
