@@ -5,12 +5,13 @@ package rs.slingshot.agent.store;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import javax.jcr.InvalidItemStateException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryResult;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.identity.EventStoreGeneration;
@@ -173,35 +174,31 @@ public final class MaintenanceSweep {
             return new SweepProgress(0, Completion.COMPLETE, "");
         }
         long examined = 0;
+        final NodeIterator records = orderedRecords(session, path, startRecord);
         String cursor = startRecord;
-        while (examined < bound) {
-            final Optional<Node> next = nextRecord(session, path, cursor);
-            if (next.isEmpty()) {
-                return new SweepProgress(examined, Completion.COMPLETE, "");
-            }
-            final Node record = next.orElseThrow();
+        while (examined < bound && records.hasNext()) {
+            final Node record = records.nextNode();
             cursor = record.getName();
             examined = examined + 1;
             examine(session, pass, path.child(cursor));
         }
-        return new SweepProgress(examined, nextRecord(session, path, cursor).isEmpty()
-                ? Completion.COMPLETE : Completion.MORE, cursor);
+        return new SweepProgress(examined, records.hasNext() ? Completion.MORE : Completion.COMPLETE,
+                cursor);
     }
 
-    private static Optional<Node> nextRecord(Session session, StatePath bucket, String after)
+    private static NodeIterator orderedRecords(Session session, StatePath bucket, String after)
             throws RepositoryException {
         if (after.isEmpty()) {
-            final NodeIterator records = session.getNode(bucket.path()).getNodes();
-            return records.hasNext() ? Optional.of(records.nextNode()) : Optional.empty();
+            return session.getNode(bucket.path()).getNodes();
         }
-        final NodeIterator records = session.getNode(bucket.path()).getNodes();
-        while (records.hasNext()) {
-            final Node candidate = records.nextNode();
-            if (candidate.getName().compareTo(after) > 0) {
-                return Optional.of(candidate);
-            }
-        }
-        return Optional.empty();
+        final String escapedBucket = bucket.path().replace("'", "''");
+        final String condition = " AND NAME(record) > '" + after.replace("'", "''") + "'";
+        final String statement = "SELECT * FROM [nt:base] AS record WHERE ISCHILDNODE(record, '"
+                + escapedBucket + "')" + condition + " ORDER BY NAME(record)";
+        final Query query = session.getWorkspace().getQueryManager()
+                .createQuery(statement, Query.JCR_SQL2);
+        final QueryResult result = query.execute();
+        return result.getNodes();
     }
 
     private static void examine(Session session, Pass pass, StatePath record)
