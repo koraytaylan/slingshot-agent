@@ -17,7 +17,7 @@ touches:
   - core/src/test/java/rs/slingshot/agent/http
   - core/src/test/java/rs/slingshot/agent/wire
 status: complete
-merged_as: "0ea4598"
+merged_as: "d7b92ab"
 ---
 # Expose Durable Command Results Through the Contract
 
