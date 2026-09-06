@@ -37,7 +37,9 @@ public final class PagingSupport {
         }
     }
 
-    /** A page decision or the one refusal that prevented it. */
+    /** A page decision or the one refusal that prevented it.
+     * @param <R> the result row type
+     */
     public sealed interface Outcome<R> permits Accepted, Refused {
     }
 

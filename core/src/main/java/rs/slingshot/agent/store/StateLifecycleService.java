@@ -132,7 +132,7 @@ public final class StateLifecycleService {
             // cancel the fixed-delay task and leave discovery reporting the previous READY pass.
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                     "state lifecycle failed unexpectedly: " + failure.getClass().getSimpleName()
-                            + ": " + String.valueOf(failure.getMessage())));
+                            + ": " + failure.getMessage()));
         }
     }
 
