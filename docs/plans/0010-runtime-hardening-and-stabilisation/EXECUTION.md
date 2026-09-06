@@ -1547,3 +1547,9 @@ required checks and the complete gate, then commit the completed task.
     assertion still expected the pre-lifecycle readiness value. The last assertion is corrected in
     commit `3f0530c`; the two container failures are isolated to interop runtime setup and do not
     reproduce in core tests.
+73. Traced the state-access 410 to `StreamWriter` persisting its monotonic elapsed-tick reading as
+    `last_advanced_at_unix_milliseconds`. After a stream advanced a cursor, the high-water route
+    therefore treated the subscription as expired. The write now uses the ticker's epoch
+    `milliseconds()` value. Focused stream/high-water tests pass; rebuilt-bundle interop reruns of
+    `StateAccessOwnershipScenario` and `GenerationRotationCrashScenario` pass. This commit records
+    the fix and review loop.
