@@ -1257,3 +1257,6 @@ required checks and the complete gate, then commit the completed task.
     explicit budget exhaustion. Its focused query and child-list suites passed (17 cases), followed
     by Checkstyle and PMD. Commit `d374f6d` records the query integration; child-list and package
     handlers still need equivalent retained-work treatment and measured fixtures.
+    ListChildPagesHandler now stops child examination at the discovery budget and reports exhaustion
+    explicitly, avoiding a partial page presented as complete. Its seven-case suite passed. Commit
+    `d55f9e2` records this step; package traversal and wide/deep measured fixtures remain.
