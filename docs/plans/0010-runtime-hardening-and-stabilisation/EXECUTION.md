@@ -1739,3 +1739,8 @@ required checks and the complete gate, then commit the completed task.
     pattern was not registered, and its record components lacked parameter documentation. Added the
     committed pattern row and complete Javadocs; `ApiShapePolicyTest` and `JavadocPolicyTest` now
     pass all 22 cases. This closes the review finding without weakening either policy.
+
+112. Re-ran `StateLifecycleServiceTest` while reviewing task 4501. All 5 lifecycle cases pass,
+    including unavailable-provider handling, activation recovery, readiness reporting and scheduler
+    shutdown. The service code is present and unit-verified, but installed-runtime evidence is still
+    required before task 4501 can be closed.
