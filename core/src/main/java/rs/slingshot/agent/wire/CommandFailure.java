@@ -32,7 +32,10 @@ public record CommandFailure(Category category) {
     /** Every member a failure document has, and there is no third. */
     public static final List<String> MEMBERS = List.of(EFFECT, CATEGORY);
 
-    /** Builds the canonical failure document for a known category. */
+    /** Builds the canonical failure document for a known category.
+     * @param category the known failure category to encode
+     * @return the canonical failure mapping
+     */
     public static DocumentValue.Mapping documentOf(Category category) {
         final java.util.SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
         members.put(CATEGORY, new DocumentValue.Text(category.spelling()));
