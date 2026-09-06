@@ -10,6 +10,8 @@ import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import javax.jcr.query.Query;
+import javax.jcr.query.QueryResult;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.identity.EventStoreGeneration;
@@ -72,17 +74,34 @@ public final class MaintenanceSweep {
         final long bound = contract.value(ContractLimit.MAINTENANCE_SWEEP_WORK_BOUND_ROWS);
         long examined = 0;
         long next = SweepCursor.BUCKETS;
-        for (final long bucket : buckets(session, generation)) {
-            if (bucket < from.bucket()) {
-                continue;
-            }
+        String nextRecord = "";
+        final List<Long> present = buckets(session, generation);
+        final int start = present.stream().takeWhile(bucket -> bucket < from.bucket()).toList().size();
+        for (int visited = 0; visited < present.size(); visited++) {
+            final int index = (start + visited) % present.size();
+            final long bucket = present.get(index);
             if (examined >= bound) {
                 next = bucket;
                 break;
             }
-            examined = examined + sweep(session, pass, bucket);
+            final SweepProgress progress = sweep(session, pass, bucket,
+                    visited == 0 ? from.cycleStartRecord() : "", bound - examined);
+            examined = examined + progress.examined();
+            if (!progress.complete()) {
+                next = visited > 0 && index < start ? SweepCursor.FIRST : bucket;
+                nextRecord = progress.nextRecord();
+                break;
+            }
+            if (examined >= bound) {
+                next = visited > 0 && index < start ? SweepCursor.FIRST
+                        : index + 1 < present.size() ? present.get(index + 1) : SweepCursor.BUCKETS;
+                break;
+            }
         }
-        SweepCursor.advance(session, from, next, nowUnixMilliseconds);
+        if (examined > 0) {
+            session.save();
+        }
+        SweepCursor.advance(session, from, next, nextRecord, nowUnixMilliseconds);
         return new SweepReport(from.bucket(),
                 next >= SweepCursor.BUCKETS ? SweepCursor.FIRST : next, examined, pass.removed(),
                 pass.collected(), pass.released());
@@ -130,7 +149,11 @@ public final class MaintenanceSweep {
         }
     }
 
-    private static long sweep(Session session, Pass pass, long bucket)
+    private record SweepProgress(long examined, boolean complete, String nextRecord) {
+    }
+
+    private static SweepProgress sweep(Session session, Pass pass, long bucket, String startRecord,
+                                       long bound)
             throws RepositoryException {
         final List<String> segments = SweepCursor.segments(bucket);
         final StatePath path = StatePath.deployment(StatePath.OPERATIONS)
@@ -138,19 +161,41 @@ public final class MaintenanceSweep {
                 .child(segments.get(0))
                 .child(segments.get(1));
         if (!session.nodeExists(path.path())) {
-            return 0;
-        }
-        final NodeIterator records = session.getNode(path.path()).getNodes();
-        final List<String> names = new ArrayList<>();
-        while (records.hasNext()) {
-            names.add(records.nextNode().getName());
+            return new SweepProgress(0, true, "");
         }
         long examined = 0;
-        for (final String name : names) {
+        String cursor = startRecord;
+        while (examined < bound) {
+            final Node record = nextRecord(session, path, cursor);
+            if (record == null) {
+                return new SweepProgress(examined, true, "");
+            }
+            cursor = record.getName();
             examined = examined + 1;
-            examine(session, pass, path.child(name));
+            examine(session, pass, path.child(cursor));
         }
-        return examined;
+        return new SweepProgress(examined, nextRecord(session, path, cursor) == null, cursor);
+    }
+
+    private static Node nextRecord(Session session, StatePath bucket, String after)
+            throws RepositoryException {
+        if (after.isEmpty()) {
+            final NodeIterator records = session.getNode(bucket.path()).getNodes();
+            return records.hasNext() ? records.nextNode() : null;
+        }
+        final String statement = "SELECT * FROM [nt:base] AS record WHERE ISCHILDNODE(record, "
+                + quote(bucket.path()) + ") AND NAME(record) > " + quote(after)
+                + " ORDER BY NAME(record)";
+        final Query query = session.getWorkspace().getQueryManager().createQuery(statement,
+                Query.JCR_SQL2);
+        query.setLimit(1);
+        final QueryResult result = query.execute();
+        final NodeIterator records = result.getNodes();
+        return records.hasNext() ? records.nextNode() : null;
+    }
+
+    private static String quote(String value) {
+        return "'" + value.replace("'", "''") + "'";
     }
 
     private static void examine(Session session, Pass pass, StatePath record)
