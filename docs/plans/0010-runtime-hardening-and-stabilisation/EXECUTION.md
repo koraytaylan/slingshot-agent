@@ -1380,3 +1380,8 @@ required checks and the complete gate, then commit the completed task.
     digest. The package suite passes with a ZIP readability regression, and Checkstyle/PMD remain
     clean. Durable `ArtifactStore.publish` integration is still pending because the command runtime
     does not yet supply its publication session and ownership boundary.
+
+42. Extended the archive review to selected resource payloads. The ZIP now carries deterministic
+    `.content.xml` entries for each selected resource, with XML escaping and stable property order;
+    tests verify both the Vault filter entry and a selected content entry. The package suite,
+    Checkstyle, and PMD pass. Publication into `ArtifactStore` remains a runtime integration task.
