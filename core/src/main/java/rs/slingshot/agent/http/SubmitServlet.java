@@ -12,6 +12,7 @@ import javax.jcr.Session;
 import javax.servlet.Servlet;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
+import org.apache.sling.api.resource.ResourceResolver;
 import org.osgi.service.component.annotations.Component;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -118,6 +119,13 @@ public final class SubmitServlet extends AgentServlet {
         rs.slingshot.agent.execution.ExecutionOutcome.Completion run(LogicalOperation operation,
                                                                  DocumentValue.Mapping submission,
                                                                  Session session);
+
+        /** Runs with the request resolver available to a packaged command runtime. */
+        default rs.slingshot.agent.execution.ExecutionOutcome.Completion run(
+                LogicalOperation operation, DocumentValue.Mapping submission, Session session,
+                ResourceResolver resolver) {
+            return run(operation, submission, session);
+        }
     }
 
     /** What a build with no commands registered runs, which is nothing. */
@@ -230,7 +238,7 @@ public final class SubmitServlet extends AgentServlet {
             return;
         }
         recorded(request, response, new Arriving(caller, ((BoundedRequestBody.Read) body).bytes(),
-                contract, asking.get()));
+                contract, asking.get(), request.getResourceResolver()));
     }
 
     /**
@@ -241,7 +249,8 @@ public final class SubmitServlet extends AgentServlet {
      * @param contract the authenticated contract, which declares every bound
      * @param effects the original caller's session, used only for requested content effects
      */
-    private record Arriving(CallerIdentity caller, byte[] body, AgentContract contract, Session effects) {
+    private record Arriving(CallerIdentity caller, byte[] body, AgentContract contract, Session effects,
+                            ResourceResolver resolver) {
     }
 
     private void recorded(SlingHttpServletRequest request, SlingHttpServletResponse response,
@@ -360,7 +369,8 @@ public final class SubmitServlet extends AgentServlet {
         final StatePath path = rs.slingshot.agent.execution.OperationStore.pathOf(running.identity());
         try (var attempt = rs.slingshot.agent.execution.ExecutionJournal.attempt(session, path,
                 arriving.contract())) {
-            attempt.complete(commands.run(running, submission, arriving.effects()));
+            attempt.complete(commands.run(running, submission, arriving.effects(),
+                    arriving.resolver()));
         }
         finalised(response, running, submission, arriving, session, acceptance);
     }
