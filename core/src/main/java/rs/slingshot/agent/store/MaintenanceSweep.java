@@ -72,13 +72,28 @@ public final class MaintenanceSweep {
         final SweepCursor from = SweepCursor.read(session);
         final Pass pass = new Pass(generation, nowUnixMilliseconds, contract);
         final long bound = contract.value(ContractLimit.MAINTENANCE_SWEEP_WORK_BOUND_ROWS);
+        final List<Long> present = buckets(session, generation);
+        final int start = present.stream().takeWhile(bucket -> bucket < from.bucket()).toList().size();
+        final SweepState state = advance(session, pass, from, present, start, bound);
+        final long examined = state.examined();
+        if (examined > 0) {
+            session.save();
+        }
+        SweepCursor.advance(session, from, state.next(), state.nextRecord(), nowUnixMilliseconds);
+        return new SweepReport(from.bucket(),
+                state.next() >= SweepCursor.BUCKETS ? SweepCursor.FIRST : state.next(), examined, pass.removed(),
+                pass.collected(), pass.released());
+    }
+
+    private record SweepState(long examined, long next, String nextRecord) { }
+
+    private static SweepState advance(Session session, Pass pass, SweepCursor from,
+                                     List<Long> present, int start, long bound)
+            throws RepositoryException {
         long examined = 0;
         long next = SweepCursor.BUCKETS;
         String nextRecord = "";
-        final List<Long> present = buckets(session, generation);
-        final int start = present.stream().takeWhile(bucket -> bucket < from.bucket()).toList().size();
-        int visited = 0;
-        while (visited < present.size()) {
+        for (int visited = 0; visited < present.size(); visited++) {
             final int index = (start + visited) % present.size();
             final long bucket = present.get(index);
             if (examined >= bound) {
@@ -98,15 +113,8 @@ public final class MaintenanceSweep {
                         : index + 1 < present.size() ? present.get(index + 1) : SweepCursor.BUCKETS;
                 break;
             }
-            visited = visited + 1;
         }
-        if (examined > 0) {
-            session.save();
-        }
-        SweepCursor.advance(session, from, next, nextRecord, nowUnixMilliseconds);
-        return new SweepReport(from.bucket(),
-                next >= SweepCursor.BUCKETS ? SweepCursor.FIRST : next, examined, pass.removed(),
-                pass.collected(), pass.released());
+        return new SweepState(examined, next, nextRecord);
     }
 
     /**
