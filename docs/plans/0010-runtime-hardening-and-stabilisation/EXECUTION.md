@@ -1277,3 +1277,10 @@ required checks and the complete gate, then commit the completed task.
     mutation coverage passed (42 cases), and the final PMD/Checkstyle pass is green. Commit `640961a`
     contains the behavior; `46a3c9a` corrects its policy suppression. Dedicated boundary fixtures
     remain before the task can be marked complete.
+
+25. Began 4403 by requiring component deletion targets to carry the component node type and by
+    counting the complete subtree up to one past the deletion bound before calling delete. Ordinary
+    folders are refused and oversized component trees remain unchanged. Component mutation coverage
+    passed (12 cases), with compilation and Checkstyle green; PMD reports only the known maintenance
+    test argument-order baseline. Commit `bbf94c0` records this step; dedicated wrong-kind and
+    over-budget fixtures remain.
