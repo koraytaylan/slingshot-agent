@@ -1788,3 +1788,8 @@ required checks and the complete gate, then commit the completed task.
     failed execution outcomes, and refuses malformed or unknown results as uncertainty. Focused
     servlet/dispatch tests pass 32 cases; compile, PMD and Checkstyle pass, and the packaged SCR
     descriptor contains the dynamic `CommandRuntime` reference.
+
+121. The adapter review caught serialization findings on its transient dispatch and contract. The
+    runtime now restores both as empty optionals on deserialization and returns an explicit
+    uncertain outcome until a live composition supplies them. SpotBugs reports zero findings,
+    PMD passes, and Checkstyle passes with zero violations after the correction.
