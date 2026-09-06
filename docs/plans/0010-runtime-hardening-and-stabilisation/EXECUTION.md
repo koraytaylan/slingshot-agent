@@ -1772,3 +1772,7 @@ required checks and the complete gate, then commit the completed task.
     length violations in the migrated asset-reference paging path and narrowed the lifecycle catch
     to the concrete adapter exception allowed by source policy; Checkstyle passes with zero
     violations.
+
+118. Re-ran the full core regression after the package cleanup mapping landed. All 1,137 tests pass,
+    including the package, transport, lifecycle, command and console suites; no regression was
+    introduced by converting staging-release failures into typed command outcomes.
