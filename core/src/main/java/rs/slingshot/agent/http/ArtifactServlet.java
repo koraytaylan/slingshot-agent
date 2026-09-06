@@ -285,29 +285,45 @@ public final class ArtifactServlet extends AgentServlet {
             long lastMovedAt = startedAt;
             long moved = 0;
             try {
-                int read = read(io, reading, buffer, monotonicStarted, monotonicLastMoved, contract);
-                while (read >= 0) {
-                    if (read > 0) {
-                        if (!write(io, writing, buffer, read, monotonicStarted, monotonicLastMoved,
-                                contract)) {
-                            return moved;
-                        }
-                        moved = moved + read;
-                        lastMovedAt = ticker.milliseconds();
-                        monotonicLastMoved = DefaultStreamTicker.monotonicNanoseconds();
-                    }
-                    if (!TransferDeadlines.isMoving(startedAt, lastMovedAt, ticker.milliseconds(),
-                            contract)) {
-                        return moved;
-                    }
-                    read = read(io, reading, buffer, monotonicStarted, monotonicLastMoved,
-                            contract);
-                }
-                return moved;
+                return transferLoop(io, reading, writing, buffer,
+                        new TransferState(monotonicStarted, monotonicLastMoved, startedAt,
+                                lastMovedAt, moved), contract);
             } finally {
                 io.shutdownNow();
             }
         }
+    }
+
+    private record TransferState(long monotonicStarted, long monotonicLastMoved,
+                                 long startedAt, long lastMovedAt, long moved) {
+    }
+
+    private long transferLoop(ExecutorService io, InputStream reading, OutputStream writing,
+                              byte[] buffer, TransferState state, AgentContract contract)
+            throws IOException {
+        long currentMoved = state.moved();
+        long currentLastMoved = state.lastMovedAt();
+        long currentMonotonicLastMoved = state.monotonicLastMoved();
+        int read = read(io, reading, buffer, state.monotonicStarted(), currentMonotonicLastMoved,
+                contract);
+        while (read >= 0) {
+            if (read > 0) {
+                if (!write(io, writing, buffer, read, state.monotonicStarted(),
+                        currentMonotonicLastMoved, contract)) {
+                    return currentMoved;
+                }
+                currentMoved = currentMoved + read;
+                currentLastMoved = ticker.milliseconds();
+                currentMonotonicLastMoved = DefaultStreamTicker.monotonicNanoseconds();
+            }
+            if (!TransferDeadlines.isMoving(state.startedAt(), currentLastMoved,
+                    ticker.milliseconds(), contract)) {
+                return currentMoved;
+            }
+            read = read(io, reading, buffer, state.monotonicStarted(), currentMonotonicLastMoved,
+                    contract);
+        }
+        return currentMoved;
     }
 
     private static int read(ExecutorService io, InputStream reading, byte[] buffer,
