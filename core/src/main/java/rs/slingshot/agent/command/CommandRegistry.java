@@ -188,7 +188,7 @@ public final class CommandRegistry {
      * @return a registry holding that one row, or the one reason there is none
      */
     public static Outcome row(Path file) {
-        return row(file.getFileName().toString(), text(file).getBytes(StandardCharsets.UTF_8));
+        return row(file.toString(), text(file).getBytes(StandardCharsets.UTF_8));
     }
 
     private static Outcome row(String name, byte[] bytes) {
