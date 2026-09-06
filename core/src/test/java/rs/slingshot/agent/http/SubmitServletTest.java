@@ -66,6 +66,18 @@ final class SubmitServletTest {
     private static final String SERVED = "query_paths";
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
+    @Test
+    @DisplayName("the command runtime can bind dynamically and fails closed when it stops")
+    void commandRuntimeBindingIsDynamicAndFailClosed() {
+        final SubmitServlet servlet = new SubmitServlet();
+        final Counting runtime = new Counting();
+        assertFalse(servlet.servesCommand(SERVED));
+        servlet.available(runtime);
+        assertTrue(servlet.servesCommand(SERVED));
+        servlet.unavailable(runtime);
+        assertFalse(servlet.servesCommand(SERVED));
+    }
+
     @BeforeEach
     void configureOperators() {
         new rs.slingshot.agent.repository.AgentSession().available(
@@ -683,7 +695,7 @@ final class SubmitServletTest {
     }
 
     /** A build that runs one command and counts how often it was asked to. */
-    private static final class Counting implements SubmitServlet.Commands {
+    private static final class Counting implements CommandRuntime {
         private static final long serialVersionUID = 1L;
         private final AtomicInteger ran = new AtomicInteger();
         private final java.util.concurrent.atomic.AtomicReference<Session> observed =
