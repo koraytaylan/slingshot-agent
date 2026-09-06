@@ -19,6 +19,7 @@ import rs.slingshot.agent.discovery.CapabilityDocument;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.route.AgentRoute;
 import rs.slingshot.agent.route.AgentRouteTable;
+import rs.slingshot.agent.store.StateLifecycleService;
 
 /**
  * The discovery route: what this agent is, answered before a client sends it anything.
@@ -51,7 +52,7 @@ public final class CapabilityServlet extends AgentServlet {
             "/rs/slingshot/agent/contract/command-canonical-json-1.sha256";
 
     /** The event-store generation this build serves, until Plan 0003 gives it one to rotate. */
-    public static final long EVENT_STORE_GENERATION = 1;
+    public static final long EVENT_STORE_GENERATION = EventStoreGeneration.FIRST;
 
     private static final long serialVersionUID = 1L;
 
@@ -141,7 +142,10 @@ public final class CapabilityServlet extends AgentServlet {
      * @return where readiness is read from
      */
     public static AdvertisedCapabilities.Readiness readiness() {
-        return () -> AdvertisedCapabilities.ContinuationAuthority.NOT_READY;
+        return () -> StateLifecycleService.observed().availability()
+                == StateLifecycleService.Availability.READY
+                ? AdvertisedCapabilities.ContinuationAuthority.READY
+                : AdvertisedCapabilities.ContinuationAuthority.NOT_READY;
     }
 
     /**
@@ -179,7 +183,10 @@ public final class CapabilityServlet extends AgentServlet {
      * @return the generation
      */
     public static EventStoreGeneration generation() {
-        final EventStoreGeneration.Outcome held = EventStoreGeneration.of(EVENT_STORE_GENERATION);
+        final StateLifecycleService.Snapshot observed = StateLifecycleService.observed();
+        final long number = observed.availability() == StateLifecycleService.Availability.READY
+                ? observed.generation() : EVENT_STORE_GENERATION;
+        final EventStoreGeneration.Outcome held = EventStoreGeneration.of(number);
         if (held instanceof final EventStoreGeneration.Refused refused) {
             throw new IllegalStateException("no generation: " + refused.detail());
         }
