@@ -268,6 +268,18 @@ final class SubscriptionLedgerTest {
     }
 
     @Test
+    @DisplayName("a mark that remains contended is refused after bounded retries")
+    void acontendedMarkIsRefusedAfterBoundedRetries() throws RepositoryException {
+        final Session session = prepared();
+        final SubscriptionRecord.Identifier identifier = identifier("a-new-subscription");
+        subscribe(session, "a-new-subscription", CONTRACT);
+        final HighWaterMark.Refused refused = HighWaterMark.refusalIn(HighWaterMark.advance(
+                SaveInterleaving.alwaysContended(session), identifier, sequence(3), NOW))
+                .orElseThrow();
+        assertEquals(HighWaterMark.Refusal.CONTENDED, refused.refusal());
+    }
+
+    @Test
     @DisplayName("an identifier is taken at exactly its bound and refused one byte past it")
     void theidentifierBoundHoldsAtBothSides() throws RepositoryException {
         final Session session = prepared();

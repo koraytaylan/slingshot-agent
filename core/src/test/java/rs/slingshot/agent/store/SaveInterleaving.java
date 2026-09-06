@@ -7,6 +7,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -93,6 +94,21 @@ public final class SaveInterleaving {
     /** Injects a persistence failure on every attempt, including retries from fresh state. */
     public static Session beforeEverySave(Session session, Action action) {
         return beforeEverySave(session, action, Thread.currentThread().getContextClassLoader());
+    }
+
+    /** Returns a session whose every save reports the repository's optimistic-lock conflict. */
+    public static Session alwaysContended(Session session) {
+        return (Session) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] {Session.class}, (proxy, method, arguments) -> {
+                    if ("save".equals(method.getName())) {
+                        throw new InvalidItemStateException("the save was contended");
+                    }
+                    try {
+                        return method.invoke(session, arguments);
+                    } catch (final InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
     }
 
     /** Uses the hosting bundle's interface loader for every intercepted save. */
