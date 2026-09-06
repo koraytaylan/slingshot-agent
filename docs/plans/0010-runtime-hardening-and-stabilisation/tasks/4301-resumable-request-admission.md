@@ -28,3 +28,7 @@ Finding(s): R04; R06 in [FINDINGS.md](../FINDINGS.md).
 3. Register the owned subscription with admission and test cancellation, response loss and identical competing resends without obtaining another caller's identity.
 
 - **Done when:** A capacity-refused submission retried after capacity returns either completes once or returns a truthful explicit refusal; it cannot remain permanently ACCEPTED with no executable progress path.
+
+Direct implementation is complete; saturation/resend reproduction, start contention and interruption,
+response-loss and competing-effect proof, and full-gate verification are recorded in
+[EXECUTION.md](../EXECUTION.md#4301--resumable-request-admission).
