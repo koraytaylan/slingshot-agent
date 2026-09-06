@@ -23,6 +23,7 @@ import rs.slingshot.agent.command.mutation.MutationAnswer;
 import rs.slingshot.agent.command.mutation.MutationOutcome;
 import rs.slingshot.agent.command.mutation.SingleCommit;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -87,7 +88,8 @@ public final class ComponentPathHandler implements CommandHandler {
                             refused.refusal() + ": " + refused.detail());
             case ComponentPathCommand.Held held -> MutationAnswer.of(
                     SingleCommit.around(SingleCommit.Expectation.ONE_COMMIT, resolver,
-                            session -> acted(held.command(), session)),
+                            session -> acted(held.command(), session,
+                                    contract.value(ContractLimit.MAXIMUM_DELETED_NODES))),
                     COMMIT_FAILED, SingleCommit.OUTCOME_UNKNOWN);
             case ComponentPathCommand.Placed placed -> MutationAnswer.of(
                     SingleCommit.around(SingleCommit.Expectation.ONE_COMMIT, resolver,
@@ -128,13 +130,14 @@ public final class ComponentPathHandler implements CommandHandler {
         };
     }
 
-    private MutationOutcome acted(ComponentPathCommand command, ResourceResolver session) {
+    private MutationOutcome acted(ComponentPathCommand command, ResourceResolver session,
+                                  long bound) {
         final Resource component = session.getResource(command.componentPath());
         if (component == null) {
             return absent(command);
         }
         return shape == ComponentPathCommand.Shape.UPDATE
-                ? changed(command, component, session) : removed(command, component, session);
+                ? changed(command, component, session) : removed(command, component, session, bound);
     }
 
     private static MutationOutcome reordered(ComponentPathCommand command,
@@ -169,8 +172,17 @@ public final class ComponentPathHandler implements CommandHandler {
     }
 
     private static MutationOutcome removed(ComponentPathCommand command, Resource component,
-                                           ResourceResolver session) {
-        final long count = under(component);
+                                           ResourceResolver session, long bound) {
+        if (!AddComponentHandler.ORDERED_TYPE.equals(String.valueOf(component.getValueMap()
+                .get(ListChildPagesHandler.TYPE_PROPERTY, String.class)))) {
+            return new MutationOutcome.Refused(COMPONENT_INVALID, command.componentPath()
+                    + " is not a component node");
+        }
+        final long count = under(component, bound);
+        if (count > bound) {
+            return new MutationOutcome.Refused(COMPONENT_INVALID, command.componentPath()
+                    + " exceeds the deletion bound and was left unchanged");
+        }
         try {
             session.delete(component);
         } catch (final PersistenceException refused) {
@@ -320,10 +332,10 @@ public final class ComponentPathHandler implements CommandHandler {
         }
     }
 
-    private static long under(Resource component) {
+    private static long under(Resource component, long bound) {
         long counted = 0;
         final Deque<Resource> pending = new ArrayDeque<>(List.of(component));
-        while (!pending.isEmpty()) {
+        while (!pending.isEmpty() && counted <= bound) {
             final Resource held = pending.removeFirst();
             counted = counted + 1;
             final Iterator<Resource> children = held.listChildren();
