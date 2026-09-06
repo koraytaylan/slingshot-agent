@@ -14,8 +14,8 @@ touches:
   - core/src/main/java/rs/slingshot/agent/execution
   - core/src/test/java/rs/slingshot/agent/http/ArtifactIntakeServletTest.java
   - core/src/test/java/rs/slingshot/agent/http/SubmitServletTest.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: "6bb7d69"
 ---
 # Execute Fully Received Intake Operations Once
 
