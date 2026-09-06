@@ -1678,3 +1678,11 @@ required checks and the complete gate, then commit the completed task.
     use one rootless Podman state boundary. The shell syntax check passes; a clean interop rerun is
     still required because this sandbox cannot remove the stale container from the read-only host
     runroot.
+
+101. Began the handler-pagination review by extracting the shared verified window operation into
+    `PagingSupport` and applying it to `FindAssetsByMetadataHandler`. Initial offsets now use the
+    bounded page probe, continuations validate authority, target, query and generation before any
+    rows are served, and a successor token is issued only when an extra row proves the result is
+    not complete. The focused metadata and package-command suites (18 tests), compilation,
+    Checkstyle, PMD and SpotBugs pass. The remaining paged handlers still need the same migration,
+    so task 4404 remains pending.
