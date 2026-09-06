@@ -1935,3 +1935,9 @@ required checks and the complete gate, then commit the completed task.
      Download and runtime review tests pass, and core verification passes all 1,154 tests,
      JaCoCo floors, Javadocs, Checkstyle, PMD, and SpotBugs. Publication is now durable whenever
      the validated runtime is active; installed runtime assembly remains the separate 4502 gate.
+
+145. Added the 4502 active-registry projection. `CommandRegistry.active` validates every selected
+     implementation name against the embedded rows, rejects duplicates and unknown commands, and
+     returns the selection in deterministic wire order. The review suite proves all three cases;
+     this gives DS assembly a fail-closed way to advertise only a complete supported subset without
+     changing the committed registry or accepting unavailable work.
