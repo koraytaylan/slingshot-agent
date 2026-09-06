@@ -15,8 +15,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
-import rs.slingshot.agent.stream.DefaultStreamTicker;
-import rs.slingshot.agent.stream.StreamTicker;
 
 /**
  * A request body read as it arrives, refused the moment the next byte would cross the bound.
@@ -110,8 +108,7 @@ public final class BoundedRequestBody {
             worker.setDaemon(true);
             return worker;
         });
-        final StreamTicker ticker = new DefaultStreamTicker();
-        final long started = ticker.elapsedMilliseconds();
+        final long started = System.nanoTime();
         long moved = started;
         try {
             int arrived = read(io, body, chunk, started, moved, contract);
@@ -122,7 +119,7 @@ public final class BoundedRequestBody {
                             + bound + " bytes, found at the byte that crossed it", read);
                 }
                 held.write(chunk, 0, arrived);
-                moved = ticker.elapsedMilliseconds();
+                moved = System.nanoTime();
                 arrived = read(io, body, chunk, started, moved, contract);
             }
         } catch (final IOException stopped) {
@@ -138,12 +135,12 @@ public final class BoundedRequestBody {
     private static int read(ExecutorService io, InputStream body, byte[] chunk,
                             long started, long moved, AgentContract contract) throws IOException {
         final Future<Integer> pending = io.submit(() -> body.read(chunk));
-        final long total = TransferDeadlines.totalMilliseconds(contract);
-        final long idle = TransferDeadlines.idleMilliseconds(contract);
-        final long now = new DefaultStreamTicker().elapsedMilliseconds();
-        final long timeout = Math.max(1, Math.min(total - (now - started), idle - (now - moved)));
+        final long total = TimeUnit.MILLISECONDS.toNanos(TransferDeadlines.totalMilliseconds(contract));
+        final long idle = TimeUnit.MILLISECONDS.toNanos(TransferDeadlines.idleMilliseconds(contract));
+        final long timeout = Math.max(1, Math.min(total - (System.nanoTime() - started),
+                idle - (System.nanoTime() - moved)));
         try {
-            return pending.get(timeout, TimeUnit.MILLISECONDS);
+            return pending.get(timeout, TimeUnit.NANOSECONDS);
         } catch (final TimeoutException timeoutFailure) {
             pending.cancel(true);
             try {
