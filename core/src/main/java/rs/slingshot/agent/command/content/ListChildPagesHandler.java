@@ -90,13 +90,16 @@ public final class ListChildPagesHandler implements CommandHandler {
             return new Failed(ROOT_NOT_FOUND, whyNothingIsListed(Absence.IT_IS_NOT_A_PAGE,
                     command.rootPath()));
         }
-        final List<PageListingResult.Page> children = childrenOf(parent);
-        if (children.size() > context.discovery().limit()) {
+        final Gathered gathered = childrenOf(parent, context.discovery().limit());
+        if (gathered.exhausted()) {
             return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this parent holds more than the "
                     + context.discovery().limit() + " children this caller may examine");
         }
         return new Produced(PageListingResult.documentOf(
-                pageOf(children, command.window(), contract), ""));
+                pageOf(gathered.children(), command.window(), contract), ""));
+    }
+
+    private record Gathered(List<PageListingResult.Page> children, boolean exhausted) {
     }
 
     /** Why a listing has no parent to list, which decides what the caller does next. */
@@ -128,16 +131,21 @@ public final class ListChildPagesHandler implements CommandHandler {
         };
     }
 
-    private static List<PageListingResult.Page> childrenOf(Resource parent) {
+    private static Gathered childrenOf(Resource parent, long budget) {
         final List<PageListingResult.Page> children = new ArrayList<>();
         final Iterator<Resource> held = parent.listChildren();
+        long examined = 0;
         while (held.hasNext()) {
             final Resource child = held.next();
+            examined = examined + 1;
+            if (examined > budget) {
+                return new Gathered(List.copyOf(children), true);
+            }
             if (PAGE_TYPE.equals(typeOf(child))) {
                 children.add(new PageListingResult.Page(child.getPath(), titleOf(child)));
             }
         }
-        return List.copyOf(children);
+        return new Gathered(List.copyOf(children), false);
     }
 
     /**
