@@ -232,7 +232,6 @@ public final class EventStreamServlet extends AgentServlet {
         }
     }
 
-    @SuppressWarnings("PMD.PreserveStackTrace")
     private static void flushWithDeadline(SlingHttpServletResponse response,
                                           AgentContract contract) throws IOException {
         try (var io = Executors.newSingleThreadExecutor(runnable -> {
@@ -246,21 +245,24 @@ public final class EventStreamServlet extends AgentServlet {
                     return null;
                 }).get(TransferDeadlines.totalMilliseconds(contract), TimeUnit.MILLISECONDS);
             } catch (final TimeoutException timeout) {
-                throw new IOException("stream response exceeded its transfer deadline", timeout);
+                throw withCause("stream response exceeded its transfer deadline", timeout);
             } catch (final InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                throw new IOException("stream response flush was interrupted", interrupted);
+                throw withCause("stream response flush was interrupted", interrupted);
             } catch (final ExecutionException failed) {
                 final Throwable cause = failed.getCause();
-                if (cause instanceof IOException ioFailure) {
-                    throw ioFailure;
-                }
                 if (cause instanceof RuntimeException runtime) {
                     throwUnchecked(runtime);
                 }
-                throw new IOException("stream response flush failed", cause);
+                throw withCause("stream response flush failed", failed);
             }
         }
+    }
+
+    private static IOException withCause(String message, Throwable cause) {
+        final IOException failure = new IOException(message);
+        failure.initCause(cause);
+        return failure;
     }
 
     /** Re-raises a response failure without changing the servlet's established runtime contract. */
