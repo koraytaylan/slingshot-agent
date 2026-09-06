@@ -157,26 +157,39 @@ public final class RepositoryReach {
         long moved = 0;
         for (final Resource held : pointing) {
             final ModifiableValueMap values = held.adaptTo(ModifiableValueMap.class);
-            if (values == null) {
-                continue;
-            }
-            for (final var property : List.copyOf(values.entrySet())) {
-                if (from.equals(property.getValue())) {
-                    values.put(property.getKey(), to);
-                    moved = moved + 1;
-                } else if (property.getValue() instanceof final String[] several) {
-                    final long replacements = java.util.Arrays.stream(several)
-                            .filter(from::equals).count();
-                    final String[] rewritten = java.util.Arrays.stream(several)
-                            .map(value -> from.equals(value) ? to : value).toArray(String[]::new);
-                    if (replacements > 0) {
-                        values.put(property.getKey(), rewritten);
-                        moved = moved + replacements;
-                    }
-                }
+            if (values != null) {
+                moved = moved + repointProperties(values, from, to);
             }
         }
         return moved;
+    }
+
+    private static long repointProperties(ModifiableValueMap values, String from, String to) {
+        long moved = 0;
+        for (final var property : List.copyOf(values.entrySet())) {
+            moved = moved + repointProperty(values, property, from, to);
+        }
+        return moved;
+    }
+
+    private static long repointProperty(ModifiableValueMap values,
+                                        java.util.Map.Entry<String, Object> property,
+                                        String from, String to) {
+        if (from.equals(property.getValue())) {
+            values.put(property.getKey(), to);
+            return 1;
+        }
+        if (!(property.getValue() instanceof final String[] several)) {
+            return 0;
+        }
+        final long replacements = java.util.Arrays.stream(several).filter(from::equals).count();
+        if (replacements == 0) {
+            return 0;
+        }
+        final String[] rewritten = java.util.Arrays.stream(several)
+                .map(value -> from.equals(value) ? to : value).toArray(String[]::new);
+        values.put(property.getKey(), rewritten);
+        return replacements;
     }
 
     private static boolean mentions(Resource held, String address) {
