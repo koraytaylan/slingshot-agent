@@ -7,6 +7,7 @@ import java.util.List;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.platform.ConfigurationCatalogue;
 import rs.slingshot.agent.command.platform.ConfigurationCatalogues;
@@ -109,13 +110,21 @@ public final class ConfigurationHandler implements CommandHandler {
         }
         final List<ConfigurationCatalogue.Entry> entries =
                 ((ConfigurationCatalogue.Listed) found).entries();
-        return entries.size() > context.discovery().limit()
-                ? new Failed(ConfigurationHandlers.DISCOVERY_BUDGET_EXCEEDED, entries.size()
-                        + " configurations is more than the " + context.discovery().limit()
-                        + " this caller may examine")
-                : new Produced(FindConfigurationsResult.documentOf(
-                        pageOf(entries, command.window()),
-                        FindConfigurationsResult.NO_MORE_PAGES));
+        if (entries.size() > context.discovery().limit()) {
+            return new Failed(ConfigurationHandlers.DISCOVERY_BUDGET_EXCEEDED, entries.size()
+                    + " configurations is more than the " + context.discovery().limit()
+                    + " this caller may examine");
+        }
+        final PagingSupport.Outcome<ConfigurationCatalogue.Entry> page = PagingSupport.page(entries,
+                command.window(), FindConfigurationsCommand.WIRE_NAME, arguments, context,
+                contract);
+        if (page instanceof final PagingSupport.Refused<ConfigurationCatalogue.Entry> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<ConfigurationCatalogue.Entry> accepted =
+                ((PagingSupport.Accepted<ConfigurationCatalogue.Entry>) page).page();
+        return new Produced(FindConfigurationsResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /**
