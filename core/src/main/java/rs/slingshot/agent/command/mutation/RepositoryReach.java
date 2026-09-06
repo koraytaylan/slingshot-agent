@@ -89,7 +89,6 @@ public final class RepositoryReach {
     }
 
     /** Discovers references and reports whether the bounded walk reached the end. */
-    @SuppressWarnings("PMD.NullAssignment")
     public static References references(ResourceResolver session, String address, long budget) {
         final Resource root = session.getResource(CONTENT_ROOT);
         if (root == null) {
@@ -97,26 +96,27 @@ public final class RepositoryReach {
         }
         final List<Resource> found = new ArrayList<>();
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
-        Resource held = root;
+        java.util.Optional<Resource> held = java.util.Optional.of(root);
         long examined = 0;
-        while (held != null && examined < budget) {
+        while (held.isPresent() && examined < budget) {
+            final Resource current = held.orElseThrow();
             examined = examined + 1;
-            if (!held.getPath().equals(address) && !held.getPath().startsWith(address + "/")
-                    && mentions(held, address)) {
-                found.add(held);
+            if (!current.getPath().equals(address) && !current.getPath().startsWith(address + "/")
+                    && mentions(current, address)) {
+                found.add(current);
             }
-            pending.push(held.listChildren());
-            held = null;
-            while (!pending.isEmpty() && held == null) {
+            pending.push(current.listChildren());
+            held = java.util.Optional.empty();
+            while (!pending.isEmpty() && held.isEmpty()) {
                 final Iterator<Resource> children = pending.peek();
                 if (children.hasNext()) {
-                    held = children.next();
+                    held = java.util.Optional.of(children.next());
                 } else {
                     pending.pop();
                 }
             }
         }
-        return new References(List.copyOf(found), pending.isEmpty() && held == null);
+        return new References(List.copyOf(found), pending.isEmpty() && held.isEmpty());
     }
 
     /**
