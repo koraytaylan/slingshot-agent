@@ -1528,3 +1528,9 @@ required checks and the complete gate, then commit the completed task.
     reduces `StateLifecycleService` coverage from 47% to 77%. Commits `ad3ec31` and `5c8c6bd`
     record the implementation and Checkstyle/PMD review loop. Remaining floor failures are
     `StreamWriter.TimedWriter` 76% and `ArtifactServlet` 74%.
+
+70. Added artifact transfer regressions for asynchronous read and write failures, asserting that both
+    propagate as contextual `IOException`s while executor cleanup remains bounded. The focused
+    `ArtifactServletTest` suite passes all eight cases and the change is committed as `d1aacf8`.
+    Full-floor verification is the next review step; lifecycle and stream coverage remain under
+    the 80% class threshold at the last gate.
