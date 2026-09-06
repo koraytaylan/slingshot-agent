@@ -5,9 +5,12 @@ package rs.slingshot.agent.command;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.SequencedMap;
+import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.identity.CommandContractIdentity;
+import rs.slingshot.agent.json.DocumentValue;
 
 /**
  * Which handler runs one command, decided after the contract has been verified and not before.
@@ -182,6 +185,19 @@ public final class CommandDispatch {
                     + " was submitted under a contract this build does not hold");
         }
         return new Resolved(handlers.get(identity.wireName()), row.get());
+    }
+
+    /** Runs a verified command through the registered handler and request-scoped dependencies. */
+    public CommandHandler.Answer run(CommandContractIdentity identity,
+                                     CommandContractIdentity.Bounds bounds,
+                                     DocumentValue.Mapping arguments, ResourceResolver resolver,
+                                     CallerContext context) {
+        final Resolution resolved = resolve(identity, bounds);
+        if (resolved instanceof final NotResolved refused) {
+            return new CommandHandler.Failed(refused.refusal().name().toLowerCase(Locale.ROOT),
+                    refused.detail());
+        }
+        return ((Resolved) resolved).handler().run(arguments, resolver, context);
     }
 
     /**
