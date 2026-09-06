@@ -194,22 +194,30 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         THE_BUDGET_RAN_OUT
     }
 
+    @SuppressWarnings("PMD.NullAssignment")
     private static Selection select(Resource root, DownloadContentPackageCommand command,
                                     long budget, long already) {
         final List<String> found = new ArrayList<>();
-        final java.util.Deque<Resource> pending = new java.util.ArrayDeque<>();
-        pending.add(root);
-        while (!pending.isEmpty()) {
+        final java.util.Deque<Iterator<Resource>> pending = new java.util.ArrayDeque<>();
+        Resource resource = root;
+        while (resource != null) {
             if (already + found.size() >= budget) {
                 return Selection.OVER_THE_BUDGET;
             }
-            final Resource resource = pending.removeFirst();
             if (command.contains(resource.getPath())) {
                 found.add(resource.getPath());
-                final Iterator<Resource> children = resource.listChildren();
-                while (children.hasNext()) {
-                    pending.addLast(children.next());
+                pending.push(resource.listChildren());
+                resource = null;
+                while (!pending.isEmpty() && resource == null) {
+                    final Iterator<Resource> children = pending.peek();
+                    if (children.hasNext()) {
+                        resource = children.next();
+                    } else {
+                        pending.pop();
+                    }
                 }
+            } else {
+                resource = null;
             }
         }
         return new Selection(Collections.unmodifiableList(found), Ending.NOTHING_LEFT_TO_SELECT);
