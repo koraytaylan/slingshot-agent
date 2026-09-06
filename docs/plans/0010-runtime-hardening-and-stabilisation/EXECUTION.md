@@ -1609,3 +1609,8 @@ required checks and the complete gate, then commit the completed task.
     `QueryPathsCommandTest` cases pass; Checkstyle and PMD pass for the changed context and handler.
     The remaining integration gap is explicit: `SubmitServlet.Commands` has no production adapter
     that can construct and populate this per-call paging context.
+
+85. Added a production-facing `CommandDispatch.run` seam that resolves the submitted five-field
+    identity before invoking a handler with the request resolver and `CallerContext`. The existing
+    dispatch contract suite passes all 7 cases; Checkstyle and PMD review passes after using
+    locale-stable refusal rendering. `SubmitServlet` still needs to adopt this seam.
