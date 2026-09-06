@@ -91,7 +91,7 @@ public final class ListChildPagesHandler implements CommandHandler {
                     command.rootPath()));
         }
         final Gathered gathered = childrenOf(parent, context.discovery().limit());
-        if (gathered.exhausted()) {
+        if (gathered.state() == BudgetState.EXCEEDED) {
             return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this parent holds more than the "
                     + context.discovery().limit() + " children this caller may examine");
         }
@@ -99,7 +99,13 @@ public final class ListChildPagesHandler implements CommandHandler {
                 pageOf(gathered.children(), command.window(), contract), ""));
     }
 
-    private record Gathered(List<PageListingResult.Page> children, boolean exhausted) {
+    private record Gathered(List<PageListingResult.Page> children, BudgetState state) {
+    }
+
+    private enum BudgetState {
+        WITHIN,
+        EXCEEDED
+
     }
 
     /** Why a listing has no parent to list, which decides what the caller does next. */
@@ -139,13 +145,13 @@ public final class ListChildPagesHandler implements CommandHandler {
             final Resource child = held.next();
             examined = examined + 1;
             if (examined > budget) {
-                return new Gathered(List.copyOf(children), true);
+                return new Gathered(List.copyOf(children), BudgetState.EXCEEDED);
             }
             if (PAGE_TYPE.equals(typeOf(child))) {
                 children.add(new PageListingResult.Page(child.getPath(), titleOf(child)));
             }
         }
-        return new Gathered(List.copyOf(children), false);
+        return new Gathered(List.copyOf(children), BudgetState.WITHIN);
     }
 
     /**
