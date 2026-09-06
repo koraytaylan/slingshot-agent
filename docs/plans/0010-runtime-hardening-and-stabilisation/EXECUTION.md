@@ -1992,3 +1992,8 @@ required checks and the complete gate, then commit the completed task.
     well as stopping scheduling and revoking readiness; a subsequent activation cannot reuse a stale
     provider. The regression test covers the second activation and the complete core verification
     passes.
+
+154. Re-reviewed dynamic discovery binding in 4502. `CapabilityServlet` now tracks the runtime
+    instance that supplied command identities and only clears them when that same instance unbinds;
+    an older runtime disappearing cannot erase a newer runtime's advertised commands. The race
+    regression test and complete core verification pass.

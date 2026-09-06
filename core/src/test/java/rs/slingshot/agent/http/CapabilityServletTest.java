@@ -96,6 +96,23 @@ final class CapabilityServletTest {
     }
 
     @Test
+    void anOlderRuntimeUnbindCannotClearNewerRuntime() {
+        final DefaultCommandRuntime older = new DefaultCommandRuntime();
+        final DefaultCommandRuntime newer = new DefaultCommandRuntime();
+        older.activate();
+        newer.activate();
+        final CapabilityServlet servlet = new CapabilityServlet();
+        servlet.available(older);
+        servlet.available(newer);
+        servlet.unavailable(older);
+        assertTrue(servlet.commandContracts().stream()
+                .anyMatch(identity -> "query_paths".equals(identity.wireName())));
+        servlet.unavailable(newer);
+        older.deactivate();
+        newer.deactivate();
+    }
+
+    @Test
     void anUnassembledRuntimeAdvertisesNoCommands() {
         assertTrue(new EmptyRuntime().commandContracts().isEmpty());
     }

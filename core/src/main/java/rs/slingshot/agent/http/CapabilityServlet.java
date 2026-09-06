@@ -63,6 +63,8 @@ public final class CapabilityServlet extends AgentServlet {
     /** The active command identities, empty until a runtime is bound. */
     private final AtomicReference<List<CommandContractIdentity>> commands =
             new AtomicReference<>(List.of());
+    /** The runtime instance currently supplying those identities. */
+    private final AtomicReference<CommandRuntime> runtime = new AtomicReference<>();
 
     /**
      * Holds a servlet with nothing in it.
@@ -82,6 +84,7 @@ public final class CapabilityServlet extends AgentServlet {
      */
     @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
     public void available(CommandRuntime activeRuntime) {
+        runtime.set(activeRuntime);
         this.commands.set(List.copyOf(activeRuntime.commandContracts()));
     }
 
@@ -91,7 +94,9 @@ public final class CapabilityServlet extends AgentServlet {
      * @param stoppedRuntime the runtime being removed
      */
     public void unavailable(CommandRuntime stoppedRuntime) {
-        this.commands.set(List.of());
+        if (runtime.compareAndSet(stoppedRuntime, null)) {
+            this.commands.set(List.of());
+        }
     }
 
     List<CommandContractIdentity> commandContracts() {
