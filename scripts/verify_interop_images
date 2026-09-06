@@ -12,6 +12,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Match the preparation script on runners whose default /run/user directory is read-only.
+export XDG_RUNTIME_DIR="/tmp/slingshot-agent-podman-${UID}"
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}"
+
 readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly IMAGE_FILE="${REPOSITORY_ROOT}/support/interop-images.toml"
 readonly ENGINE="podman"
