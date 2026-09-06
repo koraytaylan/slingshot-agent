@@ -1325,3 +1325,8 @@ required checks and the complete gate, then commit the completed task.
     preserved the expected cursor transaction. The prototype was reverted; no unsafe sweep change
     was committed. The remaining implementation needs a durable within-bucket successor that can
     be read without spending the next pass's record budget.
+
+32. Added wide (1,000 children) and deep (100 levels) repository fixtures to the shared reach
+    traversal suite. Both prove the bounded DFS returns exactly the permitted prefix, including the
+    explicit one-past bound marker, and the four-case suite passes. This strengthens 4401 evidence;
+    measured iterator-call instrumentation and final handler integration remain open.
