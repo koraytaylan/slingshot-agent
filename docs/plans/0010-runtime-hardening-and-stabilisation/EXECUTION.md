@@ -1744,3 +1744,8 @@ required checks and the complete gate, then commit the completed task.
     including unavailable-provider handling, activation recovery, readiness reporting and scheduler
     shutdown. The service code is present and unit-verified, but installed-runtime evidence is still
     required before task 4501 can be closed.
+
+113. Reviewed the capability boundary against the now-present lifecycle component. Corrected stale
+    documentation that claimed continuation authority was not implemented; capability readiness and
+    generation now explicitly describe the durable service and its conservative unavailable fallback.
+    `JavadocPolicyTest` and `SourcePolicyTest` pass all 25 cases.
