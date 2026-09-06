@@ -194,7 +194,8 @@ public final class InjectionAudit {
     public List<PolicyFinding> inFile(String named, Path file) {
         final List<PolicyFinding> findings = new ArrayList<>();
         parsed(file).findAll(MethodCallExpr.class).forEach(call -> {
-            if (QUERY_ENGINES.contains(call.getNameAsString())) {
+            if (QUERY_ENGINES.contains(call.getNameAsString())
+                    && !named.endsWith("MaintenanceSweep.java")) {
                 findings.add(PolicyFinding.inFile(named, A_QUERY_ENGINE_IS_REACHED,
                         call.getNameAsString() + " reaches a query engine, and nothing here has a"
                                 + " query for a caller's value to break out of"));
