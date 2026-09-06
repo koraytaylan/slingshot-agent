@@ -367,4 +367,32 @@ public final class CommandRegistry {
                 .sorted(java.util.Comparator.comparing(RegistryRow::wireName))
                 .toList());
     }
+
+    /**
+     * Projects this registry to the commands whose implementations are active.
+     *
+     * <p>An installed runtime may have platform adapters missing, so advertising every embedded
+     * row would promise work it cannot perform. The projection is validated against this registry
+     * and remains in deterministic wire order; an unknown or repeated name is refused instead of
+     * silently changing the advertised contract.</p>
+     *
+     * @param activeWireNames the implementations currently active
+     * @return the projected registry, or the reason the projection is invalid
+     */
+    public Outcome active(List<String> activeWireNames) {
+        final java.util.Set<String> seen = new java.util.HashSet<>();
+        for (final String name : activeWireNames) {
+            if (!seen.add(name)) {
+                return new Refused(Failure.DUPLICATE_WIRE_NAME,
+                        name + " was selected more than once for the active runtime");
+            }
+            if (row(name).isEmpty()) {
+                return new Refused(Failure.MEMBER_UNKNOWN,
+                        name + " is not an embedded command row and cannot be advertised");
+            }
+        }
+        return new Loaded(new CommandRegistry(rows.stream()
+                .filter(row -> seen.contains(row.wireName()))
+                .toList()));
+    }
 }

@@ -178,6 +178,22 @@ final class CommandRegistryTest {
                 both.wireNames());
     }
 
+    @Test
+    @DisplayName("an active projection advertises only validated implementations in wire order")
+    void activeProjectionIsValidatedAndOrdered() {
+        final CommandRegistry registry = loaded("accepted");
+        final CommandRegistry projected = assertInstanceOf(CommandRegistry.Loaded.class,
+                registry.active(List.of("query_paths", "download_content_package"))).registry();
+        assertEquals(List.of("download_content_package", "query_paths"),
+                projected.wireNames());
+        assertEquals(CommandRegistry.Failure.MEMBER_UNKNOWN,
+                assertInstanceOf(CommandRegistry.Refused.class,
+                        registry.active(List.of("missing"))).failure());
+        assertEquals(CommandRegistry.Failure.DUPLICATE_WIRE_NAME,
+                assertInstanceOf(CommandRegistry.Refused.class,
+                        registry.active(List.of("query_paths", "query_paths"))).failure());
+    }
+
     private static CommandRegistry.Refused refusal(String fixture) {
         return CommandRegistry.refusalIn(CommandRegistry.read(FIXTURES.resolve(fixture)))
                 .orElseThrow(() -> new IllegalStateException(fixture + " was accepted"));
