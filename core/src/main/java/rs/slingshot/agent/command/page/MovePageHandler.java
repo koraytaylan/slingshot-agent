@@ -126,10 +126,16 @@ public final class MovePageHandler implements CommandHandler {
 
     private static MutationOutcome adjusted(MoveRequest command, ResourceResolver session,
                                             long bound, CallerContext context) {
-        final List<Resource> pointing = command.adjustReferences()
+        final var discovered = command.adjustReferences()
                 == MoveRequest.ReferenceAdjustment.FOLLOWED
-                ? RepositoryReach.pointingAt(session, command.sourcePath(),
-                        context.discovery().limit()) : List.of();
+                ? RepositoryReach.references(session, command.sourcePath(),
+                        context.discovery().limit())
+                : new RepositoryReach.References(List.of(), true);
+        if (!discovered.complete()) {
+            return new MutationOutcome.Refused(ADJUSTMENT_BUDGET_EXCEEDED,
+                    "reference discovery exceeded the visibility budget and the move was refused");
+        }
+        final List<Resource> pointing = discovered.found();
         if (pointing.size() > bound) {
             return new MutationOutcome.Refused(ADJUSTMENT_BUDGET_EXCEEDED, pointing.size()
                     + " references is more than the " + bound + " one move may adjust. It is"

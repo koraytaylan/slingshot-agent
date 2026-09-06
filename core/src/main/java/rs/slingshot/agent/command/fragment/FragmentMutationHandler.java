@@ -479,9 +479,10 @@ public final class FragmentMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(FragmentHandlers.DELETION_BUDGET_EXCEEDED,
                     "this fragment holds more than the " + bound + " nodes one delete may remove");
         }
+        final var references = RepositoryReach.references(session, command.fragmentPath(),
+                reach.budget());
         if (command.referencePolicy() == ReferencePolicy.REFUSE_WHEN_REFERENCED
-                && !RepositoryReach.pointingAt(session, command.fragmentPath(), reach.budget())
-                        .isEmpty()) {
+                && (!references.complete() || !references.found().isEmpty())) {
             return new MutationOutcome.Refused(FragmentHandlers.FRAGMENT_IS_REFERENCED,
                     command.fragmentPath() + " is used somewhere, and this request asked to be"
                             + " refused when it is");
