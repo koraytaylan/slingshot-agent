@@ -1520,3 +1520,11 @@ required checks and the complete gate, then commit the completed task.
     with class-line coverage below 80% for `StateLifecycleService` (47%), `StreamWriter.TimedWriter`
     (76%), `HighWaterMark` (78%), and `ArtifactServlet` (74%). Coverage exclusions are refused for
     these product classes, so the remaining work is focused behavioral coverage in the four classes.
+
+69. Added an Oak-backed lifecycle success-path fixture with an isolated resolver proxy and prepared
+    the required `/var/slingshot-agent` tree. The service now proves generation establishment,
+    continuation authority setup, recovery, maintenance, and deactivation in a real repository
+    context; the four-case lifecycle suite passes. The full gate reaches all 1,128 core tests and
+    reduces `StateLifecycleService` coverage from 47% to 77%. Commits `ad3ec31` and `5c8c6bd`
+    record the implementation and Checkstyle/PMD review loop. Remaining floor failures are
+    `StreamWriter.TimedWriter` 76% and `ArtifactServlet` 74%.
