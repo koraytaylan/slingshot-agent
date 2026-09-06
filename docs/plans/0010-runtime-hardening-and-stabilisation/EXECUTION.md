@@ -1667,3 +1667,14 @@ required checks and the complete gate, then commit the completed task.
 98. The full gate completed all policy and test checks (453 development tests passed), then failed only because `BytecodeContractTest` could not find the development jar. An offline attempt to seed the reactor artifact was refused by the prepared Maven cache (`plexus-archiver` missing for the source plugin); no source change was made for this environment-only blocker.
 
 99. Ran the repository-authorized locked-cache preparation workflow after the artifact-preparation refusal. It completed the full reactor successfully (1,136 core tests and all development policy checks passed) and refreshed only the generated core-module POM digest and preparation timestamp. This is recorded as prepared-input maintenance, not a source-policy change.
+
+100. The post-cache authoritative gate passed cache verification, pinned-image verification,
+    formatting, compilation, static analysis, the 1,136 core tests, and all 453 development policy
+    tests. The public interop stage then reported a single pre-existing harness container
+    (`7355c9f81474`) in every leak assertion; the Mongo-backed crash scenario also timed out because
+    that stale Podman state was reopened through the host `/run/user/1000` runroot. The gate now
+    exports the same writable `/tmp/slingshot-agent-podman-${UID}` runtime directory used by image
+    preparation and verification before Maven starts, so the test JVM and the preparation commands
+    use one rootless Podman state boundary. The shell syntax check passes; a clean interop rerun is
+    still required because this sandbox cannot remove the stale container from the read-only host
+    runroot.
