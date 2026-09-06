@@ -405,7 +405,9 @@ public final class StaticAnalysis {
                 .filter(annotation -> suppressionForms.stream()
                         .anyMatch(form -> form.replace("@", "").equals(annotation.getNameAsString())))
                 .filter(annotation -> !("SuppressWarnings".equals(annotation.getNameAsString())
-                        && annotation.toString().contains("unchecked")))
+                        && annotation.toString().contains("unchecked")
+                        && (name.endsWith("EventStreamServlet.java")
+                        || name.endsWith("StreamWriter.java"))))
                 .map(annotation -> new PolicyFinding(name,
                         annotation.getBegin().map(position -> position.line).orElse(PolicyFinding.NO_LINE),
                         "suppression", "@" + annotation.getNameAsString()))
