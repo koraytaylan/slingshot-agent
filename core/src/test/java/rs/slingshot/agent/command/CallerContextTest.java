@@ -62,6 +62,8 @@ final class CallerContextTest {
     @DisplayName("each budget is proved at its limit and one past it, and reports its own category")
     void eachbudgetIsProvedAtItsLimitAndOnePastIt() {
         final CallerContext context = context();
+        assertFalse(context.discovery().allows(-1),
+                "a negative spend was accepted as inside a budget");
         assertTrue(context.exceeded(context.discovery().limit(), 0, 0).isEmpty(),
                 "a spend at exactly the discovery bound was refused");
         assertEquals(Budget.Kind.DISCOVERY,
