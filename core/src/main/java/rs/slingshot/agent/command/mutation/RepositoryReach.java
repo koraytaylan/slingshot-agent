@@ -79,12 +79,12 @@ public final class RepositoryReach {
      * @param budget how many nodes this caller may examine
      * @return the nodes that mention it
      */
-    @SuppressWarnings("PMD.NullAssignment")
     public static List<Resource> pointingAt(ResourceResolver session, String address, long budget) {
         return references(session, address, budget).found();
     }
 
     /** Discovers references and reports whether the bounded walk reached the end. */
+    @SuppressWarnings("PMD.NullAssignment")
     public static References references(ResourceResolver session, String address, long budget) {
         final Resource root = session.getResource(CONTENT_ROOT);
         if (root == null) {
