@@ -10,8 +10,8 @@ touches:
   - core/src/main/java/rs/slingshot/agent/execution/ExecutionFence.java
   - core/src/main/java/rs/slingshot/agent/execution/FenceHolder.java
   - core/src/test/java/rs/slingshot/agent/execution/ExecutionFenceTest.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: 037ff6d
 ---
 # Persist Execution Fence Authority Atomically
 

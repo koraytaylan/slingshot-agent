@@ -20,8 +20,8 @@ touches:
   - core/src/test/java/rs/slingshot/agent/proof/StateAccessFixtures.java
   - policy/design-patterns.toml
   - policy/repository-layout.toml
-status: pending
-merged_as: ""
+status: complete
+merged_as: 6bb7d69
 ---
 # Preserve Truthful Terminal Outcomes
 

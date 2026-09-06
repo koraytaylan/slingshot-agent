@@ -16,8 +16,8 @@ touches:
   - core/src/test/java/rs/slingshot/agent/http
   - core/src/test/java/rs/slingshot/agent/console
   - ui.config/src/main/content/jcr_root/apps/slingshot-agent/osgiconfig/config/rs.slingshot.agent.http.AuthorizationGate.cfg.json
-status: pending
-merged_as: ""
+status: complete
+merged_as: 45ad67e
 ---
 # Apply Operator Group Configuration at Runtime
 

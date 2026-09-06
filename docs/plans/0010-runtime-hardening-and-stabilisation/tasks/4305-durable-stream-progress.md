@@ -17,7 +17,7 @@ touches:
   - core/src/test/java/rs/slingshot/agent/http/HighWaterServletTest.java
   - core/src/test/java/rs/slingshot/agent/stream
 status: complete
-merged_as: "d9fd958"
+merged_as: 3d420d1
 ---
 # Record Subscription Progress from Actual Delivery
 
