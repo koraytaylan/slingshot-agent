@@ -356,11 +356,11 @@ public final class DownloadContentPackageHandler implements CommandHandler {
                 .sum() + MARKUP_AROUND_THE_FILTER);
         filter.append("<workspaceFilter version=\"1.0\">");
         command.roots().forEach(root ->
-                filter.append("<filter root=\"").append(root).append("\"/>"));
+                filter.append("<filter root=\"").append(escaped(root)).append("\"/>"));
         command.inclusionFilters().forEach(pattern ->
-                filter.append("<include pattern=\"").append(pattern).append("\"/>"));
+                filter.append("<include pattern=\"").append(escaped(pattern)).append("\"/>"));
         command.exclusionFilters().forEach(pattern ->
-                filter.append("<exclude pattern=\"").append(pattern).append("\"/>"));
+                filter.append("<exclude pattern=\"").append(escaped(pattern)).append("\"/>"));
         return filter.append("</workspaceFilter>").toString();
     }
 
