@@ -7,6 +7,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 
@@ -91,13 +97,21 @@ public final class BoundedRequestBody {
      * @param contract the authenticated contract, which declares the bound
      * @return what arrived, or the one reason it was not read
      */
+    @SuppressWarnings("PMD.CloseResource")
     public static Outcome read(InputStream body, long declaredLength, AgentContract contract) {
         final long bound = contract.value(ContractLimit.MAXIMUM_REQUEST_BODY_BYTES);
         final ByteArrayOutputStream held = new ByteArrayOutputStream();
         final byte[] chunk = new byte[READ_CHUNK_BYTES];
         long read = 0;
+        final ExecutorService io = Executors.newSingleThreadExecutor(runnable -> {
+            final Thread worker = new Thread(runnable, "slingshot-request-transfer");
+            worker.setDaemon(true);
+            return worker;
+        });
+        final long started = System.nanoTime();
+        long moved = started;
         try {
-            int arrived = body.read(chunk);
+            int arrived = read(io, body, chunk, started, moved, contract);
             while (arrived >= 0) {
                 read = read + arrived;
                 if (read > bound) {
@@ -105,13 +119,42 @@ public final class BoundedRequestBody {
                             + bound + " bytes, found at the byte that crossed it", read);
                 }
                 held.write(chunk, 0, arrived);
-                arrived = body.read(chunk);
+                moved = System.nanoTime();
+                arrived = read(io, body, chunk, started, moved, contract);
             }
         } catch (final IOException stopped) {
             return new Refused(Refusal.TRANSFER_FAILED,
                     "the bytes stopped arriving: " + stopped.getMessage(), read);
+        } finally {
+            io.shutdownNow();
         }
         return againstTheDeclaration(held.toByteArray(), declaredLength);
+    }
+
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    private static int read(ExecutorService io, InputStream body, byte[] chunk,
+                            long started, long moved, AgentContract contract) throws IOException {
+        final Future<Integer> pending = io.submit(() -> body.read(chunk));
+        final long total = TimeUnit.MILLISECONDS.toNanos(TransferDeadlines.totalMilliseconds(contract));
+        final long idle = TimeUnit.MILLISECONDS.toNanos(TransferDeadlines.idleMilliseconds(contract));
+        final long timeout = Math.max(1, Math.min(total - (System.nanoTime() - started),
+                idle - (System.nanoTime() - moved)));
+        try {
+            return pending.get(timeout, TimeUnit.NANOSECONDS);
+        } catch (final TimeoutException timeoutFailure) {
+            pending.cancel(true);
+            try {
+                body.close();
+            } catch (final IOException ignored) {
+                // The deadline has already ended the request.
+            }
+            throw new IOException("request body exceeded its transfer deadline", timeoutFailure);
+        } catch (final InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("request body was interrupted", interrupted);
+        } catch (final ExecutionException failed) {
+            throw new IOException("request body read failed", failed.getCause());
+        }
     }
 
     private static Outcome againstTheDeclaration(byte[] bytes, long declaredLength) {
