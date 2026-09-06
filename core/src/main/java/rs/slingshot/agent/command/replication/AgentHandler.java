@@ -7,6 +7,7 @@ import java.util.List;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.platform.ControlCapability;
 import rs.slingshot.agent.command.platform.PlatformControl;
@@ -110,13 +111,20 @@ public final class AgentHandler implements CommandHandler {
         }
         final List<ReplicationInventory.Agent> agents =
                 ((ReplicationInventory.Agents) found).agents();
-        return agents.size() > context.discovery().limit()
-                ? new Failed(AgentCommands.DISCOVERY_BUDGET_EXCEEDED, agents.size() + " agents is"
-                        + " more than the " + context.discovery().limit()
-                        + " this caller may examine")
-                : new Produced(AgentResults.agentsOf(
-                        pageOf(agents, ((AgentCommands.Windowed) asked).window()),
-                        AgentResults.NO_MORE_PAGES));
+        if (agents.size() > context.discovery().limit()) {
+            return new Failed(AgentCommands.DISCOVERY_BUDGET_EXCEEDED, agents.size() + " agents is"
+                    + " more than the " + context.discovery().limit()
+                    + " this caller may examine");
+        }
+        final PagingSupport.Outcome<ReplicationInventory.Agent> page = PagingSupport.page(agents,
+                ((AgentCommands.Windowed) asked).window(), AgentCommands.LIST_WIRE_NAME, arguments,
+                context, contract);
+        if (page instanceof final PagingSupport.Refused<ReplicationInventory.Agent> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<ReplicationInventory.Agent> accepted =
+                ((PagingSupport.Accepted<ReplicationInventory.Agent>) page).page();
+        return new Produced(AgentResults.agentsOf(accepted.rows(), accepted.continuationToken()));
     }
 
     private Answer inspected(DocumentValue.Mapping arguments) {
@@ -146,12 +154,21 @@ public final class AgentHandler implements CommandHandler {
             return new Failed(refused.category(), refused.detail());
         }
         final ReplicationInventory.Queue queue = (ReplicationInventory.Queue) read;
-        return queue.entries().size() > context.discovery().limit()
-                ? new Failed(AgentCommands.DISCOVERY_BUDGET_EXCEEDED, queue.entries().size()
-                        + " entries is more than the " + context.discovery().limit()
-                        + " this caller may examine")
-                : new Produced(AgentResults.queueOf(queue.flow(),
-                        pageOf(queue.entries(), windowed.window()), AgentResults.NO_MORE_PAGES));
+        if (queue.entries().size() > context.discovery().limit()) {
+            return new Failed(AgentCommands.DISCOVERY_BUDGET_EXCEEDED, queue.entries().size()
+                    + " entries is more than the " + context.discovery().limit()
+                    + " this caller may examine");
+        }
+        final PagingSupport.Outcome<ReplicationInventory.Entry> page = PagingSupport.page(
+                queue.entries(), windowed.window(), AgentCommands.INSPECT_QUEUE_WIRE_NAME, arguments,
+                context, contract);
+        if (page instanceof final PagingSupport.Refused<ReplicationInventory.Entry> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<ReplicationInventory.Entry> accepted =
+                ((PagingSupport.Accepted<ReplicationInventory.Entry>) page).page();
+        return new Produced(AgentResults.queueOf(queue.flow(), accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /**
