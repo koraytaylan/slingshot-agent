@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.servlet.Servlet;
@@ -202,7 +203,7 @@ public final class SubmitServlet extends AgentServlet {
      * what the declaration buys is that the compiler and the analyser agree with that rather than
      * a suppression saying so.</p>
      */
-    private volatile Commands commands;
+    private final AtomicReference<Commands> commands;
 
     /**
      * Holds a servlet with nothing in it.
@@ -222,7 +223,7 @@ public final class SubmitServlet extends AgentServlet {
      */
     public SubmitServlet(Commands commands) {
         super();
-        this.commands = java.util.Objects.requireNonNull(commands, "commands");
+        this.commands = new AtomicReference<>(java.util.Objects.requireNonNull(commands, "commands"));
     }
 
     /** Binds the packaged command runtime when its complete adapter graph is active.
@@ -230,21 +231,19 @@ public final class SubmitServlet extends AgentServlet {
      */
     @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
     public void available(CommandRuntime runtime) {
-        commands = runtime;
+        commands.set(runtime);
     }
 
     /** Removes a stopped runtime and returns to the fail-closed command surface.
      * @param runtime the runtime being removed
      */
     public void unavailable(CommandRuntime runtime) {
-        if (commands == runtime) {
-            commands = NOTHING_REGISTERED;
-        }
+        commands.compareAndSet(runtime, NOTHING_REGISTERED);
     }
 
     /** Whether the currently bound runtime serves a command, for activation diagnostics. */
     boolean servesCommand(String wireName) {
-        return commands.serves(wireName);
+        return commands.get().serves(wireName);
     }
 
     @Override
@@ -326,7 +325,7 @@ public final class SubmitServlet extends AgentServlet {
         }
         final Optional<SubmissionAdmission.Submission> asked = submissionOf(submission, arriving,
                 text(request.getHeader(IDEMPOTENCY_KEY)));
-        if (asked.isEmpty() || !commands.serves(asked.get().commandContract().wireName())) {
+        if (asked.isEmpty() || !commands.get().serves(asked.get().commandContract().wireName())) {
             refuse(response, REFUSED);
             return;
         }
@@ -437,8 +436,8 @@ public final class SubmitServlet extends AgentServlet {
                     new Budget(Budget.Kind.RESULT,
                             contract.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
                     ProgressSink.under(contract),
-                    commands.paging(running, contract));
-            attempt.complete(commands.run(running, submission, arriving.effects(),
+                    commands.get().paging(running, contract));
+            attempt.complete(commands.get().run(running, submission, arriving.effects(),
                     arriving.resolver(), context));
         }
         finalised(response, running, submission, arriving, session, acceptance);
