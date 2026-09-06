@@ -170,7 +170,7 @@ public final class StateLifecycleService {
                 + refused.detail());
     }
 
-    private record Run(EventStoreGeneration generation, String detail) {
+    record Run(EventStoreGeneration generation, String detail) {
     }
 
     private static final class Scheduler {
