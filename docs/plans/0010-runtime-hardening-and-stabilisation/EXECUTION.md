@@ -1672,12 +1672,10 @@ required checks and the complete gate, then commit the completed task.
     formatting, compilation, static analysis, the 1,136 core tests, and all 453 development policy
     tests. The public interop stage then reported a single pre-existing harness container
     (`7355c9f81474`) in every leak assertion; the Mongo-backed crash scenario also timed out because
-    that stale Podman state was reopened through the host `/run/user/1000` runroot. The gate now
-    exports the same writable `/tmp/slingshot-agent-podman-${UID}` runtime directory used by image
-    preparation and verification before Maven starts, so the test JVM and the preparation commands
-    use one rootless Podman state boundary. The shell syntax check passes; a clean interop rerun is
-    still required because this sandbox cannot remove the stale container from the read-only host
-    runroot.
+    that stale Podman state was reopened through the host `/run/user/1000` runroot. An attempted
+    writable `XDG_RUNTIME_DIR` override was reverted: Podman's persisted database overrides it and
+    the override made the prepared images appear absent. A clean interop rerun still requires
+    clearing or rebuilding that external Podman state, which this sandbox cannot do.
 
 101. Began the handler-pagination review by extracting the shared verified window operation into
     `PagingSupport` and applying it to `FindAssetsByMetadataHandler`. Initial offsets now use the
