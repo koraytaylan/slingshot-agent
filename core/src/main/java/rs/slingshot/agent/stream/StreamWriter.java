@@ -3,7 +3,6 @@
 
 package rs.slingshot.agent.stream;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
@@ -211,10 +210,9 @@ public record StreamWriter(StreamSession session, AgentContract contract,
     }
 
     /** Re-raises a response failure without changing the stream's established runtime contract. */
-    @SuppressFBWarnings(value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-            justification = "Preserves runtime failure identity across the stream boundary.")
-    private static void throwUnchecked(final RuntimeException failure) {
-        throw failure;
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void throwUnchecked(final Throwable failure) throws T {
+        throw (T) failure;
     }
 
     private Ending written(Writer writer, Session store, StreamTicker ticker, String resumption) {
