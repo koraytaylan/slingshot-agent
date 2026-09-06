@@ -13,6 +13,12 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+# Some hermetic runners expose a read-only /run/user directory. Keep Podman's rootless runtime
+# state in the writable temporary area so preparation and verification use the same engine setup.
+export XDG_RUNTIME_DIR="/tmp/slingshot-agent-podman-${UID}"
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}"
+
 readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly IMAGE_FILE="${REPOSITORY_ROOT}/support/interop-images.toml"
 readonly ENGINE="podman"
