@@ -54,17 +54,101 @@ import rs.slingshot.agent.wire.JobEventKind;
  */
 @ExtendWith(SlingContextExtension.class)
 final class TerminalCommitTest {
-
     private static final Path REPOSITORY = repositoryRoot();
-
     private static final Path FIXTURES =
             REPOSITORY.resolve("core/src/test/resources/fixtures/terminal-commit");
-
     private static final AgentContract CONTRACT = contract();
-
     private static final long NOW = 1788000000000L;
-
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @Test
+    void handlerReferencesAreValidatedBeforeTheCompletionIsSelected() throws RepositoryException {
+        final Session session = running();
+        final byte[] content = bytes(FIXTURES.resolve("published-result.txt"));
+        ArtifactStore.prepare(session, caller());
+        assertInstanceOf(ArtifactStore.Published.class, ArtifactStore.publish(session, caller(), operation(),
+                new ArtifactStore.Publication(slot(), content.length, new ByteArrayInputStream(content)),
+                NOW, CONTRACT));
+        final ExecutionOutcome.Published valid = new ExecutionOutcome.Published(slot(), content.length,
+                Digest.of(content));
+        assertEquals(valid, ExecutionJournal.declared(session, operation(),
+                new ExecutionOutcome.Succeeded(valid),
+                NOW, CONTRACT).result());
+        final ExecutionOutcome.Published wrongSize = new ExecutionOutcome.Published(slot(),
+                content.length + 1,
+                Digest.of(content));
+        assertEquals(ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE.result(),
+                ExecutionJournal.declared(session,
+                operation(), new ExecutionOutcome.Succeeded(wrongSize), NOW, CONTRACT).result());
+        final ExecutionOutcome.Published wrongDigest = new ExecutionOutcome.Published(slot(), content.length,
+                Digest.of(new byte[] {1}));
+        assertEquals(ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE.result(),
+                ExecutionJournal.declared(session,
+                operation(), new ExecutionOutcome.Succeeded(wrongDigest), NOW, CONTRACT).result());
+        final ExecutionOutcome.Inline oversized = new ExecutionOutcome.Inline("x".repeat(Math.toIntExact(
+                CONTRACT.value(
+                        rs.slingshot.agent.contract.ContractLimit.MAXIMUM_AGENT_INLINE_RESULT_BYTES) + 1)));
+        assertEquals(ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE.result(),
+                ExecutionJournal.declared(session,
+                operation(), new ExecutionOutcome.Succeeded(oversized), NOW, CONTRACT).result());
+    }
+
+    @Test
+    void retentionPreservesAnArtifactNamedByPendingCompletionEvidence() throws RepositoryException {
+        final Session session = running();
+        ExecutionJournal.stageStart(session.getNode(operation().path()), NOW);
+        session.save();
+        final byte[] content = bytes(FIXTURES.resolve("published-result.txt"));
+        ArtifactStore.prepare(session, caller());
+        assertInstanceOf(ArtifactStore.Published.class, ArtifactStore.publish(session, caller(), operation(),
+                new ArtifactStore.Publication(slot(), content.length, new ByteArrayInputStream(content)),
+                NOW, CONTRACT));
+        final ExecutionOutcome result = outcome(new ExecutionOutcome.Published(slot(), content.length,
+                Digest.of(content)), OperationState.SUCCEEDED);
+        assertEquals(rs.slingshot.agent.store.WriteOutcome.WRITTEN,
+                ExecutionJournal.completed(session, operation(), result, CONTRACT));
+        rs.slingshot.agent.store.MaintenanceSweep.run(session, stored(session).identity().generation(),
+                NOW + CONTRACT.value(
+                        rs.slingshot.agent.contract.ContractLimit.WORKER_EXECUTION_LEASE_MILLISECONDS),
+                CONTRACT);
+        assertTrue(ArtifactStore.read(session, operation(), slot()).isPresent());
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+    }
+
+    @Test
+    void prepaidTerminalCapacityPublishesStateResultEventAndSnapshotAtTheBound()
+            throws RepositoryException {
+        final AgentContract full = contractWith("maximum_current_generation_event_rows", 2L,
+                "maximum_caller_current_generation_event_rows", 2L);
+        final Session session = running(full);
+        final LogicalOperation read = stored(session);
+        final StatePath budget = operation().child(EventLedger.TERMINAL_BUDGET);
+        final var reserved = assertInstanceOf(CapacityLedger.Reserved.class,
+                CapacityLedger.take(session, caller(), List.of(
+                        new rs.slingshot.agent.store.CapacityReservation.Charge(
+                                AccountedQuantity.EVENT_ROWS, 1),
+                        new rs.slingshot.agent.store.CapacityReservation.Charge(AccountedQuantity.EVENT_BYTES,
+                                startedCanonical().length * 2L)), full)).reservation();
+        assertEquals(rs.slingshot.agent.store.WriteOutcome.CLAIMED,
+                rs.slingshot.agent.store.ClaimByCreation.claim(session, budget, "nt:unstructured",
+                        node -> rs.slingshot.agent.store.CapacityReservation.retain(session, reserved,
+                                node)));
+        final ExecutionOutcome result = outcome(inline(), OperationState.SUCCEEDED);
+        assertInstanceOf(TerminalCommit.AtCapacity.class,
+                TerminalCommit.commit(session, caller(), read, result, full));
+        assertInstanceOf(TerminalCommit.Committed.class,
+                TerminalCommit.commitReserved(session, caller(), read, result, full, budget));
+        assertFalse(session.nodeExists(budget.path()));
+        assertEquals(OperationState.SUCCEEDED, stored(session).state());
+        assertEquals(inline(), TerminalCommit.answerIn(session, operation()).orElseThrow());
+        assertInstanceOf(SnapshotStore.Agrees.class, SnapshotStore.verify(session, operation(),
+                new SnapshotStore.Says(OperationState.SUCCEEDED.kind())));
+        assertEquals(2, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, full));
+        assertEquals(EventLedger.bytes(session, operation().child(EventLedger.NODE)),
+                CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, full));
+        assertInstanceOf(TerminalCommit.Unchanged.class,
+                TerminalCommit.commitReserved(session, caller(), read, result, full, budget));
+    }
 
     @Test
     void takeoverBeforeTerminalCommitPreservesStateResultAndAccounting() throws RepositoryException {

@@ -551,7 +551,7 @@ final class ArtifactIntakeServletTest {
         }
 
         @Override
-        public rs.slingshot.agent.execution.ExecutionOutcome.Result run(
+        public rs.slingshot.agent.execution.ExecutionOutcome.Completion run(
                 rs.slingshot.agent.execution.LogicalOperation operation,
                 DocumentValue.Mapping submission, Session session) {
             throw new IllegalStateException("a command ran while a payload was still arriving");

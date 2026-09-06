@@ -51,6 +51,20 @@ public final class SnapshotStore {
     /** What a cursor is before a reader has been shown anything, which no sequence may be. */
     private static final long BEFORE_THE_FIRST = -1;
 
+    /** The fixed-width numeric fields retained by a materialised snapshot. */
+    private static final long NUMERIC_FIELDS = 3;
+
+    /**
+     * Counts the logical values retained by one snapshot.
+     *
+     * @param kind the materialised event kind
+     * @return UTF-8 kind bytes plus the sequence, event count and update instant
+     */
+    public static long bytesFor(JobEventKind kind) {
+        return kind.spelling().getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                + NUMERIC_FIELDS * Long.BYTES;
+    }
+
     private SnapshotStore() {
     }
 
@@ -221,10 +235,36 @@ public final class SnapshotStore {
                                              EventLedger.Alongside alongside)
             throws RepositoryException {
         return EventLedger.append(session, caller, event, canonical, nowUnixMilliseconds, contract,
-                (written, appended) -> {
-                    materialise(written, appended, nowUnixMilliseconds);
-                    alongside.write(written, appended);
-                });
+                materialising(nowUnixMilliseconds, alongside));
+    }
+
+    /**
+     * Materialises a snapshot with an event funded before execution.
+     *
+     * @param session the publication session
+     * @param source the operation's dedicated retained terminal-event budget
+     * @param event the terminal event
+     * @param canonical its canonical bytes
+     * @param nowUnixMilliseconds the publication instant
+     * @param contract the authenticated bounds
+     * @param alongside the other terminal writes
+     * @return publication or refusal without partial snapshot changes
+     * @throws RepositoryException if publication or cleanup fails
+     */
+    public static EventLedger.Outcome recordReserved(Session session, StatePath source,
+                                                     JobEvent event, byte[] canonical,
+                                                     long nowUnixMilliseconds, AgentContract contract,
+                                                     EventLedger.Alongside alongside)
+            throws RepositoryException {
+        return EventLedger.appendReserved(session, source, event, canonical, nowUnixMilliseconds, contract,
+                materialising(nowUnixMilliseconds, alongside));
+    }
+
+    private static EventLedger.Alongside materialising(long now, EventLedger.Alongside alongside) {
+        return (written, appended) -> {
+            materialise(written, appended, now);
+            alongside.write(written, appended);
+        };
     }
 
     private static void materialise(Session session, JobEvent event, long nowUnixMilliseconds)

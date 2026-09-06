@@ -35,10 +35,8 @@ import rs.slingshot.agent.wire.JobEventKind;
  * a week is a client waiting for a week.</p>
  */
 public final class RestartRecovery {
-
     /** The child of an operation the slots an inbound manifest declared live under. */
     public static final String INTAKE = MaintenanceSweep.INTAKE;
-
     /** The property one declared slot's own size is written in. */
     public static final String DECLARED_BYTES = "declared_byte_count";
 
@@ -62,7 +60,6 @@ public final class RestartRecovery {
      * @param examined how many operations were looked at
      */
     public record Reconciliation(List<Finding> findings, long examined) {
-
         /** Holds findings nothing can change afterwards. */
         public Reconciliation {
             findings = List.copyOf(findings);
@@ -107,7 +104,7 @@ public final class RestartRecovery {
             throws RepositoryException {
         final List<Finding> findings = new ArrayList<>();
         for (final StatePath operation : operations(session, generation)) {
-            findings.add(examine(session, operation, nowUnixMilliseconds, contract));
+            findings.add(examine(session, operation, generation, nowUnixMilliseconds, contract));
         }
         return new Reconciliation(findings, findings.size());
     }
@@ -136,7 +133,7 @@ public final class RestartRecovery {
         return held;
     }
 
-    private static Finding examine(Session session, StatePath operation,
+    private static Finding examine(Session session, StatePath operation, EventStoreGeneration generation,
                                    long nowUnixMilliseconds, AgentContract contract)
             throws RepositoryException {
         final Node record = session.getNode(operation.path());
@@ -153,8 +150,56 @@ public final class RestartRecovery {
                             + record.getNode(MaintenanceSweep.LEASE)
                                     .getProperty(MaintenanceSweep.LEASE_HELD_UNTIL).getLong());
         }
+        if (state == OperationState.RUNNING && record.hasNode(ExecutionJournal.NODE)) {
+            return journalled(session, operation, generation, nowUnixMilliseconds, contract);
+        }
         return withoutALease(session, operation, record, new Moment(state, nowUnixMilliseconds,
                 contract));
+    }
+
+    private static Finding journalled(Session session, StatePath operation, EventStoreGeneration generation,
+                                      long now, AgentContract contract) throws RepositoryException {
+        final long started = session.getNode(operation.child(ExecutionJournal.NODE).path())
+                .getProperty(ExecutionJournal.STARTED_AT).getLong();
+        final long budget = contract.value(ContractLimit.MAXIMUM_COMMAND_EXECUTION_MILLISECONDS)
+                + contract.value(ContractLimit.RECOVERY_UNDETERMINED_MARGIN_MILLISECONDS);
+        if (ExecutionJournal.pending(session, operation, contract).isEmpty() && now - started < budget) {
+            return new Finding(operation, RecoveryDisposition.STILL_RUNNING,
+                    "the recorded server execution start is inside its recovery budget");
+        }
+        if (ExecutionJournal.pending(session, operation, contract).isEmpty()) {
+            final ExecutionOutcome.Outcome unknown = ExecutionOutcome.of(
+                    ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED, now, contract);
+            if (unknown instanceof final ExecutionOutcome.Held held) {
+                ExecutionJournal.completed(session, operation, held.outcome(), contract);
+            }
+        }
+        return publishCompletion(session, operation, generation, contract);
+    }
+
+    private static Finding publishCompletion(Session session, StatePath operation,
+                                             EventStoreGeneration generation, AgentContract contract)
+            throws RepositoryException {
+        final OperationStore.Outcome read = OperationStore.readAt(session, generation, operation);
+        if (read instanceof final OperationStore.Held current
+                && current.operation().state().finality() == JobEventKind.Finality.ENDS) {
+            return new Finding(operation, RecoveryDisposition.FINISHED,
+                    "another publisher already completed the operation");
+        }
+        final java.util.Optional<ExecutionOutcome> pending = ExecutionJournal.pending(session,
+                operation, contract);
+        if (!(read instanceof final OperationStore.Held held) || pending.isEmpty()) {
+            return new Finding(operation, RecoveryDisposition.UNDETERMINED,
+                    "completion evidence could not be selected; no command was repeated");
+        }
+        final TerminalCommit.Outcome ended = TerminalCommit.commitReserved(session, held.operation().caller(),
+                held.operation(), pending.get(), contract, operation.child(EventLedger.TERMINAL_BUDGET));
+        if (ended instanceof TerminalCommit.Committed || ended instanceof TerminalCommit.Unchanged) {
+            return new Finding(operation, RecoveryDisposition.FINISHED,
+                    "the stored completion was published without executing the command");
+        }
+        return new Finding(operation, RecoveryDisposition.UNDETERMINED,
+                "the completion is retained for another publication attempt; no command was repeated");
     }
 
     /**

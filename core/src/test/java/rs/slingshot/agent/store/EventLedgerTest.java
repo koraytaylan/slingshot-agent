@@ -112,6 +112,93 @@ final class EventLedgerTest {
         second.logout();
     }
 
+    @Test
+    void aPrepaidEventPublishesAtCapacityAndReturnsItsUnusedBytes() throws RepositoryException {
+        final AgentContract narrow = contractWith(Map.of("maximum_current_generation_event_rows", 1L,
+                "maximum_caller_current_generation_event_rows", 1L));
+        final Session session = prepared(narrow);
+        final byte[] canonical = canonical("accepted.json");
+        final StatePath budget = budget(session, narrow, canonical.length + 1);
+        assertInstanceOf(EventLedger.AtCapacity.class, append(session, "accepted.json", narrow));
+        assertInstanceOf(EventLedger.Appended.class, EventLedger.appendReserved(session, budget,
+                event("accepted.json", narrow), canonical, NOW, narrow, (store, event) -> { }));
+        assertFalse(session.nodeExists(budget.path()));
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, narrow));
+        assertEquals(canonical.length, CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, narrow));
+    }
+
+    @Test
+    void anInvalidPrepaidSequenceDoesNotConsumeItsBudget() throws RepositoryException {
+        final Session session = prepared(CONTRACT);
+        final StatePath budget = budget(session, CONTRACT, canonical("gap.json").length);
+        assertInstanceOf(EventLedger.Refused.class, EventLedger.appendReserved(session, budget,
+                event("gap.json", CONTRACT), canonical("gap.json"), NOW, CONTRACT, (store, event) -> { }));
+        assertTrue(session.nodeExists(budget.path()));
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT));
+        assertInstanceOf(EventLedger.NotWritten.class, EventLedger.appendReserved(session,
+                StatePath.deployment("somebody-elses-budget"), event("accepted.json", CONTRACT),
+                canonical("accepted.json"), NOW, CONTRACT, (store, event) -> { }));
+        assertTrue(session.nodeExists(budget.path()));
+    }
+
+    @Test
+    void anInterruptedPrepaidPublicationPreservesOneCapacityOwner() throws RepositoryException {
+        final Session session = prepared(CONTRACT);
+        final byte[] canonical = canonical("accepted.json");
+        final StatePath budget = budget(session, CONTRACT, canonical.length + 1);
+        final var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
+        final Session faulted = SaveInterleaving.beforeEverySave(session, () -> {
+            if (session.nodeExists(EventLedger.pathOf(event("accepted.json", CONTRACT)).path())
+                    && interrupted.compareAndSet(false, true)) {
+                throw new RepositoryException("the prepaid publication was interrupted");
+            }
+        });
+        org.junit.jupiter.api.Assertions.assertThrows(RepositoryException.class,
+                () -> EventLedger.appendReserved(faulted, budget, event("accepted.json", CONTRACT),
+                        canonical, NOW, CONTRACT, (store, event) -> { }));
+        session.refresh(false);
+        assertTrue(interrupted.get());
+        assertTrue(session.nodeExists(budget.path()));
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT));
+        assertEquals(canonical.length + 1,
+                CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, CONTRACT));
+        assertInstanceOf(EventLedger.Appended.class, EventLedger.appendReserved(session, budget,
+                event("accepted.json", CONTRACT), canonical, NOW, CONTRACT, (store, event) -> { }));
+        assertFalse(session.nodeExists(budget.path()));
+        assertEquals(canonical.length, CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, CONTRACT));
+    }
+
+    @Test
+    void aPrepaidAppendCannotSpendAnExistingEventOrAnInsufficientBudget() throws RepositoryException {
+        final Session session = prepared(CONTRACT);
+        final StatePath budget = budget(session, CONTRACT, 1);
+        assertInstanceOf(EventLedger.NotWritten.class, EventLedger.appendReserved(session, budget,
+                event("accepted.json", CONTRACT), canonical("accepted.json"), NOW, CONTRACT,
+                (store, event) -> { }));
+        assertTrue(session.nodeExists(budget.path()));
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.EVENT_BYTES, CONTRACT));
+        assertInstanceOf(EventLedger.Appended.class, append(session, "accepted.json", CONTRACT));
+        final StatePath published = EventLedger.pathOf(event("accepted.json", CONTRACT));
+        assertInstanceOf(EventLedger.NotWritten.class, EventLedger.appendReserved(session, published,
+                event("started.json", CONTRACT), canonical("started.json"), NOW, CONTRACT,
+                (store, event) -> { }));
+        assertTrue(session.nodeExists(published.path()));
+        assertEquals(1, EventLedger.events(session, ledger()));
+    }
+
+    private static StatePath budget(Session session, AgentContract contract, long bytes)
+            throws RepositoryException {
+        final StatePath path = operation(contract).child(EventLedger.TERMINAL_BUDGET);
+        final var reservation = assertInstanceOf(CapacityLedger.Reserved.class,
+                CapacityLedger.take(session, caller(), List.of(
+                        new CapacityReservation.Charge(AccountedQuantity.EVENT_ROWS, 1),
+                        new CapacityReservation.Charge(AccountedQuantity.EVENT_BYTES, bytes)), contract))
+                .reservation();
+        assertEquals(WriteOutcome.CLAIMED, ClaimByCreation.claim(session, path, "nt:unstructured",
+                node -> CapacityReservation.retain(session, reservation, node)));
+        return path;
+    }
+
     private Session second() throws org.apache.sling.api.resource.LoginException {
         return java.util.Objects.requireNonNull(
                 java.util.Objects.requireNonNull(sling.getService(

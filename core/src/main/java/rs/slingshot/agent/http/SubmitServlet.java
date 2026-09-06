@@ -113,9 +113,9 @@ public final class SubmitServlet extends AgentServlet {
          * @param operation the record the work is against
          * @param submission the submission as it arrived
          * @param session the caller's own session, which is the request's
-         * @return what the command produced
+         * @return the command's declared completion, including a typed failure
          */
-        rs.slingshot.agent.execution.ExecutionOutcome.Result run(LogicalOperation operation,
+        rs.slingshot.agent.execution.ExecutionOutcome.Completion run(LogicalOperation operation,
                                                                  DocumentValue.Mapping submission,
                                                                  Session session);
     }
@@ -140,7 +140,7 @@ public final class SubmitServlet extends AgentServlet {
         }
 
         @Override
-        public rs.slingshot.agent.execution.ExecutionOutcome.Result run(
+        public rs.slingshot.agent.execution.ExecutionOutcome.Completion run(
                 LogicalOperation operation, DocumentValue.Mapping submission, Session session) {
             throw new IllegalStateException("nothing here runs anything, and this should have been"
                     + " refused before a record was written");
@@ -289,6 +289,13 @@ public final class SubmitServlet extends AgentServlet {
     private void progress(SlingHttpServletResponse response, LogicalOperation operation,
                           DocumentValue.Mapping submission, Arriving arriving, Session session,
                           SubmissionResponse.Acceptance acceptance) throws IOException, RepositoryException {
+        if (operation.state() == rs.slingshot.agent.execution.OperationState.RUNNING
+                && rs.slingshot.agent.execution.ExecutionJournal.pending(session,
+                        rs.slingshot.agent.execution.OperationStore.pathOf(operation.identity()),
+                        arriving.contract()).isPresent()) {
+            finalised(response, operation, submission, arriving, session, acceptance);
+            return;
+        }
         if (operation.state() != rs.slingshot.agent.execution.OperationState.ACCEPTED
                 || IntakeSlotWrite.outstanding(session,
                         rs.slingshot.agent.execution.OperationStore.pathOf(operation.identity())) > 0) {
@@ -343,28 +350,43 @@ public final class SubmitServlet extends AgentServlet {
                          DocumentValue.Mapping submission, Arriving arriving, Session session,
                          SubmissionResponse.Acceptance acceptance)
             throws IOException, RepositoryException {
-        final rs.slingshot.agent.execution.OperationStore.Outcome started =
-                rs.slingshot.agent.execution.OperationStore.move(session, accepted,
-                        rs.slingshot.agent.execution.OperationState.RUNNING);
-        if (!(started instanceof
-                final rs.slingshot.agent.execution.OperationStore.Held running)) {
+        final Optional<LogicalOperation> started = rs.slingshot.agent.execution.ExecutionJournal.start(
+                session, accepted, System.currentTimeMillis(), arriving.contract());
+        if (started.isEmpty()) {
             startRefused(response, accepted, submission, arriving, session);
             return;
         }
-        final rs.slingshot.agent.execution.ExecutionOutcome.Result produced =
-                commands.run(running.operation(), submission, arriving.effects());
-        final rs.slingshot.agent.execution.ExecutionOutcome.Outcome ended =
-                rs.slingshot.agent.execution.ExecutionOutcome.of(
-                        rs.slingshot.agent.execution.OperationState.SUCCEEDED, produced,
-                        System.currentTimeMillis(), arriving.contract());
-        if (!(ended instanceof final rs.slingshot.agent.execution.ExecutionOutcome.Held outcome)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        final LogicalOperation running = started.get();
+        final StatePath path = rs.slingshot.agent.execution.OperationStore.pathOf(running.identity());
+        try (var attempt = rs.slingshot.agent.execution.ExecutionJournal.attempt(session, path,
+                arriving.contract())) {
+            attempt.complete(commands.run(running, submission, arriving.effects()));
+        }
+        finalised(response, running, submission, arriving, session, acceptance);
+    }
+
+    private void finalised(SlingHttpServletResponse response, LogicalOperation running,
+                           DocumentValue.Mapping submission, Arriving arriving, Session session,
+                           SubmissionResponse.Acceptance acceptance) throws IOException, RepositoryException {
+        final StatePath path = rs.slingshot.agent.execution.OperationStore.pathOf(running.identity());
+        final Optional<rs.slingshot.agent.execution.ExecutionOutcome> pending =
+                rs.slingshot.agent.execution.ExecutionJournal.pending(session, path, arriving.contract());
+        if (pending.isEmpty()) {
+            response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
+            refuse(response, AT_CAPACITY);
             return;
         }
-        rs.slingshot.agent.execution.TerminalCommit.commit(session,
-                arriving.caller().counted().orElseThrow(), running.operation(),
-                outcome.outcome(), arriving.contract());
-        answered(response, running.operation(), submission, arriving, acceptance);
+        final rs.slingshot.agent.execution.TerminalCommit.Outcome ended =
+                rs.slingshot.agent.execution.TerminalCommit.commitReserved(session, running.caller(), running,
+                        pending.get(), arriving.contract(),
+                        path.child(rs.slingshot.agent.store.EventLedger.TERMINAL_BUDGET));
+        if (ended instanceof rs.slingshot.agent.execution.TerminalCommit.Committed
+                || ended instanceof rs.slingshot.agent.execution.TerminalCommit.Unchanged) {
+            answered(response, running, submission, arriving, acceptance);
+            return;
+        }
+        response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
+        refuse(response, AT_CAPACITY);
     }
 
     private void startRefused(SlingHttpServletResponse response, LogicalOperation accepted,
@@ -373,7 +395,7 @@ public final class SubmitServlet extends AgentServlet {
         final var current = rs.slingshot.agent.execution.OperationStore.read(session, accepted.identity());
         if (current instanceof final rs.slingshot.agent.execution.OperationStore.Held held
                 && held.operation().state() != rs.slingshot.agent.execution.OperationState.ACCEPTED) {
-            answered(response, held.operation(), submission, arriving,
+            progress(response, held.operation(), submission, arriving, session,
                     SubmissionResponse.Acceptance.ALREADY_HELD);
             return;
         }

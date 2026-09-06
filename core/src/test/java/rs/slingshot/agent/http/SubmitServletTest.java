@@ -58,19 +58,13 @@ import rs.slingshot.agent.store.SubscriptionRecord;
  */
 @ExtendWith(SlingContextExtension.class)
 final class SubmitServletTest {
-
     private static final Path REPOSITORY = repositoryRoot();
-
     private static final Path FIXTURES =
             REPOSITORY.resolve("core/src/test/resources/fixtures/submit-servlet");
-
     private static final AgentContract CONTRACT = contract();
-
     /** The command this suite's own build runs, which is the one the fixtures name. */
     private static final String SERVED = "query_paths";
-
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
-
 
     @BeforeEach
     void configureOperators() {
@@ -324,6 +318,53 @@ final class SubmitServletTest {
     }
 
     @Test
+    void anInterruptedTerminalPublicationRetriesOnlyTheRecordedCompletion()
+            throws RepositoryException, IOException, ServletException,
+            org.apache.sling.api.resource.LoginException {
+        terminalRetry(500, () -> {
+            throw new RepositoryException("terminal publication interrupted");
+        });
+    }
+
+    @Test
+    void aContendedTerminalPublicationDoesNotSilentlyAcknowledgeRunningWork()
+            throws RepositoryException, IOException, ServletException,
+            org.apache.sling.api.resource.LoginException {
+        terminalRetry(SubmitServlet.AT_CAPACITY,
+                () -> {
+                    throw new javax.jcr.InvalidItemStateException("terminal publication contended");
+                });
+    }
+
+    private void terminalRetry(int status, rs.slingshot.agent.store.SaveInterleaving.Action failure)
+            throws RepositoryException, IOException, ServletException,
+            org.apache.sling.api.resource.LoginException {
+        final Session session = prepared();
+        final Counting commands = new Counting();
+        try (var state = interceptState(OperationState.SUCCEEDED, failure)) {
+            assertEquals(status, throughState(state, commands).getStatus());
+        }
+        session.refresh(false);
+        final LogicalOperation operation = stored(session, "a-submission.json");
+        final StatePath path = OperationStore.pathOf(operation.identity());
+        assertEquals(OperationState.RUNNING, operation.state());
+        assertTrue(TerminalCommit.answerIn(session, path).isEmpty());
+        assertTrue(rs.slingshot.agent.execution.ExecutionJournal.pending(session, path,
+                CONTRACT).isPresent());
+        assertTrue(session.nodeExists(path.child(
+                rs.slingshot.agent.store.EventLedger.TERMINAL_BUDGET).path()));
+        assertEquals(1, commands.ran());
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
+                CONTRACT));
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        session.refresh(false);
+        assertEquals(OperationState.SUCCEEDED, stored(session, "a-submission.json").state());
+        assertTrue(TerminalCommit.answerIn(session, path).isPresent());
+        assertEquals(1, commands.ran());
+        assertEquals(1, session.getNode("/content/resumption-effects").getNodes().getSize());
+    }
+
+    @Test
     void aLostAcknowledgementDoesNotRepeatTheContentEffect()
             throws RepositoryException, IOException, ServletException {
         final Session session = prepared();
@@ -427,13 +468,19 @@ final class SubmitServletTest {
     private org.apache.sling.api.resource.ResourceResolver interceptStarting(
             rs.slingshot.agent.store.SaveInterleaving.Action before)
             throws org.apache.sling.api.resource.LoginException {
+        return interceptState(OperationState.RUNNING, before);
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver interceptState(OperationState expected,
+            rs.slingshot.agent.store.SaveInterleaving.Action before)
+            throws org.apache.sling.api.resource.LoginException {
         final var owned = sling.resourceResolver().clone(java.util.Map.of());
         final Session state = java.util.Objects.requireNonNull(owned.adaptTo(Session.class));
         final var inserted = new java.util.concurrent.atomic.AtomicBoolean();
         final String path = OperationStore.pathOf(identityOf("a-submission.json")).path();
         final Session intercepted = rs.slingshot.agent.store.SaveInterleaving.beforeEverySave(state, () -> {
             if (state.nodeExists(path)
-                    && OperationState.RUNNING.spelling().equals(state.getNode(path)
+                    && expected.spelling().equals(state.getNode(path)
                             .getProperty(OperationStore.STATE).getString())
                     && inserted.compareAndSet(false, true)) {
                 before.run();
@@ -470,11 +517,174 @@ final class SubmitServletTest {
                 sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
     }
 
+    @Test
+    void aHandlerThatThrowsAfterItsEffectLeavesExplicitUncertaintyWithoutRepeatingIt()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final Crashing commands = new Crashing(new Counting());
+        assertThrows(IllegalStateException.class, () -> answering(commands, "a-submission.json"));
+        session.refresh(false);
+        final StatePath path = OperationStore.pathOf(identityOf("a-submission.json"));
+        final ExecutionOutcome pending = rs.slingshot.agent.execution.ExecutionJournal
+                .pending(session, path, CONTRACT).orElseThrow();
+        assertEquals(ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED.result(), pending.result());
+        assertEquals(1, commands.effects().ran());
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
+                CONTRACT));
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        session.refresh(false);
+        assertEquals(OperationState.FAILED, stored(session, "a-submission.json").state());
+        assertEquals(pending.result(), TerminalCommit.answerIn(session, path).orElseThrow());
+        assertEquals(1, commands.effects().ran());
+        assertEquals(1, session.getNode("/content/resumption-effects").getNodes().getSize());
+    }
+
+    private record Crashing(Counting effects) implements SubmitServlet.Commands {
+        @Override
+        public boolean serves(String wireName) {
+            return effects.serves(wireName);
+        }
+
+        @Override
+        public ExecutionOutcome.Completion run(LogicalOperation operation,
+                                                DocumentValue.Mapping submission, Session session) {
+            effects.run(operation, submission, session);
+            throw new IllegalStateException("the handler stopped after committing its effect");
+        }
+    }
+
+    @Test
+    void resultCapacityMustBeAvailableBeforeTheCommandCanProduceAnEffect()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final long bound = Math.min(AccountedQuantity.RESULT_ROWS.admissibleTotal(CONTRACT),
+                AccountedQuantity.RESULT_ROWS.admissibleCallerShare(CONTRACT));
+        final CapacityReservation occupied = assertInstanceOf(CapacityLedger.Reserved.class,
+                CapacityLedger.take(session, caller(), List.of(new CapacityReservation.Charge(
+                        AccountedQuantity.RESULT_ROWS, bound)), CONTRACT)).reservation();
+        final Counting commands = new Counting();
+        assertEquals(SubmitServlet.AT_CAPACITY, answering(commands, "a-submission.json").getStatus());
+        assertEquals(0, commands.ran());
+        session.refresh(false);
+        assertEquals(OperationState.ACCEPTED, stored(session, "a-submission.json").state());
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT));
+        assertEquals(0, CapacityLedger.held(session,
+                AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, CONTRACT));
+        CapacityLedger.release(session, occupied, CONTRACT);
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        assertEquals(1, commands.ran());
+    }
+
+    @Test
+    void aMissingPublishedResultBecomesExplicitUncertainty()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final var slot = assertInstanceOf(rs.slingshot.agent.store.ArtifactSlot.Held.class,
+                rs.slingshot.agent.store.ArtifactSlot.of("missing-result")).slot();
+        final var digest = assertInstanceOf(rs.slingshot.agent.digest.DigestValue.Held.class,
+                rs.slingshot.agent.digest.DigestValue.of("a".repeat(64))).digest();
+        final Returning commands = new Returning(new ExecutionOutcome.Succeeded(
+                new ExecutionOutcome.Published(slot, 17, digest)));
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        session.refresh(false);
+        final LogicalOperation operation = stored(session, "a-submission.json");
+        assertEquals(OperationState.FAILED, operation.state());
+        assertEquals(ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE.result(),
+                TerminalCommit.answerIn(session, OperationStore.pathOf(operation.identity())).orElseThrow());
+    }
+
+    @Test
+    void aDeclaredHandlerFailureIsPersistedAsFailure()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final ExecutionOutcome.Result result = new ExecutionOutcome.Inline("{\"failure\":\"not_found\"}");
+        assertEquals(SubmitServlet.ACCEPTED, answering(new Returning(new ExecutionOutcome.Failed(result)),
+                "a-submission.json").getStatus());
+        session.refresh(false);
+        assertEquals(OperationState.FAILED, stored(session, "a-submission.json").state());
+        assertEquals(result, TerminalCommit.answerIn(session,
+                OperationStore.pathOf(identityOf("a-submission.json"))).orElseThrow());
+    }
+
+    @Test
+    void anUncertainCompletionDoesNotClaimThatNoEffectsOccurred()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final var uncertainty = ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
+        assertEquals(SubmitServlet.ACCEPTED,
+                answering(new Returning(uncertainty), "a-submission.json").getStatus());
+        session.refresh(false);
+        assertEquals(OperationState.FAILED, stored(session, "a-submission.json").state());
+        assertEquals(uncertainty.result(), TerminalCommit.answerIn(session,
+                OperationStore.pathOf(identityOf("a-submission.json"))).orElseThrow());
+    }
+
+    private record Returning(ExecutionOutcome.Completion completion) implements SubmitServlet.Commands {
+        @Override
+        public boolean serves(String wireName) {
+            return SERVED.equals(wireName);
+        }
+
+        @Override
+        public ExecutionOutcome.Completion run(LogicalOperation operation,
+                                                DocumentValue.Mapping submission, Session session) {
+            return completion;
+        }
+    }
+
+    @Test
+    void terminalCapacityExhaustionCannotAcknowledgeAMissingOutcome()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        CapacityLedger.prepare(session, AccountedQuantity.EVENT_ROWS, caller());
+        final Saturating commands = new Saturating();
+        final var response = answering(commands, "a-submission.json");
+        session.refresh(false);
+        final LogicalOperation operation = stored(session, "a-submission.json");
+        final boolean resultPresent = TerminalCommit.answerIn(session,
+                OperationStore.pathOf(operation.identity())).isPresent();
+        assertEquals(1, commands.effects.ran());
+        assertEquals(1, session.getNode("/content/resumption-effects").getNodes().getSize());
+        assertEquals(SubmitServlet.ACCEPTED, response.getStatus());
+        assertEquals(OperationState.SUCCEEDED, operation.state());
+        assertTrue(resultPresent,
+                "status=" + response.getStatus() + ", state=" + operation.state()
+                        + ", resultPresent=" + resultPresent);
+    }
+
+    private static final class Saturating implements SubmitServlet.Commands {
+        private static final long serialVersionUID = 1L;
+        private final Counting effects = new Counting();
+
+        @Override
+        public boolean serves(String wireName) {
+            return effects.serves(wireName);
+        }
+
+        @Override
+        public ExecutionOutcome.Completion run(LogicalOperation operation,
+                                           DocumentValue.Mapping submission, Session session) {
+            final ExecutionOutcome.Completion result = effects.run(operation, submission, session);
+            try {
+                final long bound = Math.min(AccountedQuantity.EVENT_ROWS.admissibleTotal(CONTRACT),
+                        AccountedQuantity.EVENT_ROWS.admissibleCallerShare(CONTRACT));
+                final long remaining = bound - CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS,
+                        CONTRACT);
+                if (remaining > 0) {
+                    assertInstanceOf(CapacityLedger.Reserved.class, CapacityLedger.take(session,
+                            operation.caller(), List.of(new CapacityReservation.Charge(
+                                    AccountedQuantity.EVENT_ROWS, remaining)), CONTRACT));
+                }
+            } catch (final RepositoryException failure) {
+                throw new IllegalStateException("the capacity exhaustion fixture failed", failure);
+            }
+            return result;
+        }
+    }
+
     /** A build that runs one command and counts how often it was asked to. */
     private static final class Counting implements SubmitServlet.Commands {
-
         private static final long serialVersionUID = 1L;
-
         private final AtomicInteger ran = new AtomicInteger();
         private final java.util.concurrent.atomic.AtomicReference<Session> observed =
                 new java.util.concurrent.atomic.AtomicReference<>();
@@ -485,7 +695,7 @@ final class SubmitServletTest {
         }
 
         @Override
-        public ExecutionOutcome.Result run(LogicalOperation operation,
+        public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, Session session) {
             observed.set(session);
             final int sequence = ran.incrementAndGet();
@@ -500,7 +710,7 @@ final class SubmitServletTest {
             } catch (final RepositoryException failure) {
                 throw new IllegalStateException("the original caller could not record its effect", failure);
             }
-            return new ExecutionOutcome.Inline("{\"matches\":[]}");
+            return new ExecutionOutcome.Succeeded(new ExecutionOutcome.Inline("{\"matches\":[]}"));
         }
 
         int ran() {
@@ -676,6 +886,14 @@ final class SubmitServletTest {
         CapacityLedger.prepare(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, caller());
         walked(session, StatePath.deployment(StatePath.OPERATIONS).path());
         permitted(session);
+        rs.slingshot.agent.store.CapacityLedger.prepare(session,
+                rs.slingshot.agent.store.AccountedQuantity.RESULT_ROWS, caller());
+        rs.slingshot.agent.store.CapacityLedger.prepare(session,
+                rs.slingshot.agent.store.AccountedQuantity.RESULT_BYTES, caller());
+        rs.slingshot.agent.store.CapacityLedger.prepare(session,
+                rs.slingshot.agent.store.AccountedQuantity.SNAPSHOT_ROWS, caller());
+        rs.slingshot.agent.store.CapacityLedger.prepare(session,
+                rs.slingshot.agent.store.AccountedQuantity.SNAPSHOT_BYTES, caller());
         return session;
     }
 

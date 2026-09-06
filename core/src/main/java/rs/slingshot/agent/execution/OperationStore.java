@@ -25,40 +25,28 @@ import rs.slingshot.agent.store.WriteOutcome;
  * the caller read, so a worker acting on a stale reading of the record cannot move it.</p>
  */
 public final class OperationStore {
-
     /** The property the submission digest is written in. */
     public static final String SUBMISSION_DIGEST = "submission_digest";
-
     /** The property the command's wire name is written in. */
     public static final String WIRE_NAME = "command_wire_name";
-
     /** The property the command's semantic contract version is written in. */
     public static final String CONTRACT_VERSION = "command_semantic_contract_version";
-
     /** The property the command's limits digest is written in. */
     public static final String LIMITS_DIGEST = "command_contract_limits_digest";
-
     /** The property the command's argument schema digest is written in. */
     public static final String ARGUMENT_DIGEST = "argument_schema_digest";
-
     /** The property the command's result schema digest is written in. */
     public static final String RESULT_DIGEST = "result_schema_digest";
-
     /** The property the target this operation ran against is written in. */
     public static final String TARGET_DIGEST = "author_target_identity_digest";
-
     /** The property the environment revision is written in. */
     public static final String ENVIRONMENT_REVISION = "selected_environment_revision";
-
     /** The property the submitting caller is written in. */
     public static final String CALLER = "caller";
-
     /** The property the client's own request-start instant is written in. */
     public static final String REQUEST_START = "request_start_unix_milliseconds";
-
     /** The property the state is written in. */
     public static final String STATE = "state";
-
     /** The property the physical attempt count is written in. */
     public static final String ATTEMPTS = "attempts";
 
@@ -170,6 +158,43 @@ public final class OperationStore {
     }
 
     /**
+     * Reads a recovery candidate using its known generation and durable target identity.
+     *
+     * @param session the recovery state session
+     * @param generation the generation being reconciled
+     * @param path the candidate operation path
+     * @return the record, or a refusal if its identity does not name that exact path
+     * @throws RepositoryException if the record cannot be read
+     */
+    public static Outcome readAt(Session session, rs.slingshot.agent.identity.EventStoreGeneration generation,
+                                 StatePath path) throws RepositoryException {
+        session.refresh(false);
+        if (!session.nodeExists(path.path())) {
+            return new Refused(Refusal.NO_RECORD, "the recovery candidate no longer exists");
+        }
+        final Node node = session.getNode(path.path());
+        final java.util.SequencedMap<String, rs.slingshot.agent.json.DocumentValue> members =
+                new java.util.LinkedHashMap<>();
+        members.put(OperationIdentity.GENERATION,
+                new rs.slingshot.agent.json.DocumentValue.Whole(generation.number()));
+        members.put(OperationIdentity.IDENTIFIER,
+                new rs.slingshot.agent.json.DocumentValue.Text(node.getName()));
+        members.put(OperationIdentity.TARGET_DIGEST,
+                new rs.slingshot.agent.json.DocumentValue.Text(node.getProperty(TARGET_DIGEST).getString()));
+        members.put(OperationIdentity.ENVIRONMENT_REVISION,
+                new rs.slingshot.agent.json.DocumentValue.Text(
+                        node.getProperty(ENVIRONMENT_REVISION).getString()));
+        final OperationIdentity.Outcome identity = OperationIdentity.of(
+                new rs.slingshot.agent.json.DocumentValue.Mapping(members), loaded());
+        if (!(identity instanceof final OperationIdentity.Held held)
+                || !pathOf(held.identity()).equals(path)) {
+            return new Refused(Refusal.UNREADABLE,
+                    "the recovery candidate's identity does not name its path");
+        }
+        return readBack(node, held.identity());
+    }
+
+    /**
      * Moves a record to another state, only if it is still in the one the caller read.
      *
      * @param session the session to write under
@@ -202,6 +227,25 @@ public final class OperationStore {
                         nowUnixMilliseconds));
     }
 
+    /**
+     * Starts accepted work with the durable resources required to record its completion.
+     *
+     * @param session the write session
+     * @param operation the accepted record as read by the caller
+     * @param alongside resources staged only with the winning start
+     * @return the running record, or a refusal without committed resources
+     * @throws RepositoryException if the start or resource publication fails
+     */
+    public static Outcome start(Session session, LogicalOperation operation,
+                                ClaimByCreation.InitialValues alongside) throws RepositoryException {
+        if (operation.state() != OperationState.ACCEPTED) {
+            return new Refused(Refusal.NOT_A_PERMITTED_MOVE, "only accepted work can start");
+        }
+        return move(session, operation, OperationState.RUNNING,
+                transaction -> !transaction.nodeExists(ExecutionFence.pathOf(operation.identity()).path()),
+                alongside);
+    }
+
     @FunctionalInterface
     private interface Authority {
         /**
@@ -216,6 +260,12 @@ public final class OperationStore {
 
     private static Outcome move(Session session, LogicalOperation operation, OperationState next,
                                 Authority authority) throws RepositoryException {
+        return move(session, operation, next, authority, node -> { });
+    }
+
+    private static Outcome move(Session session, LogicalOperation operation, OperationState next,
+                                Authority authority, ClaimByCreation.InitialValues alongside)
+            throws RepositoryException {
         final Optional<LogicalOperation> moved = operation.moved(next);
         if (moved.isEmpty()) {
             return new Refused(Refusal.NOT_A_PERMITTED_MOVE, operation.state().spelling()
@@ -231,20 +281,22 @@ public final class OperationStore {
                     + ((Held) current).operation().state().spelling() + " and this move was made"
                     + " from " + operation.state().spelling());
         }
-        return written(session, path, moved.get(), operation.state(), authority);
+        return written(session, path, moved.get(), operation.state(), authority, alongside);
     }
 
     private static Outcome written(Session session, StatePath path, LogicalOperation moved,
-                                   OperationState from, Authority authority) throws RepositoryException {
+                                   OperationState from, Authority authority,
+                                   ClaimByCreation.InitialValues alongside) throws RepositoryException {
         try {
-            return stageMove(session, path, moved, from, authority);
+            return stageMove(session, path, moved, from, authority, alongside);
         } finally {
             session.refresh(false);
         }
     }
 
     private static Outcome stageMove(Session session, StatePath path, LogicalOperation moved,
-                                     OperationState from, Authority authority) throws RepositoryException {
+                                     OperationState from, Authority authority,
+                                   ClaimByCreation.InitialValues alongside) throws RepositoryException {
         final Node node = session.getNode(path.path());
         CompareAndSet.stamp(node);
         if (!authority.permits(session)) {
@@ -257,6 +309,7 @@ public final class OperationStore {
         }
         node.setProperty(STATE, moved.state().spelling());
         node.setProperty(ATTEMPTS, moved.attempts());
+        alongside.write(node);
         try {
             session.save();
         } catch (final javax.jcr.InvalidItemStateException contended) {
@@ -427,5 +480,4 @@ public final class OperationStore {
                 ? Optional.of(held.digest())
                 : Optional.empty();
     }
-
 }

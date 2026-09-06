@@ -2104,3 +2104,8 @@ reason = "The first question anybody asks in a support conversation and the one 
 name = "RetentionDataSource"
 pattern = "accessor"
 reason = "Retention is the setting that is invisible until the day somebody goes looking for an operation that is gone. What is retained is shown separately from what the next sweep would take, because the two answer different questions: an operator deciding whether to raise a window wants the first, and one wondering whether the sweep is running at all wants the second."
+
+[[type]]
+name = "ExecutionJournal"
+pattern = "stateless-policy"
+reason = "The first completion is selected against durable execution state and retained for publication retries without retaining a handler or caller session."

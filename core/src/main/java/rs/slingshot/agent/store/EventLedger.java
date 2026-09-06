@@ -30,25 +30,22 @@ import rs.slingshot.agent.wire.JobEvent;
  * kept here: what this ledger holds is read from the tree it wrote.</p>
  */
 public final class EventLedger {
-
     /** The child of an operation the ledger lives under. */
     public static final String NODE = "events";
-
+    /** The one operation child that may fund a terminal event before execution. */
+    public static final String TERMINAL_BUDGET = "terminal-event-budget";
+    /** A prepaid event owns exactly its row and byte quantities. */
+    private static final int EVENT_CHARGES = 2;
     /** The property an event's kind is written in. */
     public static final String KIND = "kind";
-
     /** The property an event's sequence is written in. */
     public static final String SEQUENCE = "sequence";
-
     /** The property an event's own size is written in. */
     public static final String BYTES = "byte_count";
-
     /** The property the instant an event was appended is written in. */
     public static final String WRITTEN_AT = "written_at_unix_milliseconds";
-
     /** The property the event's canonical bytes are written in, so a replay repeats them exactly. */
     public static final String DOCUMENT = "document";
-
     /** How wide a sequence's name is, so the order names sort in is the order they happened in. */
     private static final int NAME_DIGITS = 12;
 
@@ -64,7 +61,6 @@ public final class EventLedger {
      */
     @FunctionalInterface
     public interface Alongside {
-
         /**
          * Writes whatever else belongs in this event's commit.
          *
@@ -165,14 +161,65 @@ public final class EventLedger {
                                  byte[] canonical, long nowUnixMilliseconds,
                                  AgentContract contract, Alongside alongside)
             throws RepositoryException {
+        return append(session, new Append(event, canonical.clone(), alongside), nowUnixMilliseconds,
+                contract, (store, append, now, bounds, ledger) ->
+                        admitted(store, caller, append, now, bounds, ledger));
+    }
+
+    /**
+     * Appends with capacity retained before execution, transferring its exact charge with the event.
+     *
+     * @param session the publication session
+     * @param source the retained budget under the same operation
+     * @param event the terminal event
+     * @param canonical the canonical event bytes
+     * @param nowUnixMilliseconds the publication instant
+     * @param contract the authenticated bounds
+     * @param alongside the other writes belonging to this event's commit
+     * @return publication or refusal without consuming an unpublished budget
+     * @throws RepositoryException if publication or reservation cleanup fails
+     */
+    public static Outcome appendReserved(Session session, StatePath source, JobEvent event,
+                                         byte[] canonical, long nowUnixMilliseconds,
+                                         AgentContract contract, Alongside alongside)
+            throws RepositoryException {
         final StatePath operation = StatePath.operation(event.generation(), event.identifier());
+        if (!source.equals(operation.child(TERMINAL_BUDGET))) {
+            return new NotWritten(WriteOutcome.VALUE_CHANGED,
+                    "the event budget belongs to another operation");
+        }
+        return append(session, new Append(event, canonical.clone(), alongside), nowUnixMilliseconds,
+                contract, (store, append, now, bounds, ledger) ->
+                        prepaid(store, source, append, now, bounds, ledger));
+    }
+
+    @FunctionalInterface
+    private interface Funding {
+        /**
+         * Publishes an already validated event with the selected source of capacity.
+         *
+         * @param session the publication session
+         * @param append the validated append
+         * @param now the publication instant
+         * @param contract the authenticated bounds
+         * @param ledger the operation's event ledger
+         * @return publication or refusal
+         * @throws RepositoryException if persistence fails
+         */
+        Outcome publish(Session session, Append append, long now, AgentContract contract, StatePath ledger)
+                throws RepositoryException;
+    }
+
+    private static Outcome append(Session session, Append append, long nowUnixMilliseconds,
+                                  AgentContract contract, Funding funding) throws RepositoryException {
+        final StatePath operation = StatePath.operation(append.event().generation(),
+                append.event().identifier());
         if (!session.nodeExists(operation.path())) {
             return new Refused(Refusal.NO_OPERATION, "there is no operation at " + operation.path()
                     + " for an event to be about");
         }
         ClaimByCreation.claim(session, operation.child(NODE), "nt:unstructured", node -> { });
-        return sequenced(session, caller, new Append(event, canonical.clone(), alongside),
-                nowUnixMilliseconds, contract, operation.child(NODE));
+        return sequenced(session, append, nowUnixMilliseconds, contract, operation.child(NODE), funding);
     }
 
     /**
@@ -188,9 +235,9 @@ public final class EventLedger {
     private record Append(JobEvent event, byte[] canonical, Alongside alongside) {
     }
 
-    private static Outcome sequenced(Session session, StatePath.Caller caller, Append append,
-                                     long nowUnixMilliseconds, AgentContract contract,
-                                     StatePath ledger) throws RepositoryException {
+    private static Outcome sequenced(Session session, Append append, long nowUnixMilliseconds,
+                                     AgentContract contract, StatePath ledger,
+                                             Funding funding) throws RepositoryException {
         final JobEvent event = append.event();
         final byte[] canonical = append.canonical();
         final long held = events(session, ledger);
@@ -208,7 +255,7 @@ public final class EventLedger {
         if (budget.isPresent()) {
             return new Refused(refusalOf(budget.get()), budget.get().detail());
         }
-        return admitted(session, caller, append, nowUnixMilliseconds, contract, ledger);
+        return funding.publish(session, append, nowUnixMilliseconds, contract, ledger);
     }
 
     private static Outcome admitted(Session session, StatePath.Caller caller, Append append,
@@ -225,6 +272,62 @@ public final class EventLedger {
         }
         return written(session, append, nowUnixMilliseconds, contract, ledger,
                 (LedgerAdmission.Admitted) admission);
+    }
+
+    private static Outcome prepaid(Session session, StatePath source, Append append, long now,
+                                   AgentContract contract, StatePath ledger) throws RepositoryException {
+        if (!session.nodeExists(source.path())) {
+            return new NotWritten(WriteOutcome.VALUE_CHANGED, "the event budget is absent");
+        }
+        final Optional<CapacityReservation> original =
+                CapacityReservation.ofResource(session, session.getNode(source.path()));
+        if (original.isEmpty() || !covers(original.get(), append.canonical().length)) {
+            return new NotWritten(WriteOutcome.VALUE_CHANGED, "the event budget does not cover this event");
+        }
+        try (CapacityReservation.Batch batch = CapacityReservation.batch(session, contract)) {
+            final Optional<CapacityReservation> replacement = batch.create(original.get().caller(),
+                    List.of(new CapacityReservation.Charge(AccountedQuantity.EVENT_ROWS, 1),
+                            new CapacityReservation.Charge(AccountedQuantity.EVENT_BYTES,
+                                    append.canonical().length)));
+            if (replacement.isEmpty()) {
+                return new NotWritten(WriteOutcome.CONTENDED,
+                        "the event capacity identity was not allocated");
+            }
+            final StatePath path = ledger.child(nameOf(append.event().sequence()));
+            final WriteOutcome claimed = ClaimByCreation.claim(session, path, "nt:unstructured",
+                    node -> paidFill(node, append, now, source, replacement.get(), contract));
+            return claimed == WriteOutcome.CLAIMED
+                    ? new Appended(append.event(), events(session, ledger), bytes(session, ledger))
+                    : new NotWritten(claimed, "the prepaid event did not win its publication");
+        }
+    }
+
+    private static boolean covers(CapacityReservation budget, long bytes) {
+        if (budget.charges().size() != EVENT_CHARGES
+                || !budget.charges().contains(new CapacityReservation.Charge(
+                        AccountedQuantity.EVENT_ROWS, 1))) {
+            return false;
+        }
+        for (final CapacityReservation.Charge charge : budget.charges()) {
+            if (charge.quantity() == AccountedQuantity.EVENT_BYTES) {
+                return charge.amount() >= bytes;
+            }
+        }
+        return false;
+    }
+
+    private static void paidFill(Node node, Append append, long now, StatePath source,
+                                 CapacityReservation replacement, AgentContract contract)
+            throws RepositoryException {
+        final Session session = node.getSession();
+        final Node budget = session.getNode(source.path());
+        final CapacityLedger.Admission admission =
+                CapacityLedger.transfer(session, budget, node, replacement, contract);
+        if (!(admission instanceof CapacityLedger.Admitted)) {
+            throw new javax.jcr.InvalidItemStateException("the retained event budget could not transfer");
+        }
+        budget.remove();
+        fill(node, append, now, replacement);
     }
 
     private static Outcome written(Session session, Append append, long nowUnixMilliseconds,
