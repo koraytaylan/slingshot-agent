@@ -187,7 +187,16 @@ public final class CommandDispatch {
         return new Resolved(handlers.get(identity.wireName()), row.get());
     }
 
-    /** Runs a verified command through the registered handler and request-scoped dependencies. */
+    /**
+     * Runs a verified command through the registered handler and request-scoped dependencies.
+     *
+     * @param identity the submitted command identity
+     * @param bounds bounds used to verify the identity
+     * @param arguments the command arguments
+     * @param resolver the caller's resolver
+     * @param context the request-scoped handler context
+     * @return the handler answer, or a typed refusal
+     */
     public CommandHandler.Answer run(CommandContractIdentity identity,
                                      CommandContractIdentity.Bounds bounds,
                                      DocumentValue.Mapping arguments, ResourceResolver resolver,
