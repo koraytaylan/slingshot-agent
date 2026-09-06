@@ -1614,3 +1614,9 @@ required checks and the complete gate, then commit the completed task.
     identity before invoking a handler with the request resolver and `CallerContext`. The existing
     dispatch contract suite passes all 7 cases; Checkstyle and PMD review passes after using
     locale-stable refusal rendering. `SubmitServlet` still needs to adopt this seam.
+
+86. Extended `SubmitServlet.Commands` with a resolver-aware default overload and carried the request
+    `ResourceResolver` through the accepted execution path. Existing command implementations remain
+    compatible through delegation, while packaged runtimes can now invoke handlers without trying
+    to recover a resolver from a JCR session. `SubmitServletTest` and `ArtifactIntakeServletTest`
+    pass all 46 cases.
