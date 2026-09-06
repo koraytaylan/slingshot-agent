@@ -4,6 +4,7 @@
 package rs.slingshot.agent.wire;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import rs.slingshot.agent.json.DocumentValue;
@@ -30,6 +31,14 @@ public record CommandFailure(Category category) {
 
     /** Every member a failure document has, and there is no third. */
     public static final List<String> MEMBERS = List.of(EFFECT, CATEGORY);
+
+    /** Builds the canonical failure document for a known category. */
+    public static DocumentValue.Mapping documentOf(Category category) {
+        final java.util.SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        members.put(CATEGORY, new DocumentValue.Text(category.spelling()));
+        members.put(EFFECT, new DocumentValue.Text(category.effect().spelling()));
+        return new DocumentValue.Mapping(members);
+    }
 
     /** Whether the command changed anything before it stopped. */
     public enum Effect {
