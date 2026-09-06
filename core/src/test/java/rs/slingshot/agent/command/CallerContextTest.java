@@ -19,7 +19,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
+import rs.slingshot.agent.identity.EventStoreGeneration;
 
 /**
  * Everything a handler may reach, and the fact that there is nothing else on it.
@@ -41,6 +43,28 @@ final class CallerContextTest {
             REPOSITORY.resolve("core/src/test/resources/fixtures/command-registry/accepted");
 
     private static final AgentContract CONTRACT = contract();
+
+    @Test
+    @DisplayName("paging state and value equality retain every admitted field")
+    void pagingStateAndValueEqualityRetainEveryAdmittedField() {
+        final DigestValue digest = assertInstanceOf(DigestValue.Held.class,
+                DigestValue.of("a".repeat(DigestValue.RENDERED_LENGTH))).digest();
+        final EventStoreGeneration generation = assertInstanceOf(EventStoreGeneration.Held.class,
+                EventStoreGeneration.of(EventStoreGeneration.FIRST)).generation();
+        final CallerContext.Available paging = new CallerContext.Available(null, digest, generation,
+                123L);
+        final ProgressSink progress = ProgressSink.under(CONTRACT);
+        final CallerContext first = new CallerContext(operation(), Budget.discovery(CONTRACT),
+                Budget.time(CONTRACT), Budget.result(row("query_paths")), progress,
+                paging);
+        final CallerContext second = new CallerContext(operation(), Budget.discovery(CONTRACT),
+                Budget.time(CONTRACT), Budget.result(row("query_paths")), progress,
+                paging);
+        assertEquals(paging, first.paging());
+        assertEquals(first, second);
+        assertEquals(first.hashCode(), second.hashCode());
+        assertEquals(123L, paging.nowUnixMilliseconds());
+    }
 
     @Test
     @DisplayName("each budget is a number the row or the contract chose, and none is unbounded")
