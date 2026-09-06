@@ -8,6 +8,7 @@ import java.util.List;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.mutation.SingleCommit;
 import rs.slingshot.agent.command.platform.BundleInventory;
@@ -115,11 +116,19 @@ public final class FrameworkHandler implements CommandHandler {
         }
         final List<BundleInventory.BundleEntry> entries =
                 ((BundleInventory.Bundles) found).entries();
-        return entries.size() > context.discovery().limit()
-                ? new Failed(DISCOVERY_BUDGET_EXCEEDED, entries.size() + " bundles is more than the "
-                        + context.discovery().limit() + " this caller may examine")
-                : new Produced(FrameworkResults.bundlesOf(pageOf(entries, command.window()),
-                        FrameworkResults.NO_MORE_PAGES));
+        if (entries.size() > context.discovery().limit()) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, entries.size() + " bundles is more than the "
+                        + context.discovery().limit() + " this caller may examine");
+        }
+        final PagingSupport.Outcome<BundleInventory.BundleEntry> page = PagingSupport.page(entries,
+                command.window(), ListBundlesCommand.WIRE_NAME, arguments, context, contract);
+        if (page instanceof final PagingSupport.Refused<BundleInventory.BundleEntry> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<BundleInventory.BundleEntry> accepted =
+                ((PagingSupport.Accepted<BundleInventory.BundleEntry>) page).page();
+        return new Produced(FrameworkResults.bundlesOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     private Answer components(DocumentValue.Mapping arguments, CallerContext context) {
@@ -136,11 +145,19 @@ public final class FrameworkHandler implements CommandHandler {
         }
         final List<BundleInventory.ComponentEntry> entries =
                 ((BundleInventory.Components) found).entries();
-        return entries.size() > context.discovery().limit()
-                ? new Failed(DISCOVERY_BUDGET_EXCEEDED, entries.size() + " components is more than"
-                        + " the " + context.discovery().limit() + " this caller may examine")
-                : new Produced(FrameworkResults.componentsOf(pageOf(entries, command.window()),
-                        FrameworkResults.NO_MORE_PAGES));
+        if (entries.size() > context.discovery().limit()) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, entries.size() + " components is more than"
+                        + " the " + context.discovery().limit() + " this caller may examine");
+        }
+        final PagingSupport.Outcome<BundleInventory.ComponentEntry> page = PagingSupport.page(entries,
+                command.window(), ListComponentsCommand.WIRE_NAME, arguments, context, contract);
+        if (page instanceof final PagingSupport.Refused<BundleInventory.ComponentEntry> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<BundleInventory.ComponentEntry> accepted =
+                ((PagingSupport.Accepted<BundleInventory.ComponentEntry>) page).page();
+        return new Produced(FrameworkResults.componentsOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /**
