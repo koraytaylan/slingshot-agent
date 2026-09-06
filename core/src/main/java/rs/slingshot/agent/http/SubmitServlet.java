@@ -536,10 +536,10 @@ public final class SubmitServlet extends AgentServlet {
      * <p>Read from the configuration every time rather than held, because an operator who widened
      * the configuration expects the next request to be admitted rather than the next restart.</p>
      *
-     * @return the groups, which is the shipped one until somebody names more
+     * @return the current immutable group set, empty while authorization is inactive
      */
     public static List<String> permittedGroups() {
-        return List.of("administrators");
+        return AuthorizationGate.permittedGroups();
     }
 
     /**

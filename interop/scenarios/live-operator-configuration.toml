@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "live-operator-configuration"
+kind = "property"
+feature = "repository-access"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.LiveOperatorConfigurationScenario"
+reason = "Real Config Admin changes replace operator groups for the installed submission route and console authorization source, including revoking administrators, without bundle lifecycle events. A test-only adapter reaches the product console data-source API; full console rendering and command execution are separate proofs."
