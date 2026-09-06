@@ -222,6 +222,43 @@ final class SubmitServletTest {
     }
 
     @Test
+    @DisplayName("a capacity-refused operation executes once when its owner retries after room returns")
+    void aCapacityRefusedOperationMakesProgressOnResend()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final Counting commands = new Counting();
+        final var reservations = new java.util.ArrayList<CapacityReservation>();
+        final long bound = Math.min(
+                AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS.admissibleTotal(CONTRACT),
+                AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS.admissibleCallerShare(CONTRACT));
+        for (long taken = 0; taken < bound; taken = taken + 1) {
+            reservations.add(assertInstanceOf(CapacityLedger.Reserved.class,
+                    CapacityLedger.take(session, caller(), List.of(new CapacityReservation.Charge(
+                            AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, 1)), CONTRACT)).reservation());
+        }
+        assertEquals(SubmitServlet.AT_CAPACITY, answering(commands, "a-submission.json").getStatus());
+        session.refresh(false);
+        assertEquals(OperationState.ACCEPTED, stored(session, "a-submission.json").state());
+        assertEquals(0, commands.ran());
+        assertEquals(SubmitServlet.AT_CAPACITY, answering(commands, "a-submission.json").getStatus(),
+                "a resend while still saturated must not acknowledge progress it cannot make");
+        for (final CapacityReservation reservation : reservations) {
+            CapacityLedger.release(session, reservation, CONTRACT);
+        }
+        final var retry = answering(commands, "a-submission.json");
+        assertEquals(SubmitServlet.ACCEPTED, retry.getStatus());
+        assertEquals(1, commands.ran(), "a recognised acceptance must progress after execution room returns");
+        session.refresh(false);
+        assertEquals(OperationState.SUCCEEDED, stored(session, "a-submission.json").state());
+        assertTrue(retry.getOutputAsString().contains("\"already_accepted\":true"));
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        assertEquals(1, commands.ran());
+        session.refresh(false);
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
+                CONTRACT));
+    }
+
+    @Test
     @DisplayName("the acknowledgement carries the nine members the client knows and no tenth")
     void theacknowledgementCarriesTheNineMembers()
             throws RepositoryException, IOException, ServletException {
@@ -286,6 +323,153 @@ final class SubmitServletTest {
                 SubscriptionRecord.identifier("following-daemon-one", CONTRACT)).identifier();
     }
 
+    @Test
+    void aLostAcknowledgementDoesNotRepeatTheContentEffect()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final Counting commands = new Counting();
+        final var response = new MockSlingHttpServletResponse();
+        final var disconnected = (org.apache.sling.api.SlingHttpServletResponse)
+                java.lang.reflect.Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                        new Class<?>[] {org.apache.sling.api.SlingHttpServletResponse.class},
+                        (proxy, method, arguments) -> {
+                            if ("getWriter".equals(method.getName())) {
+                                throw new IOException("the caller disconnected before the acknowledgement");
+                            }
+                            try {
+                                return method.invoke(response, arguments);
+                            } catch (final java.lang.reflect.InvocationTargetException failure) {
+                                throw failure.getCause();
+                            }
+                        });
+        assertThrows(IOException.class, () -> new SubmitServlet(commands)
+                .service(request("a-submission.json"), disconnected));
+        session.refresh(false);
+        assertEquals(OperationState.SUCCEEDED, stored(session, "a-submission.json").state());
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
+                CONTRACT));
+        assertTrue(sling.resourceResolver().isLive());
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        assertEquals(1, commands.ran());
+        session.refresh(false);
+        assertEquals(1, session.getNode("/content/resumption-effects").getNodes().getSize());
+    }
+
+    @Test
+    void aContendedStartReturnsRetryableRefusalAndReleasesExecutionRoom()
+            throws RepositoryException, IOException, ServletException,
+            org.apache.sling.api.resource.LoginException {
+        final Session session = prepared();
+        final Counting commands = new Counting();
+        try (var state = interceptStarting(() -> {
+            throw new javax.jcr.InvalidItemStateException("the start write contended");
+        })) {
+            assertEquals(SubmitServlet.AT_CAPACITY, throughState(state, commands).getStatus());
+        }
+        session.refresh(false);
+        assertEquals(OperationState.ACCEPTED, stored(session, "a-submission.json").state());
+        assertEquals(0, commands.ran());
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
+                CONTRACT));
+        assertTrue(SubscriptionLedger.read(session, subscriptionName(), CONTRACT).isPresent());
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        assertEquals(1, commands.ran());
+    }
+
+    @Test
+    void anInterruptedStartLeavesAnOwnedResumptionPath()
+            throws RepositoryException, IOException, ServletException,
+            org.apache.sling.api.resource.LoginException {
+        final Session session = prepared();
+        final Counting commands = new Counting();
+        try (var state = interceptStarting(() -> {
+            throw new RepositoryException("the request was interrupted before starting");
+        })) {
+            assertEquals(500, throughState(state, commands).getStatus());
+        }
+        session.refresh(false);
+        assertEquals(OperationState.ACCEPTED, stored(session, "a-submission.json").state());
+        assertEquals(0, commands.ran());
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
+                CONTRACT));
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        assertEquals(1, commands.ran());
+    }
+
+    @Test
+    void identicalRequestsCompetingAtTheStartCommitPublishOneContentEffect()
+            throws RepositoryException, IOException, ServletException,
+            org.apache.sling.api.resource.LoginException {
+        final Session session = prepared();
+        final Counting commands = new Counting();
+        final AtomicInteger competingStatus = new AtomicInteger();
+        try (var state = interceptStarting(() -> {
+            restoreStateSource();
+            try {
+                competingStatus.set(answering(commands, "a-submission.json").getStatus());
+            } catch (final IOException | ServletException failure) {
+                throw new RepositoryException("the competing request failed", failure);
+            }
+        })) {
+            assertEquals(SubmitServlet.ACCEPTED, throughState(state, commands).getStatus());
+        }
+        assertEquals(SubmitServlet.ACCEPTED, competingStatus.get());
+        assertEquals(1, commands.ran());
+        session.refresh(false);
+        assertEquals(OperationState.SUCCEEDED, stored(session, "a-submission.json").state());
+        assertEquals(1, session.getNode("/content/resumption-effects").getNodes().getSize());
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
+                CONTRACT));
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        assertEquals(1, commands.ran());
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver interceptStarting(
+            rs.slingshot.agent.store.SaveInterleaving.Action before)
+            throws org.apache.sling.api.resource.LoginException {
+        final var owned = sling.resourceResolver().clone(java.util.Map.of());
+        final Session state = java.util.Objects.requireNonNull(owned.adaptTo(Session.class));
+        final var inserted = new java.util.concurrent.atomic.AtomicBoolean();
+        final String path = OperationStore.pathOf(identityOf("a-submission.json")).path();
+        final Session intercepted = rs.slingshot.agent.store.SaveInterleaving.beforeEverySave(state, () -> {
+            if (state.nodeExists(path)
+                    && OperationState.RUNNING.spelling().equals(state.getNode(path)
+                            .getProperty(OperationStore.STATE).getString())
+                    && inserted.compareAndSet(false, true)) {
+                before.run();
+            }
+        });
+        return new org.apache.sling.api.wrappers.ResourceResolverWrapper(owned) {
+            @Override
+            public <T> T adaptTo(Class<T> type) {
+                return type == Session.class ? type.cast(intercepted) : super.adaptTo(type);
+            }
+        };
+    }
+
+    private MockSlingHttpServletResponse throughState(
+            org.apache.sling.api.resource.ResourceResolver state, Counting commands)
+            throws IOException, ServletException {
+        final var factory = (org.apache.sling.api.resource.ResourceResolverFactory)
+                java.lang.reflect.Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                        new Class<?>[] {org.apache.sling.api.resource.ResourceResolverFactory.class},
+                        (proxy, method, arguments) -> {
+                            assertEquals("getServiceResourceResolver", method.getName());
+                            return state;
+                        });
+        new rs.slingshot.agent.repository.AgentSession().available(factory);
+        try {
+            return answering(commands, "a-submission.json");
+        } finally {
+            restoreStateSource();
+        }
+    }
+
+    private void restoreStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
+    }
+
     /** A build that runs one command and counts how often it was asked to. */
     private static final class Counting implements SubmitServlet.Commands {
 
@@ -304,7 +488,18 @@ final class SubmitServletTest {
         public ExecutionOutcome.Result run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, Session session) {
             observed.set(session);
-            ran.incrementAndGet();
+            final int sequence = ran.incrementAndGet();
+            try {
+                final Node content = session.nodeExists("/content") ? session.getNode("/content")
+                        : session.getRootNode().addNode("content", "nt:unstructured");
+                final Node effects = content.hasNode("resumption-effects")
+                        ? content.getNode("resumption-effects")
+                        : content.addNode("resumption-effects", "nt:unstructured");
+                effects.addNode("effect-" + sequence, "nt:unstructured");
+                session.save();
+            } catch (final RepositoryException failure) {
+                throw new IllegalStateException("the original caller could not record its effect", failure);
+            }
             return new ExecutionOutcome.Inline("{\"matches\":[]}");
         }
 
@@ -335,6 +530,12 @@ final class SubmitServletTest {
 
     private MockSlingHttpServletResponse answering(SubmitServlet.Commands commands, String fixture)
             throws IOException, ServletException {
+        final MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
+        new SubmitServlet(commands).service(request(fixture), response);
+        return response;
+    }
+
+    private MockSlingHttpServletRequest request(String fixture) {
         final MockSlingHttpServletRequest request =
                 new MockSlingHttpServletRequest(sling.resourceResolver());
         request.setMethod("POST");
@@ -342,9 +543,7 @@ final class SubmitServletTest {
         request.setContent(submissionBytes(fixture));
         ((MockRequestPathInfo) request.getRequestPathInfo())
                 .setResourcePath(SubmitServlet.route().path());
-        final MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
-        new SubmitServlet(commands).service(request, response);
-        return response;
+        return request;
     }
 
     /**

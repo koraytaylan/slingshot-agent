@@ -875,3 +875,43 @@ Review and correction loop:
     to the state tree, and policy rules/checkers/exclusions are unchanged. Reviewed the complete diff
     and whitespace. Task 4202 is complete. Accepted-request execution after saturation, intake
     completion execution, and full command/console assembly remain separate plan tasks.
+
+
+## 4301 — resumable request admission
+
+A matching owner resend progresses an accepted operation after execution capacity returns, under
+that request's original session. It keeps the existing acknowledgement identity and resend marker.
+Incomplete intake continues waiting; running and terminal operations never execute again. A failed
+start acknowledges only an observed winner, otherwise returning a retryable refusal.
+
+Review and correction loop:
+
+1. Added a saturation/resend regression and corrected its fixture to reserve the lesser of the
+   instance total and the caller share. It then reproduced first=503, retry after release=202,
+   executions=0 at 04:58 CEST on 2026-09-06 in
+   `interop/target/plan10-4301-saturation-reproduction.log`.
+2. Both new admissions and recognised owned requests now progress accepted operations whose intake
+   is complete, reserving execution capacity and using the existing atomic start transition under
+   the current original caller session. Resumed execution retains `already_accepted:true`. A losing
+   start reads back a real running/terminal winner before acknowledging; an operation still accepted
+   receives 503 with a retry hint. The first 41 focused route/admission/intake tests passed at
+   05:00 CEST in `interop/target/plan10-4301-resumption-initial.log`.
+3. Review added repeated-saturation refusal, execution-capacity cleanup, interrupted and contended
+   start recovery, lost acknowledgement, and two servlet requests interleaved at the real Oak start
+   commit. The command fixture writes a separate content node per execution under the original caller
+   session. The competing requests and lost-response resend each leave exactly one persisted effect,
+   with execution capacity returned. All 45 focused tests passed at 05:03 CEST in
+   `interop/target/plan10-4301-resumption-races.log`. Atomic owned-subscription registration remains
+   the task 4202 implementation. Full gate and final review remain required; task 4301 is incomplete.
+
+4. The complete argument-free `scripts/quality` passed at 05:18:21 CEST on 2026-09-06: 1042 core
+   tests, 464 interop tests, and 453 development tests, all with zero failures/errors/skips. Both
+   bundle coverage checks and every gate stage passed. Evidence is
+   `interop/target/plan10-4301-quality.log`. The owner-supplied Adobe quickstart and sibling-client
+   tiers remain unproved; their absence is explicitly reported by the gate.
+5. Final review checked the task's three steps: saturation now has a live authorized owner resend
+   path, subscription binding remains coupled to admission, and interruption/response loss/competing
+   requests preserve one content effect and release execution reservations. The current request's
+   authorization gate still runs before admission, and incomplete intake cannot execute. No policy,
+   checker, exclusion, grant, or imported package changed. The final diff and whitespace were checked.
+   Task 4301 is complete. Handling every terminal persistence outcome after an effect remains task 4302.
