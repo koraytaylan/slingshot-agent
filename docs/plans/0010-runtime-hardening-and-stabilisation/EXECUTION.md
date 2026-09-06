@@ -1415,3 +1415,8 @@ required checks and the complete gate, then commit the completed task.
     and still reports seven failures, all in the known dense-bucket maintenance sweep coverage for
     task 4105 (bounded traversal, cursor resumption, and interruption boundaries). No runtime task
     was marked complete from this result; it updates the baseline used for the next 4105 review.
+
+49. Re-ran the argument-free `scripts/quality` gate. It still refuses at locked-dependency-cache
+    verification before source or policy stages: the nine locally generated reactor artifacts are
+    present in `.dependency-cache` but absent from the committed cache record. No broader quality
+    result is claimed; `scripts/prepare_locked_dependency_cache` remains the named preparation step.
