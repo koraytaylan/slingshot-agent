@@ -1871,3 +1871,8 @@ required checks and the complete gate, then commit the completed task.
     `FindAssetsByMetadataHandler` to 77% and `FindPagesUsingComponentsHandler`/`FindPagesByTemplateHandler`
     to 75%. The remaining floor failures are now the untested discovery-budget/continuation paths
     plus `PagingSupport` and the runtime adapter. Commit: `ed76883`.
+
+137. Completed the coverage review loop with discovery-budget scenarios for the three search
+    handlers, signed continuation-resumption coverage, and a valid runtime dispatch fixture.
+    Core verification now passes all 1,152 tests, JaCoCo line/branch floors, Checkstyle, PMD,
+    SpotBugs, Javadocs, and source packaging. Commit: `514bcaf`.
