@@ -1508,3 +1508,8 @@ required checks and the complete gate, then commit the completed task.
     passes, including bound-one reads, contention retries, dense-bucket resumption, and interruption
     accounting; the complete core suite passes all 1,124 tests. Checkstyle and PMD remain clean.
     Commit `432d4a2` records this implementation and review loop.
+
+66. Re-ran core SpotBugs after the 4105 change. The sweep introduces no findings; the check still
+    reports only the two previously reviewed runtime-exception adapter methods in
+    `EventStreamServlet` and `StreamWriter`. Their rethrow behavior is covered by the passing
+    stream tests, so changing them would alter the established failure contract.
