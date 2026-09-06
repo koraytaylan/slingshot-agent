@@ -4,6 +4,7 @@
 package rs.slingshot.agent.store;
 
 import java.util.Optional;
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -76,38 +77,32 @@ public final class HighWaterMark {
             return new Refused(Refusal.NO_RECORD, "there is no subscription at " + path.path()
                     + ", so there is nothing that promised anything");
         }
-        final long shown = CompareAndSet.held(session.getNode(path.path()),
-                SubscriptionRecord.EVENTS_SHOWN);
         final long asked = to.number() + 1;
-        if (asked <= shown) {
-            return new Refused(Refusal.WOULD_GO_BACKWARDS, "the mark stands at "
-                    + SubscriptionRecord.cursorFor(shown) + " and " + to + " is not past it");
+        int attempt = 0;
+        while (attempt < CompareAndSet.ATTEMPTS) {
+            session.refresh(false);
+            final Node record = session.getNode(path.path());
+            // Stamp before reading the predicate so a competing transition cannot be silently
+            // merged when both writers ask for the same business value.
+            CompareAndSet.stamp(record);
+            final long shown = CompareAndSet.held(record, SubscriptionRecord.EVENTS_SHOWN);
+            if (asked <= shown) {
+                session.refresh(false);
+                return new Refused(Refusal.WOULD_GO_BACKWARDS, "the mark stands at "
+                        + SubscriptionRecord.cursorFor(shown) + " and " + to + " is not past it");
+            }
+            record.setProperty(SubscriptionRecord.EVENTS_SHOWN, asked);
+            record.setProperty(SubscriptionRecord.LAST_ADVANCED_AT, nowUnixMilliseconds);
+            try {
+                session.save();
+                return new Advanced(to, nowUnixMilliseconds);
+            } catch (final InvalidItemStateException contended) {
+                session.refresh(false);
+                attempt = attempt + 1;
+            }
         }
-        return written(session, path, shown, asked, to, nowUnixMilliseconds);
-    }
-
-    private static Outcome written(Session session, StatePath path, long shown, long asked,
-                                   EventSequence to, long nowUnixMilliseconds)
-            throws RepositoryException {
-        final WriteOutcome moved = CompareAndSet.set(session, path,
-                SubscriptionRecord.EVENTS_SHOWN, shown, asked);
-        if (moved == WriteOutcome.VALUE_CHANGED) {
-            return new Refused(Refusal.WOULD_GO_BACKWARDS, "the mark moved to something other than "
-                    + shown + " while this move to " + to + " was being made");
-        }
-        if (moved != WriteOutcome.WRITTEN) {
-            return new Refused(Refusal.CONTENDED,
-                    "the store was busy for as long as this writer waits");
-        }
-        stamped(session, path, nowUnixMilliseconds);
-        return new Advanced(to, nowUnixMilliseconds);
-    }
-
-    private static void stamped(Session session, StatePath path, long nowUnixMilliseconds)
-            throws RepositoryException {
-        final Node record = session.getNode(path.path());
-        record.setProperty(SubscriptionRecord.LAST_ADVANCED_AT, nowUnixMilliseconds);
-        session.save();
+        return new Refused(Refusal.CONTENDED,
+                "the store was busy for as long as this writer waits");
     }
 
     /**

@@ -11,6 +11,7 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.json.BoundedDocumentReader;
+import rs.slingshot.agent.store.HighWaterMark;
 import rs.slingshot.agent.store.ReplayCursor;
 import rs.slingshot.agent.store.SnapshotStore;
 import rs.slingshot.agent.wire.JobEvent;
@@ -126,7 +127,7 @@ public record StreamWriter(StreamSession session, AgentContract contract,
         Standing standing = Standing.GOING;
         while (standing == Standing.GOING
                 && !SessionBound.isReached(openedAt, ticker.elapsedMilliseconds(), contract)) {
-            final Round round = round(writer, store, cursor);
+            final Round round = round(writer, store, ticker, cursor);
             cursor = round.cursor();
             standing = round.standing();
             lastSpokeAt = round.said() == Said.SOMETHING
@@ -150,7 +151,7 @@ public record StreamWriter(StreamSession session, AgentContract contract,
         return ticker.elapsedMilliseconds();
     }
 
-    private Round round(Writer writer, Session store, String cursor)
+    private Round round(Writer writer, Session store, StreamTicker ticker, String cursor)
             throws IOException, RepositoryException {
         // Another session's commit is invisible to this one until it is refreshed, so a stream that
         // never refreshed would be a stream that reported the moment it opened, forever.
@@ -158,28 +159,32 @@ public record StreamWriter(StreamSession session, AgentContract contract,
         final StreamResumption.Outcome resumed =
                 StreamResumption.from(store, session, cursor, contract);
         if (resumed instanceof final StreamResumption.Serving serving) {
-            return served(writer, serving, cursor);
+            return served(writer, store, ticker, serving, cursor);
         }
         if (resumed instanceof final StreamResumption.Resetting resetting) {
-            return reset(writer, resetting);
+            return reset(writer, store, ticker, resetting);
         }
         // Nothing left to serve at all: an operation this store no longer holds is an ending rather
         // than a silence, and a subscriber told nothing would wait for news that cannot come.
         return new Round(cursor, Said.NOTHING, Standing.ENDED);
     }
 
-    private Round reset(Writer writer, StreamResumption.Resetting resetting) throws IOException {
+    private Round reset(Writer writer, Session store, StreamTicker ticker,
+                        StreamResumption.Resetting resetting)
+            throws IOException, RepositoryException {
         final Optional<String> notice = ResetNotice.bytes(session, resetting.current());
         if (notice.isEmpty()) {
             return new Round(at(resetting.current()), Said.NOTHING, Standing.ENDED);
         }
         write(writer, notice.get());
+        advanceCurrent(store, ticker, resetting.current());
         return new Round(at(resetting.current()), Said.SOMETHING, Standing.GOING);
     }
 
-    private Round served(Writer writer, StreamResumption.Serving serving, String cursor)
-            throws IOException {
-        String at = opening(writer, serving, cursor);
+    private Round served(Writer writer, Session store, StreamTicker ticker,
+                         StreamResumption.Serving serving, String cursor)
+            throws IOException, RepositoryException {
+        String at = opening(writer, store, ticker, serving, cursor);
         long buffered = 0;
         for (final String document : serving.events()) {
             final Optional<JobEvent> event = eventIn(document);
@@ -196,6 +201,7 @@ public record StreamWriter(StreamSession session, AgentContract contract,
                 return new Round(at, Said.SOMETHING, Standing.ENDED);
             }
             write(writer, wire.wire());
+            advance(session, store, position, ticker);
             buffered = buffered + wire.bytes();
             at = position.rendered();
         }
@@ -218,8 +224,9 @@ public record StreamWriter(StreamSession session, AgentContract contract,
      * @return where this stream has now delivered up to
      * @throws IOException if the client is gone
      */
-    private String opening(Writer writer, StreamResumption.Serving serving, String cursor)
-            throws IOException {
+    private String opening(Writer writer, Session store, StreamTicker ticker,
+                           StreamResumption.Serving serving, String cursor)
+            throws IOException, RepositoryException {
         if (!cursor.isEmpty()) {
             return cursor;
         }
@@ -228,6 +235,7 @@ public record StreamWriter(StreamSession session, AgentContract contract,
             return cursor;
         }
         write(writer, notice.get());
+        advanceCurrent(store, ticker, serving.current());
         return at(serving.current());
     }
 
@@ -235,6 +243,20 @@ public record StreamWriter(StreamSession session, AgentContract contract,
         return current instanceof final SnapshotStore.Known known
                 ? new ReplayCursor(session.generation(), known.snapshot().sequence()).rendered()
                 : "";
+    }
+
+    private void advance(StreamSession streamSession, Session store, ReplayCursor position,
+                        StreamTicker ticker) throws RepositoryException {
+        HighWaterMark.advance(store, streamSession.subscription(), position.sequence(),
+                ticker.elapsedMilliseconds());
+    }
+
+    private void advanceCurrent(Session store, StreamTicker ticker,
+                                SnapshotStore.Materialised current) throws RepositoryException {
+        if (current instanceof final SnapshotStore.Known known) {
+            advance(session, store, new ReplayCursor(session.generation(), known.snapshot().sequence()),
+                    ticker);
+        }
     }
 
     private Optional<JobEvent> eventIn(String document) {
