@@ -3,6 +3,8 @@
 
 package rs.slingshot.agent.http;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -23,8 +25,8 @@ public final class DispatchCommandRuntime implements CommandRuntime {
 
     private static final String ARGUMENTS = SubmitServlet.ARGUMENTS;
     private static final long serialVersionUID = 1L;
-    private final transient CommandDispatch dispatch;
-    private final transient AgentContract contract;
+    private transient Optional<CommandDispatch> dispatch;
+    private transient Optional<AgentContract> contract;
 
     /**
      * Holds a dispatch and the contract used to bound its argument reader.
@@ -32,13 +34,20 @@ public final class DispatchCommandRuntime implements CommandRuntime {
      * @param contract the authenticated contract
      */
     public DispatchCommandRuntime(CommandDispatch dispatch, AgentContract contract) {
-        this.dispatch = java.util.Objects.requireNonNull(dispatch, "dispatch");
-        this.contract = java.util.Objects.requireNonNull(contract, "contract");
+        this.dispatch = Optional.of(java.util.Objects.requireNonNull(dispatch, "dispatch"));
+        this.contract = Optional.of(java.util.Objects.requireNonNull(contract, "contract"));
+    }
+
+    /** Clears non-serializable platform state when a servlet is deserialized. */
+    private void readObject(ObjectInputStream input) throws IOException, ClassNotFoundException {
+        input.defaultReadObject();
+        dispatch = Optional.empty();
+        contract = Optional.empty();
     }
 
     @Override
     public boolean serves(String wireName) {
-        return dispatch.wireNames().contains(wireName);
+        return dispatch.filter(value -> value.wireNames().contains(wireName)).isPresent();
     }
 
     @Override
@@ -51,12 +60,17 @@ public final class DispatchCommandRuntime implements CommandRuntime {
     public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, javax.jcr.Session session,
                                            ResourceResolver resolver, CallerContext context) {
-        final Optional<DocumentValue.Mapping> arguments = argumentsOf(submission);
+        if (dispatch.isEmpty() || contract.isEmpty()) {
+            return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
+        }
+        final AgentContract activeContract = contract.orElseThrow();
+        final CommandDispatch activeDispatch = dispatch.orElseThrow();
+        final Optional<DocumentValue.Mapping> arguments = argumentsOf(submission, activeContract);
         if (arguments.isEmpty()) {
             return ExecutionOutcome.Uncertain.EFFECTS_UNDETERMINED;
         }
-        final CommandHandler.Answer answer = dispatch.run(operation.commandContract(),
-                CommandContractIdentity.Bounds.from(contract), arguments.orElseThrow(), resolver,
+        final CommandHandler.Answer answer = activeDispatch.run(operation.commandContract(),
+                CommandContractIdentity.Bounds.from(activeContract), arguments.orElseThrow(), resolver,
                 context);
         return completion(answer);
     }
@@ -65,14 +79,16 @@ public final class DispatchCommandRuntime implements CommandRuntime {
     public ExecutionOutcome.Completion run(LogicalOperation operation,
                                            DocumentValue.Mapping submission, javax.jcr.Session session,
                                            ResourceResolver resolver) {
+        final AgentContract activeContract = contract.orElseThrow();
         return run(operation, submission, session, resolver, new CallerContext(
-                operation.identity().identifier(), rs.slingshot.agent.command.Budget.discovery(contract),
-                rs.slingshot.agent.command.Budget.time(contract),
+                operation.identity().identifier(),
+                rs.slingshot.agent.command.Budget.discovery(activeContract),
+                rs.slingshot.agent.command.Budget.time(activeContract),
                 new rs.slingshot.agent.command.Budget(
                         rs.slingshot.agent.command.Budget.Kind.RESULT,
-                        contract.value(rs.slingshot.agent.contract.ContractLimit
+                        activeContract.value(rs.slingshot.agent.contract.ContractLimit
                                 .MAXIMUM_COMMAND_RESULT_BYTES)),
-                rs.slingshot.agent.command.ProgressSink.under(contract)));
+                rs.slingshot.agent.command.ProgressSink.under(activeContract)));
     }
 
     @Override
@@ -80,13 +96,14 @@ public final class DispatchCommandRuntime implements CommandRuntime {
         return CallerContext.Unavailable.INSTANCE;
     }
 
-    private Optional<DocumentValue.Mapping> argumentsOf(DocumentValue.Mapping submission) {
+    private Optional<DocumentValue.Mapping> argumentsOf(DocumentValue.Mapping submission,
+                                                        AgentContract activeContract) {
         return submission.member(ARGUMENTS)
                 .filter(DocumentValue.Text.class::isInstance)
                 .map(DocumentValue.Text.class::cast)
                 .map(DocumentValue.Text::value)
                 .map(value -> BoundedDocumentReader.read(value.getBytes(StandardCharsets.UTF_8),
-                        BoundedDocumentReader.Bounds.from(contract)))
+                        BoundedDocumentReader.Bounds.from(activeContract)))
                 .filter(BoundedDocumentReader.Read.class::isInstance)
                 .map(BoundedDocumentReader.Read.class::cast)
                 .map(BoundedDocumentReader.Read::value)
