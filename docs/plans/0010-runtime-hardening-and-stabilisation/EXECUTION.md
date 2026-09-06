@@ -1851,3 +1851,10 @@ required checks and the complete gate, then commit the completed task.
     classes may only be excluded when they belong to a tier the gate does not run; the policy and
     build remain unchanged. The remaining blocker is genuine behavioral coverage, not stale
     execution data or dependency resolution.
+
+134. Added focused runtime and paging tests plus malformed-argument handler probes. The new tests
+    pass (4 focused tests and 1,147 core tests in the full run), and coverage rose for the runtime
+    adapter and two migrated handlers. JaCoCo still reports genuine shortfalls in
+    `PagingSupport`, `FindPagesUsingComponentsHandler`, `FindAssetsByMetadataHandler`, and
+    `FindPagesByTemplateHandler`; no coverage policy was weakened. Test increment committed as
+    `fbf25c5`; the next review loop remains focused on those uncovered branches.
