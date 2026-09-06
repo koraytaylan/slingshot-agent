@@ -110,26 +110,22 @@ public final class BoundedRequestBody {
         })) {
             final long started = DefaultStreamTicker.monotonicNanoseconds();
             long moved = started;
-            try {
-                int arrived = read(io, body, chunk, started, moved, contract);
-                while (arrived >= 0) {
-                    read = read + arrived;
-                    if (read > bound) {
-                        return new Refused(Refusal.PAST_THE_BOUND, "this body is past the bound of "
-                                + bound + " bytes, found at the byte that crossed it", read);
-                    }
-                    held.write(chunk, 0, arrived);
-                    moved = DefaultStreamTicker.monotonicNanoseconds();
-                    arrived = read(io, body, chunk, started, moved, contract);
+            int arrived = read(io, body, chunk, started, moved, contract);
+            while (arrived >= 0) {
+                read = read + arrived;
+                if (read > bound) {
+                    return new Refused(Refusal.PAST_THE_BOUND, "this body is past the bound of "
+                            + bound + " bytes, found at the byte that crossed it", read);
                 }
-            } catch (final IOException stopped) {
-                return new Refused(Refusal.TRANSFER_FAILED,
-                        "the bytes stopped arriving: " + stopped.getMessage(), read);
-            } finally {
-                io.shutdownNow();
+                held.write(chunk, 0, arrived);
+                moved = DefaultStreamTicker.monotonicNanoseconds();
+                arrived = read(io, body, chunk, started, moved, contract);
             }
+            return againstTheDeclaration(held.toByteArray(), declaredLength);
+        } catch (final IOException stopped) {
+            return new Refused(Refusal.TRANSFER_FAILED,
+                    "the bytes stopped arriving: " + stopped.getMessage(), read);
         }
-        return againstTheDeclaration(held.toByteArray(), declaredLength);
     }
 
     private static int read(ExecutorService io, InputStream body, byte[] chunk,
