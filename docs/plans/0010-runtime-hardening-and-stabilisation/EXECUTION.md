@@ -1749,3 +1749,10 @@ required checks and the complete gate, then commit the completed task.
     documentation that claimed continuation authority was not implemented; capability readiness and
     generation now explicitly describe the durable service and its conservative unavailable fallback.
     `JavadocPolicyTest` and `SourcePolicyTest` pass all 25 cases.
+
+114. Reviewed task 4502's installed-runtime evidence against the current bundle. The core build
+     already embeds all 64 registry rows through `embed-command-registry`, so the prior finding that
+     rows were absent was stale and has been corrected. The remaining blocker is production
+     composition: `SubmitServlet` still receives no DS-bound `Commands` service and therefore uses
+     `NOTHING_REGISTERED`; no handler map or platform-adapter assembly can be claimed until that
+     seam is implemented and exercised from an installed bundle.
