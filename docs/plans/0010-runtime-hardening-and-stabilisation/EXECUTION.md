@@ -1713,3 +1713,7 @@ required checks and the complete gate, then commit the completed task.
 106. Applied verified paging to the job queue and job inventory listings, preserving their distinct
     query wire names. `JobCommandTest` passes all 12 cases after recompilation. Principal,
     replication, and workflow listings remain to be migrated.
+
+107. Applied verified paging to principal group membership listing. `PrincipalCommandTest` passes
+    all 14 cases after recompilation, with the membership query digest kept distinct from the other
+    principal operations. Replication and workflow listings remain outstanding.
