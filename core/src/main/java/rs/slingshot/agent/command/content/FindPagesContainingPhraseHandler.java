@@ -11,6 +11,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -78,11 +79,12 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
         if (asked instanceof final FindPagesContainingPhraseCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return searched(((FindPagesContainingPhraseCommand.Held) asked).command(), resolver,
-                context);
+        return searched(((FindPagesContainingPhraseCommand.Held) asked).command(), arguments,
+                resolver, context);
     }
 
-    private Answer searched(FindPagesContainingPhraseCommand command, ResourceResolver resolver,
+    private Answer searched(FindPagesContainingPhraseCommand command,
+                            DocumentValue.Mapping arguments, ResourceResolver resolver,
                             CallerContext context) {
         final Resource root = resolver.getResource(command.rootPath());
         if (root == null) {
@@ -98,8 +100,16 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
                     + " as the complete answer, and every page it did not reach would look like a"
                     + " page that does not match.");
         }
-        return new Produced(PageListingResult.documentOf(
-                pageOf(search.found(), command.window(), contract), ""));
+        final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
+                search.found(), command.window(), FindPagesContainingPhraseCommand.WIRE_NAME,
+                arguments, context, contract);
+        if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<PageListingResult.Page> accepted =
+                ((PagingSupport.Accepted<PageListingResult.Page>) page).page();
+        return new Produced(PageListingResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /**
