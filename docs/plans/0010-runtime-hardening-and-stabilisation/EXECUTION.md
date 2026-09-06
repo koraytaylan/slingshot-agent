@@ -1458,3 +1458,9 @@ required checks and the complete gate, then commit the completed task.
     down during deactivation. The activation/refusal test passes, and core compilation,
     Checkstyle, and PMD pass. Commit `ca17fe7` records this review loop. Task 4501 remains pending
     until discovery consumes the snapshot and the installed scheduler configuration is exercised.
+
+58. Bound `CapabilityServlet` generation and continuation readiness to the lifecycle observation.
+    A ready durable pass now advertises its persisted generation and key authority; an inactive or
+    failed lifecycle continues to advertise `NOT_READY` and the compatibility generation. The
+    capability and lifecycle suites pass (11 cases), with core Checkstyle and PMD clean. Commit
+    `d10b7c5` records this review loop.
