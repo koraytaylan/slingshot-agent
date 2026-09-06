@@ -3,10 +3,17 @@
 
 package rs.slingshot.agent.http;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.servlet.Servlet;
@@ -264,29 +271,103 @@ public final class ArtifactServlet extends AgentServlet {
      * @return how many bytes moved
      * @throws IOException if either side fails
      */
+    @SuppressWarnings("PMD.CloseResource")
     long transfer(InputStream reading, OutputStream writing, AgentContract contract)
             throws IOException {
+        final ExecutorService io = Executors.newSingleThreadExecutor(runnable -> {
+            final Thread worker = new Thread(runnable, "slingshot-artifact-transfer");
+            worker.setDaemon(true);
+            return worker;
+        });
         final byte[] buffer = new byte[Digest.READ_BUFFER_BYTES];
         final long startedAt = ticker.milliseconds();
+        final long monotonicStarted = System.nanoTime();
         long lastMovedAt = startedAt;
         long moved = 0;
-        int read = reading.read(buffer);
-        while (read >= 0) {
-            if (read > 0) {
-                writing.write(buffer, 0, read);
-                writing.flush();
-                moved = moved + read;
-                lastMovedAt = ticker.milliseconds();
+        try {
+            int read = read(io, reading, buffer, monotonicStarted, contract);
+            while (read >= 0) {
+                if (read > 0) {
+                    if (!write(io, writing, buffer, read, monotonicStarted, contract)) {
+                        return moved;
+                    }
+                    moved = moved + read;
+                    lastMovedAt = ticker.milliseconds();
+                }
+                if (!TransferDeadlines.isMoving(startedAt, lastMovedAt, ticker.milliseconds(),
+                        contract)) {
+                    return moved;
+                }
+                read = read(io, reading, buffer, monotonicStarted, contract);
             }
-            if (!TransferDeadlines.isMoving(startedAt, lastMovedAt, ticker.milliseconds(),
-                    contract)) {
-                // It has stopped moving, or it has taken as long as a transfer may. Either way the
-                // reader has the count it was promised in the head and can see what arrived.
-                return moved;
-            }
-            read = reading.read(buffer);
+            return moved;
+        } finally {
+            io.shutdownNow();
         }
-        return moved;
+    }
+
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    private static int read(ExecutorService io, InputStream reading, byte[] buffer,
+                            long monotonicStarted, AgentContract contract)
+            throws IOException {
+        final Future<Integer> pending = io.submit(() -> reading.read(buffer));
+        try {
+            return pending.get(timeoutNanos(monotonicStarted, contract),
+                    TimeUnit.NANOSECONDS);
+        } catch (final TimeoutException timeout) {
+            pending.cancel(true);
+            closeQuietly(reading);
+            return -1;
+        } catch (final InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            closeQuietly(reading);
+            throw new IOException("artifact read was interrupted", interrupted);
+        } catch (final ExecutionException failed) {
+            throw new IOException("artifact read failed", failed.getCause());
+        }
+    }
+
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    private static boolean write(ExecutorService io, OutputStream writing, byte[] buffer, int count,
+                                 long monotonicStarted, AgentContract contract)
+            throws IOException {
+        final Future<?> pending = io.submit(() -> {
+            writing.write(buffer, 0, count);
+            writing.flush();
+            return null;
+        });
+        try {
+            pending.get(timeoutNanos(monotonicStarted, contract),
+                    TimeUnit.NANOSECONDS);
+            return true;
+        } catch (final TimeoutException timeout) {
+            pending.cancel(true);
+            closeQuietly(writing);
+            return false;
+        } catch (final InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            closeQuietly(writing);
+            throw new IOException("artifact write was interrupted", interrupted);
+        } catch (final ExecutionException failed) {
+            throw new IOException("artifact write failed", failed.getCause());
+        }
+    }
+
+    private static long timeoutNanos(long monotonicStarted, AgentContract contract) {
+        final long total = TimeUnit.MILLISECONDS.toNanos(
+                TransferDeadlines.totalMilliseconds(contract));
+        final long idle = TimeUnit.MILLISECONDS.toNanos(
+                TransferDeadlines.idleMilliseconds(contract));
+        final long elapsed = System.nanoTime() - monotonicStarted;
+        return Math.max(1, Math.min(total - elapsed, idle));
+    }
+
+    private static void closeQuietly(Closeable closeable) {
+        try {
+            closeable.close();
+        } catch (final IOException ignored) {
+            // The deadline already ended the transfer; close is best effort.
+        }
     }
 
     private static EventStoreGeneration serving(Session store) throws RepositoryException {
