@@ -87,7 +87,10 @@ public final class MaintenanceSweep {
 
     private record SweepState(long examined, long next, String nextRecord) { }
 
-    private record BucketStep(long examined, long next, String nextRecord, boolean stop) { }
+    private enum Stop { YES, NO }
+    private record BucketStep(long examined, long next, String nextRecord, Stop stop) { }
+    private record BucketInput(Session session, Pass pass, SweepCursor from, List<Long> present,
+                               int start, int visited, long examined, long bound) { }
 
     private static SweepState advance(Session session, Pass pass, SweepCursor from,
                                      List<Long> present, int start, long bound)
@@ -96,38 +99,38 @@ public final class MaintenanceSweep {
         long next = SweepCursor.BUCKETS;
         String nextRecord = "";
         for (int visited = 0; visited < present.size(); visited++) {
-            final BucketStep step = bucket(session, pass, from, present, start, visited, examined,
-                    bound);
+            final BucketStep step = bucket(new BucketInput(session, pass, from, present, start,
+                    visited, examined, bound));
             examined += step.examined();
             next = step.next();
             nextRecord = step.nextRecord();
-            if (step.stop()) {
+            if (step.stop() == Stop.YES) {
                 break;
             }
         }
         return new SweepState(examined, next, nextRecord);
     }
 
-    private static BucketStep bucket(Session session, Pass pass, SweepCursor from, List<Long> present,
-                                     int start, int visited, long examined, long bound)
+    private static BucketStep bucket(BucketInput input)
             throws RepositoryException {
-        final int index = (start + visited) % present.size();
-        final long bucket = present.get(index);
-        if (examined >= bound) {
-            return new BucketStep(0, bucket, "", true);
+        final int index = (input.start() + input.visited()) % input.present().size();
+        final long bucket = input.present().get(index);
+        if (input.examined() >= input.bound()) {
+            return new BucketStep(0, bucket, "", Stop.YES);
         }
-        final SweepProgress progress = sweep(session, pass, bucket,
-                visited == 0 ? from.cycleStartRecord() : "", bound - examined);
+        final SweepProgress progress = sweep(input.session(), input.pass(), bucket,
+                input.visited() == 0 ? input.from().cycleStartRecord() : "",
+                input.bound() - input.examined());
         if (!progress.complete()) {
-            return new BucketStep(progress.examined(), visited > 0 && index < start
-                    ? SweepCursor.FIRST : bucket, progress.nextRecord(), true);
+            return new BucketStep(progress.examined(), input.visited() > 0 && index < input.start()
+                    ? SweepCursor.FIRST : bucket, progress.nextRecord(), Stop.YES);
         }
-        if (examined + progress.examined() >= bound) {
-            final long following = visited > 0 && index < start ? SweepCursor.FIRST
-                    : index + 1 < present.size() ? present.get(index + 1) : SweepCursor.BUCKETS;
-            return new BucketStep(progress.examined(), following, "", true);
+        if (input.examined() + progress.examined() >= input.bound()) {
+            final long following = input.visited() > 0 && index < input.start() ? SweepCursor.FIRST
+                    : index + 1 < input.present().size() ? input.present().get(index + 1) : SweepCursor.BUCKETS;
+            return new BucketStep(progress.examined(), following, "", Stop.YES);
         }
-        return new BucketStep(progress.examined(), SweepCursor.BUCKETS, "", false);
+        return new BucketStep(progress.examined(), SweepCursor.BUCKETS, "", Stop.NO);
     }
 
     /**
