@@ -87,6 +87,8 @@ public final class MaintenanceSweep {
 
     private record SweepState(long examined, long next, String nextRecord) { }
 
+    private record BucketStep(long examined, long next, String nextRecord, boolean stop) { }
+
     private static SweepState advance(Session session, Pass pass, SweepCursor from,
                                      List<Long> present, int start, long bound)
             throws RepositoryException {
@@ -94,27 +96,38 @@ public final class MaintenanceSweep {
         long next = SweepCursor.BUCKETS;
         String nextRecord = "";
         for (int visited = 0; visited < present.size(); visited++) {
-            final int index = (start + visited) % present.size();
-            final long bucket = present.get(index);
-            if (examined >= bound) {
-                next = bucket;
-                break;
-            }
-            final SweepProgress progress = sweep(session, pass, bucket,
-                    visited == 0 ? from.cycleStartRecord() : "", bound - examined);
-            examined = examined + progress.examined();
-            if (!progress.complete()) {
-                next = visited > 0 && index < start ? SweepCursor.FIRST : bucket;
-                nextRecord = progress.nextRecord();
-                break;
-            }
-            if (examined >= bound) {
-                next = visited > 0 && index < start ? SweepCursor.FIRST
-                        : index + 1 < present.size() ? present.get(index + 1) : SweepCursor.BUCKETS;
+            final BucketStep step = bucket(session, pass, from, present, start, visited, examined,
+                    bound);
+            examined += step.examined();
+            next = step.next();
+            nextRecord = step.nextRecord();
+            if (step.stop()) {
                 break;
             }
         }
         return new SweepState(examined, next, nextRecord);
+    }
+
+    private static BucketStep bucket(Session session, Pass pass, SweepCursor from, List<Long> present,
+                                     int start, int visited, long examined, long bound)
+            throws RepositoryException {
+        final int index = (start + visited) % present.size();
+        final long bucket = present.get(index);
+        if (examined >= bound) {
+            return new BucketStep(0, bucket, "", true);
+        }
+        final SweepProgress progress = sweep(session, pass, bucket,
+                visited == 0 ? from.cycleStartRecord() : "", bound - examined);
+        if (!progress.complete()) {
+            return new BucketStep(progress.examined(), visited > 0 && index < start
+                    ? SweepCursor.FIRST : bucket, progress.nextRecord(), true);
+        }
+        if (examined + progress.examined() >= bound) {
+            final long following = visited > 0 && index < start ? SweepCursor.FIRST
+                    : index + 1 < present.size() ? present.get(index + 1) : SweepCursor.BUCKETS;
+            return new BucketStep(progress.examined(), following, "", true);
+        }
+        return new BucketStep(progress.examined(), SweepCursor.BUCKETS, "", false);
     }
 
     /**

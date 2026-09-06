@@ -161,17 +161,21 @@ public final class BoundedRequestBody {
             return pending.get(timeout, TimeUnit.NANOSECONDS);
         } catch (final TimeoutException timeoutFailure) {
             pending.cancel(true);
-            try {
-                body.close();
-            } catch (final IOException ignored) {
-                // The deadline has already ended the request.
-            }
+            closeAfterTimeout(body);
             throw withCause("request body exceeded its transfer deadline", timeoutFailure);
         } catch (final InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw withCause("request body was interrupted", interrupted);
         } catch (final ExecutionException failed) {
             throw withCause("request body read failed", failed);
+        }
+    }
+
+    private static void closeAfterTimeout(InputStream body) {
+        try {
+            body.close();
+        } catch (final IOException ignored) {
+            // The deadline has already ended the request.
         }
     }
 
