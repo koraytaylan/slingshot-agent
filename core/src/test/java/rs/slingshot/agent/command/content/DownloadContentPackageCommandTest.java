@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.SequencedMap;
 import java.util.zip.ZipInputStream;
@@ -177,6 +178,20 @@ final class DownloadContentPackageCommandTest {
             assertEquals("META-INF/vault/filter.xml", archive.getNextEntry().getName());
             assertEquals(manifest, new String(archive.readAllBytes(),
                     java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
+    void thePackageCarriesSelectedResourceContent() throws IOException {
+        sling.create().resource("/content/package-test", Map.of("title", "hello"));
+        final byte[] bytes = DownloadContentPackageHandler.packageBytes("<workspaceFilter/>",
+                sling.resourceResolver(), List.of("/content/package-test"));
+        try (ZipInputStream archive = new ZipInputStream(new ByteArrayInputStream(bytes))) {
+            assertEquals("META-INF/vault/filter.xml", archive.getNextEntry().getName());
+            archive.closeEntry();
+            assertEquals("content/package-test/.content.xml", archive.getNextEntry().getName());
+            assertTrue(new String(archive.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                    .contains("title=\"hello\""));
         }
     }
 
