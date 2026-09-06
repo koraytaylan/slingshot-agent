@@ -1433,3 +1433,5 @@ required checks and the complete gate, then commit the completed task.
     Proxy-backed iterator fixtures cover a 10,000-child tree and a 100-level tree, and the seven-case
     reach suite plus handler integration suites pass. Repository-wide quality failures remain
     separately evidenced in the cache-preparation review. Commit follows this review loop.
+
+52. Reopened 4105 after the completion claim failed current verification. The full core suite currently executes 1,122 tests with two dense-bucket failures: a bound-one pass advances two operation nodes, and cursor resumption rereads three. The child-iterator successor implementation therefore does not satisfy the declared read bound; 4105 is pending again until a bounded successor lookup is implemented and reviewed.
