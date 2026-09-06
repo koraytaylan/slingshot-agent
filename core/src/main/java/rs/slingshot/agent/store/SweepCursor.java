@@ -4,6 +4,8 @@
 package rs.slingshot.agent.store;
 
 import java.util.Optional;
+import javax.jcr.InvalidItemStateException;
+import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
@@ -14,10 +16,9 @@ import javax.jcr.Session;
  * the pass gets longer as the store gets bigger, and the store gets bigger precisely because the
  * pass never finishes. So a pass is bounded, and where it stopped is durable.</p>
  *
- * <p>The position is a bucket number rather than a path, because the store is bucketed by the first
- * characters of an identifier and the buckets are therefore a fixed, ordered, complete set. That
- * makes the position a whole number, which makes advancing it a compare-and-set — which is what
- * stops two sweeps from working the same region and from both believing they finished.</p>
+ * <p>The bucket and first retained record in this cycle identify progress within a dense bucket. A separate
+ * version fences each advancement, including repeated positions and equal timestamps. All cursor
+ * fields change in one commit.</p>
  */
 public final class SweepCursor {
 
@@ -29,6 +30,12 @@ public final class SweepCursor {
 
     /** The property the instant the position last moved is written in. */
     public static final String ADVANCED_AT = "advanced_at_unix_milliseconds";
+
+    /** The first retained record in this cycle in the current bucket, or empty at its beginning. */
+    public static final String CYCLE_START_RECORD = "cycle_start_record";
+
+    /** The version distinguishes advances which happen to have identical positions. */
+    private static final String VERSION = "cursor_version";
 
     /** The first bucket, which is where a pass that has never run starts. */
     public static final long FIRST = 0;
@@ -54,9 +61,19 @@ public final class SweepCursor {
 
     private final long advancedAtUnixMilliseconds;
 
+    private final String cycleStartRecord;
+
+    private final long version;
+
     private SweepCursor(long bucket, long advancedAtUnixMilliseconds) {
+        this(bucket, advancedAtUnixMilliseconds, "", 0);
+    }
+
+    private SweepCursor(long bucket, long advancedAtUnixMilliseconds, String cycleStartRecord, long version) {
         this.bucket = bucket;
         this.advancedAtUnixMilliseconds = advancedAtUnixMilliseconds;
+        this.cycleStartRecord = cycleStartRecord;
+        this.version = version;
     }
 
     /**
@@ -73,7 +90,9 @@ public final class SweepCursor {
         }
         final javax.jcr.Node held = session.getNode(path.path());
         return new SweepCursor(CompareAndSet.held(held, POSITION),
-                CompareAndSet.held(held, ADVANCED_AT));
+                CompareAndSet.held(held, ADVANCED_AT),
+                held.hasProperty(CYCLE_START_RECORD) ? held.getProperty(CYCLE_START_RECORD).getString() : "",
+                CompareAndSet.held(held, VERSION));
     }
 
     /**
@@ -88,15 +107,88 @@ public final class SweepCursor {
      */
     public static WriteOutcome advance(Session session, SweepCursor read, long bucket,
                                        long nowUnixMilliseconds) throws RepositoryException {
+        return advance(session, read, bucket, "", nowUnixMilliseconds);
+    }
+
+    /**
+     * Moves the bucket and within-bucket position atomically from a previously read version.
+     *
+     * @param session the cleanup session
+     * @param read the complete previously read cursor
+     * @param bucket the next bucket
+     * @param cycleStartRecord the first retained record in this cycle, or empty at the beginning of a bucket
+     * @param nowUnixMilliseconds when this advancement occurs
+     * @return whether it moved, was stale, or exhausted fresh contention attempts
+     * @throws RepositoryException if persistence fails
+     */
+    public static WriteOutcome advance(Session session, SweepCursor read, long bucket,
+                                       String cycleStartRecord, long nowUnixMilliseconds)
+            throws RepositoryException {
         final StatePath path = StatePath.deployment(NODE);
-        ClaimByCreation.claim(session, path, "nt:unstructured", node -> { });
-        final WriteOutcome moved =
-                CompareAndSet.set(session, path, POSITION, read.bucket(), wrapped(bucket));
-        if (moved == WriteOutcome.WRITTEN) {
-            session.getNode(path.path()).setProperty(ADVANCED_AT, nowUnixMilliseconds);
-            session.save();
+        if (ClaimByCreation.claim(session, path, "nt:unstructured", node -> { }) == WriteOutcome.CONTENDED) {
+            return WriteOutcome.CONTENDED;
         }
-        return moved;
+        int attempt = 0;
+        while (attempt < CompareAndSet.ATTEMPTS) {
+            final WriteOutcome outcome = advanceAttempt(session, read, bucket, cycleStartRecord,
+                    nowUnixMilliseconds);
+            if (outcome != WriteOutcome.CONTENDED) {
+                return outcome;
+            }
+            attempt = attempt + 1;
+        }
+        return WriteOutcome.CONTENDED;
+    }
+
+    private static WriteOutcome advanceAttempt(Session session, SweepCursor expected, long bucket,
+                                               String cycleStartRecord, long nowUnixMilliseconds)
+            throws RepositoryException {
+        session.refresh(false);
+        try {
+            if (!stage(session, expected, bucket, cycleStartRecord, nowUnixMilliseconds)) {
+                return WriteOutcome.VALUE_CHANGED;
+            }
+            session.save();
+            return WriteOutcome.WRITTEN;
+        } catch (final InvalidItemStateException contended) {
+            return WriteOutcome.CONTENDED;
+        } finally {
+            session.refresh(false);
+        }
+    }
+
+    /**
+     * Stages cursor progress inside the caller's transaction without saving or refreshing it.
+     *
+     * @param session the enclosing cleanup session
+     * @param expected the complete previously read cursor
+     * @param bucket the next bucket
+     * @param cycleStartRecord the first retained record in this cycle, or empty before any is retained
+     * @param nowUnixMilliseconds the advancement timestamp
+     * @return whether the expected version still owns this advancement
+     * @throws RepositoryException if the cursor cannot be read or staged
+     */
+    static boolean stage(Session session, SweepCursor expected, long bucket,
+                         String cycleStartRecord, long nowUnixMilliseconds) throws RepositoryException {
+        final Node node = session.getNode(StatePath.deployment(NODE).path());
+        CompareAndSet.stamp(node);
+        if (!expected.equals(read(session))) {
+            return false;
+        }
+        node.setProperty(POSITION, wrapped(bucket));
+        node.setProperty(CYCLE_START_RECORD, bucket >= BUCKETS ? "" : cycleStartRecord);
+        node.setProperty(ADVANCED_AT, nowUnixMilliseconds);
+        node.setProperty(VERSION, Math.addExact(expected.version, 1));
+        return true;
+    }
+
+    /**
+     * The first retained record in this cycle, or empty when the bucket has not been started.
+     *
+     * @return the persisted within-bucket position
+     */
+    public String cycleStartRecord() {
+        return cycleStartRecord;
     }
 
     private static long wrapped(long bucket) {
@@ -166,12 +258,13 @@ public final class SweepCursor {
     @Override
     public boolean equals(Object other) {
         return other instanceof final SweepCursor held && held.bucket == bucket
-                && held.advancedAtUnixMilliseconds == advancedAtUnixMilliseconds;
+                && held.advancedAtUnixMilliseconds == advancedAtUnixMilliseconds
+                && held.cycleStartRecord.equals(cycleStartRecord) && held.version == version;
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(bucket, advancedAtUnixMilliseconds);
+        return java.util.Objects.hash(bucket, advancedAtUnixMilliseconds, cycleStartRecord, version);
     }
 
     @Override

@@ -74,7 +74,7 @@ final class MaintenanceSweepTest {
 
     @ParameterizedTest
     @CsvSource({"1,false", "1,true", "2,false", "2,true", "3,false", "3,true",
-        "4,false", "4,true", "5,false", "5,true", "6,false", "6,true"})
+        "4,false", "4,true", "5,false", "5,true"})
     void interruptedCollectionKeepsArtifactAccountingExact(int boundary, boolean committed)
             throws RepositoryException, LoginException {
         interruptedCleanup(REQUEST_START + CONTRACT.value(ContractLimit.WORKER_EXECUTION_LEASE_MILLISECONDS),
@@ -83,7 +83,7 @@ final class MaintenanceSweepTest {
 
     @ParameterizedTest
     @CsvSource({"1,false", "1,true", "2,false", "2,true", "3,false", "3,true",
-        "4,false", "4,true", "5,false", "5,true", "6,false", "6,true"})
+        "4,false", "4,true", "5,false", "5,true"})
     void interruptedOperationRemovalKeepsArtifactAccountingExact(int boundary, boolean committed)
             throws RepositoryException, LoginException {
         interruptedCleanup(past(), boundary, committed);
@@ -123,10 +123,15 @@ final class MaintenanceSweepTest {
     }
 
     private static void artifactCountsMatchData(Session session) throws RepositoryException {
+        artifactCountsMatchData(session, OPERATIONS);
+    }
+
+    private static void artifactCountsMatchData(Session session, List<String> operations)
+            throws RepositoryException {
         session.refresh(false);
         long rows = 0;
         long bytes = 0;
-        for (final String fixture : OPERATIONS) {
+        for (final String fixture : operations) {
             if (session.nodeExists(slotOf(fixture).path())) {
                 rows = rows + 1;
                 bytes = bytes + session.getNode(slotOf(fixture).path())
@@ -290,6 +295,221 @@ final class MaintenanceSweepTest {
     }
 
     @Test
+    void cursorReportsContentionWhenItsInitialClaimCannotCommit() throws RepositoryException {
+        final Session session = prepared();
+        final SweepCursor initial = SweepCursor.read(session);
+        assertEquals(WriteOutcome.CONTENDED,
+                SweepCursor.advance(SaveInterleaving.beforeEverySave(session, () -> {
+                    throw new javax.jcr.InvalidItemStateException("the cursor claim lost its race");
+                }), initial, 0, "first", REQUEST_START));
+        assertEquals(initial, SweepCursor.read(session));
+        assertFalse(session.hasPendingChanges());
+    }
+
+    @Test
+    void cursorRejectsStaleProgressInsideTheSameBucket() throws RepositoryException {
+        final Session session = prepared();
+        final SweepCursor initial = SweepCursor.read(session);
+        assertEquals(WriteOutcome.WRITTEN,
+                SweepCursor.advance(session, initial, 0, "first", REQUEST_START));
+        final SweepCursor first = SweepCursor.read(session);
+        assertEquals("first", first.cycleStartRecord());
+        assertEquals(WriteOutcome.WRITTEN,
+                SweepCursor.advance(session, first, 0, "second", REQUEST_START));
+        assertEquals(WriteOutcome.VALUE_CHANGED,
+                SweepCursor.advance(session, first, 0, "stale", REQUEST_START));
+        assertEquals("second", SweepCursor.read(session).cycleStartRecord());
+    }
+
+    @Test
+    void cursorVersionRejectsAnIdenticalPositionFromAnEarlierPass() throws RepositoryException {
+        final Session session = prepared();
+        final SweepCursor initial = SweepCursor.read(session);
+        assertEquals(WriteOutcome.WRITTEN,
+                SweepCursor.advance(session, initial, 0, "same", REQUEST_START));
+        final SweepCursor first = SweepCursor.read(session);
+        assertEquals(WriteOutcome.WRITTEN,
+                SweepCursor.advance(session, first, 0, "same", REQUEST_START));
+        assertEquals(WriteOutcome.VALUE_CHANGED,
+                SweepCursor.advance(session, first, 0, "stale", REQUEST_START));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void cursorInterruptionKeepsPositionAndTimestampTogether(boolean committed)
+            throws RepositoryException {
+        final Session session = prepared();
+        ClaimByCreation.claim(session, StatePath.deployment(SweepCursor.NODE),
+                "nt:unstructured", node -> { });
+        final SweepCursor initial = SweepCursor.read(session);
+        assertThrows(RepositoryException.class,
+                () -> SweepCursor.advance(SaveInterleaving.interruptSave(session, 1, committed),
+                        initial, 1, "first", REQUEST_START));
+        final SweepCursor held = SweepCursor.read(session);
+        assertEquals(committed ? 1 : 0, held.bucket());
+        assertEquals(committed ? "first" : "", held.cycleStartRecord());
+        assertEquals(committed ? REQUEST_START : 0, held.advancedAtUnixMilliseconds());
+        assertFalse(session.hasPendingChanges());
+    }
+
+    @Test
+    void iteratorObserverCountsSkippedRecords() throws RepositoryException {
+        final Session session = recorded(List.of("dense-0.json", "dense-1.json", "dense-2.json"));
+        final String path = operation("dense-0.json").path();
+        final String bucket = path.substring(0, path.lastIndexOf('/'));
+        final var reads = new java.util.concurrent.atomic.AtomicInteger();
+        final var records = SweepReads.count(session, bucket, reads).getNode(bucket).getNodes();
+        records.skip(1);
+        records.nextNode();
+        assertEquals(2, reads.get(), "iterator skipping hid a repository read");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"1,false", "1,true", "2,false", "2,true", "3,false", "3,true",
+        "4,false", "4,true", "5,false", "5,true"})
+    void interruptedDenseRotationPreservesProgressAndAccounting(int boundary, boolean committed)
+            throws RepositoryException, LoginException {
+        final List<String> dense = List.of("dense-0.json", "dense-1.json", "dense-2.json");
+        final Session session = retainedFirst(dense);
+        assertThrows(RepositoryException.class,
+                () -> MaintenanceSweep.run(SaveInterleaving.interruptSave(session, boundary, committed),
+                        generation(), past(), CONTRACT));
+        try (ResourceResolver resolver = Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class)).getResourceResolver(Map.of())) {
+            final Session observer = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            artifactCountsMatchData(observer, dense);
+            MaintenanceSweep.run(observer, generation(), past(), CONTRACT);
+            MaintenanceSweep.run(observer, generation(), past(), CONTRACT);
+            artifactCountsMatchData(observer, dense);
+            assertEquals(1, CapacityLedger.held(observer, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+            assertTrue(observer.nodeExists(operation(dense.get(0)).path()));
+            final Node bucket = observer.getNode(operation(dense.get(0)).path()).getParent();
+            final var children = bucket.getNodes();
+            assertEquals(observer.getNode(operation(dense.get(0)).path()).getName(),
+                    children.nextNode().getName());
+            assertFalse(children.hasNext(), "a temporary ordering marker survived the commit");
+        }
+    }
+
+    @Test
+    void overlappingDenseRotationsDoNotSkipEligibleRecords() throws RepositoryException, LoginException {
+        final List<String> dense = List.of("dense-0.json", "dense-1.json", "dense-2.json");
+        final Session session = retainedFirst(dense);
+        ClaimByCreation.claim(session, StatePath.deployment(SweepCursor.NODE),
+                "nt:unstructured", node -> { });
+        final AgentContract bounded = contractWith("maintenance_sweep_work_bound_rows", 1L);
+        try (ResourceResolver resolver = Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class)).getResourceResolver(Map.of())) {
+            final Session competing = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final SweepReport lost = MaintenanceSweep.run(SaveInterleaving.before(session,
+                    () -> MaintenanceSweep.run(competing, generation(), past(), bounded)),
+                    generation(), past(), bounded);
+            assertEquals(0, lost.recordsRemoved());
+            assertEquals(0, lost.bytesReleased());
+            for (final String position : dense) {
+                final SweepReport next = MaintenanceSweep.run(competing, generation(), past(), bounded);
+                assertTrue(next.examined() <= 1, position + " exceeded its work bound");
+                artifactCountsMatchData(competing, dense);
+            }
+            assertEquals(1, CapacityLedger.held(competing, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        }
+    }
+
+    @Test
+    void retainedDenseCycleWrapsAndLaterCollectsEveryRecord() throws RepositoryException {
+        final List<String> dense = List.of("dense-0.json", "dense-1.json", "dense-2.json");
+        final Session session = recorded(dense);
+        final AgentContract bounded = contractWith("maintenance_sweep_work_bound_rows", 1L);
+        for (final String position : dense) {
+            final SweepReport report = MaintenanceSweep.run(session, generation(), REQUEST_START, bounded);
+            assertEquals(1, report.examined(), position + " did not consume exactly one record");
+            assertEquals(0, report.recordsRemoved());
+            artifactCountsMatchData(session, dense);
+        }
+        final SweepReport wrapped = MaintenanceSweep.run(session, generation(), REQUEST_START, bounded);
+        assertEquals(1, wrapped.examined());
+        assertEquals(SweepCursor.FIRST, SweepCursor.read(session).bucket());
+        for (final String position : dense) {
+            final SweepReport report = MaintenanceSweep.run(session, generation(), past(), bounded);
+            assertEquals(1, report.recordsRemoved(), position + " was missed after retention expired");
+            artifactCountsMatchData(session, dense);
+        }
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+    }
+
+    @Test
+    void contentionCannotSpendTheRecordBudgetAgain() throws RepositoryException {
+        final List<String> dense = List.of("dense-0.json", "dense-1.json", "dense-2.json");
+        final Session session = recorded(dense);
+        ClaimByCreation.claim(session, StatePath.deployment(SweepCursor.NODE),
+                "nt:unstructured", node -> { });
+        final String path = operation(dense.get(0)).path();
+        final var reads = new java.util.concurrent.atomic.AtomicInteger();
+        final Session observed = SweepReads.count(session, path.substring(0, path.lastIndexOf('/')), reads);
+        final AgentContract bounded = contractWith("maintenance_sweep_work_bound_rows", 1L);
+        assertThrows(RepositoryException.class,
+                () -> MaintenanceSweep.run(SaveInterleaving.beforeEverySave(observed, () -> {
+                    throw new javax.jcr.InvalidItemStateException("the cleanup commit lost its race");
+                }), generation(), past(), bounded));
+        assertEquals(1, reads.get(), "fresh retries exceeded the per-pass record budget");
+        assertFalse(session.hasPendingChanges());
+        artifactCountsMatchData(session, dense);
+        assertEquals(dense.size(), CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+    }
+
+    private Session retainedFirst(List<String> dense) throws RepositoryException {
+        final Session session = recorded(dense);
+        session.getNode(operation(dense.get(0)).path()).setProperty(RetentionPolicy.REQUEST_START, past());
+        session.save();
+        ExecutionFence.take(session, identity(dense.get(0)), "a-worker", past(), CONTRACT);
+        return session;
+    }
+
+    @Test
+    void denseBucketRespectsExaminedBound() throws RepositoryException {
+        final Session session = recorded(List.of("dense-0.json", "dense-1.json", "dense-2.json"));
+        final AgentContract bounded = contractWith("maintenance_sweep_work_bound_rows", 1L);
+        final SweepReport report = MaintenanceSweep.run(session, generation(), past(), bounded);
+        assertEquals(1, report.examined(), "one dense bucket exceeded the work bound");
+        assertEquals(1, report.recordsRemoved());
+    }
+
+    @Test
+    void denseBucketRespectsIteratorBound() throws RepositoryException {
+        final Session session = recorded(List.of("dense-0.json", "dense-1.json", "dense-2.json"));
+        final AgentContract bounded = contractWith("maintenance_sweep_work_bound_rows", 1L);
+        final String path = operation("dense-0.json").path();
+        final var reads = new java.util.concurrent.atomic.AtomicInteger();
+        MaintenanceSweep.run(SweepReads.count(session, path.substring(0, path.lastIndexOf('/')), reads),
+                generation(), past(), bounded);
+        assertTrue(reads.get() <= 1, "a bound-one pass advanced " + reads.get() + " operation nodes");
+    }
+
+    @Test
+    void denseBucketResumesBeyondRetainedFirstRecord() throws RepositoryException {
+        final List<String> dense = List.of("dense-0.json", "dense-1.json", "dense-2.json");
+        final Session session = retainedFirst(dense);
+        final AgentContract bounded = contractWith("maintenance_sweep_work_bound_rows", 1L);
+        final String path = operation(dense.get(0)).path();
+        long removed = 0;
+        for (final String position : dense) {
+            final var reads = new java.util.concurrent.atomic.AtomicInteger();
+            final SweepReport report = MaintenanceSweep.run(SweepReads.count(session,
+                    path.substring(0, path.lastIndexOf('/')), reads), generation(), past(), bounded);
+            assertTrue(reads.get() <= 1, position + " resumption reread " + reads.get() + " operation nodes");
+            assertTrue(report.examined() <= 1, "resumption exceeded its examined-record bound");
+            removed = removed + report.recordsRemoved();
+        }
+        assertEquals(dense.size() - 1, removed, "retained data prevented progress to later records");
+        assertTrue(session.nodeExists(operation(dense.get(0)).path()));
+        for (final String fixture : dense.subList(1, dense.size())) {
+            assertFalse(session.nodeExists(operation(fixture).path()));
+        }
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        assertEquals(1, CapacityLedger.heldBy(session, AccountedQuantity.ARTIFACT_ROWS, caller(), CONTRACT));
+    }
+
+    @Test
     @DisplayName("a bounded pass stops where it said and a resumed one covers exactly the rest")
     void aboundedPassResumesWithNoGapAndNoOverlap() throws RepositoryException {
         final AgentContract bounded = contractWith("maintenance_sweep_work_bound_rows", 1L);
@@ -432,8 +652,12 @@ final class MaintenanceSweepTest {
     }
 
     private Session recorded() throws RepositoryException {
+        return recorded(OPERATIONS);
+    }
+
+    private Session recorded(List<String> operations) throws RepositoryException {
         final Session session = prepared();
-        for (final String operation : OPERATIONS) {
+        for (final String operation : operations) {
             OperationStore.create(session, assertInstanceOf(LogicalOperation.Held.class,
                     LogicalOperation.accepted(identity(operation),
                             Digest.of(operation.getBytes(StandardCharsets.UTF_8)),
