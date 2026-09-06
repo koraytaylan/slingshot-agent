@@ -115,6 +115,29 @@ final class ContinuationTokenTest {
     }
 
     @Test
+    @DisplayName("a token renders and decodes as the canonical wire document")
+    void aTokenRoundTripsThroughItsWireDocument() {
+        final ContinuationToken issued = ContinuationToken.issue(held("accepted.json"), KEY);
+        final DocumentValue decoded = assertInstanceOf(BoundedDocumentReader.Read.class,
+                BoundedDocumentReader.read(issued.rendered().getBytes(StandardCharsets.UTF_8),
+                        DOCUMENT_BOUNDS)).value();
+        final ContinuationToken restored = assertInstanceOf(ContinuationToken.Read.class,
+                ContinuationToken.read(decoded)).token();
+        assertEquals(issued, restored, "canonical token rendering changed its signed state");
+        assertInstanceOf(ContinuationToken.Honoured.class, honour(restored, held("accepted.json")));
+    }
+
+    @Test
+    @DisplayName("a token with an invalid document shape is rejected before validation")
+    void malformedTokenDocumentIsUnreadable() {
+        final SequencedMap<String, DocumentValue> malformed = new LinkedHashMap<>();
+        malformed.put(ContinuationToken.INTEGRITY, new DocumentValue.Text("not-a-digest"));
+        malformed.put(ContinuationToken.STATE, new DocumentValue.Mapping(new LinkedHashMap<>()));
+        assertInstanceOf(ContinuationToken.Unreadable.class,
+                ContinuationToken.read(new DocumentValue.Mapping(malformed)));
+    }
+
+    @Test
     @DisplayName("an expired token is refused, and only after everything it names has matched")
     void anExpiredTokenIsRefusedLast() {
         final ContinuationState state = held("accepted.json");

@@ -1575,3 +1575,9 @@ required checks and the complete gate, then commit the completed task.
 77. Re-ran the package handler's Checkstyle and PMD review after the checked-I/O refactor. Both
     analyses pass with no findings for the changed code; the PMD ruleset emits only its existing
     unmatched-exclusion warnings.
+
+78. Added the missing canonical wire codec for continuation tokens. Issued tokens now render their
+    signed integrity and five-member state as canonical JSON, and incoming documents are decoded
+    with shape validation before signature checks. The continuation suite now covers round-trip
+    equality and malformed-document refusal (11 cases pass); validation still owns integrity,
+    target, query, generation, and expiry decisions.
