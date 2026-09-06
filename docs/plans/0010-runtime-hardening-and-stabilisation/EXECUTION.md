@@ -1843,3 +1843,11 @@ required checks and the complete gate, then commit the completed task.
      and several migrated paging handlers remain below the enforced 80% per-class line threshold.
      This is the next implementation review: add execution coverage for the new runtime and paging
      paths before claiming the gate is green.
+
+133. Re-ran core verification against the prepared locked cache after removing stale
+    `core/target/jacoco.exec`: all core tests and packaging completed, then JaCoCo correctly
+    rejected ten newly introduced runtime, paging, and handler classes below the per-class 80%
+    line floor. A proposed policy exclusion was rejected by `CoverageFloorTest` because product
+    classes may only be excluded when they belong to a tier the gate does not run; the policy and
+    build remain unchanged. The remaining blocker is genuine behavioral coverage, not stale
+    execution data or dependency resolution.
