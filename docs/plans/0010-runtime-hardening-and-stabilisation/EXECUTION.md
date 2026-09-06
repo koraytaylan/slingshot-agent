@@ -1243,3 +1243,7 @@ required checks and the complete gate, then commit the completed task.
     refusal. The body and intake suites passed (28 cases), with Checkstyle and PMD green. Commit
     `d543edc` records the upload path. The initial servlet response flush still needs a cancellable
     boundary and task 4307 remains pending.
+    A final focused review wrapped the initial event-stream response flush in a daemon-backed
+    deadline operation and retained runtime exception propagation. The event-stream servlet suite
+    passed (10 cases). Commit `3763d6d` records the flush path; task 4307 still needs an integrated
+    end-to-end transfer review before status can advance.
