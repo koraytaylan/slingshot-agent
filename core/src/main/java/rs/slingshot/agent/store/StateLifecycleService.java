@@ -70,9 +70,15 @@ public final class StateLifecycleService {
     /** Starts recovery immediately and schedules bounded maintenance afterward. */
     @Activate
     public void activate() {
+        final AgentContract.Loaded contract;
+        try {
+            contract = contract();
+        } catch (final IllegalStateException refused) {
+            OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0, refused.getMessage()));
+            return;
+        }
         scheduler.set(Optional.of(Scheduler.open()));
         runOnce();
-        final AgentContract.Loaded contract = contract();
         final long interval = RestartRecovery.intervalMilliseconds(contract.contract());
         scheduler.get().orElseThrow().schedule(this::runOnce, interval);
     }
