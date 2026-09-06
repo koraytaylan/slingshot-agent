@@ -53,19 +53,19 @@ public final class RepositoryReach {
      * @param bound how many nodes one removal may take
      * @return the addresses, which is one longer than the bound where the subtree is over it
      */
-    @SuppressWarnings("PMD.NullAssignment")
     public static List<String> under(Resource root, long bound) {
         final List<String> found = new ArrayList<>();
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
-        Resource held = root;
-        while (held != null && found.size() <= bound) {
-            found.add(held.getPath());
-            pending.push(held.listChildren());
-            held = null;
-            while (!pending.isEmpty() && held == null) {
+        java.util.Optional<Resource> held = java.util.Optional.of(root);
+        while (held.isPresent() && found.size() <= bound) {
+            final Resource current = held.orElseThrow();
+            found.add(current.getPath());
+            pending.push(current.listChildren());
+            held = java.util.Optional.empty();
+            while (!pending.isEmpty() && held.isEmpty()) {
                 final Iterator<Resource> children = pending.peek();
                 if (children.hasNext()) {
-                    held = children.next();
+                    held = java.util.Optional.ofNullable(children.next());
                 } else {
                     pending.pop();
                 }
