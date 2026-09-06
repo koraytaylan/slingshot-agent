@@ -1657,3 +1657,5 @@ required checks and the complete gate, then commit the completed task.
     directory under `/tmp`; host-context image verification succeeds for all five images.
 
 94. Replaced nullable and optional paging handoff with explicit available/unavailable states and optional continuation output; added immutable value semantics and complete documentation. Focused CallerContext, query handler, submit servlet, API-shape, and Javadoc policy checks pass. The authoritative quality gate reached the full test and coverage stage; remaining coverage review is being verified after the value-object shape change.
+
+95. Added focused value-object coverage for the explicit paging context (`52f841b`). CallerContext tests now exercise available paging state, equality, hash semantics, and all admitted fields. The full suite remains green at 1,134 tests; the gate still reports class-level coverage deficits in CallerContext and QueryPathsHandler, so task 4404 remains pending.
