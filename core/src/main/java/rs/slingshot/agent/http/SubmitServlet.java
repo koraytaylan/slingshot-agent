@@ -123,20 +123,40 @@ public final class SubmitServlet extends AgentServlet {
                                                                  DocumentValue.Mapping submission,
                                                                  Session session);
 
-        /** Runs with the request resolver available to a packaged command runtime. */
+        /**
+         * Runs with the request resolver available to a packaged command runtime.
+         * @param operation the accepted operation
+         * @param submission the submitted command
+         * @param session the caller's JCR session
+         * @param resolver the caller's resource resolver
+         * @return the command completion
+         */
         default rs.slingshot.agent.execution.ExecutionOutcome.Completion run(
                 LogicalOperation operation, DocumentValue.Mapping submission, Session session,
                 ResourceResolver resolver) {
             return run(operation, submission, session);
         }
 
-        /** Supplies request-scoped continuation authority when this runtime has one. */
-        default Optional<CallerContext.Paging> paging(LogicalOperation operation,
-                                                       AgentContract contract) {
-            return Optional.empty();
+        /**
+         * Supplies request-scoped continuation authority when this runtime has one.
+         * @param operation the accepted operation
+         * @param contract the authenticated contract
+         * @return the paging context
+         */
+        default CallerContext.Paging paging(LogicalOperation operation,
+                                            AgentContract contract) {
+            return CallerContext.Unavailable.INSTANCE;
         }
 
-        /** Runs with the complete request-scoped handler context. */
+        /**
+         * Runs with the complete request-scoped handler context.
+         * @param operation the accepted operation
+         * @param submission the submitted command
+         * @param session the caller's JCR session
+         * @param resolver the caller's resource resolver
+         * @param context the request-scoped handler context
+         * @return the command completion
+         */
         default rs.slingshot.agent.execution.ExecutionOutcome.Completion run(
                 LogicalOperation operation, DocumentValue.Mapping submission, Session session,
                 ResourceResolver resolver, CallerContext context) {
@@ -264,6 +284,7 @@ public final class SubmitServlet extends AgentServlet {
      * @param body the bytes that arrived, already bounded
      * @param contract the authenticated contract, which declares every bound
      * @param effects the original caller's session, used only for requested content effects
+     * @param resolver the original caller's resource resolver
      */
     private record Arriving(CallerIdentity caller, byte[] body, AgentContract contract, Session effects,
                             ResourceResolver resolver) {

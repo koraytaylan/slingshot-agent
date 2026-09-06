@@ -1655,3 +1655,5 @@ required checks and the complete gate, then commit the completed task.
     without unsafe live service state. That provisional class was removed pending a proper OSGi
     registration design. Preparation and verification scripts now share a writable Podman runtime
     directory under `/tmp`; host-context image verification succeeds for all five images.
+
+94. Replaced nullable and optional paging handoff with explicit available/unavailable states and optional continuation output; added immutable value semantics and complete documentation. Focused CallerContext, query handler, submit servlet, API-shape, and Javadoc policy checks pass. The authoritative quality gate reached the full test and coverage stage; remaining coverage review is being verified after the value-object shape change.
