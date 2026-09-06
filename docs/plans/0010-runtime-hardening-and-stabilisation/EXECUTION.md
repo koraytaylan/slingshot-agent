@@ -1282,8 +1282,10 @@ required checks and the complete gate, then commit the completed task.
     counting the complete subtree up to one past the deletion bound before calling delete. Ordinary
     folders are refused and oversized component trees remain unchanged. Component mutation coverage
     passed (12 cases), with compilation and Checkstyle green; PMD reports only the known maintenance
-    test argument-order baseline. Commit `bbf94c0` records this step; dedicated wrong-kind and
-    over-budget fixtures remain.
+    test argument-order baseline. Commit `bbf94c0` records this step. A wrong-kind fixture and a
+    small-bound over-budget fixture now pass in the 14-case component suite; commit `146b315` adds
+    the wrong-kind case and `ba7cd58` applies the discovery bound and over-budget case. The evidence
+    for 4403 is complete.
     Added a direct wrong-kind boundary case proving an ordinary folder and its child remain byte
     stable when deletion is refused; the component suite now passes 13 cases. Commit `146b315`
     records the fixture. An over-budget component-tree case is still required.
