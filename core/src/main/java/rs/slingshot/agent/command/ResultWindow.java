@@ -178,6 +178,9 @@ public sealed interface ResultWindow permits ResultWindow.Initial, ResultWindow.
         if (!(window instanceof final DocumentValue.Mapping mapping)) {
             return new Refused(Refusal.UNKNOWN_MODE);
         }
+        if (mapping.members().keySet().stream().anyMatch(member -> !MEMBERS.contains(member))) {
+            return new Refused(Refusal.UNKNOWN_MODE);
+        }
         if (!(mapping.member(MODE).orElse(new DocumentValue.Nothing())
                 instanceof final DocumentValue.Text mode)) {
             return new Refused(Refusal.UNKNOWN_MODE);
