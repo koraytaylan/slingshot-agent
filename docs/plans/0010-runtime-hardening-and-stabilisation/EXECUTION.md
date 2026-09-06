@@ -1927,3 +1927,11 @@ required checks and the complete gate, then commit the completed task.
      result is consequently a reference to bytes that were staged and then discarded, not a durable
      publication. Completing 4405 requires a typed publication handoff at the runtime/terminal
      boundary, preserving the handler's no-session invariant.
+
+144. Implemented the 4405 handoff. `CommandHandler.Artifact` now carries the package bytes and slot
+     as a typed answer, while `DefaultCommandRuntime` publishes those bytes through
+     `OverflowPublication` with the operation caller and state session already owned by the runtime
+     boundary. The package handler remains session-free and still closes staging on every path.
+     Download and runtime review tests pass, and core verification passes all 1,154 tests,
+     JaCoCo floors, Javadocs, Checkstyle, PMD, and SpotBugs. Publication is now durable whenever
+     the validated runtime is active; installed runtime assembly remains the separate 4502 gate.
