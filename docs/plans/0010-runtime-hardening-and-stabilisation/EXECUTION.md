@@ -1349,3 +1349,9 @@ required checks and the complete gate, then commit the completed task.
     entries targeting the old address. Repointing now rewrites every matching array entry and
     reports each replacement. `RepositoryReachTest` plus the page, asset, and fragment mutation
     suites pass, and offline PMD reports no violations.
+
+36. Added proxy-backed iterator observers for bounded reach traversal. A 10,000-child wide tree
+    advances only the two nodes needed for the bound-one one-past result, while a 100-level tree
+    advances only its active path. The seven-case `RepositoryReachTest` suite, Checkstyle, and
+    PMD all pass. This supplies direct iterator-call evidence for 4401; handler-wide timing and
+    the full quality gate remain open.
