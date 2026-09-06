@@ -1553,3 +1553,9 @@ required checks and the complete gate, then commit the completed task.
     `milliseconds()` value. Focused stream/high-water tests pass; rebuilt-bundle interop reruns of
     `StateAccessOwnershipScenario` and `GenerationRotationCrashScenario` pass. This commit records
     the fix and review loop.
+
+74. Re-reviewed lifecycle activation after the runtime service was exercised in Oak. Contract
+    loading now occurs before the scheduler is created; an unavailable contract publishes the
+    existing unavailable snapshot and returns without leaking a scheduler. The five-case
+    `StateLifecycleServiceTest` suite passes, including the missing-provider and Oak success paths.
+    This commit records the lifecycle resource-boundary review loop.
