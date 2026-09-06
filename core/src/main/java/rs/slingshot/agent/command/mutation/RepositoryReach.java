@@ -22,7 +22,12 @@ import org.apache.sling.api.resource.ResourceResolver;
  */
 public final class RepositoryReach {
 
-    /** Reference discovery result, including whether the visibility budget covered the tree. */
+    /**
+     * Reference discovery result, including whether the visibility budget covered the tree.
+     *
+     * @param found resources that mention the address
+     * @param complete whether the bounded walk reached its end
+     */
     public record References(List<Resource> found, boolean complete) {
 
         /** Holds the discovered resources independently of the traversal's mutable list. */
@@ -88,7 +93,14 @@ public final class RepositoryReach {
         return references(session, address, budget).found();
     }
 
-    /** Discovers references and reports whether the bounded walk reached the end. */
+    /**
+     * Discovers references and reports whether the bounded walk reached the end.
+     *
+     * @param session the caller's own resource resolver
+     * @param address the address whose references are wanted
+     * @param budget the maximum number of resources to examine
+     * @return the references found and whether discovery completed
+     */
     public static References references(ResourceResolver session, String address, long budget) {
         final Resource root = session.getResource(CONTENT_ROOT);
         if (root == null) {
