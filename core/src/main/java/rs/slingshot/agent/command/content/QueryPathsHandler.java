@@ -111,7 +111,8 @@ public final class QueryPathsHandler implements CommandHandler {
         final long limit = command.window() instanceof ResultWindow.Initial initial
                 ? initial.limit()
                 : contract.value(rs.slingshot.agent.contract.ContractLimit.DEFAULT_RESULT_LIMIT);
-        final PagedQuery.Page<String> page = PagedQuery.pageOf(gathered.paths(), limit, offset);
+        final List<String> fromOffset = gathered.paths().stream().skip(offset).toList();
+        final PagedQuery.Page<String> page = PagedQuery.pageOf(fromOffset, limit, offset);
         final Optional<String> token = nextToken(page, held.digest(), context);
         if (token.isEmpty()) {
             if (command.window() instanceof ResultWindow.Initial) {
