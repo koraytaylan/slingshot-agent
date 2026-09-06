@@ -1686,3 +1686,10 @@ required checks and the complete gate, then commit the completed task.
     not complete. The focused metadata and package-command suites (18 tests), compilation,
     Checkstyle, PMD and SpotBugs pass. The remaining paged handlers still need the same migration,
     so task 4404 remains pending.
+
+102. Extended the same paging operation to `ListChildPagesHandler`, `FindPagesByTemplateHandler`,
+    `FindPagesContainingPhraseHandler`, and `FindPagesUsingComponentsHandler`. Their focused
+    suites pass all 28 cases, and the core Checkstyle and PMD checks pass. Initial calls without a
+    runtime authority retain the existing compatibility behavior; continuation calls still require
+    a supplied authority and are rejected when it is absent. The remaining paged command families
+    are still unreviewed, so 4404 is not closed.
