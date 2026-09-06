@@ -1493,3 +1493,12 @@ required checks and the complete gate, then commit the completed task.
     two existing intentional runtime-exception adapters in event delivery. Cache preparation still
     stops before recording because the locked Maven source-plugin realm lacks its Plexus archiver
     dependency, so the nine reactor artifacts remain unrecorded.
+
+64. Re-ran the focused stream and maintenance suites after reviewing a proposed checked-exception
+    conversion in `EventStreamServlet` and `StreamWriter`. The conversion was reverted because it
+    changed the tested contract for runtime failures (`IllegalStateException` became `IOException`);
+    all 16 stream tests now pass. The maintenance suite still fails only in
+    `denseBucketRespectsIteratorBound` and `denseBucketResumesBeyondRetainedFirstRecord`: the
+    successor lookup rescans the child iterator to decide whether more records exist, so a bound-one
+    pass advances two nodes and a resumed pass advances three. This is the remaining 4105 blocker;
+    no code change is claimed from the reverted experiment.
