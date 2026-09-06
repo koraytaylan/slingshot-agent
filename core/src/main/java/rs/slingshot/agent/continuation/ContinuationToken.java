@@ -8,11 +8,14 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.SequencedMap;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.EventStoreGeneration;
+import rs.slingshot.agent.json.CanonicalByteWriter;
+import rs.slingshot.agent.json.DocumentValue;
 
 /**
  * One continuation token: what it says, and the digest binding that to a key this agent holds.
@@ -116,6 +119,65 @@ public final class ContinuationToken {
      */
     public static ContinuationToken arrived(DigestValue integrity, ContinuationState state) {
         return new ContinuationToken(integrity, state);
+    }
+
+    /** The result of decoding a token document before signature validation. */
+    public sealed interface ReadOutcome permits Read, Unreadable {
+    }
+
+    /** A token document whose shape is valid but whose signature is not yet checked. */
+    public record Read(ContinuationToken token) implements ReadOutcome {
+    }
+
+    /** A token document that cannot be decoded. */
+    public record Unreadable(String detail) implements ReadOutcome {
+    }
+
+    /** Renders this token as the canonical JSON document carried by a result window. */
+    public String rendered() {
+        final SequencedMap<String, DocumentValue> token = new java.util.LinkedHashMap<>();
+        token.put(INTEGRITY, new DocumentValue.Text(integrity.rendered()));
+        token.put(STATE, stateDocument(state));
+        final CanonicalByteWriter.Outcome written = CanonicalByteWriter.write(
+                new DocumentValue.Mapping(token));
+        if (!(written instanceof final CanonicalByteWriter.Written bytes)) {
+            throw new IllegalStateException("the continuation token could not be rendered");
+        }
+        return bytes.rendered();
+    }
+
+    /** Decodes the canonical token document, leaving signature validation to {@link #validate}. */
+    public static ReadOutcome read(DocumentValue document) {
+        if (!(document instanceof final DocumentValue.Mapping mapping)
+                || !mapping.members().keySet().equals(java.util.Set.copyOf(MEMBERS))) {
+            return new Unreadable("a continuation token is an object with integrity and state");
+        }
+        final Optional<DigestValue> integrity = mapping.member(INTEGRITY)
+                .filter(DocumentValue.Text.class::isInstance)
+                .map(value -> DigestValue.of(((DocumentValue.Text) value).value()))
+                .filter(DigestValue.Held.class::isInstance)
+                .map(value -> ((DigestValue.Held) value).digest());
+        if (integrity.isEmpty()) {
+            return new Unreadable("the continuation token integrity is not a digest");
+        }
+        final ContinuationState.Outcome state = ContinuationState.of(mapping.member(STATE).orElseThrow());
+        if (!(state instanceof final ContinuationState.Held held)) {
+            return new Unreadable("the continuation token state is malformed");
+        }
+        return new Read(arrived(integrity.orElseThrow(), held.state()));
+    }
+
+    private static DocumentValue.Mapping stateDocument(ContinuationState state) {
+        final SequencedMap<String, DocumentValue> members = new java.util.LinkedHashMap<>();
+        members.put(ContinuationState.GENERATION, new DocumentValue.Whole(state.generation().number()));
+        members.put(ContinuationState.TARGET_DIGEST, new DocumentValue.Text(
+                state.targetDigest().rendered()));
+        members.put(ContinuationState.EXPIRES_AT, new DocumentValue.Whole(
+                state.expiresAtUnixMilliseconds()));
+        members.put(ContinuationState.POSITION, new DocumentValue.Whole(state.position()));
+        members.put(ContinuationState.QUERY_DIGEST, new DocumentValue.Text(
+                state.queryDigest().rendered()));
+        return new DocumentValue.Mapping(members);
     }
 
     /**
