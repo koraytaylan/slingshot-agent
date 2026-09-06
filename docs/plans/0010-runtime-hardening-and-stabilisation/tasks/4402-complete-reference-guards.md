@@ -17,7 +17,7 @@ touches:
   - schemas/agent-protocol/command
   - core/src/test/resources/fixtures/agent-contract
 status: complete
-merged_as: 1805837
+merged_as: cf663d8
 ---
 # Refuse Mutations After Incomplete Reference Discovery
 
