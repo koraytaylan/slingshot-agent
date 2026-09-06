@@ -1292,3 +1292,9 @@ required checks and the complete gate, then commit the completed task.
     validation clock, and no runtime path calls `PagedQuery.tokenFor`. Existing continuation branches
     therefore cannot safely issue or validate authority. This is a confirmed architecture gap, not
     a handler-local defect; 4404 remains pending until the command runtime carries that authority.
+
+27. Audited 4405's package path and confirmed that `DownloadContentPackageHandler` currently stages
+    only `filter.xml` and returns metadata, while durable publication requires an operation session,
+    caller ownership, and `ArtifactStore.publish`. The handler receives only a staging-room handle
+    and a read-only resolver, so producing synthetic ZIP bytes would still leave no durable artifact
+    route. 4405 remains pending until the runtime supplies the publication boundary.
