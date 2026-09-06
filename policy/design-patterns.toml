@@ -571,6 +571,11 @@ pattern = "stateless-policy"
 reason = "What a submission means is decided from what the store holds now and what the request itself derives, never from anything remembered between requests - which is the whole reason a resend converges."
 
 [[type]]
+name = "SubmissionRegistration"
+pattern = "stateless-policy"
+reason = "Operation acceptance and subscription ownership are decided from current durable state and published together; request-local capacity guards retain no authority between calls."
+
+[[type]]
 name = "PhysicalAttempt"
 pattern = "value-object"
 reason = "One delivery of one operation: which job, which node, and when. Two records of one delivery are the same fact, which is what lets a duplicate arrival collapse rather than count."
@@ -764,6 +769,11 @@ reason = "What each route requires, as one table compared against the committed 
 name = "AuthorizationGate"
 pattern = "stateless-policy"
 reason = "Whether a caller may use this agent is decided from the groups an operator permitted and where the platform says the caller stands, every time, with the three ways a configuration can mean nobody kept apart."
+
+[[type]]
+name = "StateAuthority"
+pattern = "stateless-policy"
+reason = "Each state request compares the durable owner and subscription binding with the original caller and current operator groups, independently of repository visibility."
 
 [[type]]
 name = "ForgeryProtection"

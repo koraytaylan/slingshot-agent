@@ -24,6 +24,8 @@ import org.apache.sling.servlethelpers.MockSlingHttpServletResponse;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,6 +65,17 @@ final class PhysicalJobServletTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @BeforeEach
+    void bindStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
+    }
+
+    @AfterEach
+    void stopStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().stopped();
+    }
 
     @Test
     @DisplayName("no attempts, one, and several each answer exactly what the outbox holds")

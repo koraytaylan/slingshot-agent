@@ -156,20 +156,11 @@ public final class ArtifactServlet extends AgentServlet {
             refuse(response, AuthenticationGate.STATUS);
             return;
         }
-        try {
-            asked(request, response, held.contract());
-        } catch (final RepositoryException unreadable) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
-        }
+        withState(response, state -> asked(request, response, held.contract(), state));
     }
 
     private void asked(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                       AgentContract contract) throws IOException, RepositoryException {
-        final Optional<Session> store = sessionOf(request);
-        if (store.isEmpty()) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
-            return;
-        }
+                       AgentContract contract, Session store) throws IOException, RepositoryException {
         final AgentOperationIdentifier.Outcome named = AgentOperationIdentifier.of(
                 text(request.getParameter(OPERATION_QUERY_MEMBER)), contract);
         final ArtifactSlot.Outcome slot =
@@ -179,8 +170,13 @@ public final class ArtifactServlet extends AgentServlet {
             refuse(response, REFUSED);
             return;
         }
-        held(response, store.get(), StatePath.operation(serving(store.get()),
-                operation.identifier()), held.slot(), contract);
+        final StatePath path = StatePath.operation(serving(store), operation.identifier());
+        final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
+        if (viewer.isEmpty() || !StateAuthority.operation(store, path, viewer.get(), ROUTE_NAME)) {
+            refuse(response, NOTHING_HERE);
+            return;
+        }
+        held(response, store, path, held.slot(), contract);
     }
 
     private void held(SlingHttpServletResponse response, Session store, StatePath operation,
@@ -188,8 +184,8 @@ public final class ArtifactServlet extends AgentServlet {
             throws IOException, RepositoryException {
         final Optional<ArtifactRecord> record = ArtifactStore.read(store, operation, slot);
         if (record.isEmpty()) {
-            // Nothing here holds it, or the caller's own session cannot see it: one answer, because
-            // a caller who could tell those apart could ask which operations exist.
+            // The authorized operation no longer holds this artifact; expose no details about
+            // records outside the requested operation and slot.
             refuse(response, NOTHING_HERE);
             return;
         }
@@ -323,9 +319,7 @@ public final class ArtifactServlet extends AgentServlet {
         return safe.toString();
     }
 
-    private static Optional<Session> sessionOf(SlingHttpServletRequest request) {
-        return Optional.ofNullable(request.getResourceResolver().adaptTo(Session.class));
-    }
+
 
     private static String text(String value) {
         return value == null ? "" : value;

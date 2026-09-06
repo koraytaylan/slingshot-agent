@@ -7,10 +7,13 @@ import java.util.Optional;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.http.AuthorizationGate;
+import rs.slingshot.agent.http.StateAuthority;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.StatePath;
+import rs.slingshot.agent.store.SubscriptionLedger;
 import rs.slingshot.agent.store.SubscriptionRecord;
 
 /**
@@ -82,13 +85,29 @@ public record StreamSession(SubscriptionRecord.Identifier subscription,
      * <p>Every refusal here is an ordinary response rather than a stream error: a client that never
      * got a stream should not have to parse one to find out why.</p>
      *
-     * @param store the caller's own session
+     * @param store the internal state session
      * @param asked what the request asked to follow
      * @param contract the authenticated contract, which declares every bound
      * @return the session, or the one reason there is no stream
      * @throws RepositoryException if the repository fails
      */
     public static Outcome of(Session store, Asked asked, AgentContract contract)
+            throws RepositoryException {
+        return of(store, asked, contract, group -> AuthorizationGate.Standing.NOT_A_MEMBER);
+    }
+
+    /**
+     * Opens a stream using durable binding and the original caller's operator membership.
+     *
+     * @param store the internal state session
+     * @param asked the requested subscription and operation
+     * @param contract the authenticated bounds
+     * @param groups group membership read through the original caller's session
+     * @return the bound stream, or why access was refused
+     * @throws RepositoryException if the repository fails
+     */
+    public static Outcome of(Session store, Asked asked, AgentContract contract,
+                              AuthorizationGate.Groups groups)
             throws RepositoryException {
         final SubscriptionRecord.Outcome named =
                 SubscriptionRecord.identifier(asked.subscription(), contract);
@@ -103,26 +122,29 @@ public record StreamSession(SubscriptionRecord.Identifier subscription,
             return new Refused(Refusal.FOREIGN_GENERATION, "this store serves generation "
                     + serving.number() + " and this stream names " + asked.generation());
         }
-        if (!store.nodeExists(SubscriptionRecord.pathOf(subscription.identifier()).path())) {
-            return new Refused(Refusal.UNKNOWN_SUBSCRIPTION,
-                    "this side holds no such subscription, and a stream on one nobody took would"
-                            + " deliver events nobody is accounting for");
+        final Optional<SubscriptionRecord> record = SubscriptionLedger.read(store,
+                subscription.identifier(), contract);
+        if (record.isEmpty()) {
+            return new Refused(Refusal.UNKNOWN_SUBSCRIPTION, "no complete subscription holds this name");
         }
-        return owned(store, asked, subscription.identifier(), serving, operation.get());
+        if (!record.get().generation().equals(serving)
+                || !record.get().binding().operation().equals(operation.get())) {
+            return new Refused(Refusal.NOT_THIS_CALLERS_OPERATION,
+                    "the subscription is not assigned to the requested operation and generation");
+        }
+        return owned(store, asked, record.get(), new StateAuthority.Viewer(asked.caller(), groups));
     }
 
-    private static Outcome owned(Session store, Asked asked,
-                                 SubscriptionRecord.Identifier subscription,
-                                 EventStoreGeneration serving,
-                                 AgentOperationIdentifier operation) throws RepositoryException {
-        final StatePath path = StatePath.operation(serving, operation);
-        if (!store.nodeExists(path.path())) {
-            // Nothing here holds it, or the caller's own session cannot see it: one answer, because
-            // a caller who could tell those apart could ask which identifiers exist.
+    private static Outcome owned(Session store, Asked asked, SubscriptionRecord subscription,
+                                 StateAuthority.Viewer viewer) throws RepositoryException {
+        if (!StateAuthority.subscription(store, subscription, viewer, "events")) {
             return new Refused(Refusal.NOT_THIS_CALLERS_OPERATION,
-                    "nothing this caller can see holds that operation");
+                    "this caller may not follow the subscription's operation");
         }
-        return new Held(new StreamSession(subscription, serving, path, asked.caller()));
+        final StatePath path = StatePath.operation(subscription.generation(),
+                subscription.binding().operation());
+        return new Held(new StreamSession(subscription.identifier(), subscription.generation(),
+                path, asked.caller()));
     }
 
     private static Optional<AgentOperationIdentifier> operationIn(Asked asked,

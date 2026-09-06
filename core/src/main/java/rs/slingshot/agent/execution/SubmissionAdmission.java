@@ -126,6 +126,10 @@ public final class SubmissionAdmission {
     }
 
     private static AdmissionOutcome compared(LogicalOperation recorded, Submission submission) {
+        if (!recorded.caller().equals(submission.caller())) {
+            return new AdmissionOutcome.Conflicting("submitting_caller",
+                    "this identifier already names work submitted by another caller");
+        }
         if (!recorded.submissionDigest().matches(submission.submissionDigest())) {
             return new AdmissionOutcome.Conflicting("submission_digest",
                     "this identifier already names a different submission");

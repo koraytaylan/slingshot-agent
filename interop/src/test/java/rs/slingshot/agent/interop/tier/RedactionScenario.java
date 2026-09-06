@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedMap;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -36,7 +37,7 @@ import rs.slingshot.agent.route.AgentRouteTable;
  * <p>Auditing a route at a time as each one is written is how one gets missed. This drives every
  * route the committed table declares, with a planted value of every kind the corpus names in the
  * places a caller can put one, and scans every body, every header and every line the instance
- * wrote.</p>
+ * wrote, apart from identified framework INFO setup announcements.</p>
  *
  * <p>The log is half the point. A response goes to one caller; a log line goes to an operator's
  * console, a support bundle, and whatever ships logs off the instance — so a secret that only ever
@@ -56,6 +57,11 @@ final class RedactionScenario {
     /** An identifier this build reads, which no operation on a fresh instance has. */
     private static final String AN_IDENTIFIER =
             "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8";
+
+    /** Framework INFO announcements identify their logger before the message begins. */
+    private static final Pattern FRAMEWORK_ANNOUNCEMENT = Pattern.compile(
+            "^\\d{2}\\.\\d{2}\\.\\d{4} \\d{2}:\\d{2}:\\d{2}\\.\\d{3} \\*INFO\\* "
+                    + "\\[[^]]+] (?:Events\\.|org\\.apache\\.sling\\.jcr\\.repoinit\\.)");
 
     private final TierRequests requests = TierRequests.open();
 
@@ -196,21 +202,34 @@ final class RedactionScenario {
         }
     }
 
+    @Test
+    @DisplayName("only framework INFO announcements are excluded, never product lines or failures")
+    void frameworkAnnouncementsAreIdentifiedByTheirLogger() {
+        final String prefix = "06.09.2026 02:10:51.313 *INFO* [CM Event Dispatcher] ";
+        final String framework = prefix + "org.apache.sling.jcr.repoinit.impl.NodeVisitor ";
+        final String product = prefix + "rs.slingshot.agent ";
+        final String path = "/var/slingshot-agent";
+        assertEquals("", whatThisProductWrote(framework + path));
+        assertEquals("", whatThisProductWrote(prefix + "Events.Service.rs.slingshot.agent.core"));
+        assertEquals(product + path, whatThisProductWrote(product + path));
+        assertEquals(product + framework + path, whatThisProductWrote(product + framework + path));
+        final String warning = framework.replace("*INFO*", "*WARN*") + path;
+        assertEquals(warning, whatThisProductWrote(warning));
+        assertEquals(path, whatThisProductWrote(path));
+    }
+
     /**
-     * What this product wrote, without the framework's own account of its service registry.
+     * Excludes framework INFO registry and repository-initialization announcements.
      *
-     * <p>The platform names every bundle whose services it registers, this one included, at info
-     * level and on its own account - {@code Events.Service.rs.slingshot.agent.core} is the
-     * framework describing its registry rather than this product disclosing anything. It cannot be
-     * prevented without silencing the platform, and it is not what this check is for: what a caller
-     * can actually see is held to the same corpus by the three checks about answers.</p>
+     * <p>These loggers describe committed bundle names and configured paths while installing the
+     * fixture. Product messages, warnings, errors and stack-trace lines remain in the scan.</p>
      *
      * @param written everything the instance wrote
-     * @return the part of it this product is answerable for
+     * @return captured output other than the identified framework announcements
      */
     private static String whatThisProductWrote(String written) {
         return written.lines()
-                .filter(line -> !line.contains("[FelixLogListener] Events."))
+                .filter(line -> !FRAMEWORK_ANNOUNCEMENT.matcher(line).find())
                 .collect(Collectors.joining("\n"));
     }
 

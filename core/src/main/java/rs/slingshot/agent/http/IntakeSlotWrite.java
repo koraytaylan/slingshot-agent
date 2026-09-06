@@ -20,6 +20,7 @@ import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.store.ArtifactStore;
 import rs.slingshot.agent.store.CapacityLedger;
 import rs.slingshot.agent.store.CapacityReservation;
+import rs.slingshot.agent.store.ClaimByCreation;
 import rs.slingshot.agent.store.StatePath;
 import rs.slingshot.agent.store.WriteOutcome;
 import rs.slingshot.agent.wire.JobEventKind;
@@ -149,10 +150,30 @@ public final class IntakeSlotWrite {
     public static Admission admit(Session session, SubmissionAdmission.Submission submission,
                                    List<Declared> declared, long nowUnixMilliseconds,
                                    AgentContract contract) throws RepositoryException {
+        return admit(session, submission, declared, nowUnixMilliseconds, contract, node -> { });
+    }
+
+    /**
+     * Publishes a manifest and additional state in the operation's acceptance commit.
+     *
+     * @param session the admission session
+     * @param submission the operation being submitted
+     * @param declared the payload declarations
+     * @param nowUnixMilliseconds the admission time
+     * @param contract the authenticated bounds
+     * @param alongside additional state staged without saving or refreshing the session
+     * @return the operation outcome or capacity refusal
+     * @throws RepositoryException if preparation, publication, or cleanup fails
+     */
+    public static Admission admit(Session session, SubmissionAdmission.Submission submission,
+                                   List<Declared> declared, long nowUnixMilliseconds,
+                                   AgentContract contract, ClaimByCreation.InitialValues alongside)
+            throws RepositoryException {
         final List<Declared> manifest = List.copyOf(declared);
         if (manifest.isEmpty()
                 || OperationStore.read(session, submission.identity()) instanceof OperationStore.Held) {
-            return new Decided(SubmissionAdmission.admit(session, submission, nowUnixMilliseconds, contract));
+            return new Decided(SubmissionAdmission.admit(session, submission, nowUnixMilliseconds,
+                    contract, alongside));
         }
         try (CapacityReservation.Batch batch = CapacityReservation.batch(session, contract)) {
             for (final Declared slot : manifest) {
@@ -169,7 +190,10 @@ public final class IntakeSlotWrite {
                 return new NotCounted(missed.outcome());
             }
             return new Decided(SubmissionAdmission.admit(session, submission, nowUnixMilliseconds, contract,
-                    node -> declare(node, manifest, batch.reservations())));
+                    node -> {
+                        declare(node, manifest, batch.reservations());
+                        alongside.write(node);
+                    }));
         }
     }
 
@@ -197,7 +221,7 @@ public final class IntakeSlotWrite {
     /**
      * Writes one payload into the slot its manifest declared.
      *
-     * @param session the caller's own session
+     * @param session the internal state session
      * @param caller whose share the room was taken from at admission
      * @param arriving the payload as it is arriving
      * @param contract the authenticated contract, which declares every bound

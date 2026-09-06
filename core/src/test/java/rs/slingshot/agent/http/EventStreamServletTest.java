@@ -28,6 +28,8 @@ import org.apache.sling.servlethelpers.MockSlingHttpServletResponse;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -77,6 +79,21 @@ final class EventStreamServletTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    private static rs.slingshot.agent.identity.AgentOperationIdentifier boundOperation() {
+        return event("accepted.json").identifier();
+    }
+
+    @BeforeEach
+    void bindStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
+    }
+
+    @AfterEach
+    void stopStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().stopped();
+    }
 
     @Test
     @DisplayName("events after a cursor are delivered in sequence order and its own is not")
@@ -250,7 +267,7 @@ final class EventStreamServletTest {
         final ReleasingRequest request = new ReleasingRequest(sling.resourceResolver());
         request.setMethod("GET");
         request.setParameterMap(Map.of(
-                EventStreamServlet.SUBSCRIPTION, SUBSCRIPTION,
+                EventStreamServlet.SUBSCRIPTION, SUBSCRIPTION + "-empty",
                 EventStreamServlet.OPERATION, identifierOf("nothing-waiting.json"),
                 EventStreamServlet.GENERATION, String.valueOf(EventStoreGeneration.FIRST)));
         ((MockRequestPathInfo) request.getRequestPathInfo())
@@ -267,6 +284,11 @@ final class EventStreamServletTest {
         assertEquals(SessionBound.milliseconds(CONTRACT)
                         + Heartbeat.intervalMilliseconds(CONTRACT), request.timeout(),
                 "the container would end the session before this side does");
+        assertEquals(0, rs.slingshot.agent.store.CapacityLedger.heldBy(
+                        java.util.Objects.requireNonNull(sling.resourceResolver().adaptTo(Session.class)),
+                        AccountedQuantity.CONCURRENT_EVENT_STREAMS, caller(), CONTRACT),
+                "async completion occurred before releasing the stream reservation");
+        assertTrue(sling.resourceResolver().isLive(), "the caller's resolver was closed");
         servlet.stopped();
     }
 
@@ -425,7 +447,8 @@ final class EventStreamServletTest {
                 new MockSlingHttpServletRequest(sling.resourceResolver());
         request.setMethod("GET");
         request.setParameterMap(Map.of(
-                EventStreamServlet.SUBSCRIPTION, text(asked, EventStreamServlet.SUBSCRIPTION),
+                EventStreamServlet.SUBSCRIPTION, "with-nothing-waiting".equals(fixture)
+                        ? SUBSCRIPTION + "-empty" : text(asked, EventStreamServlet.SUBSCRIPTION),
                 EventStreamServlet.OPERATION, text(asked, EventStreamServlet.OPERATION),
                 EventStreamServlet.GENERATION,
                 String.valueOf(whole(asked, EventStreamServlet.GENERATION))));
@@ -485,13 +508,22 @@ final class EventStreamServletTest {
         walked(session, StatePath.ROOT);
         walked(session, operation("accepted.json").path());
         walked(session, operation("nothing-waiting.json").path());
+        session.getNode(operation("accepted.json").path()).setProperty(
+                rs.slingshot.agent.execution.OperationStore.CALLER, caller().name());
+        session.getNode(operation("nothing-waiting.json").path()).setProperty(
+                rs.slingshot.agent.execution.OperationStore.CALLER, caller().name());
+        session.save();
         GenerationStore.establish(session);
         SubscriptionLedger.prepare(session, caller());
         StreamAdmission.prepare(session, caller());
         rs.slingshot.agent.store.LedgerAdmission.prepare(session, caller());
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), NOW,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
+                        boundOperation(), NOW,
                         CONTRACT), "the subscription was not taken");
+        assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION + "-empty", generation(),
+                        event("nothing-waiting.json").identifier(), NOW, CONTRACT));
         return session;
     }
 

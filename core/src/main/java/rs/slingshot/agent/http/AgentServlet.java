@@ -4,10 +4,12 @@
 package rs.slingshot.agent.http;
 
 import java.io.IOException;
+import javax.jcr.RepositoryException;
 import javax.servlet.ServletException;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
 import org.apache.sling.api.servlets.SlingAllMethodsServlet;
+import rs.slingshot.agent.repository.AgentSession;
 import rs.slingshot.agent.route.AgentRoute;
 import rs.slingshot.agent.route.AgentRouteTable;
 
@@ -44,6 +46,24 @@ public abstract sealed class AgentServlet extends SlingAllMethodsServlet
      */
     protected AgentServlet() {
         super();
+    }
+
+    /**
+     * Answers with a scoped internal state session and closes it on every exit path.
+     *
+     * @param response the response to refuse when state access fails
+     * @param work internal bookkeeping, retaining the original request separately for content effects
+     * @throws IOException if the response cannot be written
+     */
+    protected static void withState(SlingHttpServletResponse response, AgentSession.StateWork work)
+            throws IOException {
+        try {
+            if (AgentSession.current().withState(work) == AgentSession.Completion.UNAVAILABLE) {
+                refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            }
+        } catch (final RepositoryException unavailable) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        }
     }
 
     /**

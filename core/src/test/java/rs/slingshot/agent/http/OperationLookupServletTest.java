@@ -22,6 +22,8 @@ import org.apache.sling.servlethelpers.MockSlingHttpServletResponse;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -67,6 +69,17 @@ final class OperationLookupServletTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @BeforeEach
+    void bindStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
+    }
+
+    @AfterEach
+    void stopStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().stopped();
+    }
 
     @Test
     @DisplayName("every state answers with the snapshot the store materialised")
@@ -143,10 +156,64 @@ final class OperationLookupServletTest {
                 answered.getOutputAsString());
     }
 
+    @Test
+    @DisplayName("an unrelated caller with state-tree read access cannot read another caller's snapshot")
+    void stateVisibilityDoesNotAuthorizeAnotherCallersSnapshot() throws RepositoryException,
+            IOException, ServletException, org.apache.sling.api.resource.LoginException {
+        final Session writer = recorded();
+        appended(writer, JobEventKind.ACCEPTED);
+        final var users = ((org.apache.jackrabbit.api.JackrabbitSession) writer).getUserManager();
+        final var reader = users.createUser("unrelated-state-reader", "proof-password");
+        final var controls = writer.getAccessControlManager();
+        final var policy = (org.apache.jackrabbit.api.security.JackrabbitAccessControlList)
+                controls.getApplicablePolicies(StatePath.ROOT).nextAccessControlPolicy();
+        policy.addAccessControlEntry(reader.getPrincipal(), new javax.jcr.security.Privilege[] {
+                controls.privilegeFromName(javax.jcr.security.Privilege.JCR_READ) });
+        controls.setPolicy(StatePath.ROOT, policy);
+        writer.save();
+        final Session limited = writer.getRepository().login(new javax.jcr.SimpleCredentials(
+                "unrelated-state-reader", "proof-password".toCharArray()));
+        try (var resolver = callerResolver(sling.resourceResolver().clone(java.util.Map.of()), limited)) {
+            assertTrue(limited.nodeExists(operation().path()), "the unrelated caller must see the state");
+            final MockSlingHttpServletResponse answer = lookup(resolver, identifier(), "");
+            assertEquals(OperationLookupServlet.NOT_YET, answer.getStatus(),
+                    "repository visibility must not disclose another caller's snapshot: "
+                            + answer.getOutputAsString());
+            assertEquals("", answer.getOutputAsString());
+        } finally {
+            limited.logout();
+        }
+    }
+
+    private static org.apache.sling.api.resource.ResourceResolver callerResolver(
+            org.apache.sling.api.resource.ResourceResolver delegate, Session limited) {
+        return (org.apache.sling.api.resource.ResourceResolver) java.lang.reflect.Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] { org.apache.sling.api.resource.ResourceResolver.class },
+                (proxy, method, arguments) -> {
+                    if ("getUserID".equals(method.getName())) {
+                        return limited.getUserID();
+                    }
+                    if ("adaptTo".equals(method.getName()) && arguments[0] == Session.class) {
+                        return limited;
+                    }
+                    try {
+                        return method.invoke(delegate, arguments);
+                    } catch (final java.lang.reflect.InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
+    }
+
     private MockSlingHttpServletResponse lookup(String identifier, String generation)
             throws IOException, ServletException {
-        final MockSlingHttpServletRequest request =
-                new MockSlingHttpServletRequest(sling.resourceResolver());
+        return lookup(sling.resourceResolver(), identifier, generation);
+    }
+
+    private MockSlingHttpServletResponse lookup(org.apache.sling.api.resource.ResourceResolver resolver,
+                                                String identifier, String generation)
+            throws IOException, ServletException {
+        final MockSlingHttpServletRequest request = new MockSlingHttpServletRequest(resolver);
         request.setMethod("GET");
         ((MockRequestPathInfo) request.getRequestPathInfo())
                 .setResourcePath(OperationLookupServlet.route().path());

@@ -241,6 +241,46 @@ final class SubmissionAdmissionTest {
         }
     }
 
+    @Test
+    @DisplayName("another caller cannot recognise an owner's identical submission")
+    void anotherCallerCannotRecogniseAnOwnersSubmission() throws RepositoryException {
+        final Session session = prepared();
+        final var original = submission("operation.json", "command-contract.json", "a submission");
+        admit(session, original);
+        final String before = written(session);
+        final StatePath.Caller other = assertInstanceOf(StatePath.Held.class,
+                StatePath.caller("another-caller")).caller();
+        final var resend = new SubmissionAdmission.Submission(original.identity(),
+                original.submissionDigest(), original.commandContract(), other, NOW);
+        assertEquals("submitting_caller", assertInstanceOf(AdmissionOutcome.Conflicting.class,
+                admit(session, resend)).member());
+        assertEquals(before, written(session), "a foreign resend changed the owner's record");
+    }
+
+    @Test
+    void aStateWriterNeedsNoVisibilityAboveTheStateRoot() throws RepositoryException {
+        final Session setup = prepared();
+        final var users = ((org.apache.jackrabbit.api.JackrabbitSession) setup).getUserManager();
+        final var writer = users.createUser("scoped-state-writer", "test-password");
+        final var access = setup.getAccessControlManager();
+        final var policy = (org.apache.jackrabbit.api.security.JackrabbitAccessControlList)
+                access.getApplicablePolicies(StatePath.ROOT).nextAccessControlPolicy();
+        policy.addAccessControlEntry(writer.getPrincipal(), new javax.jcr.security.Privilege[] {
+                access.privilegeFromName("jcr:read"), access.privilegeFromName("jcr:write"),
+                access.privilegeFromName("jcr:nodeTypeManagement") });
+        access.setPolicy(StatePath.ROOT, policy);
+        setup.save();
+        final Session state = setup.getRepository().login(new javax.jcr.SimpleCredentials(
+                "scoped-state-writer", "test-password".toCharArray()));
+        try {
+            assertFalse(state.nodeExists("/var"), "the fixture must hide the state root's ancestor");
+            assertInstanceOf(AdmissionOutcome.Accepted.class,
+                    admit(state, submission("operation.json", "command-contract.json", "a submission")));
+        } finally {
+            state.logout();
+        }
+    }
+
     private static OperationStore.Outcome startAndCount(Session session, LogicalOperation operation)
             throws RepositoryException {
         final OperationStore.Outcome outcome = SubmissionAdmission.start(session, operation);

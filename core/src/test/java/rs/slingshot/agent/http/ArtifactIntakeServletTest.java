@@ -81,6 +81,17 @@ final class ArtifactIntakeServletTest {
         new AuthorizationGate().stopped();
     }
 
+    @BeforeEach
+    void bindStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().available(
+                sling.getService(org.apache.sling.api.resource.ResourceResolverFactory.class));
+    }
+
+    @AfterEach
+    void stopStateSource() {
+        new rs.slingshot.agent.repository.AgentSession().stopped();
+    }
+
     @Test
     @DisplayName("a submission declaring a payload is acknowledged and does not start")
     void asubmissionDeclaringApayloadDoesNotStart() throws RepositoryException, IOException,
@@ -303,14 +314,53 @@ final class ArtifactIntakeServletTest {
         try (org.apache.sling.api.resource.ResourceResolver resolver =
                      publicationFailure(session, committed)) {
             assertEquals(javax.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
-                    submit(resolver).getStatus());
+                    throughState(resolver, () -> submit(sling.resourceResolver())).getStatus());
             session.refresh(false);
             assertEquals(committed, session.nodeExists(operation().path()));
+            final var subscription = assertInstanceOf(rs.slingshot.agent.store.SubscriptionRecord.Held.class,
+                    rs.slingshot.agent.store.SubscriptionRecord.identifier("following-daemon-one", CONTRACT))
+                    .identifier();
+            assertEquals(committed, rs.slingshot.agent.store.SubscriptionLedger.read(session,
+                    subscription, CONTRACT).isPresent(), "acceptance and binding must publish together");
+            assertEquals(committed ? 1 : 0,
+                    CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
             assertEquals(committed ? 1 : 0,
                     CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
             assertEquals(SubmitServlet.ACCEPTED, submit(sling.resourceResolver()).getStatus());
             capacity(session, 1);
         }
+    }
+
+    @Test
+    void aCompetingSubscriptionClaimRollsBackOperationAndManifest()
+            throws RepositoryException, IOException, ServletException, LoginException {
+        final Session session = prepared();
+        final var inserted = new java.util.concurrent.atomic.AtomicBoolean();
+        try (var peer = sling.resourceResolver().clone(java.util.Map.of());
+                var intercepted = intercepting(session, () -> {
+                    if (session.nodeExists(operation().path()) && inserted.compareAndSet(false, true)) {
+                        final Session other = java.util.Objects.requireNonNull(peer.adaptTo(Session.class));
+                        final var different = assertInstanceOf(
+                                rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
+                                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
+                                "e".repeat(64), CONTRACT))
+                                .identifier();
+                        assertInstanceOf(rs.slingshot.agent.store.SubscriptionLedger.Subscribed.class,
+                                rs.slingshot.agent.store.SubscriptionLedger.subscribe(other, caller(),
+                                        "following-daemon-one", identity().generation(), different,
+                                        System.currentTimeMillis(), CONTRACT));
+                    }
+                })) {
+            assertEquals(SubmitServlet.AT_CAPACITY,
+                    throughState(intercepted, () -> submit(sling.resourceResolver())).getStatus());
+        }
+        session.refresh(false);
+        assertTrue(inserted.get(), "the test did not interleave at acceptance");
+        assertFalse(session.nodeExists(operation().path()));
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, CONTRACT));
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        assertEquals(SubmitServlet.CONFLICT, submit(sling.resourceResolver()).getStatus());
     }
 
     private org.apache.sling.api.resource.ResourceResolver publicationFailure(Session session,
@@ -359,7 +409,7 @@ final class ArtifactIntakeServletTest {
             throw new javax.jcr.InvalidItemStateException("capacity allocation contended");
         })) {
             assertEquals(ArtifactIntakeServlet.TEMPORARILY_UNAVAILABLE,
-                    upload(payload(), SLOT, resolver).getStatus());
+                    throughState(resolver, () -> upload(payload(), SLOT)).getStatus());
             capacity(session, 1);
             assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), SLOT).getStatus());
             capacity(session, 0);
@@ -376,10 +426,33 @@ final class ArtifactIntakeServletTest {
             }
         })) {
             assertEquals(ArtifactIntakeServlet.TEMPORARILY_UNAVAILABLE,
-                    upload(payload(), SLOT, resolver).getStatus());
+                    throughState(resolver, () -> upload(payload(), SLOT)).getStatus());
             capacity(session, 1);
             assertEquals(ArtifactIntakeServlet.TAKEN, upload(payload(), SLOT).getStatus());
             capacity(session, 0);
+        }
+    }
+
+    @FunctionalInterface
+    private interface Answer {
+        MockSlingHttpServletResponse run() throws IOException, ServletException;
+    }
+
+    private MockSlingHttpServletResponse throughState(
+            org.apache.sling.api.resource.ResourceResolver resolver, Answer answer)
+            throws IOException, ServletException {
+        final var factory = (org.apache.sling.api.resource.ResourceResolverFactory)
+                java.lang.reflect.Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                        new Class<?>[] { org.apache.sling.api.resource.ResourceResolverFactory.class },
+                        (proxy, method, arguments) -> {
+                            assertEquals("getServiceResourceResolver", method.getName());
+                            return resolver;
+                        });
+        new rs.slingshot.agent.repository.AgentSession().available(factory);
+        try {
+            return answer.run();
+        } finally {
+            bindStateSource();
         }
     }
 
@@ -541,6 +614,7 @@ final class ArtifactIntakeServletTest {
         walked(session, StatePath.ROOT);
         GenerationStore.establish(session);
         LedgerAdmission.prepare(session, caller());
+        rs.slingshot.agent.store.SubscriptionLedger.prepare(session, caller());
         ArtifactStore.prepare(session, caller());
         CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_ROWS, caller());
         CapacityLedger.prepare(session, AccountedQuantity.OPERATION_RESERVATION_BYTES, caller());
