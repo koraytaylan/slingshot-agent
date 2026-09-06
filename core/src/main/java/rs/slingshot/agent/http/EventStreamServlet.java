@@ -3,7 +3,6 @@
 
 package rs.slingshot.agent.http;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -275,10 +274,9 @@ public final class EventStreamServlet extends AgentServlet {
     }
 
     /** Re-raises a response failure without changing the servlet's established runtime contract. */
-    @SuppressFBWarnings(value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-            justification = "Preserves runtime failure identity across the servlet boundary.")
-    private static void throwUnchecked(final RuntimeException failure) {
-        throw failure;
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void throwUnchecked(final Throwable failure) throws T {
+        throw (T) failure;
     }
 
     private void writing(SlingHttpServletRequest request, SlingHttpServletResponse response,
