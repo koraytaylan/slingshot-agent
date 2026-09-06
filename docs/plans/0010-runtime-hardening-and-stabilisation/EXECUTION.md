@@ -1370,3 +1370,7 @@ required checks and the complete gate, then commit the completed task.
     outside the budget instead of being accepted as valid progress. The command-context, reach,
     query, and child-list suites pass, with Checkstyle and PMD clean. This closes the underflow
     boundary without changing any declared contract limits.
+
+40. Synchronized task 4402 metadata with its final multivalue implementation commit
+    `cf663d8`; the task now points at the code that includes both conservative guards and complete
+    scalar/array repointing.
