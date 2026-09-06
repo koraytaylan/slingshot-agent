@@ -1590,3 +1590,6 @@ required checks and the complete gate, then commit the completed task.
     boundary instead of the handler returning the entire gathered subtree. The focused
     `QueryPathsCommandTest` suite passes all 10 cases; continuation token authority remains the
     next integration boundary.
+
+81. Re-ran Checkstyle and PMD after the paging handoff. Both pass with no findings for the changed
+    handler; PMD emits only the repository's existing unmatched-exclusion warnings.
