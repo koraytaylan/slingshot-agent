@@ -158,6 +158,23 @@ final class StreamAdmissionTest {
     }
 
     @Test
+    @DisplayName("an interrupted transfer ends as a client departure")
+    void anInterruptedTransferEndsAsAClientDeparture() throws RepositoryException {
+        final Session session = recorded();
+        final StreamSession stream = following(identifierOf("accepted.json"));
+        final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
+                StreamAdmission.open(session, caller(), CONTRACT));
+        Thread.currentThread().interrupt();
+        try {
+            assertEquals(StreamWriter.Ending.THE_CLIENT_WENT_AWAY,
+                    new StreamWriter(stream, CONTRACT, admission)
+                            .serve(new StringWriter(), session, new AdvancingTicker(), ""));
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
     @DisplayName("a store nobody prepared counts nothing rather than admitting everybody")
     void astoreNobodyPreparedCountsNothing() throws RepositoryException {
         final Session session = session();
