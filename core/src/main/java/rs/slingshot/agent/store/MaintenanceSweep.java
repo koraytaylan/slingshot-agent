@@ -76,7 +76,8 @@ public final class MaintenanceSweep {
         String nextRecord = "";
         final List<Long> present = buckets(session, generation);
         final int start = present.stream().takeWhile(bucket -> bucket < from.bucket()).toList().size();
-        for (int visited = 0; visited < present.size(); visited++) {
+        int visited = 0;
+        while (visited < present.size()) {
             final int index = (start + visited) % present.size();
             final long bucket = present.get(index);
             if (examined >= bound) {
@@ -96,6 +97,7 @@ public final class MaintenanceSweep {
                         : index + 1 < present.size() ? present.get(index + 1) : SweepCursor.BUCKETS;
                 break;
             }
+            visited = visited + 1;
         }
         if (examined > 0) {
             session.save();
