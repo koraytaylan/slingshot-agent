@@ -81,16 +81,21 @@ public final class MaintenanceSweep {
         }
         SweepCursor.advance(session, from, state.next(), state.nextRecord(), nowUnixMilliseconds);
         return new SweepReport(from.bucket(),
-                state.next() >= SweepCursor.BUCKETS ? SweepCursor.FIRST : state.next(), examined, pass.removed(),
+                state.next() >= SweepCursor.BUCKETS ? SweepCursor.FIRST : state.next(), examined,
+                pass.removed(),
                 pass.collected(), pass.released());
     }
 
     private record SweepState(long examined, long next, String nextRecord) { }
 
     private enum Stop { YES, NO }
-    private record BucketStep(long examined, long next, String nextRecord, Stop stop) { }
+
+    private record BucketStep(long examined, long next, String nextRecord, Stop stop) {
+    }
+
     private record BucketInput(Session session, Pass pass, SweepCursor from, List<Long> present,
-                               int start, int visited, long examined, long bound) { }
+                               int start, int visited, long examined, long bound) {
+    }
 
     private static SweepState advance(Session session, Pass pass, SweepCursor from,
                                      List<Long> present, int start, long bound)
@@ -127,7 +132,8 @@ public final class MaintenanceSweep {
         }
         if (input.examined() + progress.examined() >= input.bound()) {
             final long following = input.visited() > 0 && index < input.start() ? SweepCursor.FIRST
-                    : index + 1 < input.present().size() ? input.present().get(index + 1) : SweepCursor.BUCKETS;
+                    : index + 1 < input.present().size() ? input.present().get(index + 1)
+                            : SweepCursor.BUCKETS;
             return new BucketStep(progress.examined(), following, "", Stop.YES);
         }
         return new BucketStep(progress.examined(), SweepCursor.BUCKETS, "", Stop.NO);
