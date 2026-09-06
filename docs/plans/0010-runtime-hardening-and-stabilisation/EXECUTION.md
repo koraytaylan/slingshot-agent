@@ -608,3 +608,78 @@ Review and correction loop:
    shorten required retention; tokens from before and after rotation remain verifiable at the
    retention boundary as appropriate. No policy exceptions or suppressions were added. Task 4107
    is complete. Task 4105 and the remaining plan tasks are still required.
+
+## 4108 — atomic generation rotation
+
+1. An interrupted first save reproduced serving=2 with history=[1], before retention metadata
+   existed. Evidence: `interop/target/plan10-4108-red.log`. This is the originally reported R09
+   split-publication defect.
+2. Rotation now stamps the generation record before its predicates and stages serving, history,
+   retained metadata, and any eligible retirement in one save. The old public history-only rotation
+   entry point is now package-private staging used by the retention-aware transaction; callers use
+   GenerationRotation.rotate with explicit time and contract. All 22 focused tests passed in
+   `interop/target/plan10-4108-first-green.log`.
+3. Review reproduced an independent early-retirement defect: minimum-only generation retention can
+   expire before a valid configured record retention, especially with an accepted future request
+   start. Evidence: `interop/target/plan10-4108-retention-red.log`. Generation retention now uses a
+   conservative horizon covering the configured maximum plus admitted request-start skew, without
+   extending individual record deadlines. Added atomic retirement/replacement, independent competing
+   rotations, before/after save interruptions, and overflow cleanup cases. Verification is pending.
+
+4. All 30 focused cases passed in `interop/target/plan10-4108-boundaries.log`. A subsequent
+   lowered-bound regression reproduced dropping a still-retained generation when only the oldest
+   of multiple eviction candidates had expired (`interop/target/plan10-4108-lowered-bound-red.log`).
+   Room validation now checks every generation that would be retired. Added real operation,
+   snapshot, and artifact publication followed by writer-session termination and independent reader
+   recovery at both sides of the rotation save, including retention-boundary access and accounting.
+
+5. All 33 focused cases passed in `interop/target/plan10-4108-retained-work.log`, including
+   published operation/snapshot/artifact reads from a fresh session after the writer stopped.
+   Added the successful lower-bound transition once every eviction candidate has expired and
+   explicit refusal when the generation authority is missing. Starting full core verification.
+
+6. Full core verification passed all 1023 tests, coverage, formatting, PMD, and SpotBugs at
+   01:50 CEST on 2026-09-06 in `interop/target/plan10-4108-core.log`. Final source review confirmed
+   no saves in history or retention staging and one save in the enclosing stamped rotation.
+   Starting the complete argument-free gate.
+
+7. The first complete gate passed at 02:00 CEST on 2026-09-06 with 1023 core and 460 interop tests,
+   no failures/errors/skips, and all required stages passing. Evidence:
+   `interop/target/plan10-4108-first-quality.log`. Final evidence review distinguished fresh-session
+   recovery from actual process loss, so this pass alone was not treated as task completion.
+8. Added a test-only two-node probe: publish real retained work, stop the rotation immediately after
+   its first real save, kill that process before it can reply, then read serving/history/retention,
+   the operation, snapshot, artifact bytes, and capacity from the surviving node. This exercises
+   the exact shipped store code in the pinned Mongo-backed Sling runtime, independently of the
+   core fresh-session tests. Verification of this stronger proof follows.
+
+9. The focused two-node process-loss proof passed in `interop/target/plan10-4108-process-loss.log`
+   at 02:03 CEST. Extended that same test to stop the surviving application node as well, start a
+   fresh replacement process against the retained Mongo repository, install the exact store-code
+   probe, and read the retained metadata and work again. This explicitly exercises application
+   restart in addition to surviving-node failover.
+
+10. The complete process-loss and fresh-process restart case passed at 02:07 CEST on 2026-09-06
+    in `interop/target/plan10-4108-process-restart.log`. Both original application processes were
+    gone before the replacement read the retained repository. The initial gate log is preserved as
+    `interop/target/plan10-4108-first-quality.log`; running the full gate again with this proof
+    included before committing the task.
+
+11. The expanded gate passed core and static checks but found the new runner absent from the
+    scenario inventory (`interop/target/plan10-4108-inventory-quality.log`). Registered
+    `generation-rotation-crash` as a tier-a repository-layout property scenario for the shared
+    repository deployment arrangement. No checker or policy rule was weakened.
+
+12. The final complete argument-free `scripts/quality` passed at 02:23 CEST on 2026-09-06.
+    Core ran 1023 tests and interoperability ran 461, with zero failures, errors, or skips.
+    The new first-save crash and fresh-process restart proof passed inside this full run, alongside
+    the existing crash, contention, and handover scenarios. All required policy, coverage,
+    static-analysis, inventory, and packaging stages passed. Evidence:
+    `interop/target/plan10-4108-quality.log`. Owner-supplied Adobe quickstart and sibling-client
+    end-to-end tiers did not run.
+13. Final review checked the original split-publication regression, all remaining save boundaries,
+    competing same/different rotations, complete eviction-candidate validation, configured-retention
+    and future-request-start coverage, overflow cleanup, and actual retained-work reads after both
+    original application processes were gone. Serving, history, and retention publish together;
+    the public retention-free rotation path is gone. Test probes stay outside product bundles.
+    Task 4108 is complete. Task 4105 and the remaining plan tasks are still required.

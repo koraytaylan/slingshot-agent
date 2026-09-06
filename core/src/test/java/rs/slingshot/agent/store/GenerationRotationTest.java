@@ -3,10 +3,14 @@
 
 package rs.slingshot.agent.store;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -25,16 +29,24 @@ import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
 import rs.slingshot.agent.discovery.CapabilityDocument;
+import rs.slingshot.agent.execution.LogicalOperation;
+import rs.slingshot.agent.execution.OperationStore;
+import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.identity.OperationIdentity;
 import rs.slingshot.agent.json.BoundedDocumentReader;
+import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.wire.JobEvent;
+import rs.slingshot.agent.wire.JobEventKind;
 
 /**
  * Rotation as something somebody chooses, with the old incarnations kept while anybody reads them.
@@ -57,6 +69,60 @@ final class GenerationRotationTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @Test
+    void loweringTheGenerationBoundCannotDropAnyStillRetainedGeneration() throws RepositoryException {
+        final Session session = established();
+        final AgentContract three = contractWith("maximum_prior_generations", 3);
+        GenerationRotation.rotate(session, generationOf(2), NOW, three);
+        GenerationRotation.rotate(session, generationOf(3), NOW + 1, three);
+        GenerationRotation.rotate(session, generationOf(4), NOW + 2, three);
+        final AgentContract one = contractWith("maximum_prior_generations", 1);
+        assertEquals(GenerationRotation.Refusal.INSIDE_A_RETENTION,
+                assertInstanceOf(GenerationRotation.Refused.class, GenerationRotation.rotate(session,
+                        generationOf(5), NOW + GenerationRotation.longestRetention(three), one)).refusal());
+        assertEquals(List.of(1L, 2L, 3L, 4L), GenerationStore.served(session));
+        assertEquals(3, GenerationRotation.retained(session).size());
+        assertFalse(session.hasPendingChanges());
+        assertInstanceOf(GenerationRotation.Rotated.class, GenerationRotation.rotate(session,
+                generationOf(5), NOW + 2 + GenerationRotation.longestRetention(three), one));
+        assertEquals(List.of(4L), GenerationRotation.retained(session).stream()
+                .map(kept -> kept.generation().number()).toList());
+    }
+
+    @Test
+    void rotationCannotShortenAValidConfiguredRetention() throws RepositoryException {
+        final Session session = established();
+        final StatePath operation = StatePath.operation(identity().generation(), identity().identifier());
+        walked(session, operation.path());
+        session.getNode(operation.path()).setProperty(RetentionPolicy.REQUEST_START,
+                NOW + CONTRACT.value(ContractLimit.MAXIMUM_REQUEST_START_SKEW_MILLISECONDS));
+        session.save();
+        final long configured = CONTRACT.value(
+                ContractLimit.MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS);
+        final long required = assertInstanceOf(RetentionPolicy.Held.class, RetentionPolicy.until(session,
+                operation, new RetentionPolicy.Configured(RetentionPolicy.Kind.ARTIFACT, configured),
+                CONTRACT)).retainedUntil().instantUnixMilliseconds();
+        final GenerationRotation.Rotated rotated = assertInstanceOf(GenerationRotation.Rotated.class,
+                GenerationRotation.rotate(session, generationOf(2), NOW, CONTRACT));
+        assertTrue(rotated.retained().getFirst().retainedUntilUnixMilliseconds() >= required,
+                "rotation retires a generation before a valid configured artifact retention ends");
+    }
+
+    @Test
+    void anInterruptedSaveCannotPublishServingWithoutHistoryAndRetention() throws RepositoryException {
+        final Session session = established();
+        assertThrows(RepositoryException.class, () -> GenerationRotation.rotate(
+                SaveInterleaving.interruptSave(session, 1, true), generationOf(2), NOW, CONTRACT));
+        session.refresh(false);
+        assertEquals(2, assertInstanceOf(GenerationStore.Held.class,
+                GenerationStore.serving(session)).generation().number());
+        assertEquals(List.of(1L, 2L), GenerationStore.served(session));
+        final GenerationRotation.Readable readable = assertInstanceOf(GenerationRotation.Readable.class,
+                GenerationRotation.accessTo(session, generationOf(1)));
+        assertEquals(NOW + GenerationRotation.longestRetention(CONTRACT),
+                readable.generation().retainedUntilUnixMilliseconds());
+    }
 
     @Test
     @DisplayName("a rotation moves the store and keeps the incarnation it left")
@@ -173,6 +239,187 @@ final class GenerationRotationTest {
         assertTrue(rendered.contains("\"" + CapabilityDocument.GENERATION + "\":2"),
                 "the capability document reports an incarnation this store is not serving: "
                         + rendered);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void theOnlyInitialSavePublishesAllMetadataOrNone(boolean committed)
+            throws RepositoryException, LoginException {
+        final Session session = established();
+        assertThrows(RepositoryException.class, () -> GenerationRotation.rotate(
+                SaveInterleaving.interruptSave(session, 1, committed), generationOf(2), NOW, CONTRACT));
+        assertFalse(session.hasPendingChanges());
+        final ResourceResolverFactory factory = java.util.Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class));
+        try (var resolver = factory.getResourceResolver(Map.of())) {
+            final Session reader = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class));
+            assertEquals(committed ? 2 : 1, assertInstanceOf(GenerationStore.Held.class,
+                    GenerationStore.serving(reader)).generation().number());
+            assertEquals(committed ? List.of(1L, 2L) : List.of(1L), GenerationStore.served(reader));
+            assertEquals(committed ? 1 : 0, GenerationRotation.retained(reader).size());
+            if (committed) {
+                assertEquals(NOW + GenerationRotation.longestRetention(CONTRACT),
+                        GenerationRotation.retained(reader).getFirst().retainedUntilUnixMilliseconds());
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void retirementAndReplacementShareTheSameCommit(boolean committed) throws RepositoryException {
+        final Session session = established();
+        final AgentContract one = contractWith("maximum_prior_generations", 1);
+        GenerationRotation.rotate(session, generationOf(2), NOW, one);
+        final long later = NOW + GenerationRotation.longestRetention(one);
+        assertThrows(RepositoryException.class, () -> GenerationRotation.rotate(
+                SaveInterleaving.interruptSave(session, 1, committed), generationOf(3), later, one));
+        assertFalse(session.hasPendingChanges());
+        assertEquals(committed ? List.of(1L, 2L, 3L) : List.of(1L, 2L), GenerationStore.served(session));
+        final RetainedGeneration kept = GenerationRotation.retained(session).getFirst();
+        assertEquals(committed ? 2 : 1, kept.generation().number());
+        assertEquals((committed ? later : NOW) + GenerationRotation.longestRetention(one),
+                kept.retainedUntilUnixMilliseconds());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {2, 3})
+    void competingRotationsCannotMergeHistoryOrRetention(long next)
+            throws RepositoryException, LoginException {
+        final Session session = established();
+        final ResourceResolverFactory factory = java.util.Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class));
+        try (var resolver = factory.getResourceResolver(Map.of())) {
+            final Session competing = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class));
+            final GenerationRotation.Outcome outcome = GenerationRotation.rotate(
+                    SaveInterleaving.before(session, () -> assertInstanceOf(GenerationRotation.Rotated.class,
+                            GenerationRotation.rotate(competing, generationOf(2), NOW + 1, CONTRACT))),
+                    generationOf(next), NOW, CONTRACT);
+            final GenerationRotation.Refused refused = assertInstanceOf(GenerationRotation.Refused.class,
+                    outcome);
+            assertTrue(refused.detail().contains("CONTENDED"), refused.detail());
+            assertFalse(session.hasPendingChanges());
+            assertEquals(2, assertInstanceOf(GenerationStore.Held.class,
+                    GenerationStore.serving(session)).generation().number());
+            assertEquals(List.of(1L, 2L), GenerationStore.served(session));
+            assertEquals(NOW + 1 + GenerationRotation.longestRetention(CONTRACT),
+                    GenerationRotation.retained(session).getFirst().retainedUntilUnixMilliseconds());
+        }
+    }
+
+    @Test
+    void retentionOverflowDiscardsTheEntireStagedRotation() throws RepositoryException {
+        final Session session = established();
+        assertThrows(ArithmeticException.class,
+                () -> GenerationRotation.rotate(session, generationOf(2), Long.MAX_VALUE, CONTRACT));
+        assertFalse(session.hasPendingChanges());
+        assertEquals(List.of(1L), GenerationStore.served(session));
+        assertEquals(1, assertInstanceOf(GenerationStore.Held.class,
+                GenerationStore.serving(session)).generation().number());
+        assertTrue(GenerationRotation.retained(session).isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void aRestartedReaderCanReadRetainedWorkAfterAnInterruptedRotation(boolean committed)
+            throws RepositoryException, LoginException, IOException {
+        final Session session = established();
+        final LogicalOperation operation = seedWork(session);
+        final StatePath path = OperationStore.pathOf(identity());
+        final AgentContract one = contractWith("maximum_prior_generations", 1);
+        assertThrows(RepositoryException.class, () -> GenerationRotation.rotate(
+                SaveInterleaving.interruptSave(session, 1, committed), generationOf(2), NOW, one));
+        session.logout();
+        final ResourceResolverFactory factory = java.util.Objects.requireNonNull(
+                sling.getService(ResourceResolverFactory.class));
+        try (var resolver = factory.getResourceResolver(Map.of())) {
+            final Session restarted = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class));
+            if (!committed) {
+                assertInstanceOf(GenerationRotation.Rotated.class,
+                        GenerationRotation.rotate(restarted, generationOf(2), NOW, one));
+            }
+            final long until = NOW + GenerationRotation.longestRetention(one);
+            assertInstanceOf(GenerationRotation.Refused.class,
+                    GenerationRotation.rotate(restarted, generationOf(3), until - 1, one));
+            assertInstanceOf(GenerationRotation.Readable.class,
+                    GenerationRotation.accessTo(restarted, identity().generation()));
+            assertEquals(operation, assertInstanceOf(OperationStore.Held.class,
+                    OperationStore.read(restarted, identity())).operation());
+            assertEquals(JobEventKind.ACCEPTED, assertInstanceOf(SnapshotStore.Known.class,
+                    SnapshotStore.read(restarted, path)).snapshot().kind());
+            try (var content = ArtifactStore.open(restarted, path, slot()).orElseThrow()) {
+                assertArrayEquals(payload(), content.readAllBytes());
+            }
+            assertEquals(1, CapacityLedger.held(restarted, AccountedQuantity.ARTIFACT_ROWS, CONTRACT));
+            assertEquals(payload().length,
+                    CapacityLedger.held(restarted, AccountedQuantity.ARTIFACT_BYTES, CONTRACT));
+            assertInstanceOf(GenerationRotation.Rotated.class,
+                    GenerationRotation.rotate(restarted, generationOf(3), until, one));
+            assertInstanceOf(GenerationRotation.Retired.class,
+                    GenerationRotation.accessTo(restarted, identity().generation()));
+        }
+    }
+
+    @Test
+    void missingGenerationAuthorityIsRefusedWithoutCreatingState() throws RepositoryException {
+        final Session session = established();
+        session.getNode(GenerationStore.record().path()).remove();
+        session.save();
+        final GenerationRotation.Refused refused = assertInstanceOf(GenerationRotation.Refused.class,
+                GenerationRotation.rotate(session, generationOf(2), NOW, CONTRACT));
+        assertTrue(refused.detail().contains(GenerationStore.Refusal.NO_RECORD.name()));
+        assertFalse(session.nodeExists(GenerationStore.record().path()));
+        assertFalse(session.hasPendingChanges());
+    }
+
+    private static LogicalOperation seedWork(Session session) throws RepositoryException {
+        final StatePath.Caller caller = assertInstanceOf(StatePath.Held.class,
+                StatePath.caller("the-original-caller")).caller();
+        final LogicalOperation operation = assertInstanceOf(LogicalOperation.Held.class,
+                LogicalOperation.accepted(identity(), digest("submission"), commandContract(), caller,
+                        NOW + CONTRACT.value(ContractLimit.MAXIMUM_REQUEST_START_SKEW_MILLISECONDS),
+                        NOW, CONTRACT)).operation();
+        assertInstanceOf(OperationStore.Created.class, OperationStore.create(session, operation));
+        ArtifactStore.prepare(session, caller);
+        LedgerAdmission.prepare(session, caller);
+        final var members = new java.util.LinkedHashMap<String, DocumentValue>();
+        members.put(JobEvent.GENERATION, new DocumentValue.Whole(identity().generation().number()));
+        members.put(JobEvent.IDENTIFIER, new DocumentValue.Text(identity().identifier().rendered()));
+        members.put(JobEvent.KIND, new DocumentValue.Text("accepted"));
+        members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(0));
+        final DocumentValue.Mapping document = new DocumentValue.Mapping(members);
+        final JobEvent event = assertInstanceOf(JobEvent.Held.class,
+                JobEvent.read(document, identity().generation(), CONTRACT)).event();
+        final byte[] canonical = assertInstanceOf(CanonicalByteWriter.Written.class,
+                CanonicalByteWriter.write(document)).bytes();
+        assertInstanceOf(EventLedger.Appended.class,
+                SnapshotStore.record(session, caller, event, canonical, NOW, CONTRACT));
+        assertInstanceOf(ArtifactStore.Published.class, ArtifactStore.publish(session, caller,
+                OperationStore.pathOf(identity()), new ArtifactStore.Publication(slot(), payload().length,
+                        new ByteArrayInputStream(payload())), NOW, CONTRACT));
+        return operation;
+    }
+
+    private static byte[] payload() {
+        return "retained answer bytes".getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static ArtifactSlot slot() {
+        return assertInstanceOf(ArtifactSlot.Held.class, ArtifactSlot.of("the-retained-answer")).slot();
+    }
+
+    private static CommandContractIdentity commandContract() {
+        final var members = new java.util.LinkedHashMap<String, DocumentValue>();
+        members.put(CommandContractIdentity.WIRE_NAME, new DocumentValue.Text("query_paths"));
+        members.put(CommandContractIdentity.CONTRACT_VERSION, new DocumentValue.Text("1.0.0"));
+        members.put(CommandContractIdentity.LIMITS_DIGEST,
+                new DocumentValue.Text(digest("limits").rendered()));
+        members.put(CommandContractIdentity.ARGUMENT_DIGEST,
+                new DocumentValue.Text(digest("arguments").rendered()));
+        members.put(CommandContractIdentity.RESULT_DIGEST,
+                new DocumentValue.Text(digest("result").rendered()));
+        return assertInstanceOf(CommandContractIdentity.Held.class,
+                CommandContractIdentity.of(new DocumentValue.Mapping(members),
+                        CommandContractIdentity.Bounds.from(CONTRACT))).identity();
     }
 
     private static OperationIdentity identity() {

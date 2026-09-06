@@ -99,7 +99,7 @@ public final class GenerationStore {
         }
         ClaimByCreation.claim(session, record(), "nt:unstructured", node -> {
             write(node, SERVING, EventStoreGeneration.FIRST);
-            write(node, SERVED, List.of(EventStoreGeneration.FIRST));
+            writeHistory(node, List.of(EventStoreGeneration.FIRST));
         });
         return serving(session);
     }
@@ -130,14 +130,17 @@ public final class GenerationStore {
     }
 
     /**
-     * Moves this store to another incarnation.
+     * Stages serving and history inside the caller's stamped generation transaction.
+     *
+     * <p>This neither saves nor refreshes. The caller must stage required retention metadata
+     * before committing, or discard the entire transition on refusal.</p>
      *
      * @param session the session to write under
      * @param next the generation to serve from now on
      * @return the generation now being served, or the one reason it is not that one
      * @throws RepositoryException if the repository fails
      */
-    public static Outcome rotate(Session session, EventStoreGeneration next)
+    static Outcome stageRotation(Session session, EventStoreGeneration next)
             throws RepositoryException {
         final Outcome current = serving(session);
         if (current instanceof Refused) {
@@ -152,22 +155,11 @@ public final class GenerationStore {
             return new Refused(Refusal.BEFORE_THE_ONE_SERVED,
                     next + " is not after " + serving + ", which this store is serving");
         }
-        return written(session, next);
-    }
-
-    private static Outcome written(Session session, EventStoreGeneration next)
-            throws RepositoryException {
-        final long serving = session.getNode(record().path()).getProperty(SERVING).getLong();
-        final WriteOutcome outcome =
-                CompareAndSet.set(session, record(), SERVING, serving, next.number());
-        if (outcome != WriteOutcome.WRITTEN) {
-            return new Refused(Refusal.CONTENDED, "the record changed while it was being moved: "
-                    + outcome);
-        }
-        final List<Long> served = new ArrayList<>(served(session));
-        served.add(next.number());
-        write(session.getNode(record().path()), SERVED, served);
-        session.save();
+        final List<Long> history = new ArrayList<>(served(session));
+        history.add(next.number());
+        final Node node = session.getNode(record().path());
+        node.setProperty(SERVING, next.number());
+        stageHistory(node, history);
         return new Held(next);
     }
 
@@ -227,18 +219,22 @@ public final class GenerationStore {
         }
     }
 
-    private static void write(Node node, String property, List<Long> values) {
+    private static void writeHistory(Node node, List<Long> values) {
         try {
-            final javax.jcr.Value[] written = new javax.jcr.Value[values.size()];
-            int index = 0;
-            while (index < values.size()) {
-                written[index] = node.getSession().getValueFactory()
-                        .createValue(values.get(index));
-                index = index + 1;
-            }
-            node.setProperty(property, written);
+            stageHistory(node, values);
         } catch (final RepositoryException unwritable) {
             throw new IllegalStateException("the record could not be written", unwritable);
         }
+    }
+
+    private static void stageHistory(Node node, List<Long> values) throws RepositoryException {
+        final javax.jcr.Value[] written = new javax.jcr.Value[values.size()];
+        int index = 0;
+        while (index < values.size()) {
+            written[index] = node.getSession().getValueFactory()
+                    .createValue(values.get(index));
+            index = index + 1;
+        }
+        node.setProperty(SERVED, written);
     }
 }

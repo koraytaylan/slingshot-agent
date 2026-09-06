@@ -6,6 +6,7 @@ package rs.slingshot.agent.store;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import javax.jcr.InvalidItemStateException;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -126,10 +127,27 @@ public final class GenerationRotation {
      * @param contract the authenticated contract, which declares how many are kept and for how long
      * @return what rotating did
      * @throws RepositoryException if the repository fails
+     * @throws ArithmeticException if the required retention expiry cannot be represented
      */
     public static Outcome rotate(Session session, EventStoreGeneration next,
                                  long nowUnixMilliseconds, AgentContract contract)
             throws RepositoryException {
+        session.refresh(false);
+        try {
+            if (session.nodeExists(GenerationStore.record().path())) {
+                CompareAndSet.stamp(session.getNode(GenerationStore.record().path()));
+            }
+            return rotating(session, next, nowUnixMilliseconds, contract);
+        } catch (final InvalidItemStateException contended) {
+            return new Refused(Refusal.STORE_REFUSED,
+                    GenerationStore.Refusal.CONTENDED + ": another generation transition committed");
+        } finally {
+            session.refresh(false);
+        }
+    }
+
+    private static Outcome rotating(Session session, EventStoreGeneration next, long nowUnixMilliseconds,
+                                     AgentContract contract) throws RepositoryException {
         final GenerationStore.Outcome current = GenerationStore.serving(session);
         if (current instanceof final GenerationStore.Refused refused) {
             return new Refused(Refusal.STORE_REFUSED, refused.refusal() + ": " + refused.detail());
@@ -141,11 +159,11 @@ public final class GenerationRotation {
         if (room.isPresent()) {
             return room.get();
         }
-        final GenerationStore.Outcome moved = GenerationStore.rotate(session, next);
+        final GenerationStore.Outcome moved = GenerationStore.stageRotation(session, next);
         if (moved instanceof final GenerationStore.Refused refused) {
             return new Refused(Refusal.STORE_REFUSED, refused.refusal() + ": " + refused.detail());
         }
-        return written(session, serving, nowUnixMilliseconds, contract, bound);
+        return written(session, serving, next, nowUnixMilliseconds, contract, bound);
     }
 
     private static Optional<Refused> room(List<RetainedGeneration> retained, long bound,
@@ -153,49 +171,56 @@ public final class GenerationRotation {
         if (retained.size() < bound) {
             return Optional.empty();
         }
-        final RetainedGeneration oldest = retained.getFirst();
-        return oldest.mayBeDropped(nowUnixMilliseconds)
-                ? Optional.empty()
-                : Optional.of(new Refused(Refusal.INSIDE_A_RETENTION, "keeping " + bound
+        final long retiring = retained.size() - bound + 1;
+        return retained.stream().limit(retiring)
+                .filter(one -> !one.mayBeDropped(nowUnixMilliseconds))
+                .findFirst()
+                .map(one -> new Refused(Refusal.INSIDE_A_RETENTION, "keeping " + bound
                         + " prior generations means dropping generation "
-                        + oldest.generation().number() + ", which is answered about until "
-                        + oldest.retainedUntilUnixMilliseconds()));
+                        + one.generation().number() + ", which is answered about until "
+                        + one.retainedUntilUnixMilliseconds()));
     }
 
     private static Outcome written(Session session, EventStoreGeneration retiring,
-                                   long nowUnixMilliseconds, AgentContract contract, long bound)
+                                   EventStoreGeneration next, long nowUnixMilliseconds,
+                                   AgentContract contract, long bound)
             throws RepositoryException {
-        keep(session, retiring, nowUnixMilliseconds + longestRetention(contract));
+        keep(session, retiring, Math.addExact(nowUnixMilliseconds, longestRetention(contract)));
         final List<RetainedGeneration> retained = new ArrayList<>(retained(session));
         while (retained.size() > bound) {
             drop(session, retained.removeFirst());
         }
-        final GenerationStore.Outcome serving = GenerationStore.serving(session);
-        return new Rotated(((GenerationStore.Held) serving).generation(), retained);
+        session.save();
+        return new Rotated(next, retained);
     }
 
     /**
-     * How long a retired incarnation is answered about, which is the longest anything in it is kept.
+     * The conservative horizon covering every valid configured retention and admitted request start.
+     *
+     * <p>A record may use the configured maximum and its request start may be ahead by the accepted
+     * skew. A generation must remain readable through both, even when its current minimum is shorter.
+     * This does not extend individual records' retention deadlines.</p>
      *
      * @param contract the authenticated contract
      * @return the milliseconds
+     * @throws ArithmeticException if the combined horizon cannot be represented
      */
     public static long longestRetention(AgentContract contract) {
-        long longest = 0;
-        for (final RetentionPolicy.Kind kind : RetentionPolicy.Kind.values()) {
-            longest = Math.max(longest, kind.minimum(contract));
-        }
-        return longest;
+        return Math.addExact(
+                contract.value(ContractLimit.MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS),
+                contract.value(ContractLimit.MAXIMUM_REQUEST_START_SKEW_MILLISECONDS));
     }
 
     private static void keep(Session session, EventStoreGeneration retiring, long retainedUntil)
             throws RepositoryException {
-        final StatePath record = GenerationStore.record().child(RETAINED);
-        ClaimByCreation.claim(session, record, "nt:unstructured", node -> { });
-        final StatePath kept = record.child(PREFIX + retiring.number());
-        ClaimByCreation.claim(session, kept, "nt:unstructured", node -> { });
-        session.getNode(kept.path()).setProperty(RETAINED_UNTIL, retainedUntil);
-        session.save();
+        final Node root = session.getNode(GenerationStore.record().path());
+        final Node retained = root.hasNode(RETAINED) ? root.getNode(RETAINED)
+                : root.addNode(RETAINED, "nt:unstructured");
+        final StatePath path = GenerationStore.record().child(RETAINED).child(PREFIX + retiring.number());
+        final String name = path.path().substring(path.path().lastIndexOf('/') + 1);
+        final Node kept = retained.hasNode(name) ? retained.getNode(name)
+                : retained.addNode(name, "nt:unstructured");
+        kept.setProperty(RETAINED_UNTIL, retainedUntil);
     }
 
     private static void drop(Session session, RetainedGeneration dropped)
@@ -204,7 +229,6 @@ public final class GenerationRotation {
                 .child(PREFIX + dropped.generation().number());
         if (session.nodeExists(kept.path())) {
             session.getNode(kept.path()).remove();
-            session.save();
         }
     }
 
