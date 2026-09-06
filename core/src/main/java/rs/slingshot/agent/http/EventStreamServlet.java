@@ -265,9 +265,8 @@ public final class EventStreamServlet extends AgentServlet {
     }
 
     /** Re-raises a response failure without changing the servlet's established runtime contract. */
-    @SuppressWarnings("unchecked")
-    private static <T extends Throwable> void throwUnchecked(final Throwable failure) throws T {
-        throw (T) failure;
+    private static void throwUnchecked(final RuntimeException failure) {
+        throw failure;
     }
 
     private void writing(SlingHttpServletRequest request, SlingHttpServletResponse response,
