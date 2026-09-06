@@ -12,6 +12,14 @@ touches:
   - core/src/main/java/rs/slingshot/agent/store/ArtifactStore.java
   - core/src/test/java/rs/slingshot/agent/http/ArtifactIntakeServletTest.java
   - core/src/test/java/rs/slingshot/agent/store/ArtifactStoreTest.java
+  - core/src/test/java/rs/slingshot/agent/store/SaveInterleaving.java
+  - core/src/test/java/rs/slingshot/agent/proof/ExclusiveTransitionProbe.java
+  - core/src/test/java/rs/slingshot/agent/proof/IntakePublicationProbe.java
+  - interop/src/main/java/rs/slingshot/agent/interop/harness/CrashInjector.java
+  - interop/src/main/java/rs/slingshot/agent/interop/tier/TierRequests.java
+  - interop/src/test/java/rs/slingshot/agent/interop/harness
+  - interop/scenarios/intake-publication-crash.toml
+  - policy/design-patterns.toml
 status: pending
 merged_as: ""
 ---
@@ -26,3 +34,5 @@ Finding(s): R07 in [FINDINGS.md](../FINDINGS.md).
 3. Test mismatch, truncation, retry, concurrent completion and process death using independent readers.
 
 - **Done when:** No reader or retry can observe invalid or partial bytes as a completed intake slot at any persistence boundary, and rejected uploads leave the correct reusable reservation.
+
+Direct implementation is complete; see [the review and validation record](../EXECUTION.md#4303--atomic-intake-publication).

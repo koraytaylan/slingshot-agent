@@ -141,6 +141,50 @@ final class ExclusiveTransitionRuntime {
         }
     }
 
+    CrashInjector.Ended verifyIntakeCrash(CrashInjector injector, boolean committed)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        assertEquals("prepared", post(nodes.first(), "prepare", "all"));
+        assertEquals("intake-prepared", post(nodes.first(), "intake-prepare", "all"));
+        await(() -> "reserved".equals(post(nodes.second(), "intake-view", "all")),
+                "the survivor did not observe the intake promise");
+        final String action = committed ? "intake-after" : "intake-before";
+        assertEquals("armed", post(nodes.first(), "arm", action));
+        try (var callers = Executors.newSingleThreadExecutor()) {
+            final var lost = callers.submit(() -> post(nodes.first(), action, action));
+            try {
+                awaitPrepared(nodes.first(), action, lost);
+                final String expected = committed ? "complete" : "reserved";
+                await(() -> expected.equals(post(nodes.second(), "intake-view", "all")),
+                        "the survivor observed neither the intact promise nor the complete artifact");
+                final var ended = injector.kill(nodes.first(),
+                        committed ? CrashInjector.Point.AFTER_INTAKE_PUBLICATION_BEFORE_REPLY
+                                : CrashInjector.Point.DURING_INTAKE_BEFORE_MANIFEST_COMPLETE);
+                final ExecutionException unanswered = assertThrows(ExecutionException.class,
+                        () -> lost.get(10, TimeUnit.SECONDS));
+                assertInstanceOf(java.io.UncheckedIOException.class, unanswered.getCause());
+                assertEquals(expected, post(nodes.second(), "intake-view", "all"));
+                assertEquals(committed ? "ALREADY_COMPLETE" : "Written",
+                        retryIntake());
+                assertEquals("complete", post(nodes.second(), "intake-view", "all"));
+                assertEquals("ALREADY_COMPLETE", retryIntake());
+                return ended;
+            } finally {
+                if (injector.isRunning(nodes.first())) {
+                    post(nodes.first(), "release", action);
+                }
+            }
+        }
+    }
+
+    private String retryIntake() {
+        // Oak can suspend a new commit until the killed cluster node's revisions are recovered.
+        // This is one upload with a durability observation bound, never a transport retry loop.
+        final var response = requests.submit(nodes.second().address() + ENDPOINT,
+                List.of("action", "intake-retry", "fixture", "all"), java.time.Duration.ofMinutes(3));
+        assertEquals(200, response.statusCode(), response.body());
+        return response.body();
+    }
+
     private void assertReservation(String identifier) {
         final String path = "/var/slingshot-agent/capacity/reservations/"
                 + identifier.substring(0, 2) + "/" + identifier.substring(2, 4) + "/" + identifier;
@@ -275,6 +319,7 @@ final class ExclusiveTransitionRuntime {
     private static void addProofFiles(Path root, JarOutputStream output) throws IOException {
         final List<String> names = List.of("rs/slingshot/agent/proof/ExclusiveTransitionProbe.class",
                 "rs/slingshot/agent/proof/GenerationRotationProbe.class",
+                "rs/slingshot/agent/proof/IntakePublicationProbe.class",
                 "rs/slingshot/agent/proof/ExclusiveTransitionProbe$Barrier.class",
                 "rs/slingshot/agent/store/SaveInterleaving.class",
                 "rs/slingshot/agent/store/SaveInterleaving$Action.class",

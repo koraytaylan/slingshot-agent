@@ -1007,3 +1007,57 @@ The repository-layout inventory now names the terminal-event budget and completi
 its design-pattern inventory names the journal's stateless policy. No execution grant, schema,
 route, imported package or checker was widened. Result transport remains task 4306; these checks
 prove durable result storage and reconciliation rather than a new client result-envelope consumer.
+
+
+## 4303 — atomic intake publication
+
+Task 4103 (`b655509`) already moved declared size/digest validation ahead of artifact publication
+and coupled the intake reservation transfer to that publication. The pre-4103 implementation
+published first and deleted a mismatched artifact in a later save. This task adds independent
+observations at those boundaries and actual process-death evidence to protect the corrected order.
+
+Review and correction loop:
+
+1. Added independent Oak readers for mismatched digests and truncated bodies at every save. The
+   observer also interrupts a staged invalid artifact after its actual save, so restoring the old
+   publication window cannot hide behind later deletion. Invalid input preserves an open declaration,
+   its retained capacity identity, and all four total/caller counters; valid retries publish exact bytes.
+   Before/after-publication save faults and a competing completion independently prove one artifact
+   and one capacity transfer. All 22 intake checks passed at 07:12:38 CEST in
+   `interop/target/plan10-4303-independent-publication-initial.log`.
+2. Added a test-only probe using the built intake/store classes on two pinned Sling DocumentNodeStores
+   sharing Mongo. The coordinator blocks the writer immediately before or after its real publication
+   save, kills it with SIGKILL, and reads the surviving node's bytes, declaration, ownership and counters.
+   The after-commit case passed. The initial before-commit case retained the intact promise but its
+   retry exceeded the harness's 30-second HTTP deadline. A repeat and JVM thread dump located that
+   wait in Oak `CommitQueue.suspendUntilAll`, while creating the new reservation. The killed node's
+   cluster lease was still active. Evidence is `interop/target/plan10-4303-process-death-initial.log`
+   and `interop/target/plan10-4303-survivor-thread-dump.log`.
+3. The new durability scenario now observes one survivor upload for at most three minutes, allowing
+   Oak's cluster recovery to finish; it does not resend that upload or change ordinary request bounds.
+   It passed at 07:24:04 CEST in `interop/target/plan10-4303-process-diagnostic.log`. The subsequent
+   duplicate must answer ALREADY_COMPLETE and counters must still agree. This proves persistence and
+   retry after repository recovery, not a 30-second failover or bounded repository-write deadline.
+   The crash-point inventory now distinguishes completed intake publication from a command commit.
+4. Deliberately bypassing prepublication digest validation made the new observer fail at the actual
+   publication save: expected absent, observed present. Evidence is
+   `interop/target/plan10-4303-digest-observer-mutation.log`. The mutation was restored byte-for-byte;
+   no product intake/store source change remains. Full gate and final review remain required.
+
+5. The first full gate passed all 1082 core tests and static checks, then correctly refused the new
+   crash runner because its scenario catalog row was missing. Added the property scenario under
+   `interop/scenarios/intake-publication-crash.toml`, naming its actual store-level proof and timing
+   limitation. No checker was relaxed. The full gate must pass with that row before completion.
+
+6. The complete argument-free `scripts/quality` passed at 07:44:56 CEST on 2026-09-06 with 1082 core,
+   4 Adobe-module, 453 development and 466 interop tests, all with zero failures/errors/skips. Both
+   bundle coverage checks and every gate stage passed. The two new intake crash cases passed in
+   170.4 seconds. Evidence is `interop/target/plan10-4303-quality.log`, with continuous runtime logs
+   under `interop/target/plan10-4303-gate-runtime-logs/`. Owner-supplied Adobe quickstart and
+   sibling-client tiers did not run and remain unproved.
+7. Final review matched all three task steps to the historical publish/delete window, the failing
+   digest-validation mutation, independent readers at save boundaries, reusable reservations,
+   competing completion and actual before/after-commit process death. The prerequisite's validated
+   atomic publication remains unchanged. The new scenario is cataloged as a store property and its
+   longer observation bound explicitly covers repository recovery. The staged diff and whitespace
+   checks passed. Task 4303 is complete; starting fully received intake work remains task 4304.

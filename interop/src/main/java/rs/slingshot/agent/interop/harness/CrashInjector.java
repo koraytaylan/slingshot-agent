@@ -80,6 +80,9 @@ public final class CrashInjector {
         /** While declared payloads are still arriving. */
         DURING_INTAKE_BEFORE_MANIFEST_COMPLETE("during_intake_before_manifest_complete"),
 
+        /** After a validated intake slot and its capacity commit, before the upload reply. */
+        AFTER_INTAKE_PUBLICATION_BEFORE_REPLY("after_intake_publication_before_reply"),
+
         /** Between an artifact's bytes being committed and anything naming them. */
         AFTER_ARTIFACT_BYTES_BEFORE_REFERENCE("after_artifact_bytes_before_reference"),
 
