@@ -9,7 +9,7 @@
 # that the bytes were trustworthy when they were fetched. Nothing offline can establish
 # the second, and a command that implied it did would be worse than one that says so.
 
-prepared = "2026-09-06T20:28:42Z"
+prepared = "2026-09-06T21:48:13Z"
 
 [[artifact]]
 path = "aopalliance/aopalliance/1.0/aopalliance-1.0.jar"
