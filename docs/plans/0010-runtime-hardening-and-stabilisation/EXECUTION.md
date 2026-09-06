@@ -1220,3 +1220,10 @@ required checks and the complete gate, then commit the completed task.
     a recovery test that asserts the slot survives lookup. The focused lookup, result, and handler
     suites passed (23 cases), followed by Checkstyle and PMD. Commit `d7b92ab` records the reviewed
     extension.
+
+20. Added cancellable artifact transfer I/O. Each read and write runs under a daemon worker with
+    the published total and idle deadlines; timeout closes the corresponding stream, cancels the
+    blocked operation, and returns the verified partial byte count so the servlet can unwind its
+    resources. Existing artifact transfer coverage (seven cases) plus Checkstyle and PMD passed.
+    Commit `465b035` records this implementation. Upload-body and event-stream deadline paths still
+    require separate runtime tests, so task 4307 remains pending.
