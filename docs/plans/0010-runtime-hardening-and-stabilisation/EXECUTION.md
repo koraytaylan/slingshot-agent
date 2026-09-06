@@ -1238,3 +1238,8 @@ required checks and the complete gate, then commit the completed task.
     focused event-stream, admission, and heartbeat suites passed (28 cases). Commit `4e8442d` records
     this reviewed path. Upload-body handling and the servlet's initial response flush remain pending,
     so task 4307 is not complete.
+    A second review applied the same deadline discipline to incremental upload reads in
+    `BoundedRequestBody`; blocked reads close the request stream and become the existing transfer
+    refusal. The body and intake suites passed (28 cases), with Checkstyle and PMD green. Commit
+    `d543edc` records the upload path. The initial servlet response flush still needs a cancellable
+    boundary and task 4307 remains pending.
