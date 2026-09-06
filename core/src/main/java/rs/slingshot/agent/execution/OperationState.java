@@ -27,7 +27,7 @@ public enum OperationState {
     /** It finished and did what it was asked. */
     SUCCEEDED("succeeded", JobEventKind.SUCCEEDED),
 
-    /** It finished and did not. */
+    /** It ended with a declared failure or an explicit result describing uncertain effects. */
     FAILED("failed", JobEventKind.FAILED);
 
     private final String spelling;

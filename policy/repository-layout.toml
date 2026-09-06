@@ -117,3 +117,14 @@ name = "capacity-reservation"
 path = "capacity/reservations/{bucket}/{bucket}/{identifier}"
 primitive = "set"
 holds = "A process-owned pending identity activated atomically with its caller and total charges; release removes the identity and those charges together, fencing delayed retries without per-release tombstones."
+
+[[node]]
+name = "terminal-event-budget"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}/terminal-event-budget"
+primitive = "set"
+holds = "Capacity retained with the execution start and transferred to exactly one terminal event in its publication commit; an unpublished budget remains owned and cannot be mistaken for a ledger event."
+[[node]]
+name = "completion"
+path = "operations/{generation}/{bucket}/{bucket}/{identifier}/completion"
+primitive = "set"
+holds = "Execution-start evidence and prepaid result/snapshot capacity, reduced to the selected completion values and retained until operation retirement; terminal publication clears the pending payload without repeating effects."

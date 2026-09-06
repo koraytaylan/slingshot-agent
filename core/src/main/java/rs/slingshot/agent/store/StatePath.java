@@ -228,7 +228,8 @@ public final class StatePath {
      * @return the names, in the layout's own order
      */
     public static List<String> operationChildren() {
-        return List.of("outbox", "lease", "events", "snapshot", "artifacts", "intake");
+        return List.of("outbox", "lease", "events", "snapshot", "artifacts", "intake",
+                EventLedger.TERMINAL_BUDGET, MaintenanceSweep.COMPLETION);
     }
 
     /**

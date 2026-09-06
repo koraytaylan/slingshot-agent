@@ -41,22 +41,16 @@ import rs.slingshot.agent.wire.JobEvent;
  * convention.</p>
  */
 public final class TerminalCommit {
-
     /** The property the answer's kind is written in. */
     public static final String RESULT_KIND = "result_kind";
-
     /** The property an inline answer's own bytes are written in. */
     public static final String RESULT_DOCUMENT = "result_document";
-
     /** The property a published answer's slot is written in. */
     public static final String RESULT_SLOT = "result_slot";
-
     /** The property a published answer's byte count is written in. */
     public static final String RESULT_BYTE_COUNT = "result_byte_count";
-
     /** The property a published answer's digest is written in. */
     public static final String RESULT_DIGEST = "result_digest";
-
     /** The property the instant the operation ended is written in. */
     public static final String FINISHED_AT = "finished_at_unix_milliseconds";
 
@@ -134,7 +128,8 @@ public final class TerminalCommit {
                                  ExecutionOutcome outcome, AgentContract contract)
             throws RepositoryException {
         return commit(session, caller, read, outcome, contract,
-                transaction -> !transaction.nodeExists(ExecutionFence.pathOf(read.identity()).path()));
+                new Publication(transaction -> !transaction.nodeExists(
+                        ExecutionFence.pathOf(read.identity()).path()), SnapshotStore::record));
     }
 
     /**
@@ -154,8 +149,60 @@ public final class TerminalCommit {
                                  ExecutionOutcome outcome, AgentContract contract, FenceHolder holder,
                                  long nowUnixMilliseconds) throws RepositoryException {
         return commit(session, caller, read, outcome, contract,
-                transaction -> ExecutionFence.stageHeld(transaction, read.identity(), holder,
-                        nowUnixMilliseconds));
+                new Publication(transaction -> ExecutionFence.stageHeld(transaction, read.identity(), holder,
+                        nowUnixMilliseconds), SnapshotStore::record));
+    }
+
+    /**
+     * Ends an immediate operation using its retained terminal-event capacity.
+     *
+     * @param session the publication session
+     * @param caller the operation owner
+     * @param read the operation as read by the execution
+     * @param outcome the truthful completion
+     * @param contract the authenticated bounds
+     * @param budget the operation's dedicated terminal-event budget
+     * @return complete publication, an identical prior completion, or an explicit refusal
+     * @throws RepositoryException if publication or cleanup fails
+     */
+    public static Outcome commitReserved(Session session, StatePath.Caller caller, LogicalOperation read,
+                                         ExecutionOutcome outcome, AgentContract contract, StatePath budget)
+            throws RepositoryException {
+        return commit(session, caller, read, outcome, contract,
+                new Publication(transaction -> !transaction.nodeExists(
+                        ExecutionFence.pathOf(read.identity()).path()),
+                        (store, owner, event, canonical, now, bounds, alongside) ->
+                                SnapshotStore.recordReserved(store, budget, event, canonical, now,
+                                        bounds, alongside)));
+    }
+
+    @FunctionalInterface
+    private interface EventPublication {
+        /**
+         * Publishes the terminal event and its accompanying state changes.
+         *
+         * @param session the publication session
+         * @param caller the capacity owner
+         * @param event the terminal event
+         * @param canonical the event bytes
+         * @param now the publication instant
+         * @param contract the authenticated bounds
+         * @param alongside the accompanying terminal writes
+         * @return complete publication or refusal
+         * @throws RepositoryException if publication fails
+         */
+        EventLedger.Outcome write(Session session, StatePath.Caller caller, JobEvent event, byte[] canonical,
+                                  long now, AgentContract contract, EventLedger.Alongside alongside)
+                throws RepositoryException;
+    }
+
+    /**
+     * The authority and funding that must both succeed in the terminal transaction.
+     *
+     * @param authority the execution authority staged with the terminal state
+     * @param events the selected event funding and publication path
+     */
+    private record Publication(Authority authority, EventPublication events) {
     }
 
     @FunctionalInterface
@@ -179,7 +226,7 @@ public final class TerminalCommit {
     }
 
     private static Outcome commit(Session session, StatePath.Caller caller, LogicalOperation read,
-                                  ExecutionOutcome outcome, AgentContract contract, Authority authority)
+                                  ExecutionOutcome outcome, AgentContract contract, Publication publication)
             throws RepositoryException {
         final OperationStore.Outcome current = OperationStore.read(session, read.identity());
         if (current instanceof OperationStore.Refused) {
@@ -199,7 +246,7 @@ public final class TerminalCommit {
             return new Refused(Refusal.NOT_A_PERMITTED_MOVE, read.state().spelling()
                     + " does not move to " + outcome.state().spelling());
         }
-        return referenced(session, caller, stored, outcome, contract, authority);
+        return referenced(session, caller, stored, outcome, contract, publication);
     }
 
     private static Outcome alreadyEnded(Session session, LogicalOperation stored,
@@ -233,7 +280,7 @@ public final class TerminalCommit {
 
     private static Outcome referenced(Session session, StatePath.Caller caller,
                                       LogicalOperation stored, ExecutionOutcome outcome,
-                                      AgentContract contract, Authority authority)
+                                      AgentContract contract, Publication publication)
             throws RepositoryException {
         if (outcome.result() instanceof final ExecutionOutcome.Published published) {
             final Optional<ArtifactRecord> committed = ArtifactStore.read(session,
@@ -248,7 +295,7 @@ public final class TerminalCommit {
                 return mismatch.get();
             }
         }
-        return written(session, caller, stored, outcome, contract, authority);
+        return written(session, caller, stored, outcome, contract, publication);
     }
 
     private static Optional<Refused> mismatch(ExecutionOutcome.Published published,
@@ -265,7 +312,8 @@ public final class TerminalCommit {
 
     private static Outcome written(Session session, StatePath.Caller caller,
                                    LogicalOperation stored, ExecutionOutcome outcome,
-                                   AgentContract contract, Authority authority) throws RepositoryException {
+                                   AgentContract contract,
+                                           Publication publication) throws RepositoryException {
         final StatePath operation = OperationStore.pathOf(stored.identity());
         final long next = EventLedger.events(session, operation.child(EventLedger.NODE));
         final Optional<JobEvent> terminal = terminalEvent(stored, outcome, next, contract);
@@ -280,7 +328,7 @@ public final class TerminalCommit {
                     "the terminal event has no canonical form to write down");
         }
         return appended(session, caller, stored, outcome, new Terminal(terminal.get(),
-                ((CanonicalByteWriter.Written) canonical).bytes(), contract, authority));
+                ((CanonicalByteWriter.Written) canonical).bytes(), contract, publication));
     }
 
     /**
@@ -289,9 +337,10 @@ public final class TerminalCommit {
      * @param event the event
      * @param canonical its canonical bytes
      * @param contract the authenticated contract
-     * @param authority the fence staged with the terminal writes
+     * @param publication the authority and funding used for the terminal writes
      */
-    private record Terminal(JobEvent event, byte[] canonical, AgentContract contract, Authority authority) {
+    private record Terminal(JobEvent event, byte[] canonical, AgentContract contract,
+            Publication publication) {
     }
 
     private static Outcome appended(Session session, StatePath.Caller caller,
@@ -299,10 +348,11 @@ public final class TerminalCommit {
                                     Terminal terminal) throws RepositoryException {
         final EventLedger.Outcome appended;
         try {
-            appended = SnapshotStore.record(session, caller, terminal.event(),
+            appended = terminal.publication().events().write(session, caller, terminal.event(),
                     terminal.canonical(), outcome.finishedAtUnixMilliseconds(),
                     terminal.contract(),
-                    (written, event) -> end(written, stored, outcome, terminal.authority()));
+                    (written, event) -> end(written, stored, outcome, terminal.publication().authority(),
+                            terminal.contract()));
         } catch (final IllegalStateException interrupted) {
             if (interrupted.getCause() instanceof FenceRequired) {
                 session.refresh(false);
@@ -330,7 +380,7 @@ public final class TerminalCommit {
     }
 
     private static void end(Session session, LogicalOperation stored, ExecutionOutcome outcome,
-                            Authority authority)
+                            Authority authority, AgentContract contract)
             throws RepositoryException {
         final Node record = session.getNode(OperationStore.pathOf(stored.identity()).path());
         CompareAndSet.stamp(record);
@@ -343,13 +393,21 @@ public final class TerminalCommit {
                     + record.getProperty(OperationStore.STATE).getString()
                     + " while this commit was being made");
         }
+        ExecutionJournal.stageEnd(session, OperationStore.pathOf(stored.identity()), outcome, contract);
         record.setProperty(OperationStore.STATE, outcome.state().spelling());
         record.setProperty(RESULT_KIND, outcome.kind().spelling());
         record.setProperty(FINISHED_AT, outcome.finishedAtUnixMilliseconds());
-        answer(record, outcome);
+        stageAnswer(record, outcome);
     }
 
-    private static void answer(Node record, ExecutionOutcome outcome) throws RepositoryException {
+    /**
+     * Stages the bounded result representation in an enclosing completion transaction.
+     *
+     * @param record the destination record
+     * @param outcome the validated completion
+     * @throws RepositoryException if a result property cannot be staged
+     */
+    static void stageAnswer(Node record, ExecutionOutcome outcome) throws RepositoryException {
         if (outcome.result() instanceof final ExecutionOutcome.Inline inline) {
             record.setProperty(RESULT_DOCUMENT, inline.document());
         }
@@ -380,6 +438,21 @@ public final class TerminalCommit {
         members.put(JobEvent.KIND, new DocumentValue.Text(outcome.state().kind().spelling()));
         members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(sequence));
         return new DocumentValue.Mapping(members);
+    }
+
+    /**
+     * Bounds the canonical terminal event before the command can produce effects.
+     *
+     * @param operation the accepted operation with its final identity
+     * @return the largest terminal encoding, including the widest supported sequence number
+     */
+    public static long maximumEventBytes(LogicalOperation operation) {
+        return java.util.Arrays.stream(OperationState.values())
+                .filter(state -> state.finality() == rs.slingshot.agent.wire.JobEventKind.Finality.ENDS)
+                .map(state -> new ExecutionOutcome(state, ExecutionOutcome.Nothing.NOTHING_TO_RETURN, 0))
+                .map(outcome -> CanonicalByteWriter.write(document(operation, outcome, Long.MAX_VALUE)))
+                .mapToLong(written -> ((CanonicalByteWriter.Written) written).bytes().length)
+                .max().orElseThrow();
     }
 
     /**

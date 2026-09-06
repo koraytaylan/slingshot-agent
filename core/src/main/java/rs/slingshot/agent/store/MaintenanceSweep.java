@@ -48,6 +48,9 @@ public final class MaintenanceSweep {
     /** What base a bucket's name is written in. */
     private static final int HEXADECIMAL = 16;
 
+    /** The operation child retaining completion evidence before terminal publication. */
+    public static final String COMPLETION = "completion";
+
     private MaintenanceSweep() {
     }
 
@@ -224,6 +227,46 @@ public final class MaintenanceSweep {
         releaseEach(session, pass, held, named.caller(),
                 new Counted(INTAKE, AccountedQuantity.OPERATION_RESERVATION_ROWS,
                         AccountedQuantity.OPERATION_RESERVATION_BYTES, "declared_byte_count"));
+        releaseTerminalBudget(session, pass, held, named.caller());
+        releaseCompletion(session, pass, held, named.caller());
+    }
+
+    private static void releaseCompletion(Session session, Pass pass, Node operation,
+                                          StatePath.Caller caller) throws RepositoryException {
+        if (!operation.hasNode(COMPLETION)
+                || !operation.getNode(COMPLETION).hasProperty(CapacityReservation.RESOURCE_RESERVATION)) {
+            return;
+        }
+        final Node completion = operation.getNode(COMPLETION);
+        final CapacityReservation reservation = CapacityReservation.ofResource(session, completion)
+                .orElseThrow(() -> new RepositoryException("completion has no retained capacity owner"));
+        CapacityLedger.stageResourceRelease(session, completion, caller,
+                new CapacityLedger.ResourceCharge(AccountedQuantity.RESULT_ROWS,
+                        AccountedQuantity.RESULT_BYTES, RESULT_SLOT));
+        for (final CapacityReservation.Charge charge : reservation.charges()) {
+            if (charge.quantity() == AccountedQuantity.RESULT_BYTES
+                    || charge.quantity() == AccountedQuantity.SNAPSHOT_BYTES) {
+                pass.releasedSome(charge.amount());
+            }
+        }
+    }
+
+    private static void releaseTerminalBudget(Session session, Pass pass, Node operation,
+                                               StatePath.Caller caller) throws RepositoryException {
+        if (!operation.hasNode(EventLedger.TERMINAL_BUDGET)) {
+            return;
+        }
+        final Node budget = operation.getNode(EventLedger.TERMINAL_BUDGET);
+        final CapacityReservation reservation = CapacityReservation.ofResource(session, budget)
+                .orElseThrow(() -> new RepositoryException("terminal budget has no retained capacity owner"));
+        CapacityLedger.stageResourceRelease(session, budget, caller,
+                new CapacityLedger.ResourceCharge(AccountedQuantity.EVENT_ROWS,
+                        AccountedQuantity.EVENT_BYTES, EventLedger.BYTES));
+        for (final CapacityReservation.Charge charge : reservation.charges()) {
+            if (charge.quantity() == AccountedQuantity.EVENT_BYTES) {
+                pass.releasedSome(charge.amount());
+            }
+        }
     }
 
     /**
@@ -312,7 +355,9 @@ public final class MaintenanceSweep {
 
     private static boolean referenced(Node operation, String slot) throws RepositoryException {
         return operation.hasProperty(RESULT_SLOT)
-                && operation.getProperty(RESULT_SLOT).getString().equals(slot);
+                && operation.getProperty(RESULT_SLOT).getString().equals(slot)
+                || operation.hasNode(COMPLETION) && operation.getNode(COMPLETION).hasProperty(RESULT_SLOT)
+                && operation.getNode(COMPLETION).getProperty(RESULT_SLOT).getString().equals(slot);
     }
 
     private static boolean declared(Node operation, String slot) throws RepositoryException {

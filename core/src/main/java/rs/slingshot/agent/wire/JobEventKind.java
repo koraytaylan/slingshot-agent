@@ -31,7 +31,7 @@ public enum JobEventKind {
     /** It finished and did what it was asked. */
     SUCCEEDED("succeeded", Finality.ENDS),
 
-    /** It finished and did not. */
+    /** It ended with a declared failure or an explicit result describing uncertain effects. */
     FAILED("failed", Finality.ENDS);
 
     /** Whether a kind is the last thing that will be said about a job. */

@@ -138,7 +138,7 @@ public final class StateAccessFixtures {
         }
 
         @Override
-        public ExecutionOutcome.Result run(LogicalOperation operation, DocumentValue.Mapping submission,
+        public ExecutionOutcome.Completion run(LogicalOperation operation, DocumentValue.Mapping submission,
                                             Session session) {
             try {
                 require(!session.hasPermission(StatePath.ROOT, "set_property"),
@@ -151,7 +151,7 @@ public final class StateAccessFixtures {
                     session.refresh(false);
                     EFFECT.set(session.getUserID() + ":denied");
                 }
-                return new ExecutionOutcome.Inline("{\"effect\":\"denied\"}");
+                return new ExecutionOutcome.Succeeded(new ExecutionOutcome.Inline("{\"effect\":\"denied\"}"));
             } catch (final RepositoryException failed) {
                 throw new IllegalStateException("the content permission proof failed", failed);
             }

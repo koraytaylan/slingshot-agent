@@ -915,3 +915,95 @@ Review and correction loop:
    authorization gate still runs before admission, and incomplete intake cannot execute. No policy,
    checker, exclusion, grant, or imported package changed. The final diff and whitespace were checked.
    Task 4301 is complete. Handling every terminal persistence outcome after an effect remains task 4302.
+
+
+## 4302 — reliable terminal finalization
+
+Immediate execution reserves its terminal event, bounded result and snapshot before starting the
+handler. The winning start records those reservations and the server execution instant together
+with RUNNING. A completion journal selects one typed success, declared failure or explicit
+uncertainty. Terminal state, answer, event, snapshot and journal retirement then commit together.
+An owned resend or recovery publishes recorded completion evidence without running the command.
+
+Review and correction loop:
+
+1. Reproduced terminal-event exhaustion inside a handler after its actual caller-session content
+   effect: status=202, state=RUNNING, resultPresent=false. Evidence is
+   `interop/target/plan10-4302-terminal-capacity-reproduction.log`. This was independent of the
+   accepted-request resumption defect repaired by task 4301.
+2. Added a dedicated retained terminal-event budget and atomic transfer into the real event row.
+   Tests reject foreign budgets, underpayment and already-spent event rows, preserve the budget
+   after interrupted publication, and publish at the event-row bound. Snapshot materialisation
+   retains its one shared callback; an initial duplicated callback failed the existing structural
+   test and was consolidated without changing that test. The 57 focused lower-layer checks passed
+   in `interop/target/plan10-4302-prepaid-terminal-reviewed.log`.
+3. Added typed handler completion and an execution-start sidecar. Real Oak competing starts publish
+   only the winner's resources; an interrupted start leaves neither RUNNING nor its journal. The
+   completion journal uses a stamped conditional transition, so an interrupted completion remains
+   retryable and a late handler cannot overwrite recovery's selected uncertainty. An initial new
+   test incorrectly expected a state move to increment delivery attempts; review corrected the
+   test to preserve the existing separate delivery-attempt semantics.
+4. Connected request execution, completion selection and prepaid terminal publication. The original
+   saturation regression now requires 202, SUCCEEDED and a retrievable result. Interrupted terminal
+   persistence returns 500, contention returns 503 with a retry hint, and both retain the completion
+   and event budget. Retrying publishes the same answer with exactly one actual content effect.
+   Lost response writing likewise does not repeat the effect. A handler throwing after its effect
+   leaves explicit effects_undetermined evidence, later published as a failed outcome without
+   claiming that effects were absent. These paths passed 67 focused checks in
+   `interop/target/plan10-4302-handler-uncertainty-initial.log`.
+5. Recovery uses the server execution-start instant. It publishes READY evidence immediately and
+   selects explicit uncertainty after the execution budget and recovery margin. A candidate's
+   stored identity must name its exact generation/path. Terminal publication must equal the journal's
+   selected outcome and clears its pending result bytes in the same commit. Retention returns an
+   unused terminal-event reservation with operation deletion. Recovery and cleanup passed 106
+   focused checks in `interop/target/plan10-4302-unused-budget-retirement.log`.
+6. Review reproduced two further failures: a missing published artifact returned 503 indefinitely,
+   and retention could collect an artifact referenced by a pending completion. Missing or mismatched
+   references and oversized inline results now become explicit result_unavailable outcomes; pending
+   references protect their artifacts. Scoped handler cleanup preserves the original exception and
+   suppresses a failed uncertainty write, leaving durable start evidence for later recovery. These
+   paths passed 119 focused checks in
+   `interop/target/plan10-4302-suppressed-cleanup-reviewed.log`.
+7. Full-gate review corrected formatting and test-only static-analysis findings, then an injection
+   audit refusal of a qualified node-name constant. The call now uses the existing checker-recognised
+   static constant form; no checker or exclusion changed. Accounting review added result/snapshot
+   reservations before effects, exact charge replacement with READY publication, and retained-vector
+   release with operation deletion. Full result quota refuses before effects; release resumes the
+   same accepted request once. Exact result and snapshot charges return to zero after retention.
+8. The complete argument-free `scripts/quality` passed at 06:38:06 CEST on 2026-09-06 with 1070 core,
+   4 Adobe-module, 453 development and 464 interop tests, all with zero failures/errors/skips. Every
+   stage and bundle coverage check passed. Evidence is
+   `interop/target/plan10-4302-quality-capacity-reviewed.log`. The installed state-ownership scenario
+   passed with the new execution path. Owner-supplied Adobe quickstart and sibling-client tiers did
+   not run and remain unproved. Runtime lifecycle activation and command assembly remain later tasks.
+9. Post-gate review added four before/after-save completion-capacity faults. Fresh independent
+   sessions prove that either the original promise or the committed result with exact charges
+   survives, and publication retries preserve that answer. Both before/after-delete retention
+   faults preserve resource/accounting agreement. Review also reproduced a missing capacity identity
+   falling through as an unfunded journal; it now fails explicitly, and repair permits completion.
+   All 119 focused checks passed in `interop/target/plan10-4302-capacity-owner-reviewed.log`.
+   Recovery also recognises a terminal winner observed during completion publication. Final gate
+   validation and task completion remain pending after these review changes.
+
+10. The final-review gate passed all 1077 core tests and 453 development tests, but its shared-repository
+    harness returned 404 on one cluster node in two checks. The other interop checks passed. The same
+    unchanged harness then passed all three checks with continuous container-log capture at 06:56:26
+    CEST in `interop/target/plan10-4302-concurrent-runtime-reviewed.log`. The failure was not reproduced;
+    no exact platform cause is claimed and no check was relaxed. Another full gate with captured
+    runtime logs is required before committing this task.
+
+11. The final diagnostic run of the complete argument-free `scripts/quality` passed at 07:09:58
+    CEST on 2026-09-06: 1077 core, 4 Adobe-module, 453 development and 464 interop tests, all with
+    zero failures/errors/skips. Every gate stage and both bundle coverage checks passed. Evidence is
+    `interop/target/plan10-4302-quality-final-diagnostics.log`; continuous container logs are under
+    `interop/target/plan10-4302-final-gate-runtime-logs/`. All cluster checks passed unchanged.
+12. Final review checked all three task steps against the original saturation reproduction, typed
+    completion tests, independent persistence/response faults, recovery races and retained-capacity
+    accounting. Recorded completion is published without repeating effects; execution-start evidence
+    remains reconcilable when completion cannot be saved. Task 4302 is complete. The owner-supplied
+    Adobe quickstart and sibling-client tiers remain unproved.
+
+The repository-layout inventory now names the terminal-event budget and completion journal, and
+its design-pattern inventory names the journal's stateless policy. No execution grant, schema,
+route, imported package or checker was widened. Result transport remains task 4306; these checks
+prove durable result storage and reconciliation rather than a new client result-envelope consumer.
