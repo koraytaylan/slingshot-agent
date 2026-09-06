@@ -16,8 +16,8 @@ touches:
   - core/src/test/resources/fixtures/agent-contract/sibling-transport-contract.json
   - core/src/test/java/rs/slingshot/agent/http
   - core/src/test/java/rs/slingshot/agent/wire
-status: pending
-merged_as: ""
+status: complete
+merged_as: "0ea4598"
 ---
 # Expose Durable Command Results Through the Contract
 
