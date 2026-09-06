@@ -1825,3 +1825,9 @@ required checks and the complete gate, then commit the completed task.
 
 129. Added the required Javadocs and reran the documentation review. `JavadocPolicyTest` passes all
      10 cases, and core Checkstyle passes with zero violations.
+
+130. The resumed gate reached the tests-and-coverage stage and the core suite passed all 1,138
+     tests. Packaging then failed in the offline Maven cache while loading
+     `maven-source-plugin:3.3.1`: `org.codehaus.plexus.archiver.ArchiverException` is absent from
+     the cached plugin classpath. The source Javadoc warnings were corrected before this failure,
+     and the issue is environmental rather than a source-policy or test failure.
