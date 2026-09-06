@@ -1890,3 +1890,11 @@ required checks and the complete gate, then commit the completed task.
     boundary, 4501 has no installed restart/maintenance acceptance run, and 4502–4602 still need
     runtime DS wiring and positive owner-tier execution. No task is marked complete without that
     evidence.
+
+140. Re-reviewed 4405 against its done criteria. The package handler and its tests now build and
+    inspect a deterministic ZIP containing selected resource entries, with a digest and byte count
+    derived from the complete archive, and staging closes on every path. The missing part is still
+    durable publication: the handler API receives only a resolver and caller context, while
+    `ArtifactStore.publish` requires the caller session, state path, and operation boundary supplied
+    by 4502. The task remains pending until that boundary is connected; no fabricated success was
+    recorded.
