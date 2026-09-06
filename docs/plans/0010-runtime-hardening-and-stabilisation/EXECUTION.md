@@ -1776,3 +1776,9 @@ required checks and the complete gate, then commit the completed task.
 118. Re-ran the full core regression after the package cleanup mapping landed. All 1,137 tests pass,
     including the package, transport, lifecycle, command and console suites; no regression was
     introduced by converting staging-release failures into typed command outcomes.
+
+119. Implemented the DS binding seam for task 4502. `SubmitServlet` now accepts an optional dynamic
+    top-level `CommandRuntime` service and returns to `NOTHING_REGISTERED` when that service stops,
+    preserving a fail-closed surface. `SubmitServletTest` passes all 25 cases, the packaged core
+    bundle builds successfully, and its SCR descriptor contains the expected `0..1` dynamic
+    reference. The handler and adapter graph itself remains a separate pending composition step.

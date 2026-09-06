@@ -14,6 +14,9 @@ import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.ProgressSink;
@@ -199,7 +202,7 @@ public final class SubmitServlet extends AgentServlet {
      * what the declaration buys is that the compiler and the analyser agree with that rather than
      * a suppression saying so.</p>
      */
-    private final Commands commands;
+    private volatile Commands commands;
 
     /**
      * Holds a servlet with nothing in it.
@@ -219,7 +222,29 @@ public final class SubmitServlet extends AgentServlet {
      */
     public SubmitServlet(Commands commands) {
         super();
-        this.commands = commands;
+        this.commands = java.util.Objects.requireNonNull(commands, "commands");
+    }
+
+    /** Binds the packaged command runtime when its complete adapter graph is active.
+     * @param runtime the active command runtime
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL, policy = ReferencePolicy.DYNAMIC)
+    public void available(CommandRuntime runtime) {
+        commands = runtime;
+    }
+
+    /** Removes a stopped runtime and returns to the fail-closed command surface.
+     * @param runtime the runtime being removed
+     */
+    public void unavailable(CommandRuntime runtime) {
+        if (commands == runtime) {
+            commands = NOTHING_REGISTERED;
+        }
+    }
+
+    /** Whether the currently bound runtime serves a command, for activation diagnostics. */
+    boolean servesCommand(String wireName) {
+        return commands.serves(wireName);
     }
 
     @Override
