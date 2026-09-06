@@ -11,6 +11,7 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -64,11 +65,12 @@ public final class FindAssetsByMetadataHandler implements CommandHandler {
         if (asked instanceof final FindAssetsByMetadataCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return searched(((FindAssetsByMetadataCommand.Held) asked).command(), resolver, context);
+        return searched(((FindAssetsByMetadataCommand.Held) asked).command(), arguments, resolver,
+                context);
     }
 
-    private Answer searched(FindAssetsByMetadataCommand command, ResourceResolver resolver,
-                            CallerContext context) {
+    private Answer searched(FindAssetsByMetadataCommand command, DocumentValue.Mapping arguments,
+                            ResourceResolver resolver, CallerContext context) {
         final Resource root = resolver.getResource(command.rootPath());
         if (root == null) {
             return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
@@ -82,8 +84,17 @@ public final class FindAssetsByMetadataHandler implements CommandHandler {
                     + " refused rather than shortened, because a partial list of assets reads as"
                     + " the complete one");
         }
-        return new Produced(FindAssetsByMetadataResult.documentOf(
-                pageOf(search.found(), command.window(), contract), ""));
+        final PagingSupport.Outcome<FindAssetsByMetadataResult.MatchedAsset> page =
+                PagingSupport.page(search.found(), command.window(),
+                        FindAssetsByMetadataCommand.WIRE_NAME, arguments, context,
+                        contract);
+        if (page instanceof final PagingSupport.Refused<FindAssetsByMetadataResult.MatchedAsset> refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
+        final PagingSupport.Page<FindAssetsByMetadataResult.MatchedAsset> accepted =
+                ((PagingSupport.Accepted<FindAssetsByMetadataResult.MatchedAsset>) page).page();
+        return new Produced(FindAssetsByMetadataResult.documentOf(accepted.rows(),
+                accepted.continuationToken()));
     }
 
     /** One search of one subtree, carrying what it has examined and what it has found. */
