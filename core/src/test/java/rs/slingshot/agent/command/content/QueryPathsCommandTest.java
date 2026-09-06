@@ -33,7 +33,12 @@ import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
+import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
+import rs.slingshot.agent.continuation.KeyRing;
+import rs.slingshot.agent.continuation.KeyRingRefusal;
+import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
+import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -251,6 +256,24 @@ final class QueryPathsCommandTest {
                 "the handler returned the whole gathered subtree instead of the requested page");
     }
 
+    @Test
+    @DisplayName("a verified continuation starts after the preceding page")
+    void verifiedContinuationStartsAfterPrecedingPage() throws RepositoryException {
+        final List<String> paths = corpus(PAGE + 1);
+        final CommandHandler handler = new QueryPathsHandler(CONTRACT);
+        final CommandHandler.Produced first = assertInstanceOf(CommandHandler.Produced.class,
+                handler.run(argument("/content/corpus", null, window("initial", 0, PAGE, "")),
+                        readOnly(), pagingContext()));
+        final String token = assertInstanceOf(DocumentValue.Text.class,
+                first.result().member(QueryPathsResult.NEXT_CONTINUATION_TOKEN).orElseThrow()).value();
+        final CommandHandler.Produced second = assertInstanceOf(CommandHandler.Produced.class,
+                handler.run(argument("/content/corpus", null, continuationWindow(token)), readOnly(),
+                        pagingContext()));
+        final List<DocumentValue> rows = assertInstanceOf(DocumentValue.Sequence.class,
+                second.result().member(QueryPathsResult.MATCHES).orElseThrow()).items();
+        assertEquals(paths.subList(PAGE - 1, paths.size()).size(), rows.size());
+    }
+
     private String rendered(DocumentValue.Mapping result) {
         return String.valueOf(result);
     }
@@ -322,6 +345,29 @@ final class QueryPathsCommandTest {
                 new Budget(Budget.Kind.RESULT,
                         CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
                 ProgressSink.under(CONTRACT));
+    }
+
+    private static CallerContext pagingContext() {
+        final DigestValue target = assertInstanceOf(DigestValue.Held.class,
+                DigestValue.of("b".repeat(DigestValue.RENDERED_LENGTH))).digest();
+        final EventStoreGeneration generation = assertInstanceOf(EventStoreGeneration.Held.class,
+                EventStoreGeneration.of(EventStoreGeneration.FIRST)).generation();
+        final ContinuationKeyAuthority authority = new ContinuationKeyAuthority() {
+            @Override
+            public ReadOutcome read() {
+                return new Read(KeyRing.initial("paging-test-key"));
+            }
+
+            @Override
+            public WriteOutcome compareAndSet(KeyRing expected, KeyRing next, Lease lease,
+                                              long nowUnixMilliseconds) {
+                return new NotWritten(new KeyRingRefusal(KeyRingRefusal.Failure.ABSENT, "test"));
+            }
+        };
+        return new CallerContext(operation(), Budget.discovery(CONTRACT), Budget.time(CONTRACT),
+                new Budget(Budget.Kind.RESULT, CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
+                ProgressSink.under(CONTRACT),
+                new CallerContext.Available(authority, target, generation, 1_000L));
     }
 
     private static AgentOperationIdentifier operation() {
