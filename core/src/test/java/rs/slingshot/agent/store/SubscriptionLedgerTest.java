@@ -264,6 +264,7 @@ final class SubscriptionLedgerTest {
         assertEquals(HighWaterMark.Refusal.WOULD_GO_BACKWARDS, HighWaterMark.refusalIn(
                 HighWaterMark.advance(session, identifier, sequence(3), NOW + 1)).orElseThrow()
                 .refusal(), "a mark moved to where it already stood");
+        assertTrue(HighWaterMark.refusalIn(new HighWaterMark.Advanced(sequence(4), NOW)).isEmpty());
     }
 
     @Test
