@@ -36,7 +36,7 @@ public interface CommandHandler {
     Answer run(DocumentValue.Mapping arguments, ResourceResolver resolver, CallerContext context);
 
     /** What running one command produced. */
-    sealed interface Answer permits Produced, Failed {
+    sealed interface Answer permits Produced, Failed, Artifact {
     }
 
     /**
@@ -45,6 +45,35 @@ public interface CommandHandler {
      * @param result what it produced
      */
     record Produced(DocumentValue.Mapping result) implements Answer {
+    }
+
+    /**
+     * A result whose bytes must be committed by the execution boundary.
+     *
+     * <p>The handler supplies bytes and the wire result, while the runtime supplies the caller
+     * session and operation identity to the artifact store. This keeps handlers unable to obtain
+     * a session while preventing a descriptor from referring to discarded staging bytes.</p>
+     *
+     * @param result the descriptor to expose after publication
+     * @param slot the artifact slot
+     * @param bytes the complete artifact bytes
+     */
+    record Artifact(DocumentValue.Mapping result, String slot, byte[] bytes) implements Answer {
+
+        /** Holds a defensive copy of the artifact bytes. */
+        public Artifact {
+            bytes = bytes.clone();
+        }
+
+        /**
+         * Returns a defensive copy of the artifact bytes.
+         *
+         * @return the artifact bytes
+         */
+        @Override
+        public byte[] bytes() {
+            return bytes.clone();
+        }
     }
 
     /**

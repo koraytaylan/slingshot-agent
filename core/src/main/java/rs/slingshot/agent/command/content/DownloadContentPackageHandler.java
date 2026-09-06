@@ -259,9 +259,9 @@ public final class DownloadContentPackageHandler implements CommandHandler {
                         + refused.detail());
             }
             final String digest = Digest.of(packageBytes).rendered();
-            return new Produced(DownloadContentPackageResult.documentOf(
+            return new Artifact(DownloadContentPackageResult.documentOf(
                     published(((StagingArea.Written) written).bytes(), digest), digest,
-                    command.packageName()));
+                    command.packageName()), PACKAGE_SLOT, packageBytes);
         } catch (final UncheckedIOException cleanup) {
             return new Failed(STAGING_CLEANUP_FAILED,
                     "the package staging area could not be released: "
