@@ -14,7 +14,7 @@ not been rewritten by this review.
   owner-supplied AEM and client tiers remain unproved.
 - Registration/integration: not attempted; no validated Phase R base or integration OID claimed.
 - Review evidence: [EVIDENCE.md](EVIDENCE.md).
-- Full gate baseline: refused in core tests, 857 run / 2 failures; see R16.
+- Full gate baseline: refused in core tests, 1122 run / 7 failures; see R16 and EXECUTION.md item 48.
 
 | Task | Target | Dependencies |
 |---|---|---|

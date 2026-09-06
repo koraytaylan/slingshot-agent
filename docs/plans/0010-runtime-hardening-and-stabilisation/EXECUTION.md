@@ -1410,3 +1410,8 @@ required checks and the complete gate, then commit the completed task.
 47. Hardened `PagedQuery.pageOf` against integer narrowing when a valid long result limit exceeds
     the number of rows found. The page now serves the available rows without overflowing its slice
     bound; a large-limit regression passes with the paging suite, Checkstyle, and PMD clean.
+
+48. Re-ran the complete core test suite after the paging hardening. The suite executed 1,122 tests
+    and still reports seven failures, all in the known dense-bucket maintenance sweep coverage for
+    task 4105 (bounded traversal, cursor resumption, and interruption boundaries). No runtime task
+    was marked complete from this result; it updates the baseline used for the next 4105 review.
