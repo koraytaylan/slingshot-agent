@@ -26,6 +26,49 @@ import rs.slingshot.agent.store.ArtifactSlot;
 public record ExecutionOutcome(OperationState state, Result result,
                                long finishedAtUnixMilliseconds) {
 
+    /** The handler's declared completion, separate from the representation of its result. */
+    public sealed interface Completion permits Succeeded, Failed, Uncertain {
+    }
+
+    /**
+     * A handler that completed the requested work.
+     *
+     * @param result the produced result
+     */
+    public record Succeeded(Result result) implements Completion {
+    }
+
+    /**
+     * A handler that reports a declared failure.
+     *
+     * @param result the bounded failure result
+     */
+    public record Failed(Result result) implements Completion {
+    }
+
+    /** Why an effect cannot be reported as a known successful or failed command outcome. */
+    public enum Uncertain implements Completion {
+        /** The request ended without a declared handler completion. */
+        EFFECTS_UNDETERMINED("effects_undetermined"),
+        /** The handler returned an outcome that cannot be retained or referenced safely. */
+        RESULT_UNAVAILABLE("result_unavailable");
+
+        private final String reason;
+
+        Uncertain(String reason) {
+            this.reason = reason;
+        }
+
+        /**
+         * A bounded machine-readable statement that does not claim effects were absent.
+         *
+         * @return the explicit uncertainty result
+         */
+        public Result result() {
+            return new Inline("{\"outcome\":\"undetermined\",\"reason\":\"" + reason + "\"}");
+        }
+    }
+
     /** Why an outcome is not one this build will write down. */
     public enum Refusal {
         /** Its state is not terminal, and an outcome is what an execution ended as. */
@@ -119,6 +162,25 @@ public record ExecutionOutcome(OperationState state, Result result,
                     .filter(kind -> kind.spelling.equals(spelling))
                     .findFirst();
         }
+    }
+
+    /**
+     * Validates the handler's declared completion without assuming it succeeded.
+     *
+     * @param completion the typed handler completion
+     * @param finishedAtUnixMilliseconds the completion instant
+     * @param contract the authenticated result bounds
+     * @return a known completion, explicit uncertainty, or an unrepresentable result
+     */
+    public static Outcome of(Completion completion, long finishedAtUnixMilliseconds, AgentContract contract) {
+        return switch (completion) {
+            case Succeeded succeeded -> of(OperationState.SUCCEEDED, succeeded.result(),
+                    finishedAtUnixMilliseconds, contract);
+            case Failed failed -> of(OperationState.FAILED, failed.result(),
+                    finishedAtUnixMilliseconds, contract);
+            case Uncertain uncertain -> of(OperationState.FAILED, uncertain.result(),
+                    finishedAtUnixMilliseconds, contract);
+        };
     }
 
     /**

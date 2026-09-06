@@ -9,10 +9,9 @@ import java.util.Optional;
 /**
  * What reconciliation decided about one operation, out of a closed set of seven answers.
  *
- * <p>Every one of them is a decision to do nothing except say so. Recovery has no session for
- * anybody's caller — an immediate command runs on its own request's session, and there is no
- * request here — so it classifies rather than executes, and the client's own resend under the same
- * derived identifier is what starts work again.</p>
+ * <p>Recovery publishes stored completion evidence or records explicit uncertainty after the execution
+ * budget. It has no caller session and never runs a command. Accepted work still requires the
+ * caller's resend under the same derived identifier to start.</p>
  *
  * <p>The set is closed because a store that answered "we do not know" by saying nothing is a store
  * a client cannot act on. Undetermined is a real answer: it says that whether the one commit landed
