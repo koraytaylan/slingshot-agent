@@ -1310,3 +1310,11 @@ required checks and the complete gate, then commit the completed task.
     classes, so the script did not rewrite the committed cache record. This confirms the generated
     artifacts are available locally but the preparation command cannot complete until coverage is
     restored; no quality-gate result beyond this preparation failure is claimed.
+
+30. Reviewed fully received intake execution through the installed submission route. Admission
+    persists the operation and manifest atomically; the first retry with every slot present claims
+    the accepted operation through the execution journal, runs the registered command once, and
+    commits its terminal outcome. Concurrent starts, capacity refusal followed by retry, repeated
+    resubmission, handler uncertainty, and missing-result recovery are covered by the focused
+    `SubmitServletTest` and `ArtifactIntakeServletTest` suites (46 cases), all passing. This closes
+    task 4304; the implementation is spread across commits `e0d4a99`, `81c4c62`, and `6bb7d69`.
