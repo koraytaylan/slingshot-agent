@@ -575,13 +575,13 @@ final class MaintenanceSweepTest {
                 "a referenced artifact was collected");
         assertTrue(session.nodeExists(slotOf(OPERATIONS.get(0)).path()),
                 "the artifact an answer names is gone, so that answer is broken forever");
-        assertEquals(MaintenanceSweep.RESULT_SLOT, TerminalCommit.RESULT_SLOT,
+        assertEquals(TerminalCommit.RESULT_SLOT, MaintenanceSweep.RESULT_SLOT,
                 "an answer names its slot in one property and the sweep reads another");
-        assertEquals(MaintenanceSweep.LEASE_HELD_UNTIL, ExecutionFence.HELD_UNTIL,
+        assertEquals(ExecutionFence.HELD_UNTIL, MaintenanceSweep.LEASE_HELD_UNTIL,
                 "a lease is written in one property and the sweep reads another");
-        assertEquals(MaintenanceSweep.LEASE, ExecutionFence.NODE,
+        assertEquals(ExecutionFence.NODE, MaintenanceSweep.LEASE,
                 "a lease lives at one node and the sweep looks at another");
-        assertEquals(MaintenanceSweep.CALLER, OperationStore.CALLER,
+        assertEquals(OperationStore.CALLER, MaintenanceSweep.CALLER,
                 "a caller is written in one property and the sweep reads another");
     }
 
