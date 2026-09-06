@@ -82,7 +82,11 @@ public final class QueryPathsHandler implements CommandHandler {
                     + context.discovery().limit() + " nodes it is allowed, and stopped rather than"
                     + " going on");
         }
-        return new Produced(QueryPathsResult.documentOf(gathered.paths(), ""));
+        // Apply the requested window at the handler boundary.  Returning the complete gathered
+        // set here made the command silently ignore a valid initial limit and defeated the
+        // result bound that ResultWindow had already enforced.
+        return new Produced(QueryPathsResult.documentOf(
+                pageOf(gathered.paths(), command.window(), contract), ""));
     }
 
     /**
