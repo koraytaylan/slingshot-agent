@@ -38,7 +38,16 @@ public final class DefaultStreamTicker implements StreamTicker {
      */
     @Override
     public long elapsedMilliseconds() {
-        return System.nanoTime() / NANOSECONDS_IN_A_MILLISECOND;
+        return monotonicNanoseconds() / NANOSECONDS_IN_A_MILLISECOND;
+    }
+
+    /**
+     * Reads the runtime monotonic source for duration calculations.
+     *
+     * @return a monotonic nanosecond reading
+     */
+    public static long monotonicNanoseconds() {
+        return System.nanoTime();
     }
 
     /**
