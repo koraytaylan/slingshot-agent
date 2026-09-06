@@ -3,11 +3,15 @@
 
 package rs.slingshot.agent.command.content;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
@@ -16,6 +20,7 @@ import rs.slingshot.agent.command.OverflowPublication;
 import rs.slingshot.agent.command.StagingArea;
 import rs.slingshot.agent.command.StagingRooms;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.json.DocumentValue;
 import rs.slingshot.agent.wire.ResultDelivery;
@@ -234,16 +239,33 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         // that has a category of its own rather than being a build failure.
         try (StagingArea room = opened.get()) {
             final String manifest = manifestOf(command, selected);
-            final StagingArea.Outcome written = room.write("filter.xml", manifest);
+            final byte[] packageBytes;
+            try {
+                packageBytes = packageBytes(manifest);
+            } catch (final IOException invalidPackage) {
+                return new Failed(PACKAGE_FAILED, "the package archive could not be built: "
+                        + invalidPackage.getMessage());
+            }
+            final StagingArea.Outcome written = room.write("package.zip", packageBytes);
             if (written instanceof final StagingArea.Refused refused) {
-                return new Failed(PACKAGE_FAILED, "the package's own filter could not be staged: "
+                return new Failed(PACKAGE_FAILED, "the package archive could not be staged: "
                         + refused.detail());
             }
-            final String digest = digestOf(manifest);
+            final String digest = Digest.of(packageBytes).rendered();
             return new Produced(DownloadContentPackageResult.documentOf(
                     published(((StagingArea.Written) written).bytes(), digest), digest,
                     command.packageName()));
         }
+    }
+
+    static byte[] packageBytes(String manifest) throws IOException {
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ZipOutputStream archive = new ZipOutputStream(bytes)) {
+            archive.putNextEntry(new ZipEntry("META-INF/vault/filter.xml"));
+            archive.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            archive.closeEntry();
+        }
+        return bytes.toByteArray();
     }
 
     /**
@@ -296,11 +318,6 @@ public final class DownloadContentPackageHandler implements CommandHandler {
 
     /** How much markup the filter carries around its roots. */
     private static final int MARKUP_AROUND_THE_FILTER = 64;
-
-    private static String digestOf(String content) {
-        return rs.slingshot.agent.digest.Digest
-                .of(content.getBytes(java.nio.charset.StandardCharsets.UTF_8)).rendered();
-    }
 
     /**
      * Everything this command can fail with, which is a property of the command rather than of a
