@@ -1476,3 +1476,9 @@ required checks and the complete gate, then commit the completed task.
     platform adapters that have no production DS registrations. This review confirms that resource
     embedding is safe to land while partial command advertisement would be unsound. The registry
     suite and core static checks remain green.
+
+61. Re-reviewed 4502 after the registry embedding. The installed bundle can now load every declared
+    row from packaged resources, but dispatch correctly remains unavailable until every advertised
+    row has a handler and its platform adapter. No partial map was introduced; this preserves the
+    contract that missing implementations are refused rather than acknowledged. The registry
+    review evidence remains green.
