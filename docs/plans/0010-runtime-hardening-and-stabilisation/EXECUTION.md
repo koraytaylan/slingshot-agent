@@ -1918,3 +1918,12 @@ required checks and the complete gate, then commit the completed task.
      permissive fallback would accept work with no implementation. The runtime therefore remains
      safely fail-closed, but 4502 is incomplete until the full handler/adaptor graph is registered
      and an installed command executes successfully.
+
+143. Traced 4405 through terminal completion. `DownloadContentPackageHandler` writes the archive to
+     its staging area and returns a `Produced` artifact descriptor, but `CommandHandler` intentionally
+     receives only the caller resolver and context; it has no caller session, operation path, or
+     publication clock. `TerminalCommit` treats every published descriptor as a pre-existing
+     `ArtifactStore` slot and therefore refuses this path as `ARTIFACT_NOT_COMMITTED`. The current
+     result is consequently a reference to bytes that were staged and then discarded, not a durable
+     publication. Completing 4405 requires a typed publication handoff at the runtime/terminal
+     boundary, preserving the handler's no-session invariant.
