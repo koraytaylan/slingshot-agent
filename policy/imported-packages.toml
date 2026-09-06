@@ -43,6 +43,13 @@ provided_by = ["aem-cloud-service", "aem-6-5-lts"]
 reason = "The one failure a claim treats as its second outcome rather than as an error: a node type refusing a second node where one is already held."
 
 [[package]]
+name = "javax.jcr.query"
+range = "[2.0,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The repository query interfaces used to order resumed maintenance records deterministically."
+
+[[package]]
 name = "javax.servlet"
 range = "[3.1,4)"
 bundle = "core"

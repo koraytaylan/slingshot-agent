@@ -30,7 +30,9 @@ public final class RepositoryReach {
      */
     public record References(List<Resource> found, Completeness completeness) {
 
-        /** Whether the bounded walk reached its end. */
+        /**
+         * @return true when the bounded walk reached its end
+         */
         public boolean complete() {
             return completeness == Completeness.COMPLETE;
         }
