@@ -89,10 +89,14 @@ public sealed interface ResultWindow permits ResultWindow.Initial, ResultWindow.
         UNKNOWN_MODE,
         /** An initial window asked for no matches at all. */
         LIMIT_ZERO,
+        /** An initial window asked for a negative number of matches. */
+        LIMIT_NEGATIVE,
         /** An initial window asked for more matches than the contract allows. */
         LIMIT_ABOVE_MAXIMUM,
         /** An initial window asked to skip further than the contract allows. */
         OFFSET_ABOVE_MAXIMUM,
+        /** An initial window asked to skip a negative number of matches. */
+        OFFSET_NEGATIVE,
         /** A continuation carried a field the token it names already fixes. */
         CONTINUATION_NOT_ALONE,
         /** A continuation carried no token, which is the only thing it carries. */
@@ -218,11 +222,17 @@ public sealed interface ResultWindow permits ResultWindow.Initial, ResultWindow.
      * @return the window, or the one reason there is none
      */
     static Outcome initial(long offset, long limit, AgentContract contract) {
+        if (limit < NONE_AT_ALL) {
+            return new Refused(Refusal.LIMIT_NEGATIVE);
+        }
         if (limit == NONE_AT_ALL) {
             return new Refused(Refusal.LIMIT_ZERO);
         }
         if (limit > contract.value(ContractLimit.MAXIMUM_RESULT_LIMIT)) {
             return new Refused(Refusal.LIMIT_ABOVE_MAXIMUM);
+        }
+        if (offset < BEGINNING) {
+            return new Refused(Refusal.OFFSET_NEGATIVE);
         }
         if (offset > contract.value(ContractLimit.MAXIMUM_RESULT_OFFSET)) {
             return new Refused(Refusal.OFFSET_ABOVE_MAXIMUM);

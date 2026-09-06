@@ -1395,3 +1395,9 @@ required checks and the complete gate, then commit the completed task.
     or angle brackets cannot corrupt the archive manifest. The focused package suite passes (including
     the attribute-escaping regression), with offline Checkstyle and PMD clean. Durable
     `ArtifactStore.publish` integration remains a runtime boundary for task 4405.
+
+45. Closed the invalid initial paging bounds in `ResultWindow`: negative limits and offsets now have
+    explicit refusals instead of reaching handlers as accepted windows that could trigger invalid
+    slicing or traversal positions. `PagedQueryTest` and `QueryPathsCommandTest` pass, with offline
+    Checkstyle and PMD clean. Continuation authority wiring through the command runtime remains the
+    open part of task 4404.

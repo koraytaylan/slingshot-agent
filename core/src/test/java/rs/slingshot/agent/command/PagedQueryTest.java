@@ -92,6 +92,10 @@ final class PagedQueryTest {
     void theTwoWindowRefusalsAreDistinct() {
         assertEquals(ResultWindow.Refusal.LIMIT_ZERO, windowRefusal(0, 0),
                 "a page of no rows answers no question anybody meant to ask");
+        assertEquals(ResultWindow.Refusal.LIMIT_NEGATIVE, windowRefusal(0, -1),
+                "a negative page size was accepted as a valid window");
+        assertEquals(ResultWindow.Refusal.OFFSET_NEGATIVE, windowRefusal(-1, 10),
+                "a negative page offset was accepted as a valid window");
         assertEquals(ResultWindow.Refusal.LIMIT_ABOVE_MAXIMUM,
                 windowRefusal(0, CONTRACT.value(ContractLimit.MAXIMUM_RESULT_LIMIT) + 1),
                 "a window above the contract's maximum was not refused as such");
