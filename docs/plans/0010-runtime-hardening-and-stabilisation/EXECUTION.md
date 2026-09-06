@@ -1760,3 +1760,8 @@ required checks and the complete gate, then commit the completed task.
     fixed-delay task to terminate while discovery retains a stale READY snapshot. The focused
     `StateLifecycleServiceTest` suite passes all 6 cases, and `JavadocPolicyTest` plus
     `SourcePolicyTest` pass all 25 cases.
+
+116. Completed the lifecycle regression review after the failure-boundary change. The full core
+    suite passes all 1,137 tests, including lifecycle, generation, recovery, capacity, transport,
+    console and command coverage. No activation race was found: the contract is embedded and the
+    mandatory state-session reference prevents activation before its prerequisite is bound.
