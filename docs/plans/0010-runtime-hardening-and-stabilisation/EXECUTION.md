@@ -1185,6 +1185,14 @@ review final cursor integration, prove eventual
 coverage and exact accounting across repeated passes, review failure/concurrency boundaries, run
 required checks and the complete gate, then commit the completed task.
 
+16. Implemented terminal result recovery on the operation lookup route. A lookup now reads the
+    committed result evidence beside the materialised snapshot and emits the contract's `result`
+    delivery envelope for inline and published answers; operations with no answer retain the
+    snapshot-only response. Updated the snapshot schema and its committed digest, then reviewed the
+    change with the focused seven-case lookup suite, compilation, Checkstyle, and PMD. Commit
+    `0ea4598` is the reviewed implementation. The full gate remains blocked only by the seven known
+    4105 dense-sweep bound failures.
+
 15. Prototyped a durable predecessor/successor list maintained at operation admission so a sweep
     could address the next record directly. Review exposed that prepared but empty bucket parents
     remain in the numeric namespace: a bound-one pass must skip those parents while preserving the
