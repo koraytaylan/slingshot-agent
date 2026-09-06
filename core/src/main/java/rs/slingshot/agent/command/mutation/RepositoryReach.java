@@ -22,6 +22,10 @@ import org.apache.sling.api.resource.ResourceResolver;
  */
 public final class RepositoryReach {
 
+    /** Reference discovery result, including whether the visibility budget covered the tree. */
+    public record References(List<Resource> found, boolean complete) {
+    }
+
     private RepositoryReach() {
     }
 
@@ -77,9 +81,14 @@ public final class RepositoryReach {
      */
     @SuppressWarnings("PMD.NullAssignment")
     public static List<Resource> pointingAt(ResourceResolver session, String address, long budget) {
+        return references(session, address, budget).found();
+    }
+
+    /** Discovers references and reports whether the bounded walk reached the end. */
+    public static References references(ResourceResolver session, String address, long budget) {
         final Resource root = session.getResource(CONTENT_ROOT);
         if (root == null) {
-            return List.of();
+            return new References(List.of(), true);
         }
         final List<Resource> found = new ArrayList<>();
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
@@ -102,7 +111,7 @@ public final class RepositoryReach {
                 }
             }
         }
-        return List.copyOf(found);
+        return new References(List.copyOf(found), pending.isEmpty() && held == null);
     }
 
     /**
