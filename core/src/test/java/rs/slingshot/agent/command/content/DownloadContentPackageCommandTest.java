@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -15,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
+import java.util.zip.ZipInputStream;
 import javax.jcr.Session;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
@@ -165,6 +167,17 @@ final class DownloadContentPackageCommandTest {
                 ((DocumentValue.Text) artifact.member(ArtifactDescriptor.DIGEST).orElseThrow())
                         .value().length(),
                 "the answer carries no digest a reader could verify the bytes against");
+    }
+
+    @Test
+    void theProducedBytesAreAReadableVaultPackage() throws IOException {
+        final String manifest = "<workspaceFilter version=\"1.0\"/>";
+        try (ZipInputStream archive = new ZipInputStream(new ByteArrayInputStream(
+                DownloadContentPackageHandler.packageBytes(manifest)))) {
+            assertEquals("META-INF/vault/filter.xml", archive.getNextEntry().getName());
+            assertEquals(manifest, new String(archive.readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8));
+        }
     }
 
     @Test

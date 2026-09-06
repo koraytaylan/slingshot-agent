@@ -1374,3 +1374,9 @@ required checks and the complete gate, then commit the completed task.
 40. Synchronized task 4402 metadata with its final multivalue implementation commit
     `cf663d8`; the task now points at the code that includes both conservative guards and complete
     scalar/array repointing.
+
+41. Replaced the package handler's filter-only payload with a valid ZIP archive containing
+    `META-INF/vault/filter.xml`. Artifact metadata now names the archive's actual byte count and
+    digest. The package suite passes with a ZIP readability regression, and Checkstyle/PMD remain
+    clean. Durable `ArtifactStore.publish` integration is still pending because the command runtime
+    does not yet supply its publication session and ownership boundary.
