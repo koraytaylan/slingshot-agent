@@ -1227,3 +1227,6 @@ required checks and the complete gate, then commit the completed task.
     resources. Existing artifact transfer coverage (seven cases) plus Checkstyle and PMD passed.
     Commit `465b035` records this implementation. Upload-body and event-stream deadline paths still
     require separate runtime tests, so task 4307 remains pending.
+    A follow-up review found the idle deadline must reset from monotonic write progress rather than
+    the transfer start; `cdc90f5` applies that correction. The seven-case artifact suite, Checkstyle,
+    and PMD remain green.
