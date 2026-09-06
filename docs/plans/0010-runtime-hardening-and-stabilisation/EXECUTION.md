@@ -1406,3 +1406,7 @@ required checks and the complete gate, then commit the completed task.
     extra fields instead of silently accepting and ignoring them, preserving the strict command
     contract before any handler dispatch. `PagedQueryTest` passes with the malformed-window
     regression, and offline Checkstyle and PMD are clean.
+
+47. Hardened `PagedQuery.pageOf` against integer narrowing when a valid long result limit exceeds
+    the number of rows found. The page now serves the available rows without overflowing its slice
+    bound; a large-limit regression passes with the paging suite, Checkstyle, and PMD clean.

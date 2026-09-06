@@ -84,6 +84,12 @@ final class PagedQueryTest {
         assertEquals(everything, served, "paging did not serve every row exactly once");
     }
 
+    @Test
+    void aLargeLongLimitDoesNotOverflowThePageSlice() {
+        assertEquals(List.of("one", "two"),
+                PagedQuery.pageOf(List.of("one", "two"), Long.MAX_VALUE, 0).rows());
+    }
+
     /** How many rows a page carries while this suite walks one enumeration to its end. */
     private static final int PAGE = 2;
 
