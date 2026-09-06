@@ -5,6 +5,7 @@ package rs.slingshot.agent.store;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import javax.jcr.InvalidItemStateException;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -164,31 +165,32 @@ public final class MaintenanceSweep {
         long examined = 0;
         String cursor = startRecord;
         while (examined < bound) {
-            final Node record = nextRecord(session, path, cursor);
-            if (record == null) {
+            final Optional<Node> next = nextRecord(session, path, cursor);
+            if (next.isEmpty()) {
                 return new SweepProgress(examined, true, "");
             }
+            final Node record = next.orElseThrow();
             cursor = record.getName();
             examined = examined + 1;
             examine(session, pass, path.child(cursor));
         }
-        return new SweepProgress(examined, nextRecord(session, path, cursor) == null, cursor);
+        return new SweepProgress(examined, nextRecord(session, path, cursor).isEmpty(), cursor);
     }
 
-    private static Node nextRecord(Session session, StatePath bucket, String after)
+    private static Optional<Node> nextRecord(Session session, StatePath bucket, String after)
             throws RepositoryException {
         if (after.isEmpty()) {
             final NodeIterator records = session.getNode(bucket.path()).getNodes();
-            return records.hasNext() ? records.nextNode() : null;
+            return records.hasNext() ? Optional.of(records.nextNode()) : Optional.empty();
         }
         final NodeIterator records = session.getNode(bucket.path()).getNodes();
         while (records.hasNext()) {
             final Node candidate = records.nextNode();
             if (candidate.getName().compareTo(after) > 0) {
-                return candidate;
+                return Optional.of(candidate);
             }
         }
-        return null;
+        return Optional.empty();
     }
 
     private static void examine(Session session, Pass pass, StatePath record)
