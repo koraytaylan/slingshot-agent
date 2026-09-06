@@ -1451,3 +1451,10 @@ required checks and the complete gate, then commit the completed task.
     without changing cursor or bucket calculations. The 58-case sweep suite still reproduces the
     two known dense-bucket successor failures (bound-one advances two nodes; resumption rereads
     three), so 4105 remains pending. Commit `829e656` records the review loop.
+
+57. Added `StateLifecycleService` as an immediate DS component. It performs startup recovery before
+    scheduling bounded maintenance under the maintenance service identity, publishes an explicit
+    unavailable snapshot on missing sessions or failed state work, and shuts its private scheduler
+    down during deactivation. The activation/refusal test passes, and core compilation,
+    Checkstyle, and PMD pass. Commit `ca17fe7` records this review loop. Task 4501 remains pending
+    until discovery consumes the snapshot and the installed scheduler configuration is exercised.
