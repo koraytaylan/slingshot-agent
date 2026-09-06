@@ -14,9 +14,9 @@ not been rewritten by this review.
   suites pass; the owner-supplied AEM and client tiers remain unproved.
 - Registration/integration: not attempted; no validated Phase R base or integration OID claimed.
 - Review evidence: [EVIDENCE.md](EVIDENCE.md).
-- Full gate baseline: the public interop stage is currently blocked by a stale Podman container from
-  an earlier run in this sandbox's read-only host runroot; the gate now aligns its runtime directory
-  with the preparation scripts. See EXECUTION.md and the Surefire reports.
+- Full gate baseline: the complete `scripts/quality` gate passes after clearing stale
+  interoperability test containers. The owner-supplied AEM and client tiers remain unproved; see
+  EXECUTION.md and the Surefire reports.
 
 | Task | Target | Dependencies |
 |---|---|---|
