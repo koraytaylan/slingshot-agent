@@ -1997,3 +1997,8 @@ required checks and the complete gate, then commit the completed task.
     instance that supplied command identities and only clears them when that same instance unbinds;
     an older runtime disappearing cannot erase a newer runtime's advertised commands. The race
     regression test and complete core verification pass.
+
+155. Re-reviewed discovery publication for an atomicity race. Runtime identity and command rows are
+    now published as one immutable binding; unbinding compares the exact runtime instance and
+    cannot interleave into stale command advertisement. The review caught PMD's intentional identity
+    comparison and documented the narrow suppression; focused tests and core verification pass.
