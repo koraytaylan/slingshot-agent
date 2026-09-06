@@ -12,7 +12,7 @@ touches:
   - core/src/main/java/rs/slingshot/agent/command/content/DownloadContentPackageHandler.java
   - core/src/main/java/rs/slingshot/agent/command/Budget.java
   - core/src/test/java/rs/slingshot/agent/command
-status: pending
+status: complete
 merged_as: ""
 ---
 # Bound Repository Reads and Retained Traversal Work
