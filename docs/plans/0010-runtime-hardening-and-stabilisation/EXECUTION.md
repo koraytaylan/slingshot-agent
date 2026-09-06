@@ -1811,3 +1811,11 @@ required checks and the complete gate, then commit the completed task.
 125. Replaced the adapter's transient optional fields with an explicit active/missing state. The
      deserialization fallback remains fail closed, while `NullabilityPolicyTest` passes all 10
      cases and the focused servlet/dispatch suites pass all 32 cases after recompilation.
+
+126. The resumed full gate passed image pinning, formatting, compilation and static analysis, then
+     exposed two API-shape findings: the sole `CommandRuntime` implementation must use the
+     `DefaultCommandRuntime` name, and both new public runtime types require design-pattern rows.
+
+127. Renamed the concrete adapter to `DefaultCommandRuntime`, registered the runtime strategy and
+     accessor shapes in the committed pattern policy, and reran the review. `ApiShapePolicyTest`
+     passes all 12 cases; core compile, PMD, SpotBugs and Checkstyle also pass with zero findings.
