@@ -69,6 +69,29 @@ final class StateLifecycleServiceTest {
     }
 
     @Test
+    void unexpectedMaintenanceFailureRevokesReadiness() {
+        try (ResourceResolver resolver = (ResourceResolver) Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] {ResourceResolver.class}, (proxy, method, arguments) -> {
+                    if ("close".equals(method.getName())) {
+                        return null;
+                    }
+                    if ("adaptTo".equals(method.getName())) {
+                        throw new IllegalArgumentException("adapter failed");
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                })) {
+            final StateLifecycleService service = new StateLifecycleService();
+            service.available(new rs.slingshot.agent.repository.AgentSession(
+                    subservice -> resolver));
+            service.activate();
+            assertEquals(StateLifecycleService.Availability.UNAVAILABLE,
+                    StateLifecycleService.observed().availability());
+            service.deactivate();
+        }
+    }
+
+    @Test
     void boundOakMaintenancePassPublishesItsDurableObservation() {
         final ResourceResolver shared = sling.resourceResolver();
         if (shared == null) {

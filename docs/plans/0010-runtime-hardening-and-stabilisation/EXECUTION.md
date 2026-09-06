@@ -1753,4 +1753,10 @@ required checks and the complete gate, then commit the completed task.
      rows were absent was stale and has been corrected. The remaining blocker is production
      composition: `SubmitServlet` still receives no DS-bound `Commands` service and therefore uses
      `NOTHING_REGISTERED`; no handler map or platform-adapter assembly can be claimed until that
-     seam is implemented and exercised from an installed bundle.
+    seam is implemented and exercised from an installed bundle.
+
+115. Reviewed lifecycle failure handling under an unexpected platform runtime exception. The
+    scheduled pass now revokes readiness and records the exception type instead of allowing the
+    fixed-delay task to terminate while discovery retains a stale READY snapshot. The focused
+    `StateLifecycleServiceTest` suite passes all 6 cases, and `JavadocPolicyTest` plus
+    `SourcePolicyTest` pass all 25 cases.
