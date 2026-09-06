@@ -5,6 +5,7 @@ package rs.slingshot.agent.command.content;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -261,6 +262,10 @@ public final class DownloadContentPackageHandler implements CommandHandler {
             return new Produced(DownloadContentPackageResult.documentOf(
                     published(((StagingArea.Written) written).bytes(), digest), digest,
                     command.packageName()));
+        } catch (final UncheckedIOException cleanup) {
+            return new Failed(STAGING_CLEANUP_FAILED,
+                    "the package staging area could not be released: "
+                            + cleanup.getMessage());
         }
     }
 

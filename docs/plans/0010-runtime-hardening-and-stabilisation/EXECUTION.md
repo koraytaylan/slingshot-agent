@@ -1765,3 +1765,10 @@ required checks and the complete gate, then commit the completed task.
     suite passes all 1,137 tests, including lifecycle, generation, recovery, capacity, transport,
     console and command coverage. No activation race was found: the contract is embedded and the
     mandatory state-session reference prevents activation before its prerequisite is bound.
+
+117. The package/publication review caught a cleanup boundary: `DownloadContentPackageHandler` now
+    maps staging-release `UncheckedIOException` to its declared `staging_cleanup_failed` outcome.
+    The focused package suite passes all 12 cases. The same review run found two pre-existing line
+    length violations in the migrated asset-reference paging path and narrowed the lifecycle catch
+    to the concrete adapter exception allowed by source policy; Checkstyle passes with zero
+    violations.
