@@ -1941,3 +1941,12 @@ required checks and the complete gate, then commit the completed task.
      returns the selection in deterministic wire order. The review suite proves all three cases;
      this gives DS assembly a fail-closed way to advertise only a complete supported subset without
      changing the committed registry or accepting unavailable work.
+
+146. Connected the first production DS runtime assembly. `DefaultCommandRuntime` is now an immediate
+     `CommandRuntime` component that loads the embedded registry, constructs the stateless caller-
+     resolver handlers, projects their active rows, and publishes the dispatch only after registry
+     correspondence succeeds. Activation refusal and deactivation both leave the runtime missing,
+     so SubmitServlet rejects unavailable commands rather than accepting work it cannot execute.
+     Runtime activation/deactivation tests pass, and the full core gate passes all 1,155 tests and
+     every coverage/static-analysis/documentation check. Commands needing platform adapters or
+     staging remain intentionally outside this active subset pending their own assembly.
