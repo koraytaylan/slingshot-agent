@@ -733,7 +733,7 @@ reason = "Rotating is decided against the record and the retentions in it every 
 [[type]]
 name = "CrashInjector"
 pattern = "accessor"
-reason = "It ends a container through the engine it was given and holds nothing but that engine and the bounds it drives it under. The seven points a process may be ended at are enumerated as a closed type beside it, so a report says which one broke."
+reason = "It ends a container through the engine it was given and holds nothing but that engine and the bounds it drives it under. The eight points a process may be ended at are enumerated as a closed type beside it, so a report says which one broke."
 
 [[type]]
 name = "ShapeRefusal"

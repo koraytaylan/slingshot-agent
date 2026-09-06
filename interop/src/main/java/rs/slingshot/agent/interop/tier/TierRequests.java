@@ -250,10 +250,22 @@ public final class TierRequests {
      * @return what the instance answered
      */
     public HttpResponse<String> submit(String address, List<String> fields) {
+        return submit(address, fields, Duration.ofSeconds(REQUEST_SECONDS));
+    }
+
+    /**
+     * Hands form fields to an instance with a scenario's explicit observation deadline.
+     *
+     * @param address where to hand them over
+     * @param fields the fields, as name and value in turn
+     * @param deadline how long the scenario allows the repository operation to answer
+     * @return what the instance answered
+     */
+    public HttpResponse<String> submit(String address, List<String> fields, Duration deadline) {
         return send(HttpRequest.newBuilder(URI.create(address))
                 .header("Authorization", basic())
                 .header("Content-Type", "application/x-www-form-urlencoded")
-                .timeout(Duration.ofSeconds(REQUEST_SECONDS))
+                .timeout(deadline)
                 .POST(HttpRequest.BodyPublishers.ofString(encoded(fields)))
                 .build());
     }
