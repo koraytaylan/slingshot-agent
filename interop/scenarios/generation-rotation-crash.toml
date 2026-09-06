@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "generation-rotation-crash"
+kind = "property"
+feature = "repository-layout"
+tier = "a"
+deployments = ["aem-cloud-service"]
+runner = "rs.slingshot.agent.interop.harness.GenerationRotationCrashScenario"
+reason = "Generation serving, history, and retention must commit together. This pauses the exact built rotation code immediately after its first save, kills that writer, reads retained operation/snapshot/artifact state from a surviving node, then replaces both application processes and reads the same state from a fresh runtime against the persisted shared repository."

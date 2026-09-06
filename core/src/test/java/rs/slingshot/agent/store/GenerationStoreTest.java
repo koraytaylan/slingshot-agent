@@ -75,14 +75,15 @@ final class GenerationStoreTest {
     void arepeatAndADecreaseAreDistinct() throws RepositoryException {
         final Session session = prepared();
         GenerationStore.establish(session);
-        assertEquals(3, assertInstanceOf(GenerationStore.Held.class,
-                GenerationStore.rotate(session, generation(3))).generation().number());
+        assertEquals(3, assertInstanceOf(GenerationRotation.Rotated.class,
+                GenerationRotation.rotate(session, generation(3), 1788000000000L, contract()))
+                .serving().number());
         final GenerationStore.Refused repeated = assertInstanceOf(GenerationStore.Refused.class,
-                GenerationStore.rotate(session, generation(1)),
+                GenerationStore.stageRotation(session, generation(1)),
                 "a generation this store had already served was served again");
         assertEquals(GenerationStore.Refusal.ALREADY_SERVED, repeated.refusal());
         final GenerationStore.Refused decreased = assertInstanceOf(GenerationStore.Refused.class,
-                GenerationStore.rotate(session, generation(2)),
+                GenerationStore.stageRotation(session, generation(2)),
                 "a store went back to an earlier incarnation");
         assertEquals(GenerationStore.Refusal.BEFORE_THE_ONE_SERVED, decreased.refusal());
         assertTrue(decreased.detail().contains("2") && decreased.detail().contains("3"),
@@ -94,7 +95,7 @@ final class GenerationStoreTest {
     void thethreeMembershipsAreDistinct() throws RepositoryException {
         final Session session = prepared();
         GenerationStore.establish(session);
-        GenerationStore.rotate(session, generation(2));
+        GenerationRotation.rotate(session, generation(2), 1788000000000L, contract());
         assertEquals(GenerationStore.Membership.SERVING,
                 GenerationStore.membership(session, generation(2)));
         assertEquals(GenerationStore.Membership.RETAINED,

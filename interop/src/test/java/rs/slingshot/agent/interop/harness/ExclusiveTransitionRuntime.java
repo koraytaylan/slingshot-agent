@@ -39,12 +39,23 @@ final class ExclusiveTransitionRuntime {
         this.nodes = nodes;
         final Path bundle = bundle(repository);
         for (final ContainerHandle node : List.of(nodes.first(), nodes.second())) {
-            final var installed = requests.upload(node.address() + "/system/console/bundles",
-                    List.of("action", "install", "bundlestart", "start"), "bundlefile", bundle);
-            assertTrue(installed.statusCode() < 400, installed.body());
-            await(() -> "ready".equals(requests.readAsAuthenticatedUser(node.address() + ENDPOINT).body()),
-                    "the test-only store probe did not register");
+            install(node, bundle);
         }
+    }
+
+    private void install(ContainerHandle node, Path bundle) throws InterruptedException {
+        final var installed = requests.upload(node.address() + "/system/console/bundles",
+                List.of("action", "install", "bundlestart", "start"), "bundlefile", bundle);
+        assertTrue(installed.statusCode() < 400, installed.body());
+        await(() -> "ready".equals(requests.readAsAuthenticatedUser(node.address() + ENDPOINT).body()),
+                "the test-only store probe did not register");
+    }
+
+    void verifyGenerationRestart(Path repository, ContainerHandle restarted)
+            throws IOException, InterruptedException {
+        install(restarted, bundle(repository));
+        assertEquals("retained", post(restarted, "generation-view", "all"),
+                "a fresh runtime could not read the generation committed before the writer was killed");
     }
 
     void verifyRaces() throws InterruptedException, ExecutionException, TimeoutException {
@@ -100,6 +111,33 @@ final class ExclusiveTransitionRuntime {
             assertEquals(200, retained.statusCode(), retained.body());
             assertTrue(retained.body().contains("\"retained\":true"), retained.body());
             return ended;
+        }
+    }
+
+    CrashInjector.Ended verifyGenerationCrash(CrashInjector injector)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        assertEquals("prepared", post(nodes.first(), "prepare", "all"));
+        assertEquals("generation-prepared", post(nodes.first(), "generation-prepare", "all"));
+        assertEquals("armed", post(nodes.first(), "arm", "rotation-loss"));
+        try (var callers = Executors.newSingleThreadExecutor()) {
+            final var lost = callers.submit(() -> post(nodes.first(), "generation-lose", "rotation-loss"));
+            try {
+                awaitPrepared(nodes.first(), "rotation-loss", lost);
+                await(() -> "retained".equals(post(nodes.second(), "generation-view", "all")),
+                        "the first rotation save did not publish history, retention, and retained work");
+                final var ended = injector.kill(nodes.first(),
+                        CrashInjector.Point.AFTER_COMMAND_COMMIT_BEFORE_TERMINAL);
+                final ExecutionException unanswered = assertThrows(ExecutionException.class,
+                        () -> lost.get(10, TimeUnit.SECONDS));
+                assertInstanceOf(java.io.UncheckedIOException.class, unanswered.getCause());
+                assertEquals("retained", post(nodes.second(), "generation-view", "all"),
+                        "retained generation state was lost with the process that committed it");
+                return ended;
+            } finally {
+                if (injector.isRunning(nodes.first())) {
+                    post(nodes.first(), "release", "rotation-loss");
+                }
+            }
         }
     }
 
@@ -236,6 +274,7 @@ final class ExclusiveTransitionRuntime {
 
     private static void addProofFiles(Path root, JarOutputStream output) throws IOException {
         final List<String> names = List.of("rs/slingshot/agent/proof/ExclusiveTransitionProbe.class",
+                "rs/slingshot/agent/proof/GenerationRotationProbe.class",
                 "rs/slingshot/agent/proof/ExclusiveTransitionProbe$Barrier.class",
                 "rs/slingshot/agent/store/SaveInterleaving.class",
                 "rs/slingshot/agent/store/SaveInterleaving$Action.class",
