@@ -18,8 +18,8 @@ touches:
   - core/src/main/java/rs/slingshot/agent/command/replication
   - core/src/main/java/rs/slingshot/agent/command/workflow
   - core/src/test/java/rs/slingshot/agent/command
-status: pending
-merged_as: ""
+status: complete
+merged_as: "2e0f4d5"
 ---
 # Apply Verified Paging on Every Handler Run Path
 
