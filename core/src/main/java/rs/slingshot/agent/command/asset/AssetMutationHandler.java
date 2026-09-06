@@ -263,8 +263,9 @@ public final class AssetMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(AssetHandlers.DELETION_BUDGET_EXCEEDED,
                     "this asset holds more than the " + bound + " nodes one delete may remove");
         }
+        final var references = RepositoryReach.references(session, command.assetPath(), budget);
         if (command.referencePolicy() == ReferencePolicy.REFUSE_WHEN_REFERENCED
-                && !RepositoryReach.pointingAt(session, command.assetPath(), budget).isEmpty()) {
+                && (!references.complete() || !references.found().isEmpty())) {
             return new MutationOutcome.Refused(AssetHandlers.ASSET_IS_REFERENCED,
                     command.assetPath() + " is referenced, and this request asked to be refused"
                             + " when it is");
@@ -319,10 +320,14 @@ public final class AssetMutationHandler implements CommandHandler {
 
     private static MutationOutcome adjusted(MoveRequest command, ResourceResolver session,
                                             long bound, long budget, String parent) {
-        final List<Resource> pointing =
-                command.adjustReferences() == MoveRequest.ReferenceAdjustment.FOLLOWED
-                        ? RepositoryReach.pointingAt(session, command.sourcePath(), budget)
-                        : List.of();
+        final var discovered = command.adjustReferences() == MoveRequest.ReferenceAdjustment.FOLLOWED
+                ? RepositoryReach.references(session, command.sourcePath(), budget)
+                : new RepositoryReach.References(List.of(), true);
+        if (!discovered.complete()) {
+            return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
+                    "reference discovery exceeded the visibility budget and the move was refused");
+        }
+        final List<Resource> pointing = discovered.found();
         if (pointing.size() > bound) {
             return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
                     pointing.size() + " references is more than the " + bound + " one move may"
