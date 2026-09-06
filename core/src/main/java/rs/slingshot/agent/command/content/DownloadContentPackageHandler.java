@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
-import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.apache.sling.api.resource.Resource;
@@ -287,37 +286,42 @@ public final class DownloadContentPackageHandler implements CommandHandler {
      */
     static byte[] packageBytes(String manifest, ResourceResolver resolver, List<String> selected)
             throws IOException {
-        return packageBytes(manifest, archive -> selected.stream().sorted()
-                .forEach(path -> writeContentEntry(archive, resolver, path)));
+        return packageBytes(manifest, archive -> {
+            for (final String path : selected.stream().sorted().toList()) {
+                writeContentEntry(archive, resolver, path);
+            }
+        });
     }
 
-    private static byte[] packageBytes(String manifest, Consumer<ZipOutputStream> entries)
+    @FunctionalInterface
+    private interface EntryWriter {
+
+        void write(ZipOutputStream archive) throws IOException;
+    }
+
+    private static byte[] packageBytes(String manifest, EntryWriter entries)
             throws IOException {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream archive = new ZipOutputStream(bytes)) {
             archive.putNextEntry(entry("META-INF/vault/filter.xml"));
             archive.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             archive.closeEntry();
-            entries.accept(archive);
+            entries.write(archive);
         }
         return bytes.toByteArray();
     }
 
     private static void writeContentEntry(ZipOutputStream archive, ResourceResolver resolver,
-                                          String path) {
+                                          String path) throws IOException {
         final Optional<Resource> resource = Optional.ofNullable(resolver.getResource(path));
         if (resource.isEmpty()) {
             return;
         }
         final String name = path.substring(1) + "/.content.xml";
-        try {
-            archive.putNextEntry(entry(name));
-            archive.write(contentXml(resource.orElseThrow())
-                    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            archive.closeEntry();
-        } catch (final IOException failure) {
-            throw new java.io.UncheckedIOException("content entry could not be written", failure);
-        }
+        archive.putNextEntry(entry(name));
+        archive.write(contentXml(resource.orElseThrow())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        archive.closeEntry();
     }
 
     private static ZipEntry entry(String name) {
