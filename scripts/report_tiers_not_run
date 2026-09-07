@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 Koray Taylan Davgana
 
-# Says which interoperability tiers did not run, and the exact command that runs each.
+# Says which optional interoperability tiers did not run, and the exact command that runs each.
 #
 # Read from the gate's own tier inventory rather than written down here, so a tier added later is
 # reported without anybody editing this. A passing run is not a complete one, and the difference is
@@ -21,7 +21,7 @@ if [[ $# -ne 0 ]]; then
     exit "${EXIT_USAGE}"
 fi
 
-printf 'A passing run is not a complete one. These tiers did not run here:\n'
+printf 'These optional owner tiers did not run here:\n'
 python3 - "${GATE_POLICY}" <<'PYTHON'
 import pathlib
 import sys

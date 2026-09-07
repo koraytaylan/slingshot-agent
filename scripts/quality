@@ -131,7 +131,7 @@ stage front-end-footprint decided FrontEndFootprintTest
 stage public-interop-tier build verify -pl interop -am -DskipTests -Djacoco.skip=true
 
 printf '\n== gate passed\n'
-printf 'A passing gate is not a complete one. These tiers did not run here:\n'
+printf 'Optional owner tiers are outside this gate and were not run here:\n'
 python3 - "${GATE_POLICY}" <<'PYTHON'
 import pathlib
 import sys
