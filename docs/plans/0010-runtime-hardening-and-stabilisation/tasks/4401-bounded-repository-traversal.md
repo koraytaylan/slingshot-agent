@@ -13,7 +13,7 @@ touches:
   - core/src/main/java/rs/slingshot/agent/command/Budget.java
   - core/src/test/java/rs/slingshot/agent/command
 status: complete
-merged_as: ""
+merged_as: 829051b
 ---
 # Bound Repository Reads and Retained Traversal Work
 

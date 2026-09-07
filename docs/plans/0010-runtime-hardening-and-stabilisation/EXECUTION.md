@@ -2068,4 +2068,6 @@ required checks and the complete gate, then commit the completed task.
      binds live operation, maintenance, retention, identity, and health sources with authorization
      checks. The public-tier scenarios plus the focused lifecycle, command-runtime, console, policy,
      and workflow suites pass. Licensed AEM and sibling-client executions remain optional external
-     validation and are not release blockers.
+     validation and are not release blockers. Task 4601 remains open: the current public scenarios
+     still need positive populated-workload assertions and controlled regression checks before the
+     plan can claim completion.
