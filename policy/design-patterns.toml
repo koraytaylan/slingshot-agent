@@ -2134,3 +2134,8 @@ reason = "The default runtime adapts the validated command dispatch to the servl
 name = "ConsoleRuntimeAssembly"
 pattern = "stateless-policy"
 reason = "The console resource types are assembled in one place from live state suppliers and retain the authorization-first datasource boundary."
+
+[[type]]
+name = "HealthDataSource"
+pattern = "accessor"
+reason = "Health checks are read from live state only after console authorization and expose no mutable access to their source."

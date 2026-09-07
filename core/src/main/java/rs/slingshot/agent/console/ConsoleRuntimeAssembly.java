@@ -3,6 +3,7 @@
 
 package rs.slingshot.agent.console;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -10,6 +11,7 @@ import java.util.function.Supplier;
 import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
+import rs.slingshot.agent.health.AgentHealth;
 import rs.slingshot.agent.route.RouteAlias;
 
 /**
@@ -31,6 +33,8 @@ public final class ConsoleRuntimeAssembly {
     public static final String RETENTION = "slingshot-agent/datasource/retention";
     /** Resource type used by the identity table. */
     public static final String IDENTITY = "slingshot-agent/datasource/identity";
+    /** Resource type used by the health table. */
+    public static final String HEALTH = "slingshot-agent/datasource/health";
 
     private ConsoleRuntimeAssembly() {
         // Utility class.
@@ -56,15 +60,17 @@ public final class ConsoleRuntimeAssembly {
      * @param maintenance live maintenance state
      * @param retention live retention state
      * @param operations live operation listing
+     * @param health live health checks
      * @param contract authenticated contract
      */
     public record Inputs(Supplier<AdvertisedCapabilities> discovery,
                          Supplier<BuildIdentityDataSource.Build> build,
-                         Supplier<java.util.List<RouteAlias>> aliases,
-                         Supplier<java.util.List<RegistryRow>> commands,
+                         Supplier<List<RouteAlias>> aliases,
+                         Supplier<List<RegistryRow>> commands,
                          Supplier<MaintenanceDataSource.State> maintenance,
                          Supplier<RetentionDataSource.Retention> retention,
                          Supplier<OperationListDataSource.Listing> operations,
+                         Supplier<List<AgentHealth.Result>> health,
                          AgentContract contract) {
     }
 
@@ -83,12 +89,14 @@ public final class ConsoleRuntimeAssembly {
         Objects.requireNonNull(inputs.maintenance(), "maintenance");
         Objects.requireNonNull(inputs.retention(), "retention");
         Objects.requireNonNull(inputs.operations(), "operations");
+        Objects.requireNonNull(inputs.health(), "health");
         Objects.requireNonNull(inputs.contract(), "contract");
         return Map.of(
                 OPERATIONS, new ConsoleDataSource(new OperationListDataSource(inputs.operations())),
                 MAINTENANCE, new ConsoleDataSource(new MaintenanceDataSource(inputs.maintenance())),
                 RETENTION, new ConsoleDataSource(new RetentionDataSource(inputs.retention(),
                         inputs.contract())),
+                HEALTH, new ConsoleDataSource(new HealthDataSource(inputs.health())),
                 IDENTITY, new ConsoleDataSource(new BuildIdentityDataSource(
                         inputs.discovery(), inputs.build(), inputs.aliases(), inputs.commands())));
     }

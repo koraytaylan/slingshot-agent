@@ -2038,3 +2038,9 @@ required checks and the complete gate, then commit the completed task.
 162. Final full-gate review for console input validation passed. The gate validated the locked cache,
     pinned images, policy stages, static analysis, packaging, and public interoperability scenarios;
     only the explicitly external owner tiers were omitted as designed.
+
+163. Re-reviewed health diagnostics end to end after adding the live health datasource. The review
+     found the first implementation had no matching Granite page, translation entries, or console
+     documentation; those gaps are now covered by the health page, localized title/empty state, and
+     documented access contract. The complete `scripts/quality` gate passes; owner-supplied tiers
+     remain the only intentionally omitted checks.
