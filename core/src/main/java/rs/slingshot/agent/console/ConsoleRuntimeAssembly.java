@@ -76,6 +76,14 @@ public final class ConsoleRuntimeAssembly {
      */
     public static Map<String, ConsoleDataSource> assemble(Inputs inputs) {
         Objects.requireNonNull(inputs, "inputs");
+        Objects.requireNonNull(inputs.discovery(), "discovery");
+        Objects.requireNonNull(inputs.build(), "build");
+        Objects.requireNonNull(inputs.aliases(), "aliases");
+        Objects.requireNonNull(inputs.commands(), "commands");
+        Objects.requireNonNull(inputs.maintenance(), "maintenance");
+        Objects.requireNonNull(inputs.retention(), "retention");
+        Objects.requireNonNull(inputs.operations(), "operations");
+        Objects.requireNonNull(inputs.contract(), "contract");
         return Map.of(
                 OPERATIONS, new ConsoleDataSource(new OperationListDataSource(inputs.operations())),
                 MAINTENANCE, new ConsoleDataSource(new MaintenanceDataSource(inputs.maintenance())),
