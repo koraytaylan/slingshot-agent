@@ -9,14 +9,14 @@ not been rewritten by this review.
 
 - Authored against: 11d5fc9fd04614b63c959ac0369748b32e34f126.
 - Review date: 2026-09-05.
-- Direct implementation: 22/27 tasks complete (4101, 4102, 4103, 4104, 4105, 4106, 4107, 4108, 4201, 4202, 4301, 4302, 4303, 4304, 4305, 4306, 4307, 4401, 4402, 4403, 4404, 4405). See [EXECUTION.md](EXECUTION.md)
+- Direct implementation: 24/27 tasks complete (4101, 4102, 4103, 4104, 4105, 4106, 4107, 4108, 4201, 4202, 4301, 4302, 4303, 4304, 4305, 4306, 4307, 4401, 4402, 4403, 4404, 4405, 4601, 4602). See [EXECUTION.md](EXECUTION.md)
   for the review loops and validation evidence. Cache preparation and the core/development policy
-  suites pass; the owner-supplied AEM and client tiers remain unproved.
+  suites pass; licensed owner tiers remain optional external validation.
 - Registration/integration: not attempted; no validated Phase R base or integration OID claimed.
 - Review evidence: [EVIDENCE.md](EVIDENCE.md).
 - Full gate baseline: the complete `scripts/quality` gate passes after clearing stale
-  interoperability test containers. The owner-supplied AEM and client tiers remain unproved; see
-  EXECUTION.md and the Surefire reports.
+  interoperability test containers. Licensed owner tiers are optional and are not required for
+  Plan 10 completion; see EXECUTION.md and the Surefire reports.
 
 | Task | Target | Dependencies |
 |---|---|---|
