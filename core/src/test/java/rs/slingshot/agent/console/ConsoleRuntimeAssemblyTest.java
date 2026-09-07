@@ -4,14 +4,30 @@
 package rs.slingshot.agent.console;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
 
 final class ConsoleRuntimeAssemblyTest {
+
+    @Test
+    void rejectsDisconnectedAssemblyInputsImmediately() {
+        final ConsoleRuntimeAssembly.Inputs inputs = new ConsoleRuntimeAssembly.Inputs(
+                (Supplier<AdvertisedCapabilities>) null,
+                () -> new BuildIdentityDataSource.Build("v", "c", "r",
+                        BuildIdentityDataSource.Claim.CLAIMED),
+                (Supplier<List<rs.slingshot.agent.route.RouteAlias>>) List::of,
+                (Supplier<List<rs.slingshot.agent.command.RegistryRow>>) List::of,
+                () -> new MaintenanceDataSource.Unavailable("missing"),
+                () -> new RetentionDataSource.Retention(List.of()),
+                () -> new OperationListDataSource.Unavailable("missing"), null);
+        assertThrows(NullPointerException.class, () -> ConsoleRuntimeAssembly.assemble(inputs));
+    }
 
     @Test
     void assemblesLiveResourceTypesAndKeepsUnavailableStateUnreadable() {

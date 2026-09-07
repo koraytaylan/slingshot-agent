@@ -2029,3 +2029,8 @@ required checks and the complete gate, then commit the completed task.
     locked cache, pinned images, all policy/build stages, static analysis, package checks, and the
     public interoperability scenarios. Only the explicitly external Adobe quickstart and sibling
     client end-to-end tiers remain outside the gate.
+
+161. Re-reviewed console dependency failure handling. `ConsoleRuntimeAssembly` now validates every
+    live supplier and the authenticated contract at assembly time, refusing a disconnected graph
+    before request rendering. The focused null-input regression and complete core verification pass;
+    formatting and Javadoc issues found during review were corrected.
