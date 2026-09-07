@@ -2044,3 +2044,8 @@ required checks and the complete gate, then commit the completed task.
      documentation; those gaps are now covered by the health page, localized title/empty state, and
      documented access contract. The complete `scripts/quality` gate passes; owner-supplied tiers
      remain the only intentionally omitted checks.
+
+164. Re-ran both owner-tier entrypoints against the current health-console commit. The quickstart
+     refusal/conformance suite passed 10/10 and the sibling-client refusal/conformance suite passed
+     5/5. The required `.quickstart/aem-quickstart.jar` and `.client/slingshot` inputs remain absent,
+     so no installed AEM or sibling-client round trip is claimed.
