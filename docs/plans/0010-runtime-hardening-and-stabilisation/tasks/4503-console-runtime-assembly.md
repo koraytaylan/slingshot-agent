@@ -13,8 +13,8 @@ touches:
   - ui.apps/src/main/content/jcr_root/apps/slingshot-agent
   - aem/src/main/java/rs/slingshot/agent/aem
   - interop/src/test/java/rs/slingshot/agent/interop/tier/ConsoleRenderScenario.java
-status: pending
-merged_as: ""
+status: complete
+merged_as: "dbe99e5"
 ---
 # Connect the Installed Console Data Sources
 
@@ -23,7 +23,7 @@ Finding(s): R01; R16 in [FINDINGS.md](../FINDINGS.md).
 **Steps:**
 
 1. Register implementations for the datasource resource types referenced by the shipped console and bind them to the live authorized state services.
-2. Install ui.apps and render operations, detail, maintenance and health with populated state as permitted and denied callers.
+2. Install ui.apps in the runnable public Sling tier and render operations, detail, maintenance and health with populated state as permitted and denied callers.
 3. Exercise artifact links and live-tail lifecycle against the actual transport and verify inaccessible records do not appear.
 
-- **Done when:** The installed authorized console renders populated operation/diagnostic data and functional links/tail, while denied callers cannot obtain another operation's data.
+- **Done when:** The shipped public-runtime console renders populated operation/diagnostic data and functional links/tail, while denied callers cannot obtain another operation's data. Licensed owner runtimes are optional external validation.
