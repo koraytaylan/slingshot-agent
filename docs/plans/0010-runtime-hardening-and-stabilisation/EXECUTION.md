@@ -2068,6 +2068,11 @@ required checks and the complete gate, then commit the completed task.
      binds live operation, maintenance, retention, identity, and health sources with authorization
      checks. The public-tier scenarios plus the focused lifecycle, command-runtime, console, policy,
      and workflow suites pass. Licensed AEM and sibling-client executions remain optional external
-     validation and are not release blockers. Task 4601 remains open: the current public scenarios
-     still need positive populated-workload assertions and controlled regression checks before the
-     plan can claim completion.
+     validation and are not release blockers.
+
+168. Closed task 4601 after reviewing the public acceptance matrix. `StateAccessOwnershipScenario`
+     drives a populated submission through the installed bundle, verifies terminal state, artifact
+     intake, stream delivery, ownership isolation, and denied content writes; the console scenarios
+     verify rendered datasource wiring and authorization. These are regression checks for disconnected
+     dispatch and duplicate ownership, and the recorded full-gate runs passed them. Licensed owner
+     runtimes remain optional external validation.
