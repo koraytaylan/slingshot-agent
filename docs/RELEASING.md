@@ -68,6 +68,6 @@ statement.
 - **A deployment row no evidence ran against.** A row in `support/deployments.toml` is a
   declaration. It becomes supported when a tier actually runs against it, and stays declared and
   unproved otherwise — the code compiling is not evidence about somebody else's platform.
-- **Anything about a licensed tier that did not run.** The tiers that need a licensed input are
-  named, with the exact command for each, rather than skipped: a suite that quietly does not run is
-  a suite reporting success it did not earn.
+- **Optional licensed-tier validation.** The owner-supplied AEM and sibling-client tiers may be run
+  separately when their inputs exist. They are explicitly outside the release gate and do not block
+  a release when absent.

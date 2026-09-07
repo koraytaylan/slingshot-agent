@@ -2049,3 +2049,9 @@ required checks and the complete gate, then commit the completed task.
      refusal/conformance suite passed 10/10 and the sibling-client refusal/conformance suite passed
      5/5. The required `.quickstart/aem-quickstart.jar` and `.client/slingshot` inputs remain absent,
      so no installed AEM or sibling-client round trip is claimed.
+
+165. Re-scoped the permanently unavailable owner tiers. Plan 10 task 4601 now requires successful
+     public-runtime acceptance only, and task 4602 records the licensed AEM/client entrypoints as
+     optional validation while retaining their distinct refusal checks. Interop and release
+     documentation, gate messaging, and the plan status now treat absent owner inputs as expected;
+     the focused policy/workflow review passes all 22 tests.
