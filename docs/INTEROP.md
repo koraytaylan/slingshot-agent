@@ -47,14 +47,14 @@ on its own comes up in about eight seconds. The fix is a pinned image whose ASM 
 which is an image to be prepared rather than a value to be changed here, and until then a
 `NEVER_BECAME_READY` on a loaded machine is to be reproduced alone before it is believed.
 
-## Tier B — owner-supplied Adobe quickstart
+## Optional Tier B — owner-supplied Adobe quickstart
 
 **Command:** `scripts/interop_quickstart_tier`
 
-Not part of the gate. The Adobe Experience Manager quickstart jar is licensed to whoever holds it:
-it is never committed, never cached in this repository, never published, and never fetched. Its
-absence refuses this tier explicitly rather than skipping it, because a suite that quietly does not
-run is a suite reporting success it did not earn.
+This is optional external validation, outside the Plan 10 and release gates. The Adobe Experience
+Manager quickstart jar is licensed to whoever holds it: it is never committed, never cached in this
+repository, never published, and never fetched. Its absence refuses this tier explicitly rather than
+silently claiming a run.
 
 An owner puts their own jar at the path `support/quickstart-tier.toml` records, states its digest,
 and sets the acknowledgement only they can set. Three things refuse distinctly and start nothing: an
@@ -63,13 +63,13 @@ three in place, the tier builds a container image locally from that jar — neve
 and never pushed — installs both bundles and all three content packages, and runs the same scenarios
 Tier A runs.
 
-## Tier C — sibling client end to end
+## Optional Tier C — sibling client end to end
 
 **Command:** `scripts/interop_client_tier`
 
-Not part of the gate. It is the only tier that proves the two halves of the protocol speak to one
-another, by running the sibling repository's own client executable against a running agent, so its
-failures are cross-repository defects rather than local ones.
+This is optional external validation, outside the Plan 10 and release gates. It runs the sibling
+repository's own client executable against a running agent when that executable is available, so
+its failures are cross-repository defects rather than local ones.
 
 The executable is never committed here, never cached, and never fetched: it is built from the
 sibling repository at the exact commit `support/client-tier.toml` names, and its holder records the

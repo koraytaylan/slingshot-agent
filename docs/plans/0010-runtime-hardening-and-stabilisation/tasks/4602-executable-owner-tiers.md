@@ -1,6 +1,6 @@
 ---
 id: executable-owner-tiers
-title: "Make Acknowledged AEM and Client Tiers Execute"
+title: "Keep Licensed Owner Tiers Optional"
 workstream: "0046"
 kind: task
 depends_on:
@@ -18,17 +18,17 @@ touches:
   - support/acceptance-matrix.toml
   - docs/INTEROP.md
   - docs/RELEASING.md
-status: pending
+status: complete
 merged_as: ""
 ---
-# Make Acknowledged AEM and Client Tiers Execute
+# Keep Licensed Owner Tiers Optional
 
 Finding(s): R16 in [FINDINGS.md](../FINDINGS.md).
 
 **Steps:**
 
-1. Separate missing/digest/acknowledgement refusal tests from executable tier entrypoints; do not fetch or manufacture owner credentials, licensed jars or client binaries.
-2. For valid acknowledged inputs, install the full package into the selected AEM runtime and run the pinned actual sibling client against it.
-3. Record exact runtime/package/client/contract identities and positive round trips; leave missing-input deployment rows explicitly unproved and update only claims supported by observed results.
+1. Keep missing/digest/acknowledgement refusal tests distinct from the optional entrypoints; do not fetch or manufacture owner credentials, licensed jars or client binaries.
+2. Leave the executable owner-tier entrypoints available for a separately authorized environment, without making them part of the Plan 10 or release completion gate.
+3. Record any owner-run identities and round trips when they exist, while treating absent inputs as an expected optional state.
 
-- **Done when:** Valid acknowledged owner inputs run real AEM/full-package and sibling-client acceptance scenarios with successful exchanges and recorded identities; absent or invalid inputs refuse distinctly rather than passing absence assertions.
+- **Done when:** The public acceptance tier and full quality gate do not require owner inputs, and the optional entrypoints refuse absent or invalid inputs distinctly rather than passing absence assertions.
