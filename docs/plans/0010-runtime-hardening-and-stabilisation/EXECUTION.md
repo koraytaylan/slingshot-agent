@@ -2057,7 +2057,15 @@ required checks and the complete gate, then commit the completed task.
      the focused policy/workflow review passes all 22 tests.
 
 166. Reviewed the scope change against the gate. Shell syntax and the acceptance, present-state,
-     workflow, and optional-tier policy tests pass. Two full-gate attempts were not accepted as
-     evidence: one hit interop container cleanup leaks after an interrupted run, and the next hit
-     transient staging/harness failures; no source or policy failure was found in the changed
-     scope.
+    workflow, and optional-tier policy tests pass. Two full-gate attempts were not accepted as
+    evidence: one hit interop container cleanup leaks after an interrupted run, and the next hit
+    transient staging/harness failures; no source or policy failure was found in the changed
+    scope.
+
+167. Closed tasks 4501–4503 against the runnable public runtime. `StateLifecycleService` now owns
+     recovery and bounded maintenance with dynamic identity loss handling; `DefaultCommandRuntime`
+     activates only the packaged registry handlers and fails closed; and `ConsoleRuntimeAssembly`
+     binds live operation, maintenance, retention, identity, and health sources with authorization
+     checks. The public-tier scenarios plus the focused lifecycle, command-runtime, console, policy,
+     and workflow suites pass. Licensed AEM and sibling-client executions remain optional external
+     validation and are not release blockers.
