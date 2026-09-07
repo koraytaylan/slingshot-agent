@@ -2008,3 +2008,8 @@ required checks and the complete gate, then commit the completed task.
     These runs establish explicit missing-input behavior and the pinned client contract checks;
     neither claims a licensed AEM install or sibling binary round trip when those owner inputs are
     absent.
+
+157. Re-reviewed the atomic binding and typed console inputs against every repository policy stage.
+    The review caught and fixed nullability, design-pattern, method-shape, Javadoc, and
+    no-suppression violations introduced while making runtime publication atomic. Static policy,
+    focused tests, and core verification pass; the complete gate is rerun for final evidence.

@@ -48,34 +48,41 @@ public final class ConsoleRuntimeAssembly {
         return new ConsoleDataSource(new OperationDetailDataSource(operationIdentifier, assembly));
     }
 
-    /**
-     * Assemble the resource type map from live state readers.
-     *
+    /** The live readers needed to assemble the installed console.
      * @param discovery live discovery document
      * @param build live build identity
      * @param aliases live route aliases
-     * @param commands live command registry rows
+     * @param commands live command rows
      * @param maintenance live maintenance state
      * @param retention live retention state
      * @param operations live operation listing
-     * @param contract authenticated contract used by retention
+     * @param contract authenticated contract
+     */
+    public record Inputs(Supplier<AdvertisedCapabilities> discovery,
+                         Supplier<BuildIdentityDataSource.Build> build,
+                         Supplier<java.util.List<RouteAlias>> aliases,
+                         Supplier<java.util.List<RegistryRow>> commands,
+                         Supplier<MaintenanceDataSource.State> maintenance,
+                         Supplier<RetentionDataSource.Retention> retention,
+                         Supplier<OperationListDataSource.Listing> operations,
+                         AgentContract contract) {
+    }
+
+    /**
+     * Assemble the resource type map from live state readers.
+     *
+     * @param inputs live discovery, state readers, and authenticated contract
      * @return immutable resource type map
      */
-    public static Map<String, ConsoleDataSource> assemble(
-            Supplier<AdvertisedCapabilities> discovery,
-            Supplier<BuildIdentityDataSource.Build> build,
-            Supplier<java.util.List<RouteAlias>> aliases,
-            Supplier<java.util.List<RegistryRow>> commands,
-            Supplier<MaintenanceDataSource.State> maintenance,
-            Supplier<RetentionDataSource.Retention> retention,
-            Supplier<OperationListDataSource.Listing> operations,
-            AgentContract contract) {
-        Objects.requireNonNull(contract, "contract");
+    public static Map<String, ConsoleDataSource> assemble(Inputs inputs) {
+        Objects.requireNonNull(inputs, "inputs");
         return Map.of(
-                OPERATIONS, new ConsoleDataSource(new OperationListDataSource(operations)),
-                MAINTENANCE, new ConsoleDataSource(new MaintenanceDataSource(maintenance)),
-                RETENTION, new ConsoleDataSource(new RetentionDataSource(retention, contract)),
+                OPERATIONS, new ConsoleDataSource(new OperationListDataSource(inputs.operations())),
+                MAINTENANCE, new ConsoleDataSource(new MaintenanceDataSource(inputs.maintenance())),
+                RETENTION, new ConsoleDataSource(new RetentionDataSource(inputs.retention(),
+                        inputs.contract())),
                 IDENTITY, new ConsoleDataSource(new BuildIdentityDataSource(
-                        discovery, build, aliases, commands)));
+                        inputs.discovery(), inputs.build(), inputs.aliases(), inputs.commands())));
     }
+
 }
