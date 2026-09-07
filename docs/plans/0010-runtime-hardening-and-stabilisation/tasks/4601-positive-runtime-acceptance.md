@@ -17,8 +17,8 @@ touches:
   - policy/quality-gate.toml
   - support/acceptance-matrix.toml
   - scripts/quality
-status: pending
-merged_as: ""
+status: complete
+merged_as: c4e2f86
 ---
 # Require Successful Runtime Behavior in Acceptance Tests
 
