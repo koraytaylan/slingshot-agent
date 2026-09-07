@@ -89,7 +89,7 @@ public final class StateLifecycleService {
     }
 
     private static boolean sameSession(AgentSession current, AgentSession removed) {
-        final java.util.IdentityHashMap<AgentSession, Boolean> identities =
+        final java.util.Map<AgentSession, Boolean> identities =
                 new java.util.IdentityHashMap<>();
         identities.put(current, Boolean.TRUE);
         return identities.containsKey(removed);

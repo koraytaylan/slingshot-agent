@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.servlet.Servlet;
 import org.apache.sling.api.SlingHttpServletRequest;
@@ -117,7 +118,7 @@ public final class CapabilityServlet extends AgentServlet {
     }
 
     private static boolean sameRuntime(Object current, Object stopped) {
-        final IdentityHashMap<Object, Boolean> identities = new IdentityHashMap<>();
+        final Map<Object, Boolean> identities = new IdentityHashMap<>();
         identities.put(current, Boolean.TRUE);
         return identities.containsKey(stopped);
     }
