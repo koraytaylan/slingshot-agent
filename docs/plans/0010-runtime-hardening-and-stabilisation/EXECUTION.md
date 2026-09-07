@@ -2024,3 +2024,8 @@ required checks and the complete gate, then commit the completed task.
     equality-based checks with `IdentityHashMap` membership so a runtime or session implementation
     overriding `equals` cannot unbind a different live provider. Focused lifecycle/discovery tests
     and the five relevant policy suites pass.
+
+160. Final gate review after the exact-identity correction passed. `scripts/quality` validated the
+    locked cache, pinned images, all policy/build stages, static analysis, package checks, and the
+    public interoperability scenarios. Only the explicitly external Adobe quickstart and sibling
+    client end-to-end tiers remain outside the gate.
