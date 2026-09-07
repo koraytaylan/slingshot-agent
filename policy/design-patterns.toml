@@ -217,7 +217,7 @@ reason = "The discovery document is what it says. Two agents advertising the sam
 
 [[type]]
 name = "CapabilityServlet"
-pattern = "stateless-policy"
+pattern = "accessor"
 reason = "A component is a singleton the container hands to every caller at once, so it holds nothing: everything it answers with it reads from the committed contract and the committed table at the moment it is asked."
 
 [[type]]
@@ -2129,3 +2129,8 @@ reason = "The submission servlet depends on one runtime contract while the insta
 name = "DefaultCommandRuntime"
 pattern = "accessor"
 reason = "The default runtime adapts the validated command dispatch to the servlet contract and is the registered implementation used by the packaged bundle."
+
+[[type]]
+name = "ConsoleRuntimeAssembly"
+pattern = "stateless-policy"
+reason = "The console resource types are assembled in one place from live state suppliers and retain the authorization-first datasource boundary."

@@ -23,7 +23,7 @@ final class ConsoleRuntimeAssemblyTest {
                 rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[32]);
         final rs.slingshot.agent.digest.DigestValue transport =
                 rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[32]);
-        final Map<String, ConsoleDataSource> sources = ConsoleRuntimeAssembly.assemble(
+        final ConsoleRuntimeAssembly.Inputs inputs = new ConsoleRuntimeAssembly.Inputs(
                 () -> new AdvertisedCapabilities(generation, canonical, List.of(),
                         AdvertisedCapabilities.ContinuationAuthority.READY, transport),
                 () -> new BuildIdentityDataSource.Build("v", "c", "row",
@@ -33,6 +33,7 @@ final class ConsoleRuntimeAssemblyTest {
                 () -> new RetentionDataSource.Retention(List.of()),
                 () -> new OperationListDataSource.Unavailable("operations unavailable"),
                 contract);
+        final Map<String, ConsoleDataSource> sources = ConsoleRuntimeAssembly.assemble(inputs);
         assertEquals(4, sources.size());
         assertEquals(ConsoleDataSource.class, ConsoleRuntimeAssembly.operation("op",
                 ignored -> new OperationDetailDataSource.Unavailable("unavailable")).getClass());
