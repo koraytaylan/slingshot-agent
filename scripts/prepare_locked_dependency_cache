@@ -44,7 +44,6 @@ resolve() {
         -Dcheckstyle.failsOnError=false \
         -Dpmd.failOnViolation=false \
         -Dspotbugs.failOnError=false \
-        -Dspotbugs.skip=true \
         -Djacoco.haltOnFailure=false \
         -Dmaven.javadoc.skip=true \
         -Dmaven.source.skip=true \
