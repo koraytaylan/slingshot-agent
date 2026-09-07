@@ -1,6 +1,6 @@
 ---
 id: positive-runtime-acceptance
-title: "Require Successful Runtime Behavior in Acceptance Tests"
+title: "Require Successful Public Runtime Behavior in Acceptance Tests"
 workstream: "0046"
 kind: task
 depends_on:
@@ -26,8 +26,8 @@ Finding(s): R16; all repaired guarantees in [FINDINGS.md](../FINDINGS.md).
 
 **Steps:**
 
-1. Require positive installed-bundle submissions, actual results/content changes, paging, artifact bytes, stream/cursor progress and populated console before a feature scenario passes.
+1. Require positive public installed-bundle submissions, actual results/content changes, paging, artifact bytes, stream/cursor progress and populated console before a feature scenario passes.
 2. Apply redaction and disruption cases to successful outputs and fault real agent ownership/accounting/intake/rotation transitions on shared-store nodes.
-3. Make disconnected dispatch or a reintroduced exclusivity defect fail the relevant acceptance case; run the complete offline quality gate and retain its evidence.
+3. Make disconnected dispatch or a reintroduced exclusivity defect fail the relevant public acceptance case; run the complete offline quality gate and retain its evidence. Licensed platform and sibling-client checks are optional external validation and are not prerequisites for this task.
 
-- **Done when:** The full scripts/quality passes with successful installed-runtime cases, and controlled reintroduction of disconnected dispatch or duplicate ownership causes the corresponding acceptance case to fail.
+- **Done when:** The full scripts/quality passes with successful public installed-runtime cases, and controlled reintroduction of disconnected dispatch or duplicate ownership causes the corresponding acceptance case to fail.

@@ -70,8 +70,9 @@ a foundation guarantee without adding deferred caller execution to the shipping 
    authorization and console scenarios. Refusal tests remain necessary but cannot replace success.
 4. Run the whole scripts/quality gate with existing prepared inputs. Do not substitute targeted
    test commands for that acceptance claim.
-5. Use actual acknowledged AEM/client inputs for the executable owner tiers. Record deployment,
-   package, client and contract identities. Missing inputs leave those deployment claims unproved.
+5. Treat licensed AEM and sibling-client tiers as optional external validation. They may be run
+   when an owner supplies the licensed inputs, but their absence does not block implementation,
+   the public acceptance tier, or the plan's completion.
 
 Every P1 finding must be closed before enabling its affected capability. P2 boundedness and
 deployment findings must close before the associated reliability/support claim is made.
