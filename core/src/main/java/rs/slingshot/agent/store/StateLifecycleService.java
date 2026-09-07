@@ -76,7 +76,7 @@ public final class StateLifecycleService {
     public void unavailable(AgentSession source) {
         final AtomicBoolean removed = new AtomicBoolean();
         sessions.updateAndGet(current -> {
-            if (current.filter(candidate -> java.util.Objects.equals(candidate, source)).isPresent()) {
+            if (current.filter(candidate -> sameSession(candidate, source)).isPresent()) {
                 removed.set(true);
                 return Optional.empty();
             }
@@ -86,6 +86,13 @@ public final class StateLifecycleService {
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                     "state session provider is not bound"));
         }
+    }
+
+    private static boolean sameSession(AgentSession current, AgentSession removed) {
+        final java.util.IdentityHashMap<AgentSession, Boolean> identities =
+                new java.util.IdentityHashMap<>();
+        identities.put(current, Boolean.TRUE);
+        return identities.containsKey(removed);
     }
 
     /** Starts recovery immediately and schedules bounded maintenance afterward. */

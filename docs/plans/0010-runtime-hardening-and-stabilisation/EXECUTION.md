@@ -2019,3 +2019,8 @@ required checks and the complete gate, then commit the completed task.
     checks, and public interoperability scenarios. It explicitly left only owner-supplied Adobe
     quickstart and sibling-client end-to-end tiers outside the gate; those entrypoints separately
     pass their available refusal/conformance suites.
+
+159. Re-reviewed exact-instance unbinding after the policy-compliant sentinel change. Replaced
+    equality-based checks with `IdentityHashMap` membership so a runtime or session implementation
+    overriding `equals` cannot unbind a different live provider. Focused lifecycle/discovery tests
+    and the five relevant policy suites pass.
