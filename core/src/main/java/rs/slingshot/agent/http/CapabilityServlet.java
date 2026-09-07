@@ -63,9 +63,13 @@ public final class CapabilityServlet extends AgentServlet {
     /** The active runtime and its identities, empty until a runtime is bound. */
     private final AtomicReference<Binding> binding = new AtomicReference<>(Binding.EMPTY);
 
-    /** An atomic runtime-to-identities publication. */
-    private record Binding(CommandRuntime runtime, List<CommandContractIdentity> commands) {
-        private static final Binding EMPTY = new Binding(null, List.of());
+    /** An atomic runtime-to-identities publication.
+     * @param runtime supplying runtime instance
+     * @param commands identities supplied by that runtime
+     */
+    private record Binding(Object runtime, List<CommandContractIdentity> commands) {
+        private static final Object EMPTY_RUNTIME = new Object();
+        private static final Binding EMPTY = new Binding(EMPTY_RUNTIME, List.of());
 
         private Binding {
             commands = List.copyOf(commands);
@@ -98,12 +102,15 @@ public final class CapabilityServlet extends AgentServlet {
      *
      * @param stoppedRuntime the runtime being removed
      */
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     public void unavailable(CommandRuntime stoppedRuntime) {
-        binding.updateAndGet(current -> current.runtime() == stoppedRuntime
+        binding.updateAndGet(current -> java.util.Objects.equals(current.runtime(), stoppedRuntime)
                 ? Binding.EMPTY : current);
     }
 
+    /**
+     * Returns the currently published command identities.
+     * @return active identities, or an empty list when no runtime is bound
+     */
     List<CommandContractIdentity> commandContracts() {
         return binding.get().commands();
     }

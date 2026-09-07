@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
@@ -53,7 +54,8 @@ public final class StateLifecycleService {
             "state lifecycle has not initialized");
     private static final AtomicReference<Snapshot> OBSERVED = new AtomicReference<>(STARTING);
 
-    private final AtomicReference<AgentSession> sessions = new AtomicReference<>();
+    private final AtomicReference<Optional<AgentSession>> sessions =
+            new AtomicReference<>(Optional.empty());
     private final AtomicReference<Optional<Scheduler>> scheduler = new AtomicReference<>(Optional.empty());
 
     /** Creates the declarative-services component. */
@@ -65,14 +67,22 @@ public final class StateLifecycleService {
      */
     @Reference(policy = ReferencePolicy.DYNAMIC)
     public void available(AgentSession source) {
-        sessions.set(source);
+        sessions.set(Optional.ofNullable(source));
     }
 
     /** Clears a provider that has left the service registry.
      * @param source the provider being removed
      */
     public void unavailable(AgentSession source) {
-        if (sessions.compareAndSet(source, null)) {
+        final AtomicBoolean removed = new AtomicBoolean();
+        sessions.updateAndGet(current -> {
+            if (current.filter(candidate -> java.util.Objects.equals(candidate, source)).isPresent()) {
+                removed.set(true);
+                return Optional.empty();
+            }
+            return current;
+        });
+        if (removed.get()) {
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                     "state session provider is not bound"));
         }
@@ -98,7 +108,7 @@ public final class StateLifecycleService {
     @Deactivate
     public void deactivate() {
         scheduler.getAndSet(Optional.empty()).ifPresent(Scheduler::stop);
-        sessions.set(null);
+        sessions.set(Optional.empty());
         OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                 "state lifecycle has stopped"));
     }
@@ -118,14 +128,14 @@ public final class StateLifecycleService {
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0, refused.getMessage()));
             return;
         }
-        final AgentSession source = sessions.get();
-        if (source == null) {
+        final Optional<AgentSession> source = sessions.get();
+        if (source.isEmpty()) {
             OBSERVED.set(new Snapshot(Availability.UNAVAILABLE, 0,
                     "state session provider is not bound"));
             return;
         }
         try {
-            final AgentSession.Outcome<Run> outcome = source.withAgentState(
+            final AgentSession.Outcome<Run> outcome = source.orElseThrow().withAgentState(
                     AgentSession.MAINTENANCE_SUBSERVICE,
                     resolver -> runIn(resolver, loaded.contract()));
             if (outcome instanceof AgentSession.Completed<Run> completed) {
