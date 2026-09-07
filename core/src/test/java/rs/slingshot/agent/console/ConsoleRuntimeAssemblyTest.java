@@ -25,7 +25,8 @@ final class ConsoleRuntimeAssemblyTest {
                 (Supplier<List<rs.slingshot.agent.command.RegistryRow>>) List::of,
                 () -> new MaintenanceDataSource.Unavailable("missing"),
                 () -> new RetentionDataSource.Retention(List.of()),
-                () -> new OperationListDataSource.Unavailable("missing"), null);
+                () -> new OperationListDataSource.Unavailable("missing"),
+                List::of, null);
         assertThrows(NullPointerException.class, () -> ConsoleRuntimeAssembly.assemble(inputs));
     }
 
@@ -48,9 +49,10 @@ final class ConsoleRuntimeAssemblyTest {
                 () -> new MaintenanceDataSource.Unavailable("state unavailable"),
                 () -> new RetentionDataSource.Retention(List.of()),
                 () -> new OperationListDataSource.Unavailable("operations unavailable"),
+                List::of,
                 contract);
         final Map<String, ConsoleDataSource> sources = ConsoleRuntimeAssembly.assemble(inputs);
-        assertEquals(4, sources.size());
+        assertEquals(5, sources.size());
         assertEquals(ConsoleDataSource.class, ConsoleRuntimeAssembly.operation("op",
                 ignored -> new OperationDetailDataSource.Unavailable("unavailable")).getClass());
     }

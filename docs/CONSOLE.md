@@ -80,6 +80,12 @@ The case patience does not fix is named rather than left as a subtraction: a kin
 be over its bound after everything eligible had expired needs a wider bound or less kept, and the
 page says so.
 
+### `/apps/slingshot-agent/content/console/health`
+
+The live health checks for capacity, readiness, discovery, and the other runtime dependencies.
+Each result is read when the authorized page is requested, so an unavailable check is reported as
+unavailable rather than being mistaken for a healthy empty result.
+
 ## What it deliberately does not have
 
 - **A front-end toolchain.** Granite renders server-side and this ships one hand-written client
