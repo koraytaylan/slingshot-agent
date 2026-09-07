@@ -5,6 +5,7 @@ package rs.slingshot.agent.http;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.servlet.Servlet;
@@ -103,7 +104,7 @@ public final class CapabilityServlet extends AgentServlet {
      * @param stoppedRuntime the runtime being removed
      */
     public void unavailable(CommandRuntime stoppedRuntime) {
-        binding.updateAndGet(current -> java.util.Objects.equals(current.runtime(), stoppedRuntime)
+        binding.updateAndGet(current -> sameRuntime(current.runtime(), stoppedRuntime)
                 ? Binding.EMPTY : current);
     }
 
@@ -113,6 +114,12 @@ public final class CapabilityServlet extends AgentServlet {
      */
     List<CommandContractIdentity> commandContracts() {
         return binding.get().commands();
+    }
+
+    private static boolean sameRuntime(Object current, Object stopped) {
+        final IdentityHashMap<Object, Boolean> identities = new IdentityHashMap<>();
+        identities.put(current, Boolean.TRUE);
+        return identities.containsKey(stopped);
     }
 
     /** What a request refused for its method is answered with. */
