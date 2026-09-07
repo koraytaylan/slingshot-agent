@@ -2055,3 +2055,9 @@ required checks and the complete gate, then commit the completed task.
      optional validation while retaining their distinct refusal checks. Interop and release
      documentation, gate messaging, and the plan status now treat absent owner inputs as expected;
      the focused policy/workflow review passes all 22 tests.
+
+166. Reviewed the scope change against the gate. Shell syntax and the acceptance, present-state,
+     workflow, and optional-tier policy tests pass. Two full-gate attempts were not accepted as
+     evidence: one hit interop container cleanup leaks after an interrupted run, and the next hit
+     transient staging/harness failures; no source or policy failure was found in the changed
+     scope.
