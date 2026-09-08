@@ -80,9 +80,18 @@ jobs:
       - name: sign the release assets
         if: ${{ !inputs.publish }}
         run: |
-          ./mvnw --offline --batch-mode --no-transfer-progress \
-            -Dmaven.repo.local=.dependency-cache \
-            -Ppublish -DskipTests -Djacoco.skip=true verify
+          gpg --batch --yes --armor --detach-sign \
+            --local-user 17976C0C5A0EFC14CAF68B09902E9E9C0A9654AB \
+            --output all/target/slingshot-agent-all-${{ inputs.version }}.zip.asc \
+            all/target/slingshot-agent-all-${{ inputs.version }}.zip
+          gpg --batch --yes --armor --detach-sign \
+            --local-user 17976C0C5A0EFC14CAF68B09902E9E9C0A9654AB \
+            --output core/target/slingshot-agent-core-${{ inputs.version }}.jar.asc \
+            core/target/slingshot-agent-core-${{ inputs.version }}.jar
+          gpg --batch --yes --armor --detach-sign \
+            --local-user 17976C0C5A0EFC14CAF68B09902E9E9C0A9654AB \
+            --output aem/target/slingshot-agent-aem-${{ inputs.version }}.jar.asc \
+            aem/target/slingshot-agent-aem-${{ inputs.version }}.jar
       - name: hand the set to the registry
         if: ${{ inputs.publish }}
         env:
