@@ -72,12 +72,17 @@ jobs:
       # The key is the owner's and lives in this run and nowhere else. It is imported after the set
       # has been built and proved reproducible, so nothing is signed that was not first checked.
       - name: take up the signing key for this run
-        if: ${{ inputs.publish }}
         env:
           SIGNING_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
         run: |
           printf '%s' "$SIGNING_KEY" | gpg --batch --import
           gpg --list-secret-keys --keyid-format=long
+      - name: sign the release assets
+        if: ${{ !inputs.publish }}
+        run: |
+          ./mvnw --offline --batch-mode --no-transfer-progress \
+            -Dmaven.repo.local=.dependency-cache \
+            -Ppublish -DskipTests -Djacoco.skip=true verify
       - name: hand the set to the registry
         if: ${{ inputs.publish }}
         env:
@@ -85,6 +90,22 @@ jobs:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
         run: scripts/publish_release
+      - name: keep the downloadable release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-assets
+          path: |
+            all/target/slingshot-agent-all-${{ inputs.version }}.zip
+            all/target/slingshot-agent-all-${{ inputs.version }}.bom.json
+            all/target/slingshot-agent-all-${{ inputs.version }}.zip.asc
+            core/target/slingshot-agent-core-${{ inputs.version }}.jar
+            core/target/slingshot-agent-core-${{ inputs.version }}-sources.jar
+            core/target/slingshot-agent-core-${{ inputs.version }}-javadoc.jar
+            core/target/slingshot-agent-core-${{ inputs.version }}.jar.asc
+            aem/target/slingshot-agent-aem-${{ inputs.version }}.jar
+            aem/target/slingshot-agent-aem-${{ inputs.version }}-sources.jar
+            aem/target/slingshot-agent-aem-${{ inputs.version }}-javadoc.jar
+            aem/target/slingshot-agent-aem-${{ inputs.version }}.jar.asc
 
   attest:
     name: say what the bytes are
