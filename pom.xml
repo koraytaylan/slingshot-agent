@@ -33,10 +33,9 @@
     The project address, who to ask, and where the source is. The registry requires all three, and
     so does anybody who found this in a dependency tree and needs to work out why it is there.
 
-    Every one of them is empty until an owner supplies the same values in
-    support/publication-metadata.toml. A build that filled them in from a git remote would be
-    inferring a claim about somebody's account from wherever the repository happened to be cloned,
-    which is exactly the inference the publication boundary exists to refuse.
+    These values mirror support/publication-metadata.toml. They are explicit rather than inferred
+    from a git remote, because a build must not turn wherever the repository was cloned from into a
+    claim about the published source or its owner.
   -->
   <url>${publication.repository.url}</url>
 
@@ -102,13 +101,12 @@
     <!--
       What an owner supplies, mirrored here so the model can carry it. The values live in
       support/publication-metadata.toml, which is where the decision is recorded and where the
-      boundary reads it; these are empty until somebody sets them there and here together, and the
-      publication boundary is what refuses in the meantime.
+      publication boundary reads it.
     -->
-    <publication.repository.url></publication.repository.url>
-    <publication.repository.connection></publication.repository.connection>
-    <publication.developer.name></publication.developer.name>
-    <publication.developer.identifier></publication.developer.identifier>
+    <publication.repository.url>https://github.com/koraytaylan/slingshot-agent</publication.repository.url>
+    <publication.repository.connection>scm:git:https://github.com/koraytaylan/slingshot-agent.git</publication.repository.connection>
+    <publication.developer.name>Koray Taylan Davgana</publication.developer.name>
+    <publication.developer.identifier>koraytaylan</publication.developer.identifier>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
@@ -175,7 +173,8 @@
     <maven.javadoc.plugin.version>3.12.0</maven.javadoc.plugin.version>
     <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
     <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
-    <central.publishing.plugin.version>0.7.0</central.publishing.plugin.version>
+    <central.publishing.plugin.version>0.9.0</central.publishing.plugin.version>
+    <central.skipPublishing>false</central.skipPublishing>
     <bnd.plugin.version>7.4.0</bnd.plugin.version>
     <maven.checkstyle.plugin.version>3.6.0</maven.checkstyle.plugin.version>
     <checkstyle.version>14.1.0</checkstyle.version>
@@ -823,6 +822,7 @@
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
+              <skipPublishing>${central.skipPublishing}</skipPublishing>
               <!--
                 Uploaded and left for a person to release. A build that published automatically
                 would be a build deciding that these bytes are the ones somebody meant, which is a
