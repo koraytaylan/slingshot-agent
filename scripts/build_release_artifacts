@@ -10,7 +10,9 @@
 # archives, and a difference between them is a real difference.
 #
 # It records what was produced rather than checking against digests somebody typed. The digests
-# somebody typed are the ones that get updated to whatever came out.
+# somebody typed are the ones that get updated to whatever came out. A clean build also ensures an
+# older package left in target/ cannot be mistaken for the package this invocation just produced
+# when the components list chooses its version.
 
 set -o errexit
 set -o nounset
@@ -31,7 +33,7 @@ fi
     -Dmaven.repo.local="${CACHE_DIRECTORY}" \
     -f "${REPOSITORY_ROOT}/pom.xml" \
     -DskipTests -Djacoco.skip=true \
-    package
+    clean package
 
 # What the release contains, written from what this build resolved rather than fetched.
 "${REPOSITORY_ROOT}/scripts/write_components_list" "${REPOSITORY_ROOT}"

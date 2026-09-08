@@ -53,5 +53,5 @@ tier = "a"
 name = "localhost/slingshot-agent-public-sling:1"
 containerfile = "interop/tier/public-sling/Containerfile"
 base_images = ["docker.io/library/eclipse-temurin:21-jre", "docker.io/apache/sling:14"]
-identifier = "b000f98b3b7ae260746edc68e883a3ccd52b377607d25a29c269d12bd476f52a"
+identifier = "93e7a7155e861dbf749f3c6f26c2c2dfbcc230228dbf0dc00e4e5eef0fedfead"
 reason = "One image, built from two pinned ones, so the tier runs the product on the runtime its own deployment matrix declares rather than on whichever runtime somebody else's published image happened to carry."
