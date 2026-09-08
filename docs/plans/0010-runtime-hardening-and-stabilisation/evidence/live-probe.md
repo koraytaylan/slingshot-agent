@@ -29,7 +29,7 @@ public class LiveAssemblyProbe {
   System.out.println("Local submission provenance="+provenance.getClass().getSimpleName()+"; operation identity="+identity.getClass().getSimpleName());
   if (!(provenance instanceof DocumentProvenance.Held) || !(identity instanceof OperationIdentity.Held)) throw new IllegalStateException("invalid fixture: "+provenance+" "+identity);
   Files.writeString(out.resolve("submission.json"),submitted);
-  var outcome=PublicSlingTier.start(root,"localhost/slingshot-agent-public-sling:1",root.resolve("core/target/slingshot-agent-core-0.1.0.jar"));
+  var outcome=PublicSlingTier.start(root,"localhost/slingshot-agent-public-sling:1",root.resolve("core/target/slingshot-agent-core-0.2.0.jar"));
   System.out.println("Start="+outcome);
   if (!(outcome instanceof InteropTier.Running running)) throw new IllegalStateException("could not start");
   InteropTier tier=running.tier();

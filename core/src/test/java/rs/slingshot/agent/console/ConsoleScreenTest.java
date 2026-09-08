@@ -244,7 +244,7 @@ final class ConsoleScreenTest {
     void theidentityScreenReadsOneSource() {
         final AdvertisedCapabilities capabilities = capabilities();
         final List<MaintenanceDataSource.Reading> readings = BuildIdentityDataSource.readingsOf(
-                capabilities, new BuildIdentityDataSource.Build("0.1.0", "bf4ebf0", "aem-6-5-lts",
+                capabilities, new BuildIdentityDataSource.Build("0.2.0", "bf4ebf0", "aem-6-5-lts",
                         BuildIdentityDataSource.Claim.UNCLAIMED), List.of(), List.of());
         assertEquals(capabilities.transportContractDigest().rendered(),
                 valueOf(readings, "transport_contract_digest"),
@@ -465,7 +465,7 @@ final class ConsoleScreenTest {
     }
 
     private static BuildIdentityDataSource.Build build() {
-        return new BuildIdentityDataSource.Build("0.1.0", "bf4ebf0", "aem-cloud-service",
+        return new BuildIdentityDataSource.Build("0.2.0", "bf4ebf0", "aem-cloud-service",
                 BuildIdentityDataSource.Claim.CLAIMED);
     }
 

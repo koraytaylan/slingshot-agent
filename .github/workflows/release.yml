@@ -51,8 +51,14 @@ jobs:
           server-password: CENTRAL_PASSWORD
       - name: prepare the locked dependency cache
         run: scripts/prepare_locked_dependency_cache
+      - name: verify the requested version matches the source
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          declared_version="$(python3 -c 'import xml.etree.ElementTree as ET; print(ET.parse("pom.xml").getroot().findtext("{http://maven.apache.org/POM/4.0.0}version"))')"
+          test "$REQUESTED_VERSION" = "$declared_version"
       - name: refuse a release whose preconditions are unmet
-        run: ./mvnw --offline --batch-mode --no-transfer-progress -Dmaven.repo.local=.dependency-cache test -Dtest=PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am
+        run: ./mvnw --offline --batch-mode --no-transfer-progress -Dmaven.repo.local=.dependency-cache -Dsurefire.failIfNoSpecifiedTests=false test -Dtest=PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am
       - name: build the release artifacts
         run: scripts/build_release_artifacts
       - name: prove two builds of this source agree

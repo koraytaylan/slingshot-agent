@@ -282,7 +282,7 @@ final class ExclusiveTransitionRuntime {
 
     private static Path bundle(Path repository) throws IOException {
         final Path target = repository.resolve("interop/target/exclusive-transition-probe.jar");
-        final Path product = repository.resolve("core/target/slingshot-agent-core-0.1.0.jar");
+        final Path product = repository.resolve("core/target/slingshot-agent-core-0.2.0.jar");
         try (JarFile source = new JarFile(product.toFile())) {
             final Manifest manifest = new Manifest();
             manifest.getMainAttributes().putValue("Manifest-Version", "1.0");

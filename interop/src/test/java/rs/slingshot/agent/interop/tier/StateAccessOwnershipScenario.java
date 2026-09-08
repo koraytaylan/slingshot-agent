@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 final class StateAccessOwnershipScenario {
 
     private static final Path REPOSITORY = Path.of(System.getProperty("slingshot.repository.root"));
-    private static final Path PRODUCT = REPOSITORY.resolve("core/target/slingshot-agent-core-0.1.0.jar");
+    private static final Path PRODUCT = REPOSITORY.resolve("core/target/slingshot-agent-core-0.2.0.jar");
     private static final String PROBE = "/bin/slingshot-proof/state-access";
     private static final String PREFIX = "/bin/slingshot/agent/";
     private static final String OPERATION =

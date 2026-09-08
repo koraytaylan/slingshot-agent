@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 final class LiveOperatorConfigurationScenario {
 
     private static final Path REPOSITORY = Path.of(System.getProperty("slingshot.repository.root"));
-    private static final Path PRODUCT = REPOSITORY.resolve("core/target/slingshot-agent-core-0.1.0.jar");
+    private static final Path PRODUCT = REPOSITORY.resolve("core/target/slingshot-agent-core-0.2.0.jar");
     private static final String ENDPOINT = "/bin/slingshot-proof/authorization";
     private final TierRequests requests = TierRequests.open();
     private final HttpClient client = HttpClient.newHttpClient();
