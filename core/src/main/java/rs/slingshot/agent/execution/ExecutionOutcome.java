@@ -113,12 +113,30 @@ public record ExecutionOutcome(OperationState state, Result result,
     /**
      * A reference to bytes the artifact store has already committed.
      *
+     * <p>The canonical document travels beside the reference because the client validates both:
+     * the reference says where the bytes are, and the document is the answer the command's own
+     * result schema is checked against. Only the reference is answered inline to a caller, which
+     * is why the document is not part of what a lookup hands back as bytes.</p>
+     *
      * @param slot which slot holds them
      * @param byteCount how many bytes the store recorded
      * @param digest what the store recorded them as digesting to
+     * @param canonicalResult the command's own result document, where this side wrote one
      */
-    public record Published(ArtifactSlot slot, long byteCount, DigestValue digest)
-            implements Result {
+    public record Published(ArtifactSlot slot, long byteCount, DigestValue digest,
+                            Optional<String> canonicalResult) implements Result {
+
+        /**
+         * A published answer whose document the store holds separately, which is none of this
+         * build's own commands: every one of them writes the document that names its artifact.
+         *
+         * @param slot which slot holds them
+         * @param byteCount how many bytes the store recorded
+         * @param digest what the store recorded them as digesting to
+         */
+        public Published(ArtifactSlot slot, long byteCount, DigestValue digest) {
+            this(slot, byteCount, digest, Optional.empty());
+        }
     }
 
     /** That the command produces no answer at all. */

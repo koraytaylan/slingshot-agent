@@ -79,10 +79,27 @@ public interface CommandHandler {
     /**
      * A failure, named with one of the categories the command's own row declares.
      *
+     * <p>The refusal is the command's own, in the closed shape its row's client-side counterpart
+     * reads. A failure reduced to a category alone could not be told apart from one about another
+     * request — two page creations refused for a missing template differ in which target they were
+     * about — and the client validates exactly that before it will believe an ending.</p>
+     *
      * @param category which way it failed
      * @param detail what was observed, which is for this side's own record
+     * @param refusal the command's own refusal document, where it produces one
      */
-    record Failed(String category, String detail) implements Answer {
+    record Failed(String category, String detail, java.util.Optional<DocumentValue.Mapping> refusal)
+            implements Answer {
+
+        /**
+         * A failure that names no refusal document of its own.
+         *
+         * @param category which way it failed
+         * @param detail what was observed, which is for this side's own record
+         */
+        public Failed(String category, String detail) {
+            this(category, detail, java.util.Optional.empty());
+        }
     }
 
     /**

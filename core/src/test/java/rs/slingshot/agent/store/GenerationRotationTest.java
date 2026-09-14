@@ -385,7 +385,7 @@ final class GenerationRotationTest {
         members.put(JobEvent.GENERATION, new DocumentValue.Whole(identity().generation().number()));
         members.put(JobEvent.IDENTIFIER, new DocumentValue.Text(identity().identifier().rendered()));
         members.put(JobEvent.KIND, new DocumentValue.Text("accepted"));
-        members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(0));
+        members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(1));
         final DocumentValue.Mapping document = new DocumentValue.Mapping(members);
         final JobEvent event = assertInstanceOf(JobEvent.Held.class,
                 JobEvent.read(document, identity().generation(), CONTRACT)).event();

@@ -41,6 +41,8 @@ public final class OperationStore {
     public static final String TARGET_DIGEST = "author_target_identity_digest";
     /** The property the environment revision is written in. */
     public static final String ENVIRONMENT_REVISION = "selected_environment_revision";
+    /** The property the subscription this submission registered is written in. */
+    public static final String SUBSCRIPTION = "subscription_identifier";
     /** The property the submitting caller is written in. */
     public static final String CALLER = "caller";
     /** The property the client's own request-start instant is written in. */

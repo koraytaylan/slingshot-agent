@@ -362,6 +362,10 @@ public final class SubmitServlet extends AgentServlet {
     private void progress(SlingHttpServletResponse response, LogicalOperation operation,
                           DocumentValue.Mapping submission, Arriving arriving, Session session,
                           SubmissionResponse.Acceptance acceptance) throws IOException, RepositoryException {
+        if (!recorded(session, operation, arriving)) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            return;
+        }
         if (operation.state() == rs.slingshot.agent.execution.OperationState.RUNNING
                 && rs.slingshot.agent.execution.ExecutionJournal.pending(session,
                         rs.slingshot.agent.execution.OperationStore.pathOf(operation.identity()),
@@ -372,10 +376,88 @@ public final class SubmitServlet extends AgentServlet {
         if (operation.state() != rs.slingshot.agent.execution.OperationState.ACCEPTED
                 || IntakeSlotWrite.outstanding(session,
                         rs.slingshot.agent.execution.OperationStore.pathOf(operation.identity())) > 0) {
-            answered(response, operation, submission, arriving, acceptance);
+            answered(response, operation, submission, arriving, session, acceptance);
             return;
         }
         executed(response, operation, submission, arriving, session, acceptance);
+    }
+
+    /**
+     * Writes what every accepted submission must have said about it, once.
+     *
+     * <p>An accepted operation is one a client may observe, and observation is answered in the
+     * store's own sequence and physical-job vocabulary. So both are written before the answer that
+     * tells a client the work was taken: an event at the first sequence, because a snapshot below
+     * it describes an operation nothing has happened to, and the request that carried it as this
+     * operation's physical job, because accepted work is carried by something and the client
+     * refuses a complete job set that is empty.</p>
+     *
+     * <p>Idempotent on a resend: an operation that already holds its first event and its delivery
+     * gets nothing written a second time.</p>
+     *
+     * @param session the state session
+     * @param operation the accepted or running record
+     * @param arriving the request that carried it
+     * @return whether the store now holds what every accepted submission must
+     * @throws RepositoryException if the repository fails
+     */
+    private static boolean recorded(Session session, LogicalOperation operation, Arriving arriving)
+            throws RepositoryException {
+        final StatePath operationPath =
+                rs.slingshot.agent.execution.OperationStore.pathOf(operation.identity());
+        final StatePath ledger = operationPath.child(rs.slingshot.agent.store.EventLedger.NODE);
+        final java.util.List<String> held =
+                rs.slingshot.agent.store.EventLedger.held(session, ledger);
+        if (held.isEmpty()) {
+            final long sequence = 1;
+            final rs.slingshot.agent.wire.JobEvent.Outcome event =
+                    rs.slingshot.agent.wire.JobEvent.read(acceptedDocument(operation, sequence),
+                            operation.identity().generation(), arriving.contract());
+            if (!(event instanceof final rs.slingshot.agent.wire.JobEvent.Held named)) {
+                return false;
+            }
+            final rs.slingshot.agent.json.CanonicalByteWriter.Outcome canonical =
+                    rs.slingshot.agent.json.CanonicalByteWriter.write(
+                            acceptedDocument(operation, sequence));
+            if (!(canonical instanceof final rs.slingshot.agent.json.CanonicalByteWriter.Written
+                    bytes)) {
+                return false;
+            }
+            final rs.slingshot.agent.store.EventLedger.Outcome appended =
+                    rs.slingshot.agent.store.SnapshotStore.record(session, operation.caller(),
+                            named.event(), bytes.bytes(), System.currentTimeMillis(),
+                            arriving.contract());
+            if (appended instanceof rs.slingshot.agent.store.EventLedger.AtCapacity) {
+                return false;
+            }
+            if (!(appended instanceof rs.slingshot.agent.store.EventLedger.Appended)) {
+                // A repeat means another writer recorded the same first event, which is the
+                // ordinary race a resend produces and is not a failure to record.
+                if (!(appended instanceof final rs.slingshot.agent.store.EventLedger.Refused refused)
+                        || refused.refusal()
+                                != rs.slingshot.agent.store.EventLedger.Refusal.SEQUENCE_REPEAT) {
+                    return false;
+                }
+            }
+        }
+        rs.slingshot.agent.execution.Outbox.recordRequestDelivery(session, operation,
+                REQUEST_DELIVERY, System.currentTimeMillis(), arriving.contract());
+        return true;
+    }
+
+    /** What names the request that carried an immediate operation, as its own observer. */
+    private static final String REQUEST_DELIVERY = "request";
+
+    private static DocumentValue.Mapping acceptedDocument(LogicalOperation operation, long sequence) {
+        final java.util.SequencedMap<String, DocumentValue> members = new java.util.LinkedHashMap<>();
+        members.put(rs.slingshot.agent.wire.JobEvent.GENERATION,
+                new DocumentValue.Whole(operation.identity().generation().number()));
+        members.put(rs.slingshot.agent.wire.JobEvent.IDENTIFIER,
+                new DocumentValue.Text(operation.identity().identifier().rendered()));
+        members.put(rs.slingshot.agent.wire.JobEvent.KIND, new DocumentValue.Text(
+                rs.slingshot.agent.wire.JobEventKind.ACCEPTED.spelling()));
+        members.put(rs.slingshot.agent.wire.JobEvent.SEQUENCE, new DocumentValue.Whole(sequence));
+        return new DocumentValue.Mapping(members);
     }
 
     private void executed(SlingHttpServletResponse response, LogicalOperation accepted,
@@ -463,7 +545,7 @@ public final class SubmitServlet extends AgentServlet {
                         path.child(rs.slingshot.agent.store.EventLedger.TERMINAL_BUDGET));
         if (ended instanceof rs.slingshot.agent.execution.TerminalCommit.Committed
                 || ended instanceof rs.slingshot.agent.execution.TerminalCommit.Unchanged) {
-            answered(response, running, submission, arriving, acceptance);
+            answered(response, running, submission, arriving, session, acceptance);
             return;
         }
         response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
@@ -485,13 +567,18 @@ public final class SubmitServlet extends AgentServlet {
     }
 
     private void answered(SlingHttpServletResponse response, LogicalOperation operation,
-                          DocumentValue.Mapping submission, Arriving arriving,
-                          SubmissionResponse.Acceptance acceptance) throws IOException {
-        final Optional<String> rendered = SubmissionResponse.of(operation,
+                          DocumentValue.Mapping submission, Arriving arriving, Session session,
+                          SubmissionResponse.Acceptance acceptance) throws IOException, RepositoryException {
+        final rs.slingshot.agent.execution.OperationStore.Outcome held =
+                rs.slingshot.agent.execution.OperationStore.read(session, operation.identity());
+        final LogicalOperation record = held instanceof final
+                rs.slingshot.agent.execution.OperationStore.Held read ? read.operation() : operation;
+        final Optional<String> rendered = SubmissionResponse.of(record,
                         text(submission, SUBSCRIPTION),
                         arriving.contract().value(
                                 ContractLimit.MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS),
-                        acceptance)
+                        acceptance,
+                        rs.slingshot.agent.execution.Outbox.identifiersFor(session, record.identity()))
                 .rendered();
         if (rendered.isEmpty()) {
             refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
@@ -527,7 +614,8 @@ public final class SubmitServlet extends AgentServlet {
             return Optional.empty();
         }
         return Optional.of(new SubmissionAdmission.Submission(identity.get(), derived,
-                provenance.get().commandContract(), caller.get(), requestStart(submission)));
+                provenance.get().commandContract(), caller.get(), requestStart(submission),
+                text(submission, SUBSCRIPTION)));
     }
 
     private static DigestValue derive(DocumentProvenance provenance,

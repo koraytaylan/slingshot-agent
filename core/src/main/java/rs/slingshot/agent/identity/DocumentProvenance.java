@@ -3,9 +3,11 @@
 
 package rs.slingshot.agent.identity;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.SequencedMap;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.json.DocumentValue;
 
@@ -209,6 +211,37 @@ public final class DocumentProvenance {
      */
     public CommandContractIdentity commandContract() {
         return commandContract;
+    }
+
+    /**
+     * A provenance this side itself means, ready to be written into a document it answers with.
+     *
+     * <p>The two contract digests are the build's own rather than anything a caller sent: an answer
+     * that carried a caller's claim about which contracts this side speaks would be this side
+     * agreeing with whatever it was told.</p>
+     *
+     * @param build the two contracts this build itself speaks
+     * @param commandContract the command contract the document is about
+     * @return the provenance
+     */
+    public static DocumentProvenance composed(ThisBuild build,
+                                              CommandContractIdentity commandContract) {
+        return new DocumentProvenance(build.transportContractDigest(),
+                build.canonicalContractDigest(), commandContract);
+    }
+
+    /**
+     * This provenance as the document a reader compares with what it sent.
+     *
+     * @return the document, whose four members include the five-field command contract
+     */
+    public DocumentValue.Mapping document() {
+        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        members.put(CANONICAL_DIGEST, new DocumentValue.Text(canonicalContractDigest.rendered()));
+        members.put(COMMAND_CONTRACT, commandContract.document());
+        members.put(FORMAT_MEMBER, new DocumentValue.Text(FORMAT));
+        members.put(TRANSPORT_DIGEST, new DocumentValue.Text(transportContractDigest.rendered()));
+        return new DocumentValue.Mapping(members);
     }
 
     @Override

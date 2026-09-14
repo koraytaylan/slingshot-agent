@@ -42,10 +42,30 @@ public final class SubmissionAdmission {
      * @param commandContract which command contract it means
      * @param caller who submitted it
      * @param requestStartUnixMilliseconds when the client says its request began
+     * @param subscription the subscription the submission registered, with which an answer and a
+     *     snapshot both name the stream this work is followed on
      */
     public record Submission(OperationIdentity identity, DigestValue submissionDigest,
                              CommandContractIdentity commandContract, StatePath.Caller caller,
-                             long requestStartUnixMilliseconds) {
+                             long requestStartUnixMilliseconds, String subscription) {
+
+        /**
+         * A submission that registered no subscription, which is what a caller building one for
+         * admission alone has.
+         *
+         * @param identity which operation, at which incarnation, against which target, at which
+         *     revision
+         * @param submissionDigest the digest this side derived from the request itself
+         * @param commandContract which command contract it means
+         * @param caller who submitted it
+         * @param requestStartUnixMilliseconds when the client says its request began
+         */
+        public Submission(OperationIdentity identity, DigestValue submissionDigest,
+                          CommandContractIdentity commandContract, StatePath.Caller caller,
+                          long requestStartUnixMilliseconds) {
+            this(identity, submissionDigest, commandContract, caller, requestStartUnixMilliseconds,
+                    "");
+        }
     }
 
     /**
@@ -111,7 +131,10 @@ public final class SubmissionAdmission {
                     AdmissionOutcome.Reason.UNBELIEVABLE_REQUEST_START, refused.detail());
         }
         final Object created = OperationStore.create(session,
-                ((LogicalOperation.Held) accepted).operation(), alongside);
+                ((LogicalOperation.Held) accepted).operation(), node -> {
+                    node.setProperty(OperationStore.SUBSCRIPTION, submission.subscription());
+                    alongside.write(node);
+                });
         if (created instanceof final OperationStore.Refused refused) {
             return new AdmissionOutcome.Refused(AdmissionOutcome.Reason.NOT_RECORDED,
                     refused.refusal() + ": " + refused.detail());

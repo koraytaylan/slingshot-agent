@@ -56,15 +56,15 @@ final class EventLedgerTest {
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
     @Test
-    @DisplayName("a first append at sequence zero is written where its sequence says")
+    @DisplayName("a first append at the first sequence is written where its sequence says")
     void afirstAppendIsWrittenWhereItsSequenceSays() throws RepositoryException {
         final Session session = prepared(CONTRACT);
         final EventLedger.Appended appended = assertInstanceOf(EventLedger.Appended.class,
                 append(session, "accepted.json", CONTRACT), "a first event was not appended");
         assertEquals(1, appended.events());
         assertEquals(canonical("accepted.json").length, appended.bytes());
-        assertEquals("000000000000", EventLedger.nameOf(appended.event().sequence()));
-        assertTrue(session.nodeExists(ledger().child("000000000000").path()),
+        assertEquals("000000000001", EventLedger.nameOf(appended.event().sequence()));
+        assertTrue(session.nodeExists(ledger().child("000000000001").path()),
                 "the event is not at the path its own sequence derives");
         assertEquals(List.of(new String(canonical("accepted.json"), StandardCharsets.UTF_8)),
                 EventLedger.held(session, ledger()),
@@ -79,11 +79,11 @@ final class EventLedgerTest {
         final EventLedger.Refused gap = EventLedger.refusalIn(append(session, "gap.json", CONTRACT))
                 .orElseThrow();
         assertEquals(EventLedger.Refusal.SEQUENCE_GAP, gap.refusal());
-        assertTrue(gap.detail().contains("5") && gap.detail().contains("1"), gap.detail());
+        assertTrue(gap.detail().contains("6") && gap.detail().contains("1"), gap.detail());
         final EventLedger.Refused repeat =
                 EventLedger.refusalIn(append(session, "repeat.json", CONTRACT)).orElseThrow();
         assertEquals(EventLedger.Refusal.SEQUENCE_REPEAT, repeat.refusal());
-        assertTrue(repeat.detail().contains("0"), repeat.detail());
+        assertTrue(repeat.detail().contains("1"), repeat.detail());
         assertEquals(1, EventLedger.events(session, ledger()),
                 "a refused append wrote something anyway");
         assertEquals(EventLedger.Refusal.NO_OPERATION,

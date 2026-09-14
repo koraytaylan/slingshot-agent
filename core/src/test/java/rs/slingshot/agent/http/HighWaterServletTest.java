@@ -95,7 +95,7 @@ final class HighWaterServletTest {
         assertEquals(OperationLookupServlet.SERVED, answered.getStatus(),
                 answered.getOutputAsString());
         assertEquals("{\"agent_event_store_generation\":1,\"daemon_subscription_identifier\":\""
-                        + SUBSCRIPTION + "\",\"events_shown\":3}",
+                        + SUBSCRIPTION + "\",\"events_shown\":2}",
                 answered.getOutputAsString(),
                 "the answer is not the cursor the store holds");
     }

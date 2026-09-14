@@ -100,12 +100,12 @@ final class EventStreamServletTest {
     void eventsafterAcursorAreDeliveredInSequenceOrder() throws RepositoryException, IOException,
             ServletException {
         recorded();
-        final MockSlingHttpServletResponse served = asking("with-events-waiting", "1:0");
+        final MockSlingHttpServletResponse served = asking("with-events-waiting", "1:1");
         assertEquals(EventStreamServlet.SERVING, served.getStatus(), served.getOutputAsString());
         assertTrue(served.getContentType().startsWith(EventEncoder.MEDIA_TYPE),
                 "a stream was served as " + served.getContentType());
         final String wire = served.getOutputAsString();
-        assertEquals(List.of("1:1", "1:2"), identifiersIn(wire),
+        assertEquals(List.of("1:2", "1:3"), identifiersIn(wire),
                 "the events were not delivered in sequence order, or the cursor's own was: "
                         + wire);
         assertTrue(wire.indexOf("event:started") < wire.indexOf("event:succeeded"),
@@ -121,7 +121,7 @@ final class EventStreamServletTest {
         assertTrue(ResetNotice.isAreset(wire),
                 "a subscriber with no position was served news before it was told where it is: "
                         + wire);
-        assertTrue(wire.contains("\"sequence\":2"),
+        assertTrue(wire.contains("\"sequence\":3"),
                 "the notice does not carry what to resynchronise from: " + wire);
         assertEquals(List.of(), identifiersIn(wire),
                 "a subscriber with no position was shown events its own snapshot accounts for: "

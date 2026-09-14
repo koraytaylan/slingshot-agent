@@ -72,10 +72,10 @@ final class StreamResumptionTest {
     void alivecursorServesWhatFollowsIt() throws RepositoryException {
         recorded();
         final StreamResumption.Serving serving = assertInstanceOf(StreamResumption.Serving.class,
-                resumed("1:0"), "a live cursor was not served");
+                resumed("1:1"), "a live cursor was not served");
         assertEquals(List.of(canonicalOf("started.json"), canonicalOf("succeeded.json")),
                 serving.events(), "a resumption served something other than what follows a cursor");
-        assertEquals(2, assertInstanceOf(SnapshotStore.Known.class, serving.current())
+        assertEquals(3, assertInstanceOf(SnapshotStore.Known.class, serving.current())
                 .snapshot().sequence().number());
     }
 
@@ -89,7 +89,7 @@ final class StreamResumptionTest {
                 .child(EventLedger.nameOf(event("started.json").sequence())).path()).remove();
         session.save();
         final StreamResumption.Resetting reset = assertInstanceOf(
-                StreamResumption.Resetting.class, resumed("1:0"),
+                StreamResumption.Resetting.class, resumed("1:1"),
                 "a cursor into events that are gone was served as though it were merely behind");
         assertInstanceOf(SnapshotStore.Known.class, reset.current(),
                 "a reset carried nothing to resynchronise from");
@@ -111,7 +111,7 @@ final class StreamResumptionTest {
         assertTrue(ResetNotice.isAreset(notice), notice);
         assertTrue(notice.contains("\"agent_event_store_generation\":1"),
                 "the reset does not name the incarnation this store serves: " + notice);
-        assertTrue(notice.contains("\"sequence\":2"),
+        assertTrue(notice.contains("\"sequence\":3"),
                 "the reset does not carry what to resynchronise from: " + notice);
     }
 
@@ -123,7 +123,7 @@ final class StreamResumptionTest {
                 resumed(""), "a cursorless reconnection was not served");
         assertEquals(List.of(), serving.events(),
                 "a cursorless reader was shown events its own snapshot already accounts for");
-        assertEquals(2, assertInstanceOf(SnapshotStore.Known.class, serving.current())
+        assertEquals(3, assertInstanceOf(SnapshotStore.Known.class, serving.current())
                 .snapshot().sequence().number());
     }
 

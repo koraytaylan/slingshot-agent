@@ -15,6 +15,7 @@ import rs.slingshot.agent.store.AccountedQuantity;
 import rs.slingshot.agent.store.CapacityLedger;
 import rs.slingshot.agent.store.CapacityReservation;
 import rs.slingshot.agent.store.ClaimByCreation;
+import rs.slingshot.agent.store.LedgerAdmission;
 import rs.slingshot.agent.store.StatePath;
 import rs.slingshot.agent.store.SubscriptionLedger;
 import rs.slingshot.agent.store.SubscriptionRecord;
@@ -65,6 +66,10 @@ public final class SubmissionRegistration {
                 submission.identity().generation(), new SubscriptionRecord.Binding(submission.caller(),
                 submission.identity().identifier()), SubscriptionRecord.Unread.NOTHING_SHOWN_YET,
                 nowUnixMilliseconds);
+        // The accepted event is written with the submission, so the counters it is admitted
+        // against must exist before the submission does. Preparing them here is what keeps a
+        // submission from being accepted as a record the store cannot then say anything about.
+        LedgerAdmission.prepare(session, submission.caller());
         if (OperationStore.read(session, submission.identity()) instanceof OperationStore.Held) {
             return registered(session, request, record, new IntakeSlotWrite.Decided(
                     SubmissionAdmission.admit(session, submission, nowUnixMilliseconds, contract)), contract);

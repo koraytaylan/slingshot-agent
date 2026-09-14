@@ -6,15 +6,18 @@ package rs.slingshot.agent.wire;
 /**
  * Where one event sits in the run of events about one operation.
  *
- * <p>It starts at zero and strictly increases within one operation and one generation. A repeat and
- * a decrease are two different failures: a repeat is a delivery a job system made twice, which is a
- * thing that happens and is handled, and a decrease is a store or a sender that has gone backwards,
- * which is not.</p>
+ * <p>It starts at one and strictly increases within one operation and one generation. The client's
+ * own vocabulary starts there — its per-job sequence and its notion of the next one are both
+ * one-based — so an event numbered from zero would be a position the client reads as before its
+ * first, and the accepted event every operation begins with would be one it could never reconcile.
+ * A repeat and a decrease are two different failures: a repeat is a delivery a job system made
+ * twice, which is a thing that happens and is handled, and a decrease is a store or a sender that
+ * has gone backwards, which is not.</p>
  */
 public final class EventSequence implements Comparable<EventSequence> {
 
     /** The sequence the first event about an operation carries. */
-    public static final long FIRST = 0;
+    public static final long FIRST = 1;
 
     private final long number;
 

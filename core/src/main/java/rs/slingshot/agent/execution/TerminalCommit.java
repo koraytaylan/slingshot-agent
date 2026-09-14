@@ -315,7 +315,9 @@ public final class TerminalCommit {
                                    AgentContract contract,
                                            Publication publication) throws RepositoryException {
         final StatePath operation = OperationStore.pathOf(stored.identity());
-        final long next = EventLedger.events(session, operation.child(EventLedger.NODE));
+        // The accepted event is written at admission, so the terminal event is written one past
+        // what the ledger holds rather than at the count itself.
+        final long next = EventLedger.events(session, operation.child(EventLedger.NODE)) + 1;
         final Optional<JobEvent> terminal = terminalEvent(stored, outcome, next, contract);
         if (terminal.isEmpty()) {
             return new Refused(Refusal.EVENT_REFUSED,
@@ -415,8 +417,20 @@ public final class TerminalCommit {
             record.setProperty(RESULT_SLOT, published.slot().name());
             record.setProperty(RESULT_BYTE_COUNT, published.byteCount());
             record.setProperty(RESULT_DIGEST, published.digest().rendered());
+            // The command's own document is what a client checks a result against, and it is not
+            // fetchable from the artifact: the artifact holds the bytes the document describes.
+            // So it is written beside the reference, and a published answer without one leaves
+            // the property absent rather than holding an empty document.
+            if (published.canonicalResult().isPresent()) {
+                record.setProperty(RESULT_PUBLISHED_DOCUMENT, published.canonicalResult().get());
+            } else if (record.hasProperty(RESULT_PUBLISHED_DOCUMENT)) {
+                record.getProperty(RESULT_PUBLISHED_DOCUMENT).remove();
+            }
         }
     }
+
+    /** The property a published answer's own canonical document is written in. */
+    public static final String RESULT_PUBLISHED_DOCUMENT = "result_published_document";
 
     private static Optional<JobEvent> terminalEvent(LogicalOperation stored,
                                                     ExecutionOutcome outcome, long sequence,
@@ -497,10 +511,13 @@ public final class TerminalCommit {
                 ArtifactSlot.of(record.getProperty(RESULT_SLOT).getString());
         final DigestValue.Outcome digest =
                 DigestValue.of(record.getProperty(RESULT_DIGEST).getString());
+        final java.util.Optional<String> document = record.hasProperty(RESULT_PUBLISHED_DOCUMENT)
+                ? java.util.Optional.of(record.getProperty(RESULT_PUBLISHED_DOCUMENT).getString())
+                : java.util.Optional.empty();
         return slot instanceof final ArtifactSlot.Held held
                 && digest instanceof final DigestValue.Held known
                 ? new ExecutionOutcome.Published(held.slot(),
-                        record.getProperty(RESULT_BYTE_COUNT).getLong(), known.digest())
+                        record.getProperty(RESULT_BYTE_COUNT).getLong(), known.digest(), document)
                 : ExecutionOutcome.Nothing.NOTHING_TO_RETURN;
     }
 
@@ -525,7 +542,7 @@ public final class TerminalCommit {
     public static Optional<EventSequence> nextSequence(Session session, StatePath operation)
             throws RepositoryException {
         final EventSequence.Outcome next =
-                EventSequence.of(EventLedger.events(session, operation.child(EventLedger.NODE)));
+                EventSequence.of(EventLedger.events(session, operation.child(EventLedger.NODE)) + 1);
         return next instanceof final EventSequence.Held held
                 ? Optional.of(held.sequence())
                 : Optional.empty();

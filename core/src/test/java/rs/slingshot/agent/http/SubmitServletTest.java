@@ -265,19 +265,30 @@ final class SubmitServletTest {
     }
 
     @Test
-    @DisplayName("the acknowledgement carries the nine members the client knows and no tenth")
-    void theacknowledgementCarriesTheNineMembers()
+    @DisplayName("the acknowledgement carries the twelve members the client knows and no thirteenth")
+    void theacknowledgementCarriesTheTwelveMembers()
             throws RepositoryException, IOException, ServletException {
         prepared();
         final String answered = submit(new Counting(), "a-submission.json");
-        for (final String member : SubmissionResponse.MEMBERS) {
-            assertTrue(answered.contains("\"" + member + "\""),
-                    member + " is not in the acknowledgement: " + answered);
-        }
-        assertEquals(SubmissionResponse.MEMBERS.size(),
-                answered.split("\":", -1).length - 1,
-                "the acknowledgement carries a member the client does not know: " + answered);
-        assertEquals(9, SubmissionResponse.MEMBERS.size(), "a member was added or lost");
+        final DocumentValue.Mapping acknowledgement = assertInstanceOf(DocumentValue.Mapping.class,
+                assertInstanceOf(rs.slingshot.agent.json.BoundedDocumentReader.Read.class,
+                        rs.slingshot.agent.json.BoundedDocumentReader.read(
+                                answered.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                                rs.slingshot.agent.json.BoundedDocumentReader.Bounds.from(CONTRACT)),
+                        "the acknowledgement is not a document this reader accepts").value(),
+                "the acknowledgement is not an object");
+        // Every member the client knows is present except the one only a refusal carries, and
+        // nothing the client does not know is: an answer carrying a field it cannot read is an
+        // answer it cannot interpret at all.
+        assertEquals(SubmissionResponse.MEMBERS.stream()
+                        .filter(member -> !member.equals(SubmissionResponse.NON_EXECUTION))
+                        .sorted()
+                        .toList(),
+                acknowledgement.members().keySet().stream().sorted().toList(),
+                "the acknowledgement is not exactly the members the client knows: " + answered);
+        assertFalse(answered.contains("\"" + SubmissionResponse.NON_EXECUTION + "\""),
+                "an accepted acknowledgement carried a refusal");
+        assertEquals(12, SubmissionResponse.MEMBERS.size(), "a member was added or lost");
     }
 
     @Test
@@ -579,7 +590,9 @@ final class SubmitServletTest {
         assertEquals(0, commands.ran());
         session.refresh(false);
         assertEquals(OperationState.ACCEPTED, stored(session, "a-submission.json").state());
-        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT));
+        // The accepted event is written at admission, before execution capacity is taken, because
+        // a client may observe an accepted operation immediately. The execution charge is not.
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.EVENT_ROWS, CONTRACT));
         assertEquals(0, CapacityLedger.held(session,
                 AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, CONTRACT));
         CapacityLedger.release(session, occupied, CONTRACT);
@@ -818,7 +831,7 @@ final class SubmitServletTest {
                 rs.slingshot.agent.execution.SubmissionAdmission.admit(session,
                         new rs.slingshot.agent.execution.SubmissionAdmission.Submission(
                                 identityOf(fixture), key, provenance.commandContract(), caller(),
-                                System.currentTimeMillis()),
+                                System.currentTimeMillis(), ""),
                         System.currentTimeMillis(), CONTRACT),
                 fixture + " was not admitted").operation();
     }

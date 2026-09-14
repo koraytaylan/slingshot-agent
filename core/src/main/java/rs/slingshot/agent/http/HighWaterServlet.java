@@ -188,7 +188,7 @@ public final class HighWaterServlet extends AgentServlet {
             throws RepositoryException {
         final SubscriptionRecord.Cursor cursor = HighWaterMark.read(session, identifier);
         return cursor instanceof final SubscriptionRecord.Shown shown
-                ? shown.sequence().number() + 1
+                ? shown.sequence().number()
                 : 0;
     }
 

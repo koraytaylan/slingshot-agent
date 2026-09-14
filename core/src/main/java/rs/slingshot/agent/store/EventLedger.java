@@ -242,11 +242,14 @@ public final class EventLedger {
         final byte[] canonical = append.canonical();
         final long held = events(session, ledger);
         final long asked = event.sequence().number();
-        if (asked < held) {
+        // The first sequence is one, so what a ledger holding `held` events expects next is the
+        // one after it rather than the count itself.
+        final long expected = held + EventSequence.FIRST;
+        if (asked < expected) {
             return new Refused(Refusal.SEQUENCE_REPEAT, "sequence " + asked + " is already there,"
-                    + " and the next one is " + held);
+                    + " and the next one is " + expected);
         }
-        if (asked > held) {
+        if (asked > expected) {
             return new Refused(Refusal.SEQUENCE_GAP, "sequence " + asked + " leaves " + held
                     + " unwritten, and an event nothing holds is an event that was lost");
         }

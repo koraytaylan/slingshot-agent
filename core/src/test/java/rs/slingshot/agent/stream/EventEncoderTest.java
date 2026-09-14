@@ -55,7 +55,7 @@ final class EventEncoderTest {
     @DisplayName("the identifier carries the incarnation and the sequence together")
     void theidentifierCarriesBoth() {
         final EventEncoder.Encoded encoded = assertInstanceOf(EventEncoder.Encoded.class,
-                EventEncoder.encode(event(JobEventKind.ACCEPTED, 0), cursor(2, 7), document(0),
+                EventEncoder.encode(event(JobEventKind.ACCEPTED, 1), cursor(2, 7), document(1),
                         EventEncoder.Buffered.NOTHING, CONTRACT));
         assertTrue(encoded.wire().contains("id:2:7"),
                 "the cursor does not name both the incarnation and the sequence: "

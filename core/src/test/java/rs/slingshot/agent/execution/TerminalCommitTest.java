@@ -218,7 +218,7 @@ final class TerminalCommitTest {
                 commit(session, inline(), OperationState.SUCCEEDED), "the operation did not end");
         assertEquals(OperationState.SUCCEEDED, committed.operation().state());
         assertEquals(JobEventKind.SUCCEEDED, committed.event().kind());
-        assertEquals(1, committed.event().sequence().number(),
+        assertEquals(2, committed.event().sequence().number(),
                 "the terminal event was not written at the sequence after the last one");
         assertEquals(new ExecutionOutcome.Inline(inlineDocument()),
                 TerminalCommit.answerIn(session, operation()).orElseThrow(),
@@ -527,7 +527,7 @@ final class TerminalCommitTest {
         members.put(rs.slingshot.agent.wire.JobEvent.IDENTIFIER,
                 new DocumentValue.Text(identity().identifier().rendered()));
         members.put(rs.slingshot.agent.wire.JobEvent.KIND, new DocumentValue.Text("started"));
-        members.put(rs.slingshot.agent.wire.JobEvent.SEQUENCE, new DocumentValue.Whole(0));
+        members.put(rs.slingshot.agent.wire.JobEvent.SEQUENCE, new DocumentValue.Whole(1));
         return new DocumentValue.Mapping(members);
     }
 
