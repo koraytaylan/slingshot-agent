@@ -244,6 +244,21 @@ public final class CommandContractIdentity {
         return resultSchemaDigest;
     }
 
+    /**
+     * This identity as the document a reader compares with what it sent.
+     *
+     * @return the document, whose five members are this type's own
+     */
+    public DocumentValue.Mapping document() {
+        final java.util.SequencedMap<String, DocumentValue> members = new java.util.LinkedHashMap<>();
+        members.put(ARGUMENT_DIGEST, new DocumentValue.Text(argumentSchemaDigest.rendered()));
+        members.put(LIMITS_DIGEST, new DocumentValue.Text(limitsDigest.rendered()));
+        members.put(CONTRACT_VERSION, new DocumentValue.Text(contractVersion));
+        members.put(WIRE_NAME, new DocumentValue.Text(wireName));
+        members.put(RESULT_DIGEST, new DocumentValue.Text(resultSchemaDigest.rendered()));
+        return new DocumentValue.Mapping(members);
+    }
+
     @Override
     public boolean equals(Object other) {
         return other instanceof final CommandContractIdentity identity

@@ -180,6 +180,73 @@ public final class Outbox {
                 && session.getNode(operation.path()).hasProperty(EXHAUSTED);
     }
 
+    /**
+     * The name one delivery of an immediate request has.
+     *
+     * <p>A command this side runs inside its own request is carried by exactly the request that
+     * submitted it, and the client requires a complete non-empty set of physical jobs for accepted
+     * work. So the request names itself: the name is derived from the operation and its incarnation
+     * rather than counted, so a resend converges on the same delivery instead of inventing a second
+     * one.</p>
+     *
+     * @param identity which operation the request carried
+     * @return the identifier
+     */
+    public static String requestIdentifier(OperationIdentity identity) {
+        return "request-" + identity.generation().number() + "-"
+                + identity.identifier().rendered();
+    }
+
+    /**
+     * Records the request that carried one immediate operation, and answers what it now holds.
+     *
+     * <p>Idempotent: recording a delivery the store already holds writes nothing and changes
+     * nothing, so a resend and a resumption both leave one physical job behind.</p>
+     *
+     * @param session the session to write under
+     * @param operation the operation the request carried
+     * @param observedBy the node that received it
+     * @param nowUnixMilliseconds when it arrived
+     * @param contract the authenticated contract, which declares the attempt bound
+     * @return the physical jobs this operation holds, in the order the store's own name for them
+     * @throws RepositoryException if the repository fails
+     */
+    public static List<String> recordRequestDelivery(Session session, LogicalOperation operation,
+                                                     String observedBy, long nowUnixMilliseconds,
+                                                     AgentContract contract)
+            throws RepositoryException {
+        final PhysicalAttempt.Outcome attempt = PhysicalAttempt.of(
+                requestIdentifier(operation.identity()), observedBy, nowUnixMilliseconds, contract);
+        if (attempt instanceof final PhysicalAttempt.Held held) {
+            record(session, operation.identity(), held.attempt(), contract);
+        }
+        return identifiersFor(session, operation.identity());
+    }
+
+    /**
+     * The physical jobs one operation holds, by their identifiers.
+     *
+     * @param session the session to read under
+     * @param identity which operation
+     * @return the identifiers, ascending and distinct
+     * @throws RepositoryException if the repository fails
+     */
+    public static List<String> identifiersFor(Session session, OperationIdentity identity)
+            throws RepositoryException {
+        final List<String> identifiers = new ArrayList<>();
+        for (final PhysicalAttempt attempt : held(session, identity)) {
+            identifiers.add(attempt.jobIdentifier());
+        }
+        java.util.Collections.sort(identifiers);
+        final List<String> distinct = new ArrayList<>();
+        for (final String identifier : identifiers) {
+            if (distinct.isEmpty() || !distinct.get(distinct.size() - 1).equals(identifier)) {
+                distinct.add(identifier);
+            }
+        }
+        return List.copyOf(distinct);
+    }
+
     private static void markExhausted(Session session, StatePath operation)
             throws RepositoryException {
         final Node record = session.getNode(operation.path());

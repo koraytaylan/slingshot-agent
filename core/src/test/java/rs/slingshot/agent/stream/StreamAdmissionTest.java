@@ -212,9 +212,9 @@ final class StreamAdmissionTest {
                 StreamAdmission.open(session, caller(), CONTRACT));
         assertEquals(StreamWriter.Ending.REACHED_THE_SESSION_BOUND,
                 new StreamWriter(stream, CONTRACT, admission)
-                        .serve(new StringWriter(), session, new AdvancingTicker(), "1:0"));
+                        .serve(new StringWriter(), session, new AdvancingTicker(), "1:1"));
         final Session observer = second();
-        assertEquals(new SubscriptionRecord.Shown(sequence(2)),
+        assertEquals(new SubscriptionRecord.Shown(sequence(3)),
                 HighWaterMark.read(observer, stream.subscription()),
                 "successful event delivery did not become durable subscription progress");
         assertEquals(NOW, observer.getNode(SubscriptionRecord.pathOf(stream.subscription()).path())
@@ -232,7 +232,7 @@ final class StreamAdmissionTest {
         new StreamWriter(stream, CONTRACT, admission)
                 .serve(new StringWriter(), session, new AdvancingTicker(), "");
         final Session observer = second();
-        assertEquals(new SubscriptionRecord.Shown(sequence(2)),
+        assertEquals(new SubscriptionRecord.Shown(sequence(3)),
                 HighWaterMark.read(observer, stream.subscription()),
                 "the snapshot shown on an initial connection did not advance the cursor");
     }
@@ -245,9 +245,9 @@ final class StreamAdmissionTest {
         final StreamAdmission.Admitted admission = assertInstanceOf(StreamAdmission.Admitted.class,
                 StreamAdmission.open(session, caller(), CONTRACT));
         new StreamWriter(stream, CONTRACT, admission)
-                .serve(new StringWriter(), session, new AdvancingTicker(), "2:0");
+                .serve(new StringWriter(), session, new AdvancingTicker(), "2:3");
         final Session observer = second();
-        assertEquals(new SubscriptionRecord.Shown(sequence(2)),
+        assertEquals(new SubscriptionRecord.Shown(sequence(3)),
                 HighWaterMark.read(observer, stream.subscription()),
                 "the replacement snapshot did not become durable progress after reset");
     }
@@ -262,9 +262,9 @@ final class StreamAdmissionTest {
                 StreamAdmission.open(session, caller(), CONTRACT));
         assertEquals(StreamWriter.Ending.THE_CLIENT_WENT_AWAY,
                 new StreamWriter(stream, CONTRACT, admission)
-                        .serve(new DisconnectAfterWrites(1), session, new AdvancingTicker(), "1:0"));
+                        .serve(new DisconnectAfterWrites(1), session, new AdvancingTicker(), "1:1"));
         final Session observer = second();
-        assertEquals(new SubscriptionRecord.Shown(sequence(1)),
+        assertEquals(new SubscriptionRecord.Shown(sequence(2)),
                 HighWaterMark.read(observer, stream.subscription()),
                 "a disconnect moved the cursor past the last acknowledged event");
     }
@@ -293,9 +293,9 @@ final class StreamAdmissionTest {
                 new StreamWriter(stream, CONTRACT, admission)
                         .serve(new StringWriter(),
                                 SaveInterleaving.interruptSave(session, 1, committed),
-                                new AdvancingTicker(), "1:0"));
+                                new AdvancingTicker(), "1:1"));
         final Session observer = second();
-        assertEquals(committed ? new SubscriptionRecord.Shown(sequence(1))
+        assertEquals(committed ? new SubscriptionRecord.Shown(sequence(2))
                         : SubscriptionRecord.Unread.NOTHING_SHOWN_YET,
                 HighWaterMark.read(observer, stream.subscription()),
                 "durable progress did not match the "

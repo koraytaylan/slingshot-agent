@@ -43,7 +43,7 @@ public final class OverflowPublication {
     }
 
     /** The slot an overflowing result occupies, which is the one the client fetches by. */
-    public static final String RESULT_SLOT = "result";
+    public static final String RESULT_SLOT = ArtifactSlot.RESULT_SLOT;
 
     /**
      * That slot, held as a slot rather than as a name.
@@ -53,13 +53,22 @@ public final class OverflowPublication {
      * than anything a caller did — and it stops the build instead of becoming a branch every
      * publication carries and no caller can reach.</p>
      */
-    private static final ArtifactSlot RESULT = resultSlot();
+    private static final ArtifactSlot RESULT = slotNamed(RESULT_SLOT);
 
-    private static ArtifactSlot resultSlot() {
-        final ArtifactSlot.Outcome named = ArtifactSlot.of(RESULT_SLOT);
+    /**
+     * One slot, held as a slot rather than as a name.
+     *
+     * <p>A name that is not a slot is this build's own defect rather than anything a caller did,
+     * so it stops the build instead of becoming a branch every publication carries and no caller
+     * can reach.</p>
+     *
+     * @param name the slot's own name
+     * @return the slot
+     */
+    public static ArtifactSlot slotNamed(String name) {
+        final ArtifactSlot.Outcome named = ArtifactSlot.of(name);
         if (named instanceof final ArtifactSlot.Refused refused) {
-            throw new IllegalStateException(RESULT_SLOT + " is not a slot name: "
-                    + refused.detail());
+            throw new IllegalStateException(name + " is not a slot name: " + refused.detail());
         }
         return ((ArtifactSlot.Held) named).slot();
     }
@@ -108,8 +117,30 @@ public final class OverflowPublication {
                                   ResultAssembly.Overflowed overflowed, byte[] bytes,
                                   long nowUnixMilliseconds, AgentContract contract)
             throws RepositoryException {
+        return publish(session, caller, operation, RESULT, overflowed, bytes, nowUnixMilliseconds,
+                contract);
+    }
+
+    /**
+     * Publishes an overflowing result into the slot its command declares, or nothing at all.
+     *
+     * @param session the session to write under
+     * @param caller whose share the artifact comes out of
+     * @param operation the operation the result belongs to
+     * @param slot the slot the command's own artifact fills
+     * @param overflowed the count and digest assembly measured
+     * @param bytes the result, which is read once and never held
+     * @param nowUnixMilliseconds what this side's clock says
+     * @param contract the authenticated contract, which declares every bound
+     * @return the reference, or the category and detail of the failure
+     * @throws RepositoryException if the repository fails
+     */
+    public static Outcome publish(Session session, StatePath.Caller caller, StatePath operation,
+                                  ArtifactSlot slot, ResultAssembly.Overflowed overflowed,
+                                  byte[] bytes, long nowUnixMilliseconds, AgentContract contract)
+            throws RepositoryException {
         final ArtifactStore.Publication publication = new ArtifactStore.Publication(
-                RESULT, overflowed.byteCount(), new ByteArrayInputStream(bytes));
+                slot, overflowed.byteCount(), new ByteArrayInputStream(bytes));
         return answerFor(ArtifactStore.publish(session, caller, operation, publication,
                 nowUnixMilliseconds, contract), overflowed);
     }

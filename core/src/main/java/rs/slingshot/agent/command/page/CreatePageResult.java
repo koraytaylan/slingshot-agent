@@ -25,6 +25,9 @@ public final class CreatePageResult {
     /** The member the created page's address is carried in. */
     public static final String TARGET_PATH = "target_path";
 
+    /** The member a refusal carries its own category in, which the client reads it from. */
+    public static final String FAILURE = "failure";
+
     /** Every member this result's document has, and there is no second. */
     public static final List<String> MEMBERS = List.of(TARGET_PATH);
 

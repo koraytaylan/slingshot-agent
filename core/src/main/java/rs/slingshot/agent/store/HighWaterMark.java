@@ -77,7 +77,7 @@ public final class HighWaterMark {
             return new Refused(Refusal.NO_RECORD, "there is no subscription at " + path.path()
                     + ", so there is nothing that promised anything");
         }
-        final long asked = to.number() + 1;
+        final long asked = to.number();
         int attempt = 0;
         while (attempt < CompareAndSet.ATTEMPTS) {
             session.refresh(false);

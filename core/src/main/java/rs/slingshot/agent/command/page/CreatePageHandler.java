@@ -109,12 +109,12 @@ public final class CreatePageHandler implements CommandHandler {
     private static MutationOutcome created(CreatePageCommand command, ResourceResolver session) {
         final Resource parent = session.getResource(command.parentPath());
         if (parent == null) {
-            return new MutationOutcome.Refused(PARENT_NOT_FOUND, command.parentPath() + " is not a"
+            return refused(PARENT_NOT_FOUND, command, command.parentPath() + " is not a"
                     + " path this caller can reach, which is the same answer as nothing being"
                     + " there");
         }
         if (session.getResource(command.targetPath()) != null) {
-            return new MutationOutcome.Refused(TARGET_ALREADY_EXISTS, command.targetPath()
+            return refused(TARGET_ALREADY_EXISTS, command, command.targetPath()
                     + " is already there, and this command replaces nothing");
         }
         final MutationOutcome template = templated(command, session);
@@ -124,16 +124,38 @@ public final class CreatePageHandler implements CommandHandler {
         return written(command, parent, session);
     }
 
+    /**
+     * One refusal, in the shape this command's own client-side counterpart reads.
+     *
+     * <p>The target is this command's own derivation and not an argument, so a refusal cannot
+     * claim to be about a request other than the one it answers. The document is the whole of
+     * what a client validates a failure against: a category alone would leave two refusals about
+     * different targets indistinguishable.</p>
+     *
+     * @param category the declared category
+     * @param command what was asked
+     * @param detail what was observed
+     * @return the refusal
+     */
+    static MutationOutcome refused(String category, CreatePageCommand command, String detail) {
+        final java.util.SequencedMap<String, DocumentValue> refusal =
+                new java.util.LinkedHashMap<>();
+        refusal.put(CreatePageResult.FAILURE, new DocumentValue.Text(category));
+        refusal.put(CreatePageResult.TARGET_PATH, new DocumentValue.Text(command.targetPath()));
+        return new MutationOutcome.Refused(category, detail,
+                java.util.Optional.of(new DocumentValue.Mapping(refusal)));
+    }
+
     private static MutationOutcome templated(CreatePageCommand command, ResourceResolver session) {
         final Resource template = session.getResource(command.templatePath());
         if (template == null) {
-            return new MutationOutcome.Refused(TEMPLATE_NOT_FOUND, command.templatePath()
+            return refused(TEMPLATE_NOT_FOUND, command, command.templatePath()
                     + " is not there. A page made without its template renders as nothing, so this"
                     + " is refused rather than made untyped.");
         }
         if (!TEMPLATE_TYPE.equals(String.valueOf(template.getValueMap()
                 .get(ListChildPagesHandler.TYPE_PROPERTY, String.class)))) {
-            return new MutationOutcome.Refused(TEMPLATE_INVALID, command.templatePath() + " is"
+            return refused(TEMPLATE_INVALID, command, command.templatePath() + " is"
                     + " there and is not a template; what is there is something else");
         }
         return new MutationOutcome.Changed(CreatePageResult.documentOf(command.targetPath()));
@@ -150,7 +172,7 @@ public final class CreatePageHandler implements CommandHandler {
         } catch (final PersistenceException refused) {
             // A commit that came back refused did not happen. One that never came back at all is
             // the third answer, and the repository tells those apart by throwing or not.
-            return new MutationOutcome.Refused(COMMIT_FAILED,
+            return refused(COMMIT_FAILED, command,
                     "the repository refused this page: " + refused.getMessage());
         }
     }

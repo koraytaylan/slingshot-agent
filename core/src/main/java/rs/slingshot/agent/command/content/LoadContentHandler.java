@@ -9,7 +9,11 @@ import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
+import rs.slingshot.agent.command.OverflowPublication;
+import rs.slingshot.agent.digest.Digest;
+import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.wire.ResultDelivery;
 
 /**
  * Reads one subtree as the caller, to exactly the depth they asked for.
@@ -65,7 +69,7 @@ public final class LoadContentHandler implements CommandHandler {
         }
         try {
             return answered(LoadContentResult.of(node, command.depth(),
-                    context.discovery().limit()), command);
+                    context.discovery().limit()), command, context);
         } catch (final RepositoryException failure) {
             return whenTheRepositoryFails(failure, command.repositoryPath());
         }
@@ -92,12 +96,58 @@ public final class LoadContentHandler implements CommandHandler {
     }
 
     private static Answer answered(LoadContentResult.Outcome rendered,
-                                   LoadContentCommand command) {
+                                   LoadContentCommand command, CallerContext context) {
         if (rendered instanceof final LoadContentResult.Refused refused) {
             return new Failed(refused.category(), refused.detail());
         }
-        return new Produced(LoadContentResult.documentOf(
-                (LoadContentResult.Rendered) rendered, command.repositoryPath()));
+        final LoadContentResult.Rendered held = (LoadContentResult.Rendered) rendered;
+        if (!held.overflowed(inlineBound())) {
+            return new Produced(LoadContentResult.documentOf(held, command.repositoryPath()));
+        }
+        return overflowed(held, command.repositoryPath());
+    }
+
+    /**
+     * How large a loaded document may be before it is answered by reference.
+     *
+     * <p>The command's own bound rather than the contract's general inline bound: the client
+     * compares a document against this one exactly, so a document that fitted the larger bound
+     * would be refused by the client against the smaller one it actually declared.</p>
+     *
+     * @return the bound
+     */
+    private static long inlineBound() {
+        final rs.slingshot.agent.contract.AgentContract.Outcome loaded =
+                rs.slingshot.agent.contract.AgentContract.load();
+        if (!(loaded instanceof final rs.slingshot.agent.contract.AgentContract.Loaded held)) {
+            throw new IllegalStateException("no contract: this build cannot read its own bound");
+        }
+        return held.contract().value(
+                rs.slingshot.agent.contract.ContractLimit.MAXIMUM_AGENT_INLINE_LOADED_DOCUMENT_BYTES);
+    }
+
+    /**
+     * The answer for one document too large to carry.
+     *
+     * <p>The identifier is the document's own digest. An artifact store assigns identifiers and
+     * none is wired to this command, and an identifier the document cannot be checked against is
+     * worse than one that is exactly the thing it names.</p>
+     *
+     * @param rendered the document that did not fit
+     * @param repositoryPath the path that was asked for
+     * @return the answer
+     */
+    private static Answer overflowed(LoadContentResult.Rendered rendered, String repositoryPath) {
+        final byte[] bytes = rendered.documentBytes();
+        final String digest = Digest.of(bytes).rendered();
+        final OverflowPublication.Published published = new OverflowPublication.Published(
+                LoadContentResult.LOADED_CONTENT_SLOT,
+                new ResultDelivery.Artifact(bytes.length,
+                        ((DigestValue.Held) DigestValue.of(digest)).digest()));
+        return new Artifact(LoadContentResult.artifactOf(repositoryPath, published, digest,
+                LoadContentResult.LOADED_CONTENT_MEDIA_TYPE,
+                LoadContentResult.LOADED_CONTENT_FILE_NAME), LoadContentResult.LOADED_CONTENT_SLOT,
+                bytes);
     }
 
     @Override

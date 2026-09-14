@@ -172,7 +172,7 @@ final class SubmissionAdmissionTest {
         final long allowance = CONTRACT.value(ContractLimit.MAXIMUM_REQUEST_START_SKEW_MILLISECONDS);
         final SubmissionAdmission.Submission ahead = new SubmissionAdmission.Submission(
                 identity("operation.json"), digest("a submission"),
-                commandContract("command-contract.json"), caller(), NOW + allowance + 1);
+                commandContract("command-contract.json"), caller(), NOW + allowance + 1, "");
         assertEquals(AdmissionOutcome.Reason.UNBELIEVABLE_REQUEST_START,
                 assertInstanceOf(AdmissionOutcome.Refused.class,
                         SubmissionAdmission.admit(session, ahead, NOW, CONTRACT)).refusal());
@@ -251,7 +251,7 @@ final class SubmissionAdmissionTest {
         final StatePath.Caller other = assertInstanceOf(StatePath.Held.class,
                 StatePath.caller("another-caller")).caller();
         final var resend = new SubmissionAdmission.Submission(original.identity(),
-                original.submissionDigest(), original.commandContract(), other, NOW);
+                original.submissionDigest(), original.commandContract(), other, NOW, "");
         assertEquals("submitting_caller", assertInstanceOf(AdmissionOutcome.Conflicting.class,
                 admit(session, resend)).member());
         assertEquals(before, written(session), "a foreign resend changed the owner's record");

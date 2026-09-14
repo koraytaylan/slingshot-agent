@@ -3,6 +3,7 @@
 
 package rs.slingshot.agent.command.mutation;
 
+import java.util.Optional;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -45,10 +46,28 @@ public sealed interface MutationOutcome
     /**
      * It did not happen, and nothing changed.
      *
+     * <p>The refusal is the command's own closed document rather than a category alone. Two
+     * refusals under one category differ in what they are about — which target, which parent —
+     * and the client authenticates that against the request it made before it believes an ending.
+     * The document is optional because a command whose row declares no refusal shape of its own
+     * still fails, and saying so under its category is all it owes.</p>
+     *
      * @param category the declared failure category
      * @param detail what was refused, naming no content the caller cannot already see
+     * @param refusal the command's own refusal document, where it produces one
      */
-    record Refused(String category, String detail) implements MutationOutcome {
+    record Refused(String category, String detail, java.util.Optional<DocumentValue.Mapping> refusal)
+            implements MutationOutcome {
+
+        /**
+         * A refusal that names no document of its own.
+         *
+         * @param category the declared failure category
+         * @param detail what was refused
+         */
+        public Refused(String category, String detail) {
+            this(category, detail, java.util.Optional.empty());
+        }
     }
 
     /**

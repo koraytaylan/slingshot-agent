@@ -246,7 +246,7 @@ final class SubscriptionLedgerTest {
         final Session session = prepared();
         final SubscriptionRecord.Identifier identifier = identifier("a-new-subscription");
         assertEquals(HighWaterMark.Refusal.NO_RECORD,
-                HighWaterMark.refusalIn(HighWaterMark.advance(session, identifier, sequence(0),
+                HighWaterMark.refusalIn(HighWaterMark.advance(session, identifier, sequence(1),
                         NOW)).orElseThrow().refusal(),
                 "a mark moved under a subscription nothing holds");
         subscribe(session, "a-new-subscription", CONTRACT);

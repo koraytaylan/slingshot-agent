@@ -16,6 +16,7 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Value;
 import rs.slingshot.agent.command.ArtifactDescriptor;
 import rs.slingshot.agent.command.OverflowPublication;
+import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -60,6 +61,17 @@ public final class LoadContentResult {
     /** The member saying which of the two shapes this answer has. */
     public static final String DISPOSITION = "disposition";
 
+    /** The slot this command declares for a document too large to answer with. */
+    public static final String LOADED_CONTENT_SLOT =
+            rs.slingshot.agent.store.ArtifactSlot.LOADED_CONTENT_SLOT;
+
+    /** What kind of file that slot always holds, which the client compares exactly. */
+    public static final String LOADED_CONTENT_MEDIA_TYPE =
+            rs.slingshot.agent.store.ArtifactSlot.LOADED_CONTENT_MEDIA_TYPE;
+
+    /** The name that slot always suggests, which the client compares exactly. */
+    public static final String LOADED_CONTENT_FILE_NAME = "loaded-content.json";
+
     /** How an answer carrying its own document is spelled. */
     public static final String INLINE = "inline";
 
@@ -93,6 +105,38 @@ public final class LoadContentResult {
      * @param nodesRead how many nodes were examined, which is what the load budget counts
      */
     public record Rendered(DocumentValue.Mapping document, long nodesRead) implements Outcome {
+
+        /**
+         * Whether this document is too large to carry in the answer.
+         *
+         * <p>The bound is the command's own and the client's: a charged document that exceeds it
+         * must be answered by reference, because a document that arrives inline under the
+         * transport's larger bound would be refused against the command's smaller one. The count
+         * charged is the document's alone — not the path, the discriminator, the descriptor, or
+         * the envelope, none of which the client counts.</p>
+         *
+         * @param inlineBound the largest document this command may carry inline
+         * @return whether it must be published instead
+         */
+        public boolean overflowed(long inlineBound) {
+            return documentBytes().length > inlineBound;
+        }
+
+        /**
+         * This document as the canonical bytes a reader would be served.
+         *
+         * @return the bytes, in the one form this build writes
+         */
+        public byte[] documentBytes() {
+            final CanonicalByteWriter.Outcome written = CanonicalByteWriter.write(document);
+            if (!(written instanceof final CanonicalByteWriter.Written bytes)) {
+                // A document this build cannot write has no byte count, and an uncountable answer
+                // cannot be decided about. The walk produces only values the writer takes, so this
+                // is a defect in this file rather than anything a caller did.
+                throw new IllegalStateException("the rendered subtree has no canonical form");
+            }
+            return bytes.bytes();
+        }
     }
 
     /**
@@ -134,7 +178,7 @@ public final class LoadContentResult {
      *
      * @param repositoryPath the path that was asked for
      * @param published where the document went and what it is
-     * @param identifier the artifact's own identifier
+     * @param identifier the artifact's own identifier, which is the document's own digest
      * @param mediaType what kind of file it is
      * @param fileName the name a reader should save it under
      * @return the result document

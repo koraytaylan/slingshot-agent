@@ -43,9 +43,19 @@ public final class CapabilityDocument {
     /** The member the transport contract digest is carried in. */
     public static final String TRANSPORT_DIGEST = "transport_contract_digest";
 
-    /** Every member this document has, and there is no sixth. */
+    /** The member the document's own version is carried in. */
+    public static final String FORMAT = "format";
+
+    /**
+     * Every member this document has.
+     *
+     * <p>The format is one of them and not decoration: the client's own document is closed, so an
+     * answer without it is an answer it cannot read at all — it would refuse every capability
+     * exchange, and no command could be derived.</p>
+     */
     public static final List<String> MEMBERS =
-            List.of(GENERATION, CANONICAL_DIGEST, CONTRACTS, AUTHORITY_READY, TRANSPORT_DIGEST);
+            List.of(GENERATION, CANONICAL_DIGEST, CONTRACTS, AUTHORITY_READY, TRANSPORT_DIGEST,
+                    FORMAT);
 
     private final AdvertisedCapabilities capabilities;
     private final byte[] bytes;
@@ -137,6 +147,8 @@ public final class CapabilityDocument {
                 : DocumentValue.Truth.FALSE));
         members.put(TRANSPORT_DIGEST,
                 new DocumentValue.Text(capabilities.transportContractDigest().rendered()));
+        members.put(FORMAT,
+                new DocumentValue.Text(rs.slingshot.agent.identity.DocumentProvenance.FORMAT));
         return new DocumentValue.Mapping(members);
     }
 

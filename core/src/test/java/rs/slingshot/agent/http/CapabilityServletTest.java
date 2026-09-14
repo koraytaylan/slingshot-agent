@@ -74,6 +74,7 @@ final class CapabilityServletTest {
                         + CapabilityServlet.canonicalContractDigest().rendered() + "\""
                         + ",\"command_contracts\":[]"
                         + ",\"continuation_authority_ready\":false"
+                        + ",\"format\":\"slingshot.agent/1\""
                         + ",\"transport_contract_digest\":\"" + SIBLING_TRANSPORT_DIGEST + "\"}",
                 rendered);
     }

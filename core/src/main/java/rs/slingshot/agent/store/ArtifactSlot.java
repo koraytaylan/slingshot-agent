@@ -17,6 +17,43 @@ import java.util.Optional;
  */
 public record ArtifactSlot(String name) {
 
+    /** The slot this build publishes an oversized result into, as the client spells it. */
+    public static final String RESULT_SLOT = "result";
+
+    /** The slot a load command declares for a document too large to answer with. */
+    public static final String LOADED_CONTENT_SLOT = "loaded_content_json";
+
+    /** What kind of file that slot carries, which the client compares exactly. */
+    public static final String LOADED_CONTENT_MEDIA_TYPE = "application/json";
+
+    /** The slot a built content package occupies. */
+    public static final String CONTENT_PACKAGE_SLOT = "content_package";
+
+    /** What kind of file that slot carries, which the client compares exactly. */
+    public static final String CONTENT_PACKAGE_MEDIA_TYPE = "application/zip";
+
+    /** What kind of file a canonical JSON artifact carries, whatever slot it sits in. */
+    public static final String CANONICAL_JSON_MEDIA_TYPE = "application/json";
+
+    /**
+     * What kind of bytes one slot holds.
+     *
+     * <p>These are the client's own spellings and it compares them exactly, so a slot answered
+     * with another type is a fetch the client refuses rather than a transfer it accepts. The
+     * answer is the slot's rather than a route's, because one route serves every slot and the
+     * client's expectation is per-slot.</p>
+     *
+     * @param name the slot's own name
+     * @return the media type
+     */
+    public static String mediaType(String name) {
+        return switch (name) {
+            case LOADED_CONTENT_SLOT -> LOADED_CONTENT_MEDIA_TYPE;
+            case CONTENT_PACKAGE_SLOT -> CONTENT_PACKAGE_MEDIA_TYPE;
+            default -> CANONICAL_JSON_MEDIA_TYPE;
+        };
+    }
+
     /** Why a slot name is not one this build will write to. */
     public enum Refusal {
         /** It is empty, and a slot nothing can name is one nothing can find again. */

@@ -6,6 +6,7 @@ package rs.slingshot.agent.http;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
 import javax.jcr.RepositoryException;
@@ -17,9 +18,14 @@ import org.osgi.service.component.annotations.Component;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.execution.ExecutionOutcome;
+import rs.slingshot.agent.execution.LogicalOperation;
+import rs.slingshot.agent.execution.OperationStore;
+import rs.slingshot.agent.execution.Outbox;
 import rs.slingshot.agent.execution.TerminalCommit;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
+import rs.slingshot.agent.identity.DocumentProvenance;
 import rs.slingshot.agent.identity.EventStoreGeneration;
+import rs.slingshot.agent.identity.OperationIdentity;
 import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
 import rs.slingshot.agent.route.AgentRoute;
@@ -27,7 +33,9 @@ import rs.slingshot.agent.route.AgentRouteTable;
 import rs.slingshot.agent.store.GenerationRotation;
 import rs.slingshot.agent.store.SnapshotStore;
 import rs.slingshot.agent.store.StatePath;
+import rs.slingshot.agent.store.SubscriptionRecord;
 import rs.slingshot.agent.wire.JobEvent;
+import rs.slingshot.agent.wire.JobEventKind;
 
 /**
  * What one logical operation has become, answered from the store and from nothing else.
@@ -44,6 +52,13 @@ import rs.slingshot.agent.wire.JobEvent;
  *
  * <p>Somebody else's operation is answered exactly as an unknown one is. A caller who could tell
  * the two apart could ask this route which identifiers exist.</p>
+ *
+ * <p>The answer is the client's own snapshot document, member for member. Fifteen of its members
+ * are the record — the identity, the contracts, the subscription, the digest, the retention, the
+ * physical jobs — and the last two are what has happened, which is the newest event's kind and
+ * sequence, the attempt count, the progress, and either the retained result or the retained
+ * failure. The record is read back through the store's own reader rather than assembled here, so
+ * a member the client compares is the value the store holds.</p>
  */
 @Component(service = Servlet.class, property = {
         "sling.servlet.paths=/bin/slingshot/agent/snapshot",
@@ -69,8 +84,71 @@ public final class OperationLookupServlet extends AgentServlet {
     /** What a lookup this build cannot read at all is answered with. */
     public static final int REFUSED = 400;
 
+    /** What a lookup that found what it asked about is answered with. */
+    public static final int SERVED = 200;
+
     /** The header this side asks a caller to wait on before looking again. */
     public static final String RETRY_AFTER = "Retry-After";
+
+    /** The member the subscription cursor is carried in. */
+    public static final String SUBSCRIPTION_WATERMARK = "subscription_watermark";
+
+    /** The member the recorded provenance is carried in. */
+    public static final String PROVENANCE = "provenance";
+
+    /** The member the retained terminal result is carried in, where one was produced. */
+    public static final String TERMINAL_RESULT = "terminal_result";
+
+    /** The member the retained terminal failure is carried in, where one was produced. */
+    public static final String TERMINAL_FAILURE = "terminal_failure";
+
+    /** The member the complete physical job set is carried in. */
+    public static final String PHYSICAL_JOBS = "physical_sling_job_identifiers";
+
+    /** The member the granted retention is carried in. */
+    public static final String RETENTION = "granted_retention_milliseconds";
+
+    /** The member the physical attempt count is carried in. */
+    public static final String ATTEMPT = "attempt";
+
+    /** The member the logical progress is carried in. */
+    public static final String PROGRESS = "progress";
+
+    /** The member the target the record is against is carried in. */
+    public static final String TARGET_DIGEST = OperationStore.TARGET_DIGEST;
+
+    /** The member the selected environment revision is carried in. */
+    public static final String ENVIRONMENT_REVISION = OperationStore.ENVIRONMENT_REVISION;
+
+    /** The member the subscription the submission registered is carried in. */
+    public static final String SUBSCRIPTION = "daemon_subscription_identifier";
+
+    /** The member the submission digest is carried in. */
+    public static final String SUBMITTED_DIGEST = OperationStore.SUBMISSION_DIGEST;
+
+    /** The property the subscription a submission registered is written in. */
+    public static final String SUBSCRIPTION_PROPERTY = "subscription_identifier";
+
+    /** The member an identity document's incarnation is carried in. */
+    public static final String IDENTITY_GENERATION = OperationIdentity.GENERATION;
+
+    /** The member an identity document's operation name is carried in. */
+    public static final String IDENTITY_IDENTIFIER = OperationIdentity.IDENTIFIER;
+
+    /** What a finished operation's progress completes at, which is the client's own value. */
+    private static final long COMPLETE_PROGRESS = 100;
+
+    /** What a cursor says before anything has been shown, and the one value that is not a sequence. */
+    private static final String NOTHING_SHOWN = "0:0";
+
+    /** What a request is answered with when this build cannot read its own contract or store. */
+    private static final int NOTHING_THIS_BUILD_CAN_SERVE = 500;
+
+    /** How many milliseconds a second is, where a header is written in seconds. */
+    private static final long MILLISECONDS_IN_A_SECOND = 1000;
+
+    /** Which segment of an operation's path names the incarnation, counting from the root. */
+    private static final int GENERATION_SEGMENT = 4;
 
     private static final long serialVersionUID = 1L;
 
@@ -111,11 +189,9 @@ public final class OperationLookupServlet extends AgentServlet {
         withState(response, state -> answer(request, response, held.contract(), state));
     }
 
-    /** What a request is answered with when this build cannot read its own contract or store. */
-    private static final int NOTHING_THIS_BUILD_CAN_SERVE = 500;
-
     private void answer(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                        AgentContract contract, Session session) throws IOException, RepositoryException {
+                        AgentContract contract, Session session)
+            throws IOException, RepositoryException {
         final Optional<AgentOperationIdentifier> asked =
                 identifierIn(request.getParameter(OPERATION_QUERY_MEMBER), contract);
         if (asked.isEmpty()) {
@@ -123,8 +199,7 @@ public final class OperationLookupServlet extends AgentServlet {
             return;
         }
         final EventStoreGeneration named = generationIn(request, session);
-        final GenerationRotation.Access access =
-                GenerationRotation.accessTo(session, named);
+        final GenerationRotation.Access access = GenerationRotation.accessTo(session, named);
         if (access instanceof GenerationRotation.Retired) {
             // An incarnation nothing answers about any more is a thing a client may stop waiting
             // for, and the only answer that lets it stop is one that says so.
@@ -149,7 +224,16 @@ public final class OperationLookupServlet extends AgentServlet {
             notYet(response, contract);
             return;
         }
-        final Optional<String> rendered = rendered(session, operation, known.snapshot());
+        final OperationStore.Outcome read =
+                OperationStore.readAt(session, EventStoreGeneration.of(generationOf(operation))
+                        instanceof final EventStoreGeneration.Held held ? held.generation()
+                                : throwMissingGeneration(), operation);
+        if (!(read instanceof final OperationStore.Held held)) {
+            notYet(response, contract);
+            return;
+        }
+        final Optional<String> rendered =
+                rendered(session, operation, held.operation(), known.snapshot(), contract);
         if (rendered.isEmpty()) {
             refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
             return;
@@ -160,9 +244,6 @@ public final class OperationLookupServlet extends AgentServlet {
         response.getWriter().write(rendered.get());
     }
 
-    /** What a lookup that found what it asked about is answered with. */
-    public static final int SERVED = 200;
-
     private void notYet(SlingHttpServletResponse response, AgentContract contract)
             throws IOException {
         response.setHeader(RETRY_AFTER, String.valueOf(Math.max(1,
@@ -171,25 +252,48 @@ public final class OperationLookupServlet extends AgentServlet {
         refuse(response, NOT_YET);
     }
 
-    /** How many milliseconds a second is, where a header is written in seconds. */
-    private static final long MILLISECONDS_IN_A_SECOND = 1000;
-
     private static Optional<String> rendered(Session session, StatePath operation,
-                                             SnapshotStore.Snapshot snapshot) {
+                                             LogicalOperation record, SnapshotStore.Snapshot snapshot,
+                                             AgentContract contract) throws RepositoryException {
         final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
-        members.put(JobEvent.GENERATION, new DocumentValue.Whole(generationOf(operation)));
-        members.put(JobEvent.IDENTIFIER, new DocumentValue.Text(identifierOf(operation)));
+        members.put(SUBSCRIPTION_WATERMARK,
+                new DocumentValue.Text(watermarkOf(session, operation)));
+        members.put(PROVENANCE, provenanceOf(record));
+        members.put(TARGET_DIGEST,
+                new DocumentValue.Text(record.identity().targetDigest().rendered()));
+        members.put(ENVIRONMENT_REVISION,
+                new DocumentValue.Text(record.identity().environmentRevision()));
+        members.put(SUBSCRIPTION, new DocumentValue.Text(subscriptionOf(session, operation)));
+        members.put(SUBMITTED_DIGEST,
+                new DocumentValue.Text(record.submissionDigest().rendered()));
+        members.put(PHYSICAL_JOBS, new DocumentValue.Sequence(
+                Outbox.identifiersFor(session, record.identity()).stream()
+                        .map(DocumentValue.Text::new)
+                        .map(DocumentValue.class::cast)
+                        .toList()));
+        members.put(RETENTION, new DocumentValue.Whole(
+                contract.value(ContractLimit.MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS)));
+        members.put(ATTEMPT, new DocumentValue.Whole(record.attempts()));
+        members.put(PROGRESS, new DocumentValue.Whole(
+                snapshot.kind().finality() == JobEventKind.Finality.ENDS ? COMPLETE_PROGRESS : 0));
+        members.put(JobEvent.GENERATION,
+                new DocumentValue.Whole(record.identity().generation().number()));
+        members.put(JobEvent.IDENTIFIER,
+                new DocumentValue.Text(record.identity().identifier().rendered()));
         members.put(JobEvent.KIND, new DocumentValue.Text(snapshot.kind().spelling()));
         members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(snapshot.sequence().number()));
-        // A terminal snapshot is also the durable recovery point for its answer.  Keep the
-        // result in the same response so a lost submission response can be recovered without
-        // invoking the command again.
-        try {
-            final Optional<ExecutionOutcome.Result> answer = TerminalCommit.answerIn(session, operation);
-            answer.flatMap(OperationLookupServlet::resultDocument).ifPresent(result ->
-                    members.put("result", result));
-        } catch (RepositoryException ignored) {
-            return Optional.empty();
+        // A terminal snapshot is also the durable recovery point for its answer, so the answer
+        // travels in the same response a lost submission answer is recovered through.
+        final Optional<ExecutionOutcome.Result> answer = answerIn(session, operation);
+        if (answer.isPresent()) {
+            if (snapshot.kind() == JobEventKind.FAILED) {
+                terminalDocument(session, operation, record, answer.get(), true).ifPresent(failure ->
+                        members.put(TERMINAL_FAILURE, failure));
+            }
+            if (snapshot.kind() == JobEventKind.SUCCEEDED) {
+                terminalDocument(session, operation, record, answer.get(), false).ifPresent(result ->
+                        members.put(TERMINAL_RESULT, result));
+            }
         }
         final CanonicalByteWriter.Outcome written =
                 CanonicalByteWriter.write(new DocumentValue.Mapping(members));
@@ -198,20 +302,155 @@ public final class OperationLookupServlet extends AgentServlet {
                 : Optional.empty();
     }
 
-    private static Optional<DocumentValue> resultDocument(ExecutionOutcome.Result result) {
-        final SequencedMap<String, DocumentValue> delivery = new LinkedHashMap<>();
-        if (result instanceof ExecutionOutcome.Inline inline) {
-            delivery.put("delivery", new DocumentValue.Text("inline"));
-            delivery.put("inline_result", new DocumentValue.Text(inline.document()));
-        } else if (result instanceof ExecutionOutcome.Published published) {
-            delivery.put("artifact_byte_count", new DocumentValue.Whole(published.byteCount()));
-            delivery.put("artifact_digest", new DocumentValue.Text(published.digest().rendered()));
-            delivery.put("artifact_slot", new DocumentValue.Text(published.slot().name()));
-            delivery.put("delivery", new DocumentValue.Text("artifact"));
+    /**
+     * The client's terminal envelope for one ended operation.
+     *
+     * <p>One document with two spellings: a successful ending carries its canonical result and the
+     * artifacts it declared, and a failed one carries its canonical failure. Both echo the exact
+     * operation, subscription, provenance, and digest the record holds, because the client
+     * authenticates them against what it submitted before it will believe either.</p>
+     *
+     * @param session the state session
+     * @param operation the operation's record
+     * @param record the record as this store holds it
+     * @param result the stored answer
+     * @param failed whether this ending is a failure
+     * @return the document, or nothing where this side cannot render it
+     */
+    private static Optional<DocumentValue> terminalDocument(Session session, StatePath operation,
+                                                            LogicalOperation record,
+                                                            ExecutionOutcome.Result result,
+                                                            boolean failed)
+            throws RepositoryException {
+        final String canonical;
+        if (result instanceof final ExecutionOutcome.Inline inline) {
+            canonical = inline.document();
+        } else if (result instanceof final ExecutionOutcome.Published published
+                && published.canonicalResult().isPresent()) {
+            // An answer too large to carry inline still has a document: it is the one that names
+            // the artifact, and it is what the client validates the ending against.
+            canonical = published.canonicalResult().get();
         } else {
             return Optional.empty();
         }
-        return Optional.of(new DocumentValue.Mapping(delivery));
+        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        if (failed) {
+            members.put("canonical_failure", new DocumentValue.Text(canonical));
+        } else {
+            members.put("canonical_result", new DocumentValue.Text(canonical));
+            members.put("declared_artifacts", declaredArtifacts(result));
+        }
+        members.put(SUBSCRIPTION, new DocumentValue.Text(subscriptionOf(session, operation)));
+        members.put("operation", identityDocument(record));
+        members.put(PROVENANCE, provenanceOf(record));
+        members.put(SUBMITTED_DIGEST,
+                new DocumentValue.Text(record.submissionDigest().rendered()));
+        return Optional.of(new DocumentValue.Mapping(members));
+    }
+
+    /**
+     * The artifacts one result declares, which the client checks against the typed result.
+     *
+     * <p>Read from the command's own document rather than from the descriptor, because the two are
+     * compared: a slot, media type, byte count, or file name that disagreed would be a result this
+     * side answered under a name the command did not declare.</p>
+     *
+     * @param result the stored answer
+     * @return the echoes, which is empty where the result declares none
+     */
+    private static DocumentValue declaredArtifacts(ExecutionOutcome.Result result) {
+        if (!(result instanceof final ExecutionOutcome.Published published)
+                || published.canonicalResult().isEmpty()) {
+            return new DocumentValue.Sequence(List.of());
+        }
+        final rs.slingshot.agent.json.BoundedDocumentReader.Outcome read =
+                rs.slingshot.agent.json.BoundedDocumentReader.read(
+                        published.canonicalResult().get().getBytes(StandardCharsets.UTF_8),
+                        rs.slingshot.agent.json.BoundedDocumentReader.Bounds.from(loaded()));
+        final Optional<DocumentValue.Mapping> artifact = read
+                instanceof final rs.slingshot.agent.json.BoundedDocumentReader.Read document
+                && document.value() instanceof final DocumentValue.Mapping mapping
+                ? mapping.member("artifact").filter(DocumentValue.Mapping.class::isInstance)
+                        .map(DocumentValue.Mapping.class::cast)
+                : Optional.empty();
+        if (artifact.isEmpty()) {
+            return new DocumentValue.Sequence(List.of());
+        }
+        final DocumentValue.Mapping descriptor = artifact.get();
+        final SequencedMap<String, DocumentValue> echo = new LinkedHashMap<>();
+        echo.put("byte_length", descriptor.member(rs.slingshot.agent.command.ArtifactDescriptor
+                .BYTE_LENGTH).orElse(new DocumentValue.Whole(0)));
+        echo.put("media_type", descriptor.member(rs.slingshot.agent.command.ArtifactDescriptor
+                .MEDIA_TYPE).orElse(new DocumentValue.Text("")));
+        echo.put("slot", descriptor.member(rs.slingshot.agent.command.ArtifactDescriptor.SLOT)
+                .orElse(new DocumentValue.Text("")));
+        echo.put("suggested_name", descriptor.member(rs.slingshot.agent.command.ArtifactDescriptor
+                .SUGGESTED_FILE_NAME).orElse(new DocumentValue.Text("")));
+        return new DocumentValue.Sequence(List.of(new DocumentValue.Mapping(echo)));
+    }
+
+    private static DocumentValue identityDocument(LogicalOperation record) {
+        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        members.put(IDENTITY_GENERATION,
+                new DocumentValue.Whole(record.identity().generation().number()));
+        members.put(IDENTITY_IDENTIFIER,
+                new DocumentValue.Text(record.identity().identifier().rendered()));
+        members.put(TARGET_DIGEST,
+                new DocumentValue.Text(record.identity().targetDigest().rendered()));
+        members.put(ENVIRONMENT_REVISION,
+                new DocumentValue.Text(record.identity().environmentRevision()));
+        return new DocumentValue.Mapping(members);
+    }
+
+    private static DocumentValue.Mapping provenanceOf(LogicalOperation record) {
+        return DocumentProvenance.composed(SubmitServlet.thisBuild(), record.commandContract())
+                .document();
+    }
+
+    private static Optional<ExecutionOutcome.Result> answerIn(Session session, StatePath operation) {
+        try {
+            return TerminalCommit.answerIn(session, operation);
+        } catch (RepositoryException unreadable) {
+            return Optional.empty();
+        }
+    }
+
+    private static String subscriptionOf(Session session, StatePath operation)
+            throws RepositoryException {
+        return textProperty(session, operation, SUBSCRIPTION_PROPERTY);
+    }
+
+    /**
+     * How far the subscription this operation registered has been served.
+     *
+     * <p>A snapshot carries the position its own effects are accounted for through, and the client
+     * resumes its stream from that position. So it is the subscription's own cursor where there is
+     * one, and the one value that says nothing has been shown where there is not.</p>
+     *
+     * @param session the session to read under
+     * @param operation the operation
+     * @return the cursor, as the stream's own identifier carries it
+     * @throws RepositoryException if the repository fails
+     */
+    private static String watermarkOf(Session session, StatePath operation)
+            throws RepositoryException {
+        final SubscriptionRecord.Outcome named =
+                SubscriptionRecord.identifier(subscriptionOf(session, operation), loaded());
+        if (!(named instanceof final SubscriptionRecord.Held held)) {
+            return NOTHING_SHOWN;
+        }
+        return rs.slingshot.agent.store.HighWaterMark.read(session, held.identifier())
+                instanceof final SubscriptionRecord.Shown shown
+                ? generationOf(operation) + ":" + shown.sequence().number()
+                : NOTHING_SHOWN;
+    }
+
+    private static AgentContract loaded() {
+        final AgentContract.Outcome outcome = AgentContract.load();
+        if (outcome instanceof final AgentContract.Refused refused) {
+            throw new IllegalStateException("no contract: " + refused.detail());
+        }
+        return ((AgentContract.Loaded) outcome).contract();
     }
 
     private static long generationOf(StatePath operation) {
@@ -219,11 +458,16 @@ public final class OperationLookupServlet extends AgentServlet {
         return Long.parseLong(segments[GENERATION_SEGMENT].substring(1));
     }
 
-    /** Which segment of an operation's path names the incarnation, counting from the root. */
-    private static final int GENERATION_SEGMENT = 4;
+    private static EventStoreGeneration throwMissingGeneration() {
+        throw new IllegalStateException("an operation's own path does not name its incarnation");
+    }
 
-    private static String identifierOf(StatePath operation) {
-        return operation.path().substring(operation.path().lastIndexOf('/') + 1);
+    private static String textProperty(Session session, StatePath operation, String property)
+            throws RepositoryException {
+        return session.nodeExists(operation.path())
+                && session.getNode(operation.path()).hasProperty(property)
+                ? session.getNode(operation.path()).getProperty(property).getString()
+                : "";
     }
 
     private static EventStoreGeneration generationIn(SlingHttpServletRequest request,
@@ -257,14 +501,11 @@ public final class OperationLookupServlet extends AgentServlet {
         if (asked == null || asked.isBlank()) {
             return Optional.empty();
         }
-        final AgentOperationIdentifier.Outcome held =
-                AgentOperationIdentifier.of(asked, contract);
+        final AgentOperationIdentifier.Outcome held = AgentOperationIdentifier.of(asked, contract);
         return held instanceof final AgentOperationIdentifier.Held identifier
                 ? Optional.of(identifier.identifier())
                 : Optional.empty();
     }
-
-
 
     /**
      * The route this servlet answers, read from the committed table.

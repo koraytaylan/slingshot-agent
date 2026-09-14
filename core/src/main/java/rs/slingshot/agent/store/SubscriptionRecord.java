@@ -165,7 +165,7 @@ public record SubscriptionRecord(Identifier identifier, EventStoreGeneration gen
         if (shown <= 0) {
             return Unread.NOTHING_SHOWN_YET;
         }
-        final EventSequence.Outcome sequence = EventSequence.of(shown - 1);
+        final EventSequence.Outcome sequence = EventSequence.of(shown);
         return sequence instanceof final EventSequence.Held held
                 ? new Shown(held.sequence())
                 : Unread.NOTHING_SHOWN_YET;
@@ -174,10 +174,10 @@ public record SubscriptionRecord(Identifier identifier, EventStoreGeneration gen
     /**
      * How many events this record accounts for having shown.
      *
-     * @return the count, which is one past the newest sequence shown
+     * @return the count, which is the newest sequence shown under a one-based run
      */
     public long eventsShown() {
-        return cursor instanceof final Shown shown ? shown.sequence().number() + 1 : 0;
+        return cursor instanceof final Shown shown ? shown.sequence().number() : 0;
     }
 
     /**

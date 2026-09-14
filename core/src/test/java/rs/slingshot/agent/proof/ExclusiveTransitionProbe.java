@@ -285,7 +285,7 @@ public final class ExclusiveTransitionProbe extends SlingAllMethodsServlet imple
                         CommandContractIdentity.Bounds.from(CONTRACT))).identity();
         return new SubmissionAdmission.Submission(identity,
                 Digest.of("identical submission".getBytes(StandardCharsets.UTF_8)), command,
-                ((StatePath.Held) StatePath.caller("proof-caller")).caller(), NOW);
+                ((StatePath.Held) StatePath.caller("proof-caller")).caller(), NOW, "");
     }
 
     private static DocumentValue document(String source) {

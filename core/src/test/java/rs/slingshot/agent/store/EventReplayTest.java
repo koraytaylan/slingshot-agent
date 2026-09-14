@@ -75,8 +75,8 @@ final class EventReplayTest {
     void acursorIntoGoneEventsIsAreset() throws RepositoryException {
         final Session session = recorded();
         assertInstanceOf(ReplayOutcome.Served.class, replay(session, "before-everything"));
-        session.getNode(ledger().child(EventLedger.nameOf(sequenceOf(0))).path()).remove();
         session.getNode(ledger().child(EventLedger.nameOf(sequenceOf(1))).path()).remove();
+        session.getNode(ledger().child(EventLedger.nameOf(sequenceOf(2))).path()).remove();
         session.save();
         final ReplayOutcome.Reset reset = assertInstanceOf(ReplayOutcome.Reset.class,
                 replay(session, "before-everything"),
@@ -84,7 +84,7 @@ final class EventReplayTest {
         assertEquals(JobEventKind.SUCCEEDED, assertInstanceOf(SnapshotStore.Known.class,
                 reset.current(), "a reset carried nothing to resynchronise from").snapshot()
                 .kind());
-        assertTrue(reset.detail().contains("2"), reset.detail());
+        assertTrue(reset.detail().contains("3"), reset.detail());
         assertEquals(List.of(), assertInstanceOf(ReplayOutcome.Served.class,
                 replay(session, "past-the-newest"),
                 "a cursor past the newest event was reset rather than served nothing").events());
@@ -113,7 +113,7 @@ final class EventReplayTest {
         final Session session = recorded();
         final ReplayOutcome.Served served = assertInstanceOf(ReplayOutcome.Served.class,
                 EventReplay.current(session, operation(), CONTRACT));
-        assertEquals(3, assertInstanceOf(SnapshotStore.Known.class, served.current()).snapshot()
+        assertEquals(4, assertInstanceOf(SnapshotStore.Known.class, served.current()).snapshot()
                 .sequence().number());
         assertEquals(List.of(), served.events(),
                 "a cursorless reader was shown events its own snapshot already accounts for");
@@ -142,7 +142,7 @@ final class EventReplayTest {
     @Test
     @DisplayName("a cursor is written and read back, and three malformed ones are refused apart")
     void acursorIsWrittenAndReadBack() {
-        assertEquals("1:1", cursor("at-the-second-event").rendered());
+        assertEquals("1:2", cursor("at-the-second-event").rendered());
         assertEquals(cursor("at-the-second-event"),
                 assertInstanceOf(ReplayCursor.Held.class,
                         ReplayCursor.read(cursor("at-the-second-event").rendered())).cursor());
@@ -163,7 +163,7 @@ final class EventReplayTest {
         final AgentContract bounded = contractWith(Map.of(
                 "maximum_server_sent_event_buffer_bytes", two));
         final ReplayOutcome.Served served = assertInstanceOf(ReplayOutcome.Served.class,
-                EventReplay.from(session, operation(), cursorOf(EventStoreGeneration.FIRST, 0),
+                EventReplay.from(session, operation(), cursorOf(EventStoreGeneration.FIRST, 1),
                         generation(), bounded));
         assertEquals(2, served.events().size(),
                 "one read carried more than a stream may hold for a reader that is not reading");

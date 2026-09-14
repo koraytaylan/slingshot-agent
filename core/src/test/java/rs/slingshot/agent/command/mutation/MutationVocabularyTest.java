@@ -232,7 +232,8 @@ final class MutationVocabularyTest {
                 "the three answers a mutation can give are no longer three");
         assertEquals(List.of("result"), componentsOf(MutationOutcome.Changed.class),
                 "the answer that says something changed carries something other than what changed");
-        assertEquals(List.of("category", "detail"), componentsOf(MutationOutcome.Refused.class),
+        assertEquals(List.of("category", "detail", "refusal"),
+                componentsOf(MutationOutcome.Refused.class),
                 "a refusal carries a result, so a caller told it failed can still read one");
         assertEquals(List.of("detail"), componentsOf(MutationOutcome.Unknown.class),
                 "the unknown outcome carries a claim about whether anything changed, and its whole"

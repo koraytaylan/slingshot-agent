@@ -115,7 +115,7 @@ final class OperationLookupServletTest {
         final MockSlingHttpServletResponse answer = lookup(identifier(), "");
         assertEquals(OperationLookupServlet.SERVED, answer.getStatus());
         assertTrue(answer.getOutputAsString().contains(
-                "\"result\":{\"delivery\":\"inline\",\"inline_result\":\"{\\\"answer\\\":true}\"}"),
+                "\"terminal_result\":{\"canonical_result\":\"{\\\"answer\\\":true}\""),
                 answer.getOutputAsString());
     }
 
@@ -130,11 +130,20 @@ final class OperationLookupServletTest {
         session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_BYTE_COUNT, 7L);
         session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_DIGEST,
                 "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        session.getNode(operation().path()).setProperty(TerminalCommit.RESULT_PUBLISHED_DOCUMENT,
+                "{\"artifact\":{\"slot\":\"result\",\"media_type\":\"application/json\","
+                        + "\"byte_length\":7,\"suggested_file_name\":\"res.json\"}}");
         session.save();
 
         final MockSlingHttpServletResponse answer = lookup(identifier(), "");
         assertEquals(OperationLookupServlet.SERVED, answer.getStatus());
-        assertTrue(answer.getOutputAsString().contains("\"artifact_slot\":\"result\""),
+        assertTrue(answer.getOutputAsString().contains("\"terminal_result\""),
+                answer.getOutputAsString());
+        // The echo the client checks is built from the descriptor's own members and spelled the
+        // way the client's ArtifactEcho spells them.
+        assertTrue(answer.getOutputAsString().contains(
+                "\"declared_artifacts\":[{\"byte_length\":7,\"media_type\":\"application/json\","
+                        + "\"slot\":\"result\",\"suggested_name\":\"res.json\"}]"),
                 answer.getOutputAsString());
     }
 
@@ -269,19 +278,42 @@ final class OperationLookupServletTest {
     private String snapshotDocument(Session session) throws RepositoryException {
         final SnapshotStore.Snapshot snapshot = assertInstanceOf(SnapshotStore.Known.class,
                 SnapshotStore.read(session, operation()), "the store holds no snapshot").snapshot();
+        final OperationStore.Held held = assertInstanceOf(OperationStore.Held.class,
+                OperationStore.read(session, identity()), "the record is not held");
+        final LogicalOperation record = held.operation();
+
         final java.util.SequencedMap<String, DocumentValue> members =
                 new java.util.LinkedHashMap<>();
-        members.put(JobEvent.GENERATION, new DocumentValue.Whole(EventStoreGeneration.FIRST));
+        members.put(OperationLookupServlet.SUBSCRIPTION_WATERMARK,
+                new DocumentValue.Text("0:0"));
+        members.put(OperationLookupServlet.PROVENANCE,
+                rs.slingshot.agent.identity.DocumentProvenance.composed(
+                        rs.slingshot.agent.http.SubmitServlet.thisBuild(), record.commandContract()).document());
+        members.put(OperationLookupServlet.TARGET_DIGEST,
+                new DocumentValue.Text(record.identity().targetDigest().rendered()));
+        members.put(OperationLookupServlet.ENVIRONMENT_REVISION,
+                new DocumentValue.Text(record.identity().environmentRevision()));
+        members.put(OperationLookupServlet.SUBSCRIPTION, new DocumentValue.Text(""));
+        members.put(OperationLookupServlet.SUBMITTED_DIGEST,
+                new DocumentValue.Text(record.submissionDigest().rendered()));
+        members.put(OperationLookupServlet.PHYSICAL_JOBS, new DocumentValue.Sequence(java.util.List.of()));
+        members.put(OperationLookupServlet.RETENTION, new DocumentValue.Whole(
+                CONTRACT.value(ContractLimit.MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS)));
+        members.put(OperationLookupServlet.ATTEMPT, new DocumentValue.Whole(record.attempts()));
+        members.put(OperationLookupServlet.PROGRESS, new DocumentValue.Whole(
+                snapshot.kind().finality() == JobEventKind.Finality.ENDS ? 100 : 0));
+        members.put(JobEvent.GENERATION, new DocumentValue.Whole(record.identity().generation().number()));
         members.put(JobEvent.IDENTIFIER, new DocumentValue.Text(identifier()));
         members.put(JobEvent.KIND, new DocumentValue.Text(snapshot.kind().spelling()));
         members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(snapshot.sequence().number()));
+
         return assertInstanceOf(CanonicalByteWriter.Written.class,
                 CanonicalByteWriter.write(new DocumentValue.Mapping(members)),
                 "the snapshot has no canonical form").rendered();
     }
 
     private void appended(Session session, JobEventKind kind) throws RepositoryException {
-        final long sequence = EventLedger.events(session, operation().child(EventLedger.NODE));
+        final long sequence = EventLedger.events(session, operation().child(EventLedger.NODE)) + 1;
         final java.util.SequencedMap<String, DocumentValue> members =
                 new java.util.LinkedHashMap<>();
         members.put(JobEvent.GENERATION, new DocumentValue.Whole(EventStoreGeneration.FIRST));

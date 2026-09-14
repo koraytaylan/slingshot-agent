@@ -91,11 +91,11 @@ final class SnapshotStoreTest {
         assertInstanceOf(EventLedger.Appended.class, record(watched, IN_ORDER.get(1)));
         assertFalse(seen.isEmpty(), "the append committed nothing, so nothing was watched");
         for (final String pair : seen) {
-            assertTrue(List.of("accepted/0/1", "started/1/2").contains(pair),
+            assertTrue(List.of("accepted/1/1", "started/2/2").contains(pair),
                     "a commit was made with a pair that is neither the one before the append nor"
                             + " the one after it: " + pair);
         }
-        assertEquals("started/1/2", pairSeenBy(session),
+        assertEquals("started/2/2", pairSeenBy(session),
                 "the pair after the append is not the one the append should have left");
     }
 
@@ -205,9 +205,9 @@ final class SnapshotStoreTest {
                 "a reader was shown an event the snapshot it was given already accounts for");
         final SnapshotStore.Reading resumed =
                 SnapshotStore.since(session, operation(), sequence(1));
-        assertEquals(List.of(canonicalOf("progress.json"), canonicalOf("succeeded.json")),
+        assertEquals(List.of(canonicalOf("started.json"), canonicalOf("progress.json"), canonicalOf("succeeded.json")),
                 resumed.after(), "a resumed reader was served the wrong events");
-        assertTrue(resumed.after().stream().noneMatch(document -> document.contains("\"sequence\":1")
+        assertTrue(resumed.after().stream().noneMatch(document -> document.contains("\"sequence\":0")
                         || document.contains("\"sequence\":0")),
                 "a resumed reader was shown something at or below its own cursor");
         assertEquals(List.of(), SnapshotStore.current(session, empty()).after(),

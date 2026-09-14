@@ -49,7 +49,7 @@ public final class SnapshotStore {
     public static final String UPDATED_AT = "updated_at_unix_milliseconds";
 
     /** What a cursor is before a reader has been shown anything, which no sequence may be. */
-    private static final long BEFORE_THE_FIRST = -1;
+    private static final long BEFORE_THE_FIRST = EventSequence.FIRST - 1;
 
     /** The fixed-width numeric fields retained by a materialised snapshot. */
     private static final long NUMERIC_FIELDS = 3;
@@ -276,7 +276,8 @@ public final class SnapshotStore {
                 : session.getNode(operation.path()).addNode(NODE, "nt:unstructured");
         snapshot.setProperty(KIND, event.kind().spelling());
         snapshot.setProperty(SEQUENCE, event.sequence().number());
-        snapshot.setProperty(EVENTS, event.sequence().number() + 1);
+        // The first sequence is one, so the count of events folded is the newest sequence itself.
+        snapshot.setProperty(EVENTS, event.sequence().number());
         snapshot.setProperty(UPDATED_AT, nowUnixMilliseconds);
     }
 
@@ -325,7 +326,7 @@ public final class SnapshotStore {
         final Materialised snapshot = read(session, operation);
         final long from = snapshot instanceof final Known known
                 ? known.snapshot().sequence().number()
-                : BEFORE_THE_FIRST;
+                : EventSequence.FIRST - 1;
         return new Reading(snapshot, after(session, operation, from));
     }
 
@@ -348,10 +349,10 @@ public final class SnapshotStore {
             throws RepositoryException {
         final List<String> after = new ArrayList<>();
         final List<String> held = EventLedger.held(session, operation.child(EventLedger.NODE));
-        long sequence = 0;
-        while (sequence < held.size()) {
+        long sequence = 1;
+        while (sequence <= held.size()) {
             if (sequence > from) {
-                after.add(held.get((int) sequence));
+                after.add(held.get((int) sequence - 1));
             }
             sequence = sequence + 1;
         }

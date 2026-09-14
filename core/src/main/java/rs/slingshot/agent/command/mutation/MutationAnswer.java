@@ -63,7 +63,7 @@ public final class MutationAnswer {
             case MutationOutcome.Changed changed ->
                     new CommandHandler.Produced(changed.result());
             case MutationOutcome.Refused held ->
-                    new CommandHandler.Failed(held.category(), held.detail());
+                    new CommandHandler.Failed(held.category(), held.detail(), held.refusal());
             case MutationOutcome.Unknown held ->
                     new CommandHandler.Failed(outcomeUnknown, held.detail());
         };

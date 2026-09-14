@@ -66,11 +66,11 @@ final class JobEventTest {
     }
 
     @Test
-    @DisplayName("a sequence starts at zero, and a repeat and a decrease are two refusals")
+    @DisplayName("a sequence starts at one, and a repeat and a decrease are two refusals")
     void thesequenceOnlyEverMovesForward() {
-        assertEquals(0, held("sequence-zero.json").sequence().number());
-        final EventSequence first = held("sequence-zero.json").sequence();
-        final EventSequence second = held("sequence-one.json").sequence();
+        final EventSequence first = held("sequence-one.json").sequence();
+        assertEquals(1, first.number());
+        final EventSequence second = held("sequence-two.json").sequence();
         assertInstanceOf(EventSequence.Held.class, second.after(first),
                 "the next sequence was refused");
         assertEquals(EventSequence.Refusal.REPEATED,
@@ -78,10 +78,11 @@ final class JobEventTest {
         final EventSequence.Refused backwards =
                 assertInstanceOf(EventSequence.Refused.class, first.after(second));
         assertEquals(EventSequence.Refusal.WENT_BACKWARDS, backwards.refusal());
-        assertTrue(backwards.detail().contains("0") && backwards.detail().contains("1"),
+        assertTrue(backwards.detail().contains("1") && backwards.detail().contains("2"),
                 backwards.detail());
-        assertEquals(JobEvent.Refusal.OUT_OF_RANGE, refusal("sequence-below-zero.json").refusal());
+        assertEquals(JobEvent.Refusal.OUT_OF_RANGE, refusal("sequence-below-first.json").refusal());
     }
+
 
     @Test
     @DisplayName("an event naming another incarnation of the store is refused naming both")
