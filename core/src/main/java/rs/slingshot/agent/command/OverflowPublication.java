@@ -167,6 +167,16 @@ public final class OverflowPublication {
      * @param overflowed the count and digest assembly measured
      * @return the reference, or the category and detail of the failure
      */
+    /**
+     * What one publication outcome means for the caller.
+     *
+     * <p>Kept apart from the writing so that what a caller is told can be proved without a
+     * repository, which is the same reason every other decision in this package is.</p>
+     *
+     * @param outcome what the store did
+     * @param overflowed the count and digest assembly measured
+     * @return the reference, or the category and detail of the failure
+     */
     public static Outcome answerFor(ArtifactStore.Outcome outcome,
                                     ResultAssembly.Overflowed overflowed) {
         return switch (outcome) {

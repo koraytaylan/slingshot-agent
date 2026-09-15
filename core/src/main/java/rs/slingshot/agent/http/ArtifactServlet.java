@@ -254,6 +254,12 @@ public final class ArtifactServlet extends AgentServlet {
         // against the type the slot is declared to carry, and a route-wide type would be one the
         // client refuses for every slot that is not that type.
         response.setContentType(mediaTypeOf(record.slot()));
+        // The body's exact length, declared before the first byte moves. A reader accepts a fixed
+        // length or a chunked encoding and refuses a body that is neither, because a boundary it
+        // has to infer from the connection closing is one it cannot prove ended where the sender
+        // meant it to. The recorded count is what the store vouches for and what the transfer
+        // below moves, so declaring it is the same number, said where the reader can check it.
+        response.setContentLengthLong(record.byteCount());
         response.setHeader(BYTE_COUNT_HEADER, String.valueOf(record.byteCount()));
         response.setHeader(DIGEST_HEADER, headerSafe(record.digest().rendered()));
         try (InputStream reading = bytes.get(); OutputStream writing = response.getOutputStream()) {

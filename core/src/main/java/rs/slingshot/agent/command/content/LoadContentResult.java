@@ -4,6 +4,8 @@
 package rs.slingshot.agent.command.content;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
@@ -43,8 +45,11 @@ public final class LoadContentResult {
     /** The member a node's own properties are carried in. */
     public static final String PROPERTIES = "properties";
 
-    /** The member a node's children are carried in, keyed by their own names. */
+    /** The member a node's children are carried in as a sequence. */
     public static final String CHILDREN = "children";
+
+    /** The member saying whether readable children exist beyond the requested depth. */
+    public static final String CHILDREN_TRUNCATED = "children_truncated";
 
     /** The member one property's value is carried in. */
     public static final String VALUE = "value";
@@ -53,7 +58,16 @@ public final class LoadContentResult {
     public static final String VALUES = "values";
 
     /** The member saying what a property's type is, so a caller writing it back knows. */
-    public static final String TYPE = "type";
+    public static final String PROPERTY_TYPE = "property_type";
+
+    /** The member saying the property's cardinality. */
+    public static final String CARDINALITY = "cardinality";
+
+    /** The wire spelling for a single-valued property. */
+    public static final String SINGLE = "single";
+
+    /** The wire spelling for a multiple-valued property. */
+    public static final String MULTIPLE = "multiple";
 
     /** The member the addressed path is echoed in, so an answer says what it is about. */
     public static final String PATH = "path";
@@ -104,7 +118,7 @@ public final class LoadContentResult {
      * @param document the rendered subtree
      * @param nodesRead how many nodes were examined, which is what the load budget counts
      */
-    public record Rendered(DocumentValue.Mapping document, long nodesRead) implements Outcome {
+    public record Rendered(DocumentValue document, long nodesRead) implements Outcome {
 
         /**
          * Whether this document is too large to carry in the answer.
@@ -206,9 +220,47 @@ public final class LoadContentResult {
      */
     public static Outcome of(Node node, long depth, long nodeBudget) throws RepositoryException {
         final Walk walk = new Walk(nodeBudget);
-        final Outcome rendered = walk.node(node, depth);
+        final Outcome rendered = walk.node(node, 0, depth);
         return rendered instanceof final Rendered held
                 ? new Rendered(held.document(), walk.read.get()) : rendered;
+    }
+
+    /**
+     * The order the client's own reader requires children in.
+     *
+     * <p>Ascending by the child's own name, where a same-name sibling's name carries its {@code
+     * [n]} index — so {@code name} sorts before {@code name[2]}, and the order is the client's own
+     * rather than the order the repository happened to hand the nodes over in. The client compares
+     * this order and refuses a document whose children are not strictly ascending, so a subtree
+     * rendered in the wrong order is a subtree it cannot read.</p>
+     */
+    private enum LocalNameOrder implements java.util.Comparator<Node> {
+        /** Ascending by local name, index last. */
+        ASCENDING;
+
+        @Override
+        public int compare(Node first, Node second) {
+            return keyOf(first).compareTo(keyOf(second));
+        }
+
+        /**
+         * One node's ordering key: its local name, then its same-name index.
+         *
+         * @param node the node
+         * @return the key
+         */
+        private static String keyOf(Node node) {
+            try {
+                final int index = node.getIndex();
+                return index <= 1
+                        ? node.getName()
+                        : node.getName() + "[" + index + "]";
+            } catch (final RepositoryException unreadable) {
+                // A node whose own name cannot be read has no place in an ordered answer, and the
+                // walk that reaches one is already failing on the same repository.
+                throw new IllegalStateException(unreadable);
+            }
+        }
     }
 
     /**
@@ -228,7 +280,7 @@ public final class LoadContentResult {
             this.nodeBudget = nodeBudget;
         }
 
-        Outcome node(Node node, long depth) throws RepositoryException {
+        Outcome node(Node node, long currentDepth, long maxDepth) throws RepositoryException {
             if (read.incrementAndGet() > nodeBudget) {
                 return new Refused(BUDGET_EXCEEDED, "this load examined more than the "
                         + nodeBudget + " nodes it is allowed, and stopped rather than going on");
@@ -238,8 +290,13 @@ public final class LoadContentResult {
             if (properties instanceof Refused) {
                 return properties;
             }
-            return depth == 0 ? new Rendered(new DocumentValue.Mapping(rendered), read.get())
-                    : children(node, depth, rendered);
+            rendered.put(PATH, new DocumentValue.Text(node.getPath()));
+            if (currentDepth == maxDepth) {
+                rendered.put(CHILDREN, new DocumentValue.Sequence(List.of()));
+                rendered.put(CHILDREN_TRUNCATED, new DocumentValue.Flag(node.hasNodes() ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
+                return new Rendered(new DocumentValue.Mapping(rendered), read.get());
+            }
+            return children(node, currentDepth, maxDepth, rendered);
         }
 
         private Outcome properties(Node node, SequencedMap<String, DocumentValue> into)
@@ -269,35 +326,68 @@ public final class LoadContentResult {
                         + " than rendered as text nobody could write back");
             }
             final SequencedMap<String, DocumentValue> one = new LinkedHashMap<>();
-            one.put(TYPE, new DocumentValue.Text(kind.get().spelling()));
+            one.put(CARDINALITY, new DocumentValue.Text(property.isMultiple() ? MULTIPLE : SINGLE));
+            one.put(PROPERTY_TYPE, new DocumentValue.Text(kind.get().spelling()));
             if (property.isMultiple()) {
                 final List<DocumentValue> values = new ArrayList<>();
                 for (final Value value : property.getValues()) {
-                    values.add(RepositoryValueKind.documentValueOf(kind.get(), value.getString()));
+                    long len = 0;
+                    if (kind.get() == RepositoryValueKind.BINARY) {
+                        try {
+                            len = countBytes(value.getBinary());
+                        } catch (java.io.IOException e) {
+                            throw new RepositoryException(e);
+                        }
+                    }
+                    values.add(RepositoryValueKind.documentValueOf(kind.get(), value, len));
                 }
                 one.put(VALUES, new DocumentValue.Sequence(List.copyOf(values)));
             } else {
                 one.put(VALUE,
-                        RepositoryValueKind.documentValueOf(kind.get(), property.getValue().getString()));
+                        RepositoryValueKind.documentValueOf(kind.get(), property.getValue(), property.getLength()));
             }
             into.put(property.getName(), new DocumentValue.Mapping(one));
             return new Rendered(new DocumentValue.Mapping(into), read.get());
         }
 
-        private Outcome children(Node node, long depth,
-                                 SequencedMap<String, DocumentValue> into)
+        private static long countBytes(javax.jcr.Binary binary) throws java.io.IOException, RepositoryException {
+            try (java.io.InputStream is = binary.getStream()) {
+                long count = 0;
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = is.read(buffer)) != -1) {
+                    count += read;
+                }
+                return count;
+            }
+        }
+
+        private Outcome children(Node node, long currentDepth, long maxDepth,
+                                     SequencedMap<String, DocumentValue> into)
                 throws RepositoryException {
-            final SequencedMap<String, DocumentValue> children = new LinkedHashMap<>();
+            final List<Node> childNodes = new ArrayList<>();
             final NodeIterator held = node.getNodes();
             while (held.hasNext()) {
-                final Node child = held.nextNode();
-                final Outcome one = node(child, depth - 1);
-                if (one instanceof Refused) {
-                    return one;
-                }
-                children.put(child.getName(), ((Rendered) one).document());
+                childNodes.add(held.nextNode());
             }
-            into.put(CHILDREN, new DocumentValue.Mapping(children));
+            childNodes.sort(LocalNameOrder.ASCENDING);
+            final List<DocumentValue> renderedChildren = new ArrayList<>();
+            for (final Node child : childNodes) {
+                try {
+                    final Outcome one = node(child, currentDepth + 1, maxDepth);
+                    if (one instanceof Refused) {
+                        return one;
+                    }
+                    renderedChildren.add(((Rendered) one).document());
+                } catch (RepositoryException e) {
+                    throw e;
+                }
+            }
+            into.put(CHILDREN, new DocumentValue.Sequence(renderedChildren));
+            // The walk reached this node's children, so nothing was left out and the answer says
+            // so. The flag is the client's own: at a depth below the maximum it must be false,
+            // because a walk that included the children has truncated nothing.
+            into.put(CHILDREN_TRUNCATED, new DocumentValue.Flag(DocumentValue.Truth.FALSE));
             return new Rendered(new DocumentValue.Mapping(into), read.get());
         }
     }

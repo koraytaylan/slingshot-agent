@@ -9,6 +9,7 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import org.apache.sling.api.SlingHttpServletRequest;
 import rs.slingshot.agent.execution.OperationStore;
+import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.store.StatePath;
 import rs.slingshot.agent.store.SubscriptionRecord;
 
@@ -70,19 +71,55 @@ public final class StateAuthority {
     }
 
     /**
-     * Authorizes a subscription only when its binding agrees with the durable operation owner.
+     * One subscription's request shape: whether it names an operation as well as its subscription.
+     *
+     * <p>A subscription belongs to the following daemon, not to one operation — the same daemon
+     * subscribes once and submits many operations under that one name. So a route that reads the
+     * subscription whole, like the high-water position, asks about the subscription alone, while a
+     * route that follows one operation names both. Which of the two it is decides what has to be
+     * authorized, so it is a type rather than a possibly-absent parameter.</p>
+     */
+    public sealed interface Scope permits Scope.TheSubscriptionAlone, Scope.OneOperationOfIt {
+
+        /** The shape that names only the subscription. */
+        record TheSubscriptionAlone() implements Scope {
+        }
+
+        /**
+         * The shape that names one operation under the subscription.
+         *
+         * @param operation the operation being followed
+         */
+        record OneOperationOfIt(AgentOperationIdentifier operation) implements Scope {
+        }
+    }
+
+    /**
+     * Authorizes a subscription against what its scope names.
+     *
+     * <p>The subscriber is always checked: a caller may only follow its own subscription. An
+     * operation under it is checked too, when the route named one, which is what keeps a caller
+     * from following somebody else's work by guessing a subscription name it is not even allowed
+     * to know.</p>
      *
      * @param store the internal state session
      * @param subscription the complete subscription record
      * @param viewer the original caller and membership source
+     * @param scope what the request named
      * @param route the route whose requirement applies
-     * @return whether the binding is valid and the caller owns or may operate the work
+     * @return whether the scope is authorized for this caller
      * @throws RepositoryException if state cannot be read
      */
     public static boolean subscription(Session store, SubscriptionRecord subscription, Viewer viewer,
-                                        String route) throws RepositoryException {
+                                        Scope scope, String route) throws RepositoryException {
+        if (!viewer.caller().equals(subscription.binding().caller())) {
+            return false;
+        }
+        if (scope instanceof Scope.TheSubscriptionAlone) {
+            return true;
+        }
         final StatePath path = StatePath.operation(subscription.generation(),
-                subscription.binding().operation());
+                ((Scope.OneOperationOfIt) scope).operation());
         return owner(store, path).filter(subscription.binding().caller()::equals).isPresent()
                 && operation(store, path, viewer, route);
     }

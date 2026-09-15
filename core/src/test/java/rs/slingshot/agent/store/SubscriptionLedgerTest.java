@@ -102,14 +102,11 @@ final class SubscriptionLedgerTest {
         final Session session = prepared();
         final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 subscribe(session, "a-new-subscription", CONTRACT)).record();
-        final var other = assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
-                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
-                        "d".repeat(64), CONTRACT)).identifier();
-        for (final var binding : List.of(new SubscriptionRecord.Binding(caller("another-caller"),
-                boundOperation()), new SubscriptionRecord.Binding(caller(), other))) {
+        final StatePath.Caller other = caller("another-caller");
+        for (final var bindingCaller : List.of(other)) {
             final var refused = assertInstanceOf(SubscriptionLedger.Refused.class,
-                    SubscriptionLedger.subscribe(session, binding.caller(), record.identifier().rendered(),
-                            generation(), binding.operation(), NOW, CONTRACT));
+                    SubscriptionLedger.subscribe(session, bindingCaller, record.identifier().rendered(),
+                            generation(), boundOperation(), NOW, CONTRACT));
             assertEquals(SubscriptionLedger.Refusal.BINDING_DIFFERS, refused.refusal());
         }
         assertEquals(record, SubscriptionLedger.read(session, record.identifier(), CONTRACT).orElseThrow());
@@ -142,19 +139,15 @@ final class SubscriptionLedgerTest {
         final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 subscribe(session, "a-new-subscription", CONTRACT)).record();
         final Node node = session.getNode(SubscriptionRecord.pathOf(record.identifier()).path());
-        node.getProperty(SubscriptionLedger.OPERATION).remove();
+        // A record naming no subscriber is the legacy shape this refuses: the caller is the whole
+        // binding, because a subscription belongs to the daemon that opened it rather than to one
+        // of the operations that daemon submits.
+        node.setProperty(SubscriptionLedger.SUBSCRIBER, "");
         session.save();
         assertTrue(SubscriptionLedger.read(session, record.identifier(), CONTRACT).isEmpty());
         assertEquals(SubscriptionLedger.Refusal.BINDING_DIFFERS,
                 assertInstanceOf(SubscriptionLedger.Refused.class,
                         subscribe(session, "a-new-subscription", CONTRACT)).refusal());
-        node.setProperty(SubscriptionLedger.OPERATION, "invalid");
-        session.save();
-        assertTrue(SubscriptionLedger.read(session, record.identifier(), CONTRACT).isEmpty());
-        node.setProperty(SubscriptionLedger.OPERATION, boundOperation().rendered());
-        node.setProperty(SubscriptionLedger.SUBSCRIBER, "");
-        session.save();
-        assertTrue(SubscriptionLedger.read(session, record.identifier(), CONTRACT).isEmpty());
         node.setProperty(SubscriptionLedger.SUBSCRIBER, caller().name());
         node.setProperty(SubscriptionRecord.GENERATION, 0);
         session.save();
@@ -440,7 +433,7 @@ final class SubscriptionLedgerTest {
 
     private static SubscriptionRecord record(String fixture) {
         return new SubscriptionRecord(identifier(fixture), generation(),
-                new SubscriptionRecord.Binding(caller(), boundOperation()),
+                new SubscriptionRecord.Binding(caller()),
                 SubscriptionRecord.Unread.NOTHING_SHOWN_YET, NOW);
     }
 

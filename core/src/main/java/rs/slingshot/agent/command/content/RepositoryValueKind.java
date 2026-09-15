@@ -3,8 +3,12 @@
 
 package rs.slingshot.agent.command.content;
 
+import java.util.LinkedHashMap;
 import java.util.Optional;
+import java.util.SequencedMap;
 import javax.jcr.PropertyType;
+import javax.jcr.RepositoryException;
+import javax.jcr.Value;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -23,7 +27,9 @@ import rs.slingshot.agent.json.DocumentValue;
 public enum RepositoryValueKind {
     /** Text, which is carried as text. */
     STRING(PropertyType.STRING, "string"),
-    /** A whole number, which is carried as a whole number. */
+    /** A binary, carried as metadata alone. */
+    BINARY(PropertyType.BINARY, "binary"),
+    /** A whole number, which is carried as text. */
     LONG(PropertyType.LONG, "long"),
     /** A truth, which is carried as a truth rather than as the word for one. */
     BOOLEAN(PropertyType.BOOLEAN, "boolean"),
@@ -100,35 +106,72 @@ public enum RepositoryValueKind {
     }
 
     /**
-     * The document value one supported type and its written form become.
+     * The document value one supported type and its repository value become.
      *
-     * <p>A whole number and a truth are carried as themselves; everything else is carried as text,
-     * in the repository's own written form, because text is the only representation this protocol
-     * has that survives a round trip without a lossy conversion in the middle. What each one is
-     * travels beside it, so a caller writing a value back knows what to write.</p>
+     * <p>Every type but a truth is carried as text, in the one spelling the client's own reader
+     * accepts for it. That is not a formatting choice: the reader validates each spelling against
+     * the type it was told to expect, so a value written another way is not a value it can read.
+     * A long must be its minimal decimal spelling, because the client compares digits rather than
+     * parsing a number that could have been rounded; a double must be the sixteen lowercase
+     * hexadecimal digits of its binary64 bits, because a decimal rendering could not carry a
+     * non-finite value and could not round-trip; and a binary carries its length and never its
+     * bytes, because a length is what the client's own reader asks for and reading a stream to
+     * answer a question about its size would read content the caller did not ask to see.</p>
      *
      * @param kind the type
-     * @param written the value as the repository writes it
+     * @param value the repository value
+     * @param length the length of the value, which a binary carries instead of its bytes
      * @return the document value
+     * @throws RepositoryException if the repository fails
      */
-    public static DocumentValue documentValueOf(RepositoryValueKind kind, String written) {
-        return switch (kind) {
-            case LONG -> wholeOr(written);
-            case BOOLEAN -> new DocumentValue.Flag(Boolean.parseBoolean(written)
-                    ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE);
-            case STRING, DECIMAL, DOUBLE, DATE, NAME, PATH, REFERENCE, WEAKREFERENCE, URI ->
-                    new DocumentValue.Text(written);
-        };
+    public static DocumentValue documentValueOf(RepositoryValueKind kind, Value value, long length)
+            throws RepositoryException {
+        try {
+            return switch (kind) {
+                case LONG -> new DocumentValue.Text(minimalDecimalOf(value.getLong()));
+                case BOOLEAN -> new DocumentValue.Flag(value.getBoolean()
+                        ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE);
+                case DOUBLE -> new DocumentValue.Text(binary64BitsOf(value.getDouble()));
+                case BINARY -> {
+                    final SequencedMap<String, DocumentValue> metadata = new LinkedHashMap<>();
+                    metadata.put(BYTE_LENGTH, new DocumentValue.Text(String.valueOf(length)));
+                    yield new DocumentValue.Mapping(metadata);
+                }
+                case STRING, DECIMAL, DATE, NAME, PATH, REFERENCE, WEAKREFERENCE, URI ->
+                        new DocumentValue.Text(value.getString());
+            };
+        } catch (final javax.jcr.ValueFormatException failure) {
+            throw new RepositoryException(failure);
+        }
     }
 
-    private static DocumentValue wholeOr(String written) {
-        try {
-            return new DocumentValue.Whole(Long.parseLong(written));
-        } catch (final NumberFormatException notWhole) {
-            // A repository that answered a long property with something that is not one is a
-            // repository disagreeing with itself. Carrying the text is the honest answer: it says
-            // what was actually there rather than a number nobody stored.
-            return new DocumentValue.Text(written);
-        }
+    /** The member a binary value's length is carried in. */
+    public static final String BYTE_LENGTH = "byte_length";
+
+    /** How many hexadecimal digits one binary64 value is written with. */
+    private static final int BINARY64_DIGITS = 16;
+
+    /**
+     * One whole number in the minimal decimal spelling the client's reader compares.
+     *
+     * @param whole the number
+     * @return its minimal decimal spelling
+     */
+    private static String minimalDecimalOf(long whole) {
+        return Long.toString(whole);
+    }
+
+    /**
+     * One floating-point number as the bits it is, which is the only spelling that survives.
+     *
+     * <p>Sixteen lowercase hexadecimal digits of the binary64 value, which is what the client's
+     * reader requires and what no decimal rendering could promise: a non-finite value has no
+     * decimal spelling at all, and a decimal one would be read back as a different bit pattern.</p>
+     *
+     * @param value the floating-point number
+     * @return its binary64 bits, in lowercase hexadecimal
+     */
+    private static String binary64BitsOf(double value) {
+        return String.format("%0" + BINARY64_DIGITS + "x", Double.doubleToRawLongBits(value));
     }
 }

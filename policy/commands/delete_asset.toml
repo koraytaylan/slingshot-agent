@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["asset_access_denied", "asset_invalid", "asset_is_referenced", "asset_not_found", "deletion_budget_exceeded", "mutation_outcome_unknown", "repository_commit_failed"]
-argument_schema_digest = "af28b7c29a4cb63d0972b5fcc12661d882cf67d70f59a96b83e582625eaa0843"
-result_schema_digest = "c83ee28a77fbe5667163949eeb74e0c6c39d422d2c6cc2841f64f0857942fe63"
+argument_schema_digest = "6cf43cf657acc219531325e60900d66370d1a313a9f0632ee21c7c2e14e1aa34"
+result_schema_digest = "14b2c3dea377d1d49c3bde963c74c5e178da773df618e936b86b1ee377a27323"
 contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
 staging_bytes = 0
 execution = "immediate"

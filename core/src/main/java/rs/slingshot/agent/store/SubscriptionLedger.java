@@ -133,7 +133,7 @@ public final class SubscriptionLedger {
                     + " nothing");
         }
         final SubscriptionRecord record = new SubscriptionRecord(identifier, generation,
-                new SubscriptionRecord.Binding(caller, operation),
+                new SubscriptionRecord.Binding(caller),
                 SubscriptionRecord.Unread.NOTHING_SHOWN_YET, nowUnixMilliseconds);
         return againstWhatIsHeld(session, record, contract);
     }
@@ -154,7 +154,7 @@ public final class SubscriptionLedger {
         if (current.isEmpty() || !current.get().binding().equals(asked.binding())
                 || !current.get().generation().equals(asked.generation())) {
             return new Refused(Refusal.BINDING_DIFFERS,
-                    "the subscription name is not bound to this caller, operation, and generation");
+                    "the subscription name is not bound to this caller and generation");
         }
         final SubscriptionRecord held = current.get();
         return expired(held, asked.lastAdvancedAtUnixMilliseconds(), contract)
@@ -202,7 +202,6 @@ public final class SubscriptionLedger {
         node.setProperty(SubscriptionRecord.LAST_ADVANCED_AT,
                 record.lastAdvancedAtUnixMilliseconds());
         node.setProperty(SUBSCRIBER, caller.name());
-        node.setProperty(OPERATION, record.binding().operation().rendered());
         node.setProperty(BYTE_COUNT, record.bytes());
         CapacityReservation.retain(node.getSession(), reservation, node);
     }
@@ -267,7 +266,7 @@ public final class SubscriptionLedger {
 
     private static Optional<SubscriptionRecord> readBack(Node held, SubscriptionRecord.Identifier identifier,
                                                           AgentContract contract) throws RepositoryException {
-        if (!held.hasProperty(SUBSCRIBER) || !held.hasProperty(OPERATION)
+        if (!held.hasProperty(SUBSCRIBER)
                 || !held.hasProperty(SubscriptionRecord.GENERATION)
                 || !held.hasProperty(SubscriptionRecord.LAST_ADVANCED_AT)) {
             return Optional.empty();
@@ -278,17 +277,14 @@ public final class SubscriptionLedger {
     private static Optional<SubscriptionRecord> decoded(Node held, SubscriptionRecord.Identifier identifier,
                                                          AgentContract contract) throws RepositoryException {
         final StatePath.Outcome caller = StatePath.caller(held.getProperty(SUBSCRIBER).getString());
-        final AgentOperationIdentifier.Outcome operation = AgentOperationIdentifier.of(
-                held.getProperty(OPERATION).getString(), contract);
         final EventStoreGeneration.Outcome generation = EventStoreGeneration.of(
                 held.getProperty(SubscriptionRecord.GENERATION).getLong());
         if (!(caller instanceof final StatePath.Held owner)
-                || !(operation instanceof final AgentOperationIdentifier.Held named)
                 || !(generation instanceof final EventStoreGeneration.Held stored)) {
             return Optional.empty();
         }
         return Optional.of(new SubscriptionRecord(identifier, stored.generation(),
-                new SubscriptionRecord.Binding(owner.caller(), named.identifier()),
+                new SubscriptionRecord.Binding(owner.caller()),
                 SubscriptionRecord.cursorFor(CompareAndSet.held(held, SubscriptionRecord.EVENTS_SHOWN)),
                 held.getProperty(SubscriptionRecord.LAST_ADVANCED_AT).getLong()));
     }

@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["mutation_outcome_unknown", "parent_access_denied", "parent_not_found", "repository_commit_failed", "target_already_exists", "template_invalid", "template_not_found"]
-argument_schema_digest = "79d10a98d4a8ec10bce80eed274e683d1a7bc3dc8cb02fd9540710b8c8a1dd23"
-result_schema_digest = "f150397926cf07c98d76c6adf1db0826d934adfef9ac9b6ffd19782f98ef9b6f"
+argument_schema_digest = "c5d62dd7a017999fcb0028188900292fe18b6195bbd6005b642446bbfecdc176"
+result_schema_digest = "48df52a0c4f9caf11ad501fb521a419892543bf41d6bc4c7b92c27cc435aad4e"
 contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
 staging_bytes = 0
 execution = "immediate"

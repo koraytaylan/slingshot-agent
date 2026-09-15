@@ -479,6 +479,14 @@ public final class SubmitServlet extends AgentServlet {
             refuse(response, REFUSED);
             return;
         }
+        // The counters this charge is decided against are prepared first, as
+        // every other admitted quantity prepares its own. Taking a charge
+        // against nodes nothing has made is a decision that could not be made
+        // rather than one that ran out of room, and answering it the same way
+        // would tell a caller to come back to a store that is not full.
+        rs.slingshot.agent.store.CapacityLedger.prepare(session,
+                rs.slingshot.agent.store.AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
+                caller.get());
         final rs.slingshot.agent.store.CapacityLedger.ReservationAdmission room =
                 rs.slingshot.agent.store.CapacityLedger.take(session, caller.get(), java.util.List.of(
                         new rs.slingshot.agent.store.CapacityReservation.Charge(
