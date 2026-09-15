@@ -109,7 +109,6 @@ final class SubmitServletTest {
         final SubscriptionRecord binding = SubscriptionLedger.read(session, subscriptionName(), CONTRACT)
                 .orElseThrow();
         assertEquals(caller(), binding.binding().caller());
-        assertEquals(identityOf("a-submission.json").identifier(), binding.binding().operation());
         org.junit.jupiter.api.Assertions.assertSame(session, commands.observed.get(),
                 "requested content effects must use the original caller's session");
         assertEquals(OperationState.SUCCEEDED, stored(session, "a-submission.json").state(),
@@ -302,23 +301,55 @@ final class SubmitServletTest {
     }
 
     @Test
-    void aSubscriptionBoundToAnotherOperationRefusesBeforeAcceptance()
+    void oneSubscriptionServesEveryOperationItsCallerSubmits()
             throws RepositoryException, IOException, ServletException {
+        // A subscription belongs to the following daemon, not to one operation: the client
+        // derives one name per installation, target, revision and generation and submits every
+        // operation of that daemon under it. So a second operation under the same name is its
+        // caller's own next submission rather than a conflict.
         final Session session = prepared();
-        final var other = assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
+        final var first = assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
                 rs.slingshot.agent.identity.AgentOperationIdentifier.of(
                         "e".repeat(64), CONTRACT)).identifier();
         assertInstanceOf(SubscriptionLedger.Subscribed.class, SubscriptionLedger.subscribe(session, caller(),
-                subscriptionName().rendered(), identityOf("a-submission.json").generation(), other,
+                subscriptionName().rendered(), identityOf("a-submission.json").generation(), first,
+                System.currentTimeMillis(), CONTRACT));
+        final Counting commands = new Counting();
+        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus(),
+                "a second operation under the caller's own subscription was refused");
+        session.refresh(false);
+        assertEquals(1, commands.ran(),
+                "the submission was accepted and the command did not run");
+        assertEquals(caller(),
+                SubscriptionLedger.read(session, subscriptionName(), CONTRACT).orElseThrow()
+                        .binding().caller(),
+                "the subscription is no longer bound to the caller that opened it");
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT),
+                "a subscription already held was charged twice");
+    }
+
+    @Test
+    void aSubscriptionBoundToAnotherCallerRefusesBeforeAcceptance()
+            throws RepositoryException, IOException, ServletException {
+        final Session session = prepared();
+        final StatePath.Caller somebodyElse =
+                assertInstanceOf(StatePath.Held.class,
+                        StatePath.caller("following-daemon-two"), "the caller was refused").caller();
+        // The other caller's counters are prepared before they are charged, as the submission path
+        // prepares its own: a charge against nodes nothing has made could not be decided at all.
+        SubscriptionLedger.prepare(session, somebodyElse);
+        assertInstanceOf(SubscriptionLedger.Subscribed.class, SubscriptionLedger.subscribe(session,
+                somebodyElse, subscriptionName().rendered(),
+                identityOf("a-submission.json").generation(),
+                assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
+                        rs.slingshot.agent.identity.AgentOperationIdentifier.of(
+                                "e".repeat(64), CONTRACT)).identifier(),
                 System.currentTimeMillis(), CONTRACT));
         final Counting commands = new Counting();
         assertEquals(SubmitServlet.CONFLICT, answering(commands, "a-submission.json").getStatus());
         session.refresh(false);
         assertEquals(0, records(session));
         assertEquals(0, commands.ran());
-        assertEquals(other, SubscriptionLedger.read(session, subscriptionName(), CONTRACT).orElseThrow()
-                .binding().operation());
-        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
     }
 
     @Test

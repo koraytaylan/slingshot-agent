@@ -109,18 +109,20 @@ final class LoadContentHandlerTest {
     }
 
     @Test
-    @DisplayName("a value the renderer refuses reaches the caller as that refusal, not as content")
-    void arefusedValueReachesTheCallerAsItself() throws RepositoryException {
-        final Node node = nodeAt("/content/has-a-binary");
+    @DisplayName("a node holding every kind a repository stores is answered as content")
+    void aNodeHoldingEveryStoredKindIsAnswered() throws RepositoryException {
+        // Every type a repository can store is one this build represents, so the refusal branch is
+        // not reachable through a real node; what a caller must be able to rely on is that a
+        // subtree holding the awkward kinds — bytes, a floating-point number, a multiple-valued
+        // property — is answered rather than refused.
+        final Node node = nodeAt("/content/every-kind");
         node.setProperty("payload", session().getValueFactory()
                 .createBinary(new java.io.ByteArrayInputStream(new byte[] {1, 2, 3})));
+        node.setProperty("ratio", 1.5d);
+        node.setProperty("many", new String[] {"a", "b"});
         session().save();
-        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
-                run("/content/has-a-binary", 0),
-                "a subtree holding a value nobody can write back was answered as content");
-        assertEquals(LoadContentResult.UNSUPPORTED_VALUE, failed.category());
-        assertTrue(failed.detail().contains("payload"),
-                "the caller is not told which property it was: " + failed.detail());
+        assertInstanceOf(CommandHandler.Produced.class, run("/content/every-kind", 0),
+                "a subtree holding values a caller can be told about was refused");
     }
 
     @Test

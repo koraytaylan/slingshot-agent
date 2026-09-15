@@ -127,22 +127,22 @@ public record StreamSession(SubscriptionRecord.Identifier subscription,
         if (record.isEmpty()) {
             return new Refused(Refusal.UNKNOWN_SUBSCRIPTION, "no complete subscription holds this name");
         }
-        if (!record.get().generation().equals(serving)
-                || !record.get().binding().operation().equals(operation.get())) {
+        if (!record.get().generation().equals(serving)) {
             return new Refused(Refusal.NOT_THIS_CALLERS_OPERATION,
-                    "the subscription is not assigned to the requested operation and generation");
+                    "the subscription is not assigned to the requested generation");
         }
-        return owned(store, asked, record.get(), new StateAuthority.Viewer(asked.caller(), groups));
+        return owned(store, asked, record.get(), new StateAuthority.Viewer(asked.caller(), groups), contract);
     }
 
     private static Outcome owned(Session store, Asked asked, SubscriptionRecord subscription,
-                                 StateAuthority.Viewer viewer) throws RepositoryException {
-        if (!StateAuthority.subscription(store, subscription, viewer, "events")) {
+                                 StateAuthority.Viewer viewer, AgentContract contract) throws RepositoryException {
+        final Optional<AgentOperationIdentifier> operation = operationIn(asked, contract);
+        if (operation.isEmpty() || !StateAuthority.subscription(store, subscription, viewer,
+                new StateAuthority.Scope.OneOperationOfIt(operation.get()), "events")) {
             return new Refused(Refusal.NOT_THIS_CALLERS_OPERATION,
                     "this caller may not follow the subscription's operation");
         }
-        final StatePath path = StatePath.operation(subscription.generation(),
-                subscription.binding().operation());
+        final StatePath path = StatePath.operation(subscription.generation(), operation.get());
         return new Held(new StreamSession(subscription.identifier(), subscription.generation(),
                 path, asked.caller()));
     }

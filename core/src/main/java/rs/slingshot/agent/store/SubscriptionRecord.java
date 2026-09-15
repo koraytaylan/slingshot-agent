@@ -32,12 +32,15 @@ public record SubscriptionRecord(Identifier identifier, EventStoreGeneration gen
                                  Binding binding, Cursor cursor, long lastAdvancedAtUnixMilliseconds) {
 
     /**
-     * The immutable caller and operation assignment carried by a subscription.
+     * The immutable caller assignment carried by a subscription.
+     *
+     * <p>The subscriber, and not one of its operations: a following daemon subscribes once and
+     * submits every operation it has under that one name, so the subscription is the daemon's and
+     * the operation a request names is authorized separately against the caller's own work.</p>
      *
      * @param caller the submitting caller charged for this subscription
-     * @param operation the only operation whose cursor this subscription may advance
      */
-    public record Binding(StatePath.Caller caller, AgentOperationIdentifier operation) {
+    public record Binding(StatePath.Caller caller) {
     }
 
     /** The property the subscriber's own name is written in. */
@@ -188,7 +191,6 @@ public record SubscriptionRecord(Identifier identifier, EventStoreGeneration gen
     public long bytes() {
         return identifier.rendered().getBytes(StandardCharsets.UTF_8).length
                 + (long) binding.caller().name().getBytes(StandardCharsets.UTF_8).length
-                + binding.operation().rendered().getBytes(StandardCharsets.UTF_8).length
                 + (long) Long.BYTES * WHOLE_NUMBERS_HELD;
     }
 

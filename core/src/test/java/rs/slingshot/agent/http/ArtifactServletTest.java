@@ -98,7 +98,7 @@ final class ArtifactServletTest {
             ServletException {
         for (final String fixture : List.of("small.txt", "large.txt")) {
             published(fixture);
-            final MockSlingHttpServletResponse served = ask(OPERATION, SLOT);
+            final DeclaringResponse served = ask(OPERATION, SLOT);
             assertEquals(ArtifactServlet.SERVED, served.getStatus(), served.getOutputAsString());
             assertArrayEquals(bytes(FIXTURES.resolve(fixture)), served.getOutput(),
                     fixture + " did not come back byte for byte");
@@ -108,6 +108,12 @@ final class ArtifactServletTest {
             assertEquals(Digest.of(bytes(FIXTURES.resolve(fixture))).rendered(),
                     served.getHeader(ArtifactServlet.DIGEST_HEADER),
                     "a reader digesting what it received would disagree with the head");
+            // A reader accepts a fixed length or a chunked encoding and refuses a body that is
+            // neither, so the length has to be declared before the first byte moves rather than
+            // left for the reader to infer from the connection closing.
+            assertEquals(bytes(FIXTURES.resolve(fixture)).length,
+                    served.declaredContentLength(),
+                    "the body declares a length a reader cannot frame the transfer by");
         }
         assertTrue(bytes(FIXTURES.resolve("large.txt")).length > Digest.READ_BUFFER_BYTES,
                 "the large fixture fits in one buffer, so nothing above crossed one");
@@ -326,7 +332,7 @@ final class ArtifactServletTest {
         }
     }
 
-    private MockSlingHttpServletResponse ask(String operation, String slot)
+    private DeclaringResponse ask(String operation, String slot)
             throws IOException, ServletException {
         final MockSlingHttpServletRequest request =
                 new MockSlingHttpServletRequest(sling.resourceResolver());
@@ -336,9 +342,39 @@ final class ArtifactServletTest {
                 ArtifactServlet.SLOT_QUERY_MEMBER, slot));
         ((MockRequestPathInfo) request.getRequestPathInfo())
                 .setResourcePath(ArtifactServlet.route().path());
-        final MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
+        final DeclaringResponse response = new DeclaringResponse();
         new ArtifactServlet(new AdvancingTicker(0)).service(request, response);
         return response;
+    }
+
+    /**
+     * A response that records the body length the way a container does.
+     *
+     * <p>The Sling mock refuses {@code setContentLengthLong} outright, and the length a reader
+     * frames the transfer by is exactly what this suite has to see, so the two members that carry
+     * it are the two this double supplies. Everything else is the mock's own.</p>
+     */
+    private static final class DeclaringResponse extends MockSlingHttpServletResponse {
+
+        private long declared;
+
+        private DeclaringResponse() {
+            super();
+        }
+
+        @Override
+        public void setContentLengthLong(long length) {
+            this.declared = length;
+        }
+
+        @Override
+        public void setContentLength(int length) {
+            this.declared = length;
+        }
+
+        private long declaredContentLength() {
+            return declared;
+        }
     }
 
     private Session published(String fixture) throws RepositoryException, IOException {

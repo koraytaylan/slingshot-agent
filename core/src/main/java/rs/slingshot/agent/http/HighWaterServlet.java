@@ -165,7 +165,8 @@ public final class HighWaterServlet extends AgentServlet {
                        AgentContract contract, StateAuthority.Viewer viewer)
             throws IOException, RepositoryException {
         final Optional<SubscriptionRecord> record = SubscriptionLedger.read(session, identifier, contract);
-        if (record.isEmpty() || !StateAuthority.subscription(session, record.get(), viewer, ROUTE_NAME)) {
+        if (record.isEmpty() || !StateAuthority.subscription(session, record.get(), viewer,
+                new StateAuthority.Scope.TheSubscriptionAlone(), ROUTE_NAME)) {
             refuse(response, UNKNOWN);
             return;
         }

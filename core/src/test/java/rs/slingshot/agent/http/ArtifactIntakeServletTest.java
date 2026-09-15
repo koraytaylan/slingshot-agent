@@ -471,14 +471,23 @@ final class ArtifactIntakeServletTest {
                 var intercepted = intercepting(session, () -> {
                     if (session.nodeExists(operation().path()) && inserted.compareAndSet(false, true)) {
                         final Session other = java.util.Objects.requireNonNull(peer.adaptTo(Session.class));
-                        final var different = assertInstanceOf(
-                                rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
-                                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
-                                "e".repeat(64), CONTRACT))
-                                .identifier();
+                        final var otherCaller = assertInstanceOf(
+                                rs.slingshot.agent.store.StatePath.Held.class,
+                                rs.slingshot.agent.store.StatePath.caller("following-daemon-two"),
+                                "the caller was refused").caller();
+                        rs.slingshot.agent.store.SubscriptionLedger.prepare(other, otherCaller);
+                        // The competing claim is another caller's, because a subscription belongs
+                        // to the daemon that opened it: a second operation under one caller's own
+                        // subscription is that caller's next submission, not a competing claim.
                         assertInstanceOf(rs.slingshot.agent.store.SubscriptionLedger.Subscribed.class,
-                                rs.slingshot.agent.store.SubscriptionLedger.subscribe(other, caller(),
-                                        "following-daemon-one", identity().generation(), different,
+                                rs.slingshot.agent.store.SubscriptionLedger.subscribe(other,
+                                        otherCaller,
+                                        "following-daemon-one", identity().generation(),
+                                        assertInstanceOf(
+                                                rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
+                                                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
+                                                        "e".repeat(64), CONTRACT))
+                                                .identifier(),
                                         System.currentTimeMillis(), CONTRACT));
                     }
                 })) {

@@ -16,9 +16,9 @@ operation_key = "required"
 
 result_bytes = 1048576
 failure_categories = ["artifact_publication_failed", "artifact_publication_outcome_unknown", "evaluation_budget_exceeded", "filevault_filter_unrepresentable", "filevault_package_failed", "filevault_profile_unsupported", "pattern_rejected", "repository_read_failed", "root_access_denied", "root_not_found", "staging_cleanup_failed"]
-argument_schema_digest = "a0185592d20955b10986d323edd0758af24783249fba5555cdc69e49cecf2bcc"
-result_schema_digest = "640ff1ad40d6b5d9c581b0b153771af11f7dba9a5691bf5396a4b317dd0816da"
-contract_limits_digest = "a4d75953b0b52e9e2e110dd836f53f33bba3f2a28f42329f511b55143c12d9d5"
+argument_schema_digest = "a82d363de6c4d4459d3638460da48df0fa9fe53a9b487aebd330730b69d525d1"
+result_schema_digest = "7391c92867a64d37783f15e5d643837c2852cb134d471bb56c901e92fea3feb6"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
 
 # The room this command may take inside the agent's own tree while it works. Every other command
 # declares none; this is the exception task 1701 said there would be exactly one of.

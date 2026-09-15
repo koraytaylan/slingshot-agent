@@ -123,8 +123,18 @@ public final class OperationLookupServlet extends AgentServlet {
     /** The member the subscription the submission registered is carried in. */
     public static final String SUBSCRIPTION = "daemon_subscription_identifier";
 
-    /** The member the submission digest is carried in. */
-    public static final String SUBMITTED_DIGEST = OperationStore.SUBMISSION_DIGEST;
+    /**
+     * The member the submission digest is carried in.
+     *
+     * <p>The name the client reads, which is the acknowledgement's own
+     * ({@link SubmissionResponse#SUBMITTED_DIGEST}) rather than the name this
+     * side's store happens to keep the value under. The snapshot is one of the
+     * documents the client validates exactly: a member named the store's way
+     * is a member the client does not find, and a snapshot whose digest it
+     * cannot read is one it cannot tell from an answer about another
+     * submission.</p>
+     */
+    public static final String SUBMITTED_DIGEST = SubmissionResponse.SUBMITTED_DIGEST;
 
     /** The property the subscription a submission registered is written in. */
     public static final String SUBSCRIPTION_PROPERTY = "subscription_identifier";

@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["agent_access_denied", "agent_not_found", "entry_not_found", "platform_control_outcome_unknown", "platform_control_rejected"]
-argument_schema_digest = "dbedde18634b72fe73a3b58a2cbca6230dc377b2d71787b39107fe9c22e62674"
-result_schema_digest = "5e6de4e5c8ea3c8154ca72f3199e20f93057f411561b27da0c18276c427dd315"
+argument_schema_digest = "a83508198697d8b87d1be64b5ee1608faa4288bfd4a6f051eed7498e9a48b774"
+result_schema_digest = "b4d362899cf95226e7ad90a5fe80560ad59678fa16a17111afe8d9f12e33cc8a"
 contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
 staging_bytes = 0
 execution = "immediate"

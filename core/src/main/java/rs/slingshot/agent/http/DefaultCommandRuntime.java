@@ -19,9 +19,26 @@ import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.CommandRegistry;
 import rs.slingshot.agent.command.OverflowPublication;
+import rs.slingshot.agent.command.asset.AssetMutationHandler;
+import rs.slingshot.agent.command.asset.CreateAssetCommand;
+import rs.slingshot.agent.command.asset.CreateAssetFolderCommand;
+import rs.slingshot.agent.command.asset.DeleteAssetCommand;
+import rs.slingshot.agent.command.asset.MoveAssetCommand;
+import rs.slingshot.agent.command.asset.UpdateAssetMetadataCommand;
 import rs.slingshot.agent.command.component.AddComponentCommand;
 import rs.slingshot.agent.command.component.AddComponentHandler;
+import rs.slingshot.agent.command.component.ComponentPathCommand;
+import rs.slingshot.agent.command.component.ComponentPathHandler;
+import rs.slingshot.agent.command.component.DeleteComponentCommand;
+import rs.slingshot.agent.command.component.ReorderComponentCommand;
+import rs.slingshot.agent.command.component.UpdateComponentCommand;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataCommand;
+import rs.slingshot.agent.command.fragment.CreateContentFragmentCommand;
+import rs.slingshot.agent.command.fragment.UpdateContentFragmentCommand;
+import rs.slingshot.agent.command.fragment.CreateExperienceFragmentCommand;
+import rs.slingshot.agent.command.fragment.UpdateExperienceFragmentCommand;
+import rs.slingshot.agent.command.fragment.FragmentMutationHandler;
+import rs.slingshot.agent.command.fragment.FragmentDeletion;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataHandler;
 import rs.slingshot.agent.command.content.FindAssetsReferencedByPageCommand;
 import rs.slingshot.agent.command.content.FindAssetsReferencedByPageHandler;
@@ -63,6 +80,7 @@ import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
 import rs.slingshot.agent.store.ArtifactSlot;
+import rs.slingshot.agent.store.ArtifactStore;
 import rs.slingshot.agent.wire.CommandFailure;
 
 /** Adapts a verified command dispatch to the submission servlet's execution contract. */
@@ -158,6 +176,22 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                         new ResolveResourcePathHandler(contract)),
                 new CommandDispatch.Registration(AddComponentCommand.WIRE_NAME,
                         new AddComponentHandler(contract)),
+                new CommandDispatch.Registration(UpdateComponentCommand.WIRE_NAME,
+                        new ComponentPathHandler(contract, ComponentPathCommand.Shape.UPDATE)),
+                new CommandDispatch.Registration(DeleteComponentCommand.WIRE_NAME,
+                        new ComponentPathHandler(contract, ComponentPathCommand.Shape.DELETE)),
+                new CommandDispatch.Registration(ReorderComponentCommand.WIRE_NAME,
+                        new ComponentPathHandler(contract, ComponentPathCommand.Shape.REORDER)),
+                new CommandDispatch.Registration(CreateAssetFolderCommand.WIRE_NAME,
+                        new AssetMutationHandler(contract, AssetMutationHandler.Kind.FOLDER)),
+                new CommandDispatch.Registration(CreateAssetCommand.WIRE_NAME,
+                        new AssetMutationHandler(contract, AssetMutationHandler.Kind.CREATION)),
+                new CommandDispatch.Registration(UpdateAssetMetadataCommand.WIRE_NAME,
+                        new AssetMutationHandler(contract, AssetMutationHandler.Kind.METADATA)),
+                new CommandDispatch.Registration(DeleteAssetCommand.WIRE_NAME,
+                        new AssetMutationHandler(contract, AssetMutationHandler.Kind.REMOVAL)),
+                new CommandDispatch.Registration(MoveAssetCommand.WIRE_NAME,
+                        new AssetMutationHandler(contract, AssetMutationHandler.Kind.MOVE)),
                 new CommandDispatch.Registration(CreatePageCommand.WIRE_NAME,
                         new CreatePageHandler(contract)),
                 new CommandDispatch.Registration(DeletePageCommand.WIRE_NAME,
@@ -165,7 +199,19 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                 new CommandDispatch.Registration(MovePageCommand.WIRE_NAME,
                         new MovePageHandler(contract)),
                 new CommandDispatch.Registration(UpdatePageCommand.WIRE_NAME,
-                        new UpdatePageHandler(contract)));
+                        new UpdatePageHandler(contract)),
+                new CommandDispatch.Registration(CreateContentFragmentCommand.WIRE_NAME,
+                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.CONTENT_CREATION)),
+                new CommandDispatch.Registration(UpdateContentFragmentCommand.WIRE_NAME,
+                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.CONTENT_UPDATE)),
+                new CommandDispatch.Registration(FragmentDeletion.CONTENT_WIRE_NAME,
+                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.CONTENT_REMOVAL)),
+                new CommandDispatch.Registration(CreateExperienceFragmentCommand.WIRE_NAME,
+                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.EXPERIENCE_CREATION)),
+                new CommandDispatch.Registration(UpdateExperienceFragmentCommand.WIRE_NAME,
+                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.EXPERIENCE_UPDATE)),
+                new CommandDispatch.Registration(FragmentDeletion.EXPERIENCE_WIRE_NAME,
+                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.EXPERIENCE_REMOVAL)));
     }
 
     /** Writes only the fail-closed state because dispatch and contract are platform objects.
@@ -300,6 +346,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         }
         final byte[] bytes = artifact.bytes();
         try {
+            ArtifactStore.prepare(session, operation.caller());
             final OverflowPublication.Outcome published = OverflowPublication.publish(session,
                     new OverflowPublication.Publication(operation.caller(),
                             OperationStore.pathOf(operation.identity()), held.slot(), contract),

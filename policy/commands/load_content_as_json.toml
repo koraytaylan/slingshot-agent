@@ -17,8 +17,8 @@ operation_key = "required"
 
 result_bytes = 1048576
 failure_categories = ["access_denied", "load_budget_exceeded", "not_found", "unsupported_repository_value"]
-argument_schema_digest = "aa891881e9ffe9cf2fc372f8d2f785f822080205b8e172a6012208d0973a62b0"
-result_schema_digest = "08a8c17ba6e9039410123e53ee60696d419b1c17f002aa33a5473101d1e21312"
-contract_limits_digest = "4d9db5be9b51a92205d7ff7e112cb991a72cfc50aaec633209e69dc8d96e5841"
+argument_schema_digest = "9b08c558daa41ceaf3761755f4c466d7e09b6731f7463f7e21519f1df5e8ecfd"
+result_schema_digest = "f52fb1eb8e9629b3e82cd1d4db6587b90e3babcbf97e5259f63619dc02df3168"
+contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
 staging_bytes = 0
 execution = "immediate"

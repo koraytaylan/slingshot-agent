@@ -63,13 +63,14 @@ public final class SubmissionRegistration {
         }
         final var submission = request.submission();
         final SubscriptionRecord record = new SubscriptionRecord(held.identifier(),
-                submission.identity().generation(), new SubscriptionRecord.Binding(submission.caller(),
-                submission.identity().identifier()), SubscriptionRecord.Unread.NOTHING_SHOWN_YET,
+                submission.identity().generation(), new SubscriptionRecord.Binding(submission.caller()),
+                SubscriptionRecord.Unread.NOTHING_SHOWN_YET,
                 nowUnixMilliseconds);
         // The accepted event is written with the submission, so the counters it is admitted
         // against must exist before the submission does. Preparing them here is what keeps a
         // submission from being accepted as a record the store cannot then say anything about.
         LedgerAdmission.prepare(session, submission.caller());
+        SubscriptionLedger.prepare(session, submission.caller());
         if (OperationStore.read(session, submission.identity()) instanceof OperationStore.Held) {
             return registered(session, request, record, new IntakeSlotWrite.Decided(
                     SubmissionAdmission.admit(session, submission, nowUnixMilliseconds, contract)), contract);
@@ -144,7 +145,7 @@ public final class SubmissionRegistration {
         }
         final SubscriptionLedger.Outcome subscribed = SubscriptionLedger.subscribe(session,
                 request.submission().caller(), request.subscription(), record.generation(),
-                record.binding().operation(), record.lastAdvancedAtUnixMilliseconds(), contract);
+                null, record.lastAdvancedAtUnixMilliseconds(), contract);
         if (subscribed instanceof final SubscriptionLedger.AtCapacity refused) {
             return new IntakeSlotWrite.AtCapacity(refused.refusal());
         }
@@ -156,6 +157,6 @@ public final class SubmissionRegistration {
 
     private static IntakeSlotWrite.Admission conflicting() {
         return new IntakeSlotWrite.Decided(new AdmissionOutcome.Conflicting(SubmitServlet.SUBSCRIPTION,
-                "the subscription name is not available for this operation"));
+                "the subscription name is not available for this caller"));
     }
 }

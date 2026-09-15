@@ -122,6 +122,16 @@ public final class ExecutionJournal {
         final long snapshot = java.util.Arrays.stream(OperationState.values())
                 .filter(state -> state.finality() == rs.slingshot.agent.wire.JobEventKind.Finality.ENDS)
                 .mapToLong(state -> SnapshotStore.bytesFor(state.kind())).max().orElseThrow();
+        // The result and snapshot counters are prepared before they are
+        // charged, as every admitted quantity prepares its own. Taking a charge
+        // against nodes nothing has made is a decision that could not be made,
+        // and reporting it as a start this instance has no room for would tell
+        // a caller to come back to a store that is not full.
+        for (final AccountedQuantity quantity : List.of(AccountedQuantity.RESULT_ROWS,
+                AccountedQuantity.RESULT_BYTES, AccountedQuantity.SNAPSHOT_ROWS,
+                AccountedQuantity.SNAPSHOT_BYTES)) {
+            CapacityLedger.prepare(session, quantity, operation.caller());
+        }
         final CapacityLedger.ReservationAdmission room = CapacityLedger.take(session, operation.caller(),
                 footprint(contract.value(ContractLimit.MAXIMUM_AGENT_INLINE_RESULT_BYTES),
                         snapshot), contract);
