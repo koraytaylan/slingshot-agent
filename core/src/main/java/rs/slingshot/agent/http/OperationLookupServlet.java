@@ -287,12 +287,12 @@ public final class OperationLookupServlet extends AgentServlet {
         final Optional<ExecutionOutcome.Result> answer = answerIn(session, operation);
         if (answer.isPresent()) {
             if (snapshot.kind() == JobEventKind.FAILED) {
-                terminalDocument(session, operation, record, answer.get(), true).ifPresent(failure ->
-                        members.put(TERMINAL_FAILURE, failure));
+                terminalDocument(session, operation, record, answer.get(), Ending.FAILED)
+                        .ifPresent(failure -> members.put(TERMINAL_FAILURE, failure));
             }
             if (snapshot.kind() == JobEventKind.SUCCEEDED) {
-                terminalDocument(session, operation, record, answer.get(), false).ifPresent(result ->
-                        members.put(TERMINAL_RESULT, result));
+                terminalDocument(session, operation, record, answer.get(), Ending.SUCCEEDED)
+                        .ifPresent(result -> members.put(TERMINAL_RESULT, result));
             }
         }
         final CanonicalByteWriter.Outcome written =
@@ -314,27 +314,27 @@ public final class OperationLookupServlet extends AgentServlet {
      * @param operation the operation's record
      * @param record the record as this store holds it
      * @param result the stored answer
-     * @param failed whether this ending is a failure
+     * @param ending which of the two spellings this ending takes
      * @return the document, or nothing where this side cannot render it
      */
     private static Optional<DocumentValue> terminalDocument(Session session, StatePath operation,
                                                             LogicalOperation record,
                                                             ExecutionOutcome.Result result,
-                                                            boolean failed)
+                                                            Ending ending)
             throws RepositoryException {
         final String canonical;
         if (result instanceof final ExecutionOutcome.Inline inline) {
             canonical = inline.document();
         } else if (result instanceof final ExecutionOutcome.Published published
-                && published.canonicalResult().isPresent()) {
+                && published.canonicalResult() instanceof final ExecutionOutcome.Written written) {
             // An answer too large to carry inline still has a document: it is the one that names
             // the artifact, and it is what the client validates the ending against.
-            canonical = published.canonicalResult().get();
+            canonical = written.document();
         } else {
             return Optional.empty();
         }
         final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
-        if (failed) {
+        if (ending == Ending.FAILED) {
             members.put("canonical_failure", new DocumentValue.Text(canonical));
         } else {
             members.put("canonical_result", new DocumentValue.Text(canonical));
@@ -349,6 +349,19 @@ public final class OperationLookupServlet extends AgentServlet {
     }
 
     /**
+     * Which of the two spellings one terminal envelope takes.
+     *
+     * <p>A named type rather than a flag, because a call site reading {@code true} says nothing
+     * about which ending it is asking for, and the two spellings carry different members.</p>
+     */
+    private enum Ending {
+        /** The operation succeeded, so the envelope carries its result and what it declared. */
+        SUCCEEDED,
+        /** The operation failed, so the envelope carries its canonical failure. */
+        FAILED
+    }
+
+    /**
      * The artifacts one result declares, which the client checks against the typed result.
      *
      * <p>Read from the command's own document rather than from the descriptor, because the two are
@@ -360,12 +373,13 @@ public final class OperationLookupServlet extends AgentServlet {
      */
     private static DocumentValue declaredArtifacts(ExecutionOutcome.Result result) {
         if (!(result instanceof final ExecutionOutcome.Published published)
-                || published.canonicalResult().isEmpty()) {
+                || !(published.canonicalResult() instanceof final ExecutionOutcome.Written
+                        written)) {
             return new DocumentValue.Sequence(List.of());
         }
         final rs.slingshot.agent.json.BoundedDocumentReader.Outcome read =
                 rs.slingshot.agent.json.BoundedDocumentReader.read(
-                        published.canonicalResult().get().getBytes(StandardCharsets.UTF_8),
+                        written.document().getBytes(StandardCharsets.UTF_8),
                         rs.slingshot.agent.json.BoundedDocumentReader.Bounds.from(loaded()));
         final Optional<DocumentValue.Mapping> artifact = read
                 instanceof final rs.slingshot.agent.json.BoundedDocumentReader.Read document

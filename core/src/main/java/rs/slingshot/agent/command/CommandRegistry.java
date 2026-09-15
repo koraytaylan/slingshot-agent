@@ -43,10 +43,10 @@ public final class CommandRegistry {
     public static final String ROW_EXTENSION = ".toml";
 
     /** The embedded deterministic list of command-row resources. */
-    public static final String REGISTRY_RESOURCE_INDEX = "rs/slingshot/agent/commands/index.txt";
+    public static final String REGISTRY_RESOURCE_INDEX = "/rs/slingshot/agent/commands/index.txt";
 
     /** The embedded resource directory containing the command rows. */
-    public static final String REGISTRY_RESOURCE_DIRECTORY = "rs/slingshot/agent/commands/";
+    public static final String REGISTRY_RESOURCE_DIRECTORY = "/rs/slingshot/agent/commands/";
 
     private final List<RegistryRow> rows;
 
@@ -117,20 +117,23 @@ public final class CommandRegistry {
     }
 
     /**
-     * Reads the command rows embedded in an installed bundle.
+     * Reads the command rows embedded in this bundle.
      *
-     * @param loader the bundle class loader
+     * <p>Read through the class that declares this registry rather than through a loader somebody
+     * passes in: the rows are this bundle's own resources, and under OSGi a caller's loader is
+     * another bundle's, through which nothing here is visible at all.</p>
+     *
      * @return the registry, or the one reason its resources cannot be read
      */
-    public static Outcome read(ClassLoader loader) {
-        final Optional<byte[]> index = resource(loader, REGISTRY_RESOURCE_INDEX);
+    public static Outcome read() {
+        final Optional<byte[]> index = resource(CommandRegistry.class, REGISTRY_RESOURCE_INDEX);
         if (index.isEmpty()) {
             return new Refused(Failure.UNREADABLE, REGISTRY_RESOURCE_INDEX + " is not embedded");
         }
         try (BufferedReader lines = new BufferedReader(new InputStreamReader(
                 new java.io.ByteArrayInputStream(index.get()),
                 StandardCharsets.UTF_8))) {
-            final Outcome rows = readRows(loader, lines);
+            final Outcome rows = readRows(lines);
             if (rows instanceof Refused) {
                 return rows;
             }
@@ -141,7 +144,7 @@ public final class CommandRegistry {
         }
     }
 
-    private static Outcome readRows(ClassLoader loader, BufferedReader lines) throws IOException {
+    private static Outcome readRows(BufferedReader lines) throws IOException {
         final SequencedMap<String, RegistryRow> byName = new LinkedHashMap<>();
         String file = lines.readLine();
         while (file != null) {
@@ -149,7 +152,8 @@ public final class CommandRegistry {
                 file = lines.readLine();
                 continue;
             }
-            final Optional<byte[]> row = resource(loader, REGISTRY_RESOURCE_DIRECTORY + file);
+            final Optional<byte[]> row = resource(CommandRegistry.class,
+                    REGISTRY_RESOURCE_DIRECTORY + file);
             if (row.isEmpty()) {
                 return new Refused(Failure.UNREADABLE, file + " is not embedded");
             }
@@ -168,8 +172,8 @@ public final class CommandRegistry {
                 .sorted(java.util.Comparator.comparing(RegistryRow::wireName)).toList()));
     }
 
-    private static Optional<byte[]> resource(ClassLoader loader, String name) {
-        try (InputStream source = loader.getResourceAsStream(name)) {
+    private static Optional<byte[]> resource(Class<?> owner, String name) {
+        try (InputStream source = owner.getResourceAsStream(name)) {
             return source == null ? Optional.empty() : Optional.of(source.readAllBytes());
         } catch (final IOException unreadable) {
             return Optional.empty();

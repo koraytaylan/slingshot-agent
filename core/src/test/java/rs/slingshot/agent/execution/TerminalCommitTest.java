@@ -319,6 +319,55 @@ final class TerminalCommitTest {
     }
 
     @Test
+    @DisplayName("a published answer's own document round-trips, and one without stays without")
+    void apublishedAnswersDocumentRoundTrips() throws RepositoryException {
+        final Session session = running();
+        final byte[] content = bytes(FIXTURES.resolve("published-result.txt"));
+        ArtifactStore.prepare(session, caller());
+        assertInstanceOf(ArtifactStore.Published.class, ArtifactStore.publish(session, caller(),
+                operation(), new ArtifactStore.Publication(slot(), content.length,
+                        new ByteArrayInputStream(content)), NOW, CONTRACT));
+        final String document = "{\"artifact\":{\"slot\":\"result\"}}";
+        assertInstanceOf(TerminalCommit.Committed.class,
+                commit(session, new ExecutionOutcome.Published(slot(), content.length,
+                        Digest.of(content), new ExecutionOutcome.Written(document)),
+                        OperationState.SUCCEEDED),
+                "an answer carrying its own document was refused");
+        assertEquals(document, session.getNode(operation().path())
+                .getProperty(TerminalCommit.RESULT_PUBLISHED_DOCUMENT).getString(),
+                "the command's own document was not written beside the reference");
+        assertEquals(new ExecutionOutcome.Written(document),
+                ((ExecutionOutcome.Published) TerminalCommit.answerIn(session, operation())
+                        .orElseThrow()).canonicalResult(),
+                "the document the answer carried did not survive being read back");
+    }
+
+    @Test
+    @DisplayName("a published answer naming no document leaves the property absent")
+    void apublishedAnswerNamingNoDocumentLeavesItAbsent() throws RepositoryException {
+        final Session session = running();
+        final byte[] content = bytes(FIXTURES.resolve("published-result.txt"));
+        ArtifactStore.prepare(session, caller());
+        assertInstanceOf(ArtifactStore.Published.class, ArtifactStore.publish(session, caller(),
+                operation(), new ArtifactStore.Publication(slot(), content.length,
+                        new ByteArrayInputStream(content)), NOW, CONTRACT));
+        session.getNode(operation().path())
+                .setProperty(TerminalCommit.RESULT_PUBLISHED_DOCUMENT, "{\"stale\":true}");
+        session.save();
+        assertInstanceOf(TerminalCommit.Committed.class,
+                commit(session, new ExecutionOutcome.Published(slot(), content.length,
+                        Digest.of(content)), OperationState.SUCCEEDED),
+                "an answer naming no document was refused");
+        assertTrue(!session.getNode(operation().path())
+                        .hasProperty(TerminalCommit.RESULT_PUBLISHED_DOCUMENT),
+                "an answer naming no document left one behind from an earlier answer");
+        assertEquals(new ExecutionOutcome.Unwritten(),
+                ((ExecutionOutcome.Published) TerminalCommit.answerIn(session, operation())
+                        .orElseThrow()).canonicalResult(),
+                "an answer naming no document came back naming one");
+    }
+
+    @Test
     @DisplayName("nothing here writes an artifact byte")
     void nothingHereWritesAnArtifactByte() {
         final String source = read(REPOSITORY.resolve(

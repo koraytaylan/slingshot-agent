@@ -48,7 +48,7 @@ final class CommandRegistryTest {
     @DisplayName("the installed bundle can load its embedded command rows")
     void embeddedRowsLoadWithoutTheRepositoryFilesystem() {
         final CommandRegistry.Loaded loaded = assertInstanceOf(CommandRegistry.Loaded.class,
-                CommandRegistry.read(Thread.currentThread().getContextClassLoader()));
+                CommandRegistry.read());
         assertEquals(64, loaded.registry().rows().size(),
                 "the embedded index did not expose every committed immediate command row");
         assertTrue(loaded.registry().row("query_paths").isPresent());

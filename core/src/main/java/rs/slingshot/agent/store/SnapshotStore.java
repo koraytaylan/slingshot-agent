@@ -48,9 +48,6 @@ public final class SnapshotStore {
     /** The property the instant this snapshot was written is written in. */
     public static final String UPDATED_AT = "updated_at_unix_milliseconds";
 
-    /** What a cursor is before a reader has been shown anything, which no sequence may be. */
-    private static final long BEFORE_THE_FIRST = EventSequence.FIRST - 1;
-
     /** The fixed-width numeric fields retained by a materialised snapshot. */
     private static final long NUMERIC_FIELDS = 3;
 

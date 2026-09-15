@@ -253,7 +253,7 @@ public final class ArtifactServlet extends AgentServlet {
         // The slot's own media type rather than the route's: the client compares what it receives
         // against the type the slot is declared to carry, and a route-wide type would be one the
         // client refuses for every slot that is not that type.
-        response.setContentType(ArtifactSlot.mediaType(record.slot().name()));
+        response.setContentType(mediaTypeOf(record.slot()));
         response.setHeader(BYTE_COUNT_HEADER, String.valueOf(record.byteCount()));
         response.setHeader(DIGEST_HEADER, headerSafe(record.digest().rendered()));
         try (InputStream reading = bytes.get(); OutputStream writing = response.getOutputStream()) {

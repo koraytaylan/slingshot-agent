@@ -105,11 +105,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         if (!(loaded instanceof final AgentContract.Loaded present)) {
             return;
         }
-        // The bundle's own loader, not the thread's context loader: the rows are this bundle's
-        // resources, and under OSGi the activation thread's context loader is somebody else's —
-        // so reading through it finds nothing and this runtime would serve no command at all.
-        final CommandRegistry.Outcome rows = CommandRegistry.read(
-                DefaultCommandRuntime.class.getClassLoader());
+        final CommandRegistry.Outcome rows = CommandRegistry.read();
         if (!(rows instanceof final CommandRegistry.Loaded embedded)) {
             return;
         }
@@ -305,10 +301,11 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         final byte[] bytes = artifact.bytes();
         try {
             final OverflowPublication.Outcome published = OverflowPublication.publish(session,
-                    operation.caller(), OperationStore.pathOf(operation.identity()), held.slot(),
+                    new OverflowPublication.Publication(operation.caller(),
+                            OperationStore.pathOf(operation.identity()), held.slot(), contract),
                     new rs.slingshot.agent.command.ResultAssembly.Overflowed(bytes.length,
                             rs.slingshot.agent.digest.Digest.of(bytes)),
-                    bytes, System.currentTimeMillis(), contract);
+                    bytes, System.currentTimeMillis());
             if (!(published instanceof final OverflowPublication.Published value)) {
                 return ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE;
             }
@@ -316,7 +313,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
             return document.<ExecutionOutcome.Completion>map(written ->
                             new ExecutionOutcome.Succeeded(new ExecutionOutcome.Published(
                                     held.slot(), value.delivery().byteCount(),
-                                    value.delivery().digest(), Optional.of(written))))
+                                    value.delivery().digest(), new ExecutionOutcome.Written(written))))
                     .orElseGet(() -> ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE);
         } catch (final javax.jcr.RepositoryException failure) {
             return ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE;
@@ -341,13 +338,26 @@ public final class DefaultCommandRuntime implements CommandRuntime {
      * @return the completion
      */
     private static ExecutionOutcome.Completion failed(CommandHandler.Failed failed) {
-        final Optional<String> document = failed.refusal()
+        final Optional<String> document = refusedDocument(failed.refusal())
                 .flatMap(DefaultCommandRuntime::canonical)
                 .or(() -> CommandFailure.Category.named(failed.category())
                         .flatMap(value -> canonical(CommandFailure.documentOf(value))));
         return document.<ExecutionOutcome.Completion>map(value ->
                         new ExecutionOutcome.Failed(new ExecutionOutcome.Inline(value)))
                 .orElseGet(() -> ExecutionOutcome.Uncertain.RESULT_UNAVAILABLE);
+    }
+
+    /**
+     * The refusal document a failure names, where it names one.
+     *
+     * @param refusal the refusal the handler's failure carries
+     * @return the document, or nothing where the handler declared none
+     */
+    private static Optional<DocumentValue.Mapping> refusedDocument(
+            CommandHandler.RefusalDocument refusal) {
+        return refusal instanceof final CommandHandler.Stated stated
+                ? Optional.of(stated.document())
+                : Optional.empty();
     }
 
     private static Optional<String> canonical(DocumentValue.Mapping value) {

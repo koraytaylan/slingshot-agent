@@ -288,7 +288,8 @@ final class OperationLookupServletTest {
                 new DocumentValue.Text("0:0"));
         members.put(OperationLookupServlet.PROVENANCE,
                 rs.slingshot.agent.identity.DocumentProvenance.composed(
-                        rs.slingshot.agent.http.SubmitServlet.thisBuild(), record.commandContract()).document());
+                        rs.slingshot.agent.http.SubmitServlet.thisBuild(),
+                        record.commandContract()).document());
         members.put(OperationLookupServlet.TARGET_DIGEST,
                 new DocumentValue.Text(record.identity().targetDigest().rendered()));
         members.put(OperationLookupServlet.ENVIRONMENT_REVISION,

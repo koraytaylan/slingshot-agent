@@ -138,6 +138,30 @@ final class LoadContentHandlerTest {
         assertEquals(LoadContentResult.BUDGET_EXCEEDED, failed.category());
     }
 
+    @Test
+    @DisplayName("a subtree larger than the inline bound is answered as bytes to carry, not inline")
+    void asubtreePastTheInlineBoundBecomesAnArtifact() throws RepositoryException {
+        final Node root = nodeAt("/content/large");
+        // Content whose written document crosses the command's own inline bound, which is far
+        // smaller than the contract's general one: a document that fitted the larger bound would
+        // be refused by the client against the smaller one the command declares.
+        root.setProperty("payload", "x".repeat(LOADED_INLINE_BOUND + 1));
+        session().save();
+        final CommandHandler.Artifact artifact = assertInstanceOf(CommandHandler.Artifact.class,
+                run("/content/large", 0),
+                "a document past the command's own inline bound was carried inline anyway");
+        assertEquals(LoadContentResult.LOADED_CONTENT_SLOT, artifact.slot());
+        assertTrue(artifact.bytes().length > LOADED_INLINE_BOUND,
+                "the artifact does not hold the document that did not fit");
+        assertEquals(new DocumentValue.Text(LoadContentResult.ARTIFACT),
+                artifact.result().member(LoadContentResult.DISPOSITION).orElseThrow(),
+                "an answer carried by reference does not say which of its two shapes it has");
+    }
+
+    /** The bound this command's own document is carried inline under, from the contract. */
+    private static final int LOADED_INLINE_BOUND = Math.toIntExact(CONTRACT.value(
+            rs.slingshot.agent.contract.ContractLimit.MAXIMUM_AGENT_INLINE_LOADED_DOCUMENT_BYTES));
+
     /** How many children one deliberately wide subtree has. */
     private static final int WIDE = 12;
 

@@ -205,10 +205,11 @@ final class SnapshotStoreTest {
                 "a reader was shown an event the snapshot it was given already accounts for");
         final SnapshotStore.Reading resumed =
                 SnapshotStore.since(session, operation(), sequence(1));
-        assertEquals(List.of(canonicalOf("started.json"), canonicalOf("progress.json"), canonicalOf("succeeded.json")),
+        assertEquals(List.of(canonicalOf("started.json"), canonicalOf("progress.json"),
+                        canonicalOf("succeeded.json")),
                 resumed.after(), "a resumed reader was served the wrong events");
         assertTrue(resumed.after().stream().noneMatch(document -> document.contains("\"sequence\":0")
-                        || document.contains("\"sequence\":0")),
+                        || document.contains("\"sequence\":1")),
                 "a resumed reader was shown something at or below its own cursor");
         assertEquals(List.of(), SnapshotStore.current(session, empty()).after(),
                 "an operation with no events served one");

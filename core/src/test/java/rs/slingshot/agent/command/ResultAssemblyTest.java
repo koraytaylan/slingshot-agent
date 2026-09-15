@@ -211,6 +211,25 @@ final class ResultAssemblyTest {
     }
 
     @Test
+    @DisplayName("the publication a runtime writes from carries its slot, caller, and bounds once")
+    void theRuntimePublicationCarriesItsOwnContext() throws RepositoryException {
+        final Session session = prepared();
+        final byte[] whole = content(BOUND + 1);
+        final OverflowPublication.Published published = assertInstanceOf(
+                OverflowPublication.Published.class,
+                OverflowPublication.publish(session,
+                        new OverflowPublication.Publication(caller(), operation(), slot(), CONTRACT),
+                        overflowed(), whole, NOW),
+                "the publication the runtime writes carried its context wrongly");
+        assertEquals(OverflowPublication.RESULT_SLOT, published.slot());
+        final byte[] fetched = read(session);
+        assertTrue(java.util.Arrays.equals(whole, fetched),
+                "what the record-addressed publication wrote is not what the command produced");
+        assertEquals(Digest.of(whole).rendered(), Digest.of(fetched).rendered(),
+                "the published digest does not verify against the bytes the store hands back");
+    }
+
+    @Test
     @DisplayName("a second publication into a taken slot answers no reference at all")
     void asecondPublicationAnswersNothing() throws RepositoryException {
         final Session session = prepared();
