@@ -4,8 +4,6 @@
 package rs.slingshot.agent.command.content;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
@@ -226,6 +224,15 @@ public final class LoadContentResult {
     }
 
     /**
+     * One child, and what the reader orders it by.
+     *
+     * @param order what the reader orders this child by
+     * @param node the child itself
+     */
+    record Ordered(String order, Node node) {
+    }
+
+    /**
      * The order the client's own reader requires children in.
      *
      * <p>Ascending by the child's own name, where a same-name sibling's name carries its {@code
@@ -233,33 +240,56 @@ public final class LoadContentResult {
      * rather than the order the repository happened to hand the nodes over in. The client compares
      * this order and refuses a document whose children are not strictly ascending, so a subtree
      * rendered in the wrong order is a subtree it cannot read.</p>
+     *
+     * <p>The keys are taken where the repository can still report that it would not read a node —
+     * the walk itself, which already declares that failure — rather than inside a comparator that
+     * the language does not let report one. A node nobody can name is a walk that is already
+     * failing, so there is nothing for an ordering to do about it.</p>
      */
-    private enum LocalNameOrder implements java.util.Comparator<Node> {
-        /** Ascending by local name, index last. */
-        ASCENDING;
+    static final class LocalNameOrder {
 
-        @Override
-        public int compare(Node first, Node second) {
-            return keyOf(first).compareTo(keyOf(second));
+        /** Holds the ordering, which carries nothing between the walks that use it. */
+        private LocalNameOrder() {
+            // A class of two orderings and no state, so nothing constructs one. The private
+            // constructor says so where the checker that refuses an instantiable utility class can
+            // read it.
         }
 
         /**
-         * One node's ordering key: its local name, then its same-name index.
+         * Returns the children of `node`, in the order a reader reads them.
          *
-         * @param node the node
+         * @param node the parent
+         * @return its children, ascending
+         * @throws RepositoryException if a child's own name or index cannot be read
+         */
+        static List<Node> of(Node node) throws RepositoryException {
+            final List<Ordered> ordered = new ArrayList<>();
+            final NodeIterator held = node.getNodes();
+            while (held.hasNext()) {
+                final Node child = held.nextNode();
+                ordered.add(new Ordered(keyOf(child.getName(), child.getIndex()), child));
+            }
+            ordered.sort(java.util.Comparator.comparing(Ordered::order));
+            final List<Node> children = new ArrayList<>();
+            for (final Ordered one : ordered) {
+                children.add(one.node());
+            }
+            return children;
+        }
+
+        /**
+         * One ordering key from a name and its same-name index.
+         *
+         * <p>The index is named only past the first, because the first of a name is the name: a
+         * reader rebuilding the tree reads the plain name as index one, and a key that said
+         * otherwise would order the same siblings differently from the way it writes them back.</p>
+         *
+         * @param name the node's local name
+         * @param index its same-name index, counting from one
          * @return the key
          */
-        private static String keyOf(Node node) {
-            try {
-                final int index = node.getIndex();
-                return index <= 1
-                        ? node.getName()
-                        : node.getName() + "[" + index + "]";
-            } catch (final RepositoryException unreadable) {
-                // A node whose own name cannot be read has no place in an ordered answer, and the
-                // walk that reaches one is already failing on the same repository.
-                throw new IllegalStateException(unreadable);
-            }
+        static String keyOf(String name, int index) {
+            return index <= 1 ? name : name + "[" + index + "]";
         }
     }
 
@@ -280,7 +310,7 @@ public final class LoadContentResult {
             this.nodeBudget = nodeBudget;
         }
 
-        Outcome node(Node node, long currentDepth, long maxDepth) throws RepositoryException {
+        Outcome node(Node node, long currentDepth, long depthLimit) throws RepositoryException {
             if (read.incrementAndGet() > nodeBudget) {
                 return new Refused(BUDGET_EXCEEDED, "this load examined more than the "
                         + nodeBudget + " nodes it is allowed, and stopped rather than going on");
@@ -291,12 +321,13 @@ public final class LoadContentResult {
                 return properties;
             }
             rendered.put(PATH, new DocumentValue.Text(node.getPath()));
-            if (currentDepth == maxDepth) {
+            if (currentDepth == depthLimit) {
                 rendered.put(CHILDREN, new DocumentValue.Sequence(List.of()));
-                rendered.put(CHILDREN_TRUNCATED, new DocumentValue.Flag(node.hasNodes() ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
+                rendered.put(CHILDREN_TRUNCATED, new DocumentValue.Flag(node.hasNodes()
+                        ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
                 return new Rendered(new DocumentValue.Mapping(rendered), read.get());
             }
-            return children(node, currentDepth, maxDepth, rendered);
+            return children(node, currentDepth, depthLimit, rendered);
         }
 
         private Outcome properties(Node node, SequencedMap<String, DocumentValue> into)
@@ -331,57 +362,63 @@ public final class LoadContentResult {
             if (property.isMultiple()) {
                 final List<DocumentValue> values = new ArrayList<>();
                 for (final Value value : property.getValues()) {
-                    long len = 0;
-                    if (kind.get() == RepositoryValueKind.BINARY) {
-                        try {
-                            len = countBytes(value.getBinary());
-                        } catch (java.io.IOException e) {
-                            throw new RepositoryException(e);
-                        }
-                    }
-                    values.add(RepositoryValueKind.documentValueOf(kind.get(), value, len));
+                    values.add(RepositoryValueKind.documentValueOf(kind.get(), value,
+                            measuredLength(kind.get(), value)));
                 }
                 one.put(VALUES, new DocumentValue.Sequence(List.copyOf(values)));
             } else {
-                one.put(VALUE,
-                        RepositoryValueKind.documentValueOf(kind.get(), property.getValue(), property.getLength()));
+                one.put(VALUE, RepositoryValueKind.documentValueOf(kind.get(), property.getValue(),
+                        property.getLength()));
             }
             into.put(property.getName(), new DocumentValue.Mapping(one));
             return new Rendered(new DocumentValue.Mapping(into), read.get());
         }
 
-        private static long countBytes(javax.jcr.Binary binary) throws java.io.IOException, RepositoryException {
-            try (java.io.InputStream is = binary.getStream()) {
-                long count = 0;
-                byte[] buffer = new byte[8192];
-                int read;
-                while ((read = is.read(buffer)) != -1) {
-                    count += read;
-                }
-                return count;
+        /**
+         * How many bytes one stored value holds.
+         *
+         * <p>A binary's own length is measured rather than reported, because the property's length
+         * is the length of what is stored beside it rather than the length of the bytes: a reader
+         * told the wrong number cannot ask for the right ones back.</p>
+         *
+         * @param kind what the value is
+         * @param value the value
+         * @return its length in bytes, which is nothing for a kind whose length is not its bytes
+         * @throws RepositoryException if the repository cannot read the value
+         */
+        private static long measuredLength(RepositoryValueKind kind, Value value)
+                throws RepositoryException {
+            if (kind != RepositoryValueKind.BINARY) {
+                return 0;
+            }
+            try {
+                return countBytes(value.getBinary());
+            } catch (java.io.IOException unreadable) {
+                throw new RepositoryException(unreadable);
             }
         }
 
-        private Outcome children(Node node, long currentDepth, long maxDepth,
+        private static long countBytes(javax.jcr.Binary binary)
+                throws java.io.IOException, RepositoryException {
+            try (java.io.InputStream reading = binary.getStream()) {
+                // A stream rather than an indexed loop: this counts bytes and does nothing with
+                // their positions, so saying where each one is would state an iteration order
+                // nobody needed.
+                return reading.transferTo(java.io.OutputStream.nullOutputStream());
+            }
+        }
+
+        private Outcome children(Node node, long currentDepth, long depthLimit,
                                      SequencedMap<String, DocumentValue> into)
                 throws RepositoryException {
-            final List<Node> childNodes = new ArrayList<>();
-            final NodeIterator held = node.getNodes();
-            while (held.hasNext()) {
-                childNodes.add(held.nextNode());
-            }
-            childNodes.sort(LocalNameOrder.ASCENDING);
+            final List<Node> childNodes = LocalNameOrder.of(node);
             final List<DocumentValue> renderedChildren = new ArrayList<>();
             for (final Node child : childNodes) {
-                try {
-                    final Outcome one = node(child, currentDepth + 1, maxDepth);
-                    if (one instanceof Refused) {
-                        return one;
-                    }
-                    renderedChildren.add(((Rendered) one).document());
-                } catch (RepositoryException e) {
-                    throw e;
+                final Outcome one = node(child, currentDepth + 1, depthLimit);
+                if (one instanceof Refused) {
+                    return one;
                 }
+                renderedChildren.add(((Rendered) one).document());
             }
             into.put(CHILDREN, new DocumentValue.Sequence(renderedChildren));
             // The walk reached this node's children, so nothing was left out and the answer says

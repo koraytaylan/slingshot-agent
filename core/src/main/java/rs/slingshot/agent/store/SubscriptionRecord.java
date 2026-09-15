@@ -6,7 +6,6 @@ package rs.slingshot.agent.store;
 import java.nio.charset.StandardCharsets;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
-import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.wire.EventSequence;
 

@@ -145,7 +145,7 @@ public final class SubmissionRegistration {
         }
         final SubscriptionLedger.Outcome subscribed = SubscriptionLedger.subscribe(session,
                 request.submission().caller(), request.subscription(), record.generation(),
-                null, record.lastAdvancedAtUnixMilliseconds(), contract);
+                record.lastAdvancedAtUnixMilliseconds(), contract);
         if (subscribed instanceof final SubscriptionLedger.AtCapacity refused) {
             return new IntakeSlotWrite.AtCapacity(refused.refusal());
         }

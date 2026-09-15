@@ -135,7 +135,8 @@ public record StreamSession(SubscriptionRecord.Identifier subscription,
     }
 
     private static Outcome owned(Session store, Asked asked, SubscriptionRecord subscription,
-                                 StateAuthority.Viewer viewer, AgentContract contract) throws RepositoryException {
+                                 StateAuthority.Viewer viewer, AgentContract contract)
+            throws RepositoryException {
         final Optional<AgentOperationIdentifier> operation = operationIn(asked, contract);
         if (operation.isEmpty() || !StateAuthority.subscription(store, subscription, viewer,
                 new StateAuthority.Scope.OneOperationOfIt(operation.get()), "events")) {

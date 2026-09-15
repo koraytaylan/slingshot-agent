@@ -80,10 +80,6 @@ final class EventStreamServletTest {
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
-    private static rs.slingshot.agent.identity.AgentOperationIdentifier boundOperation() {
-        return event("accepted.json").identifier();
-    }
-
     @BeforeEach
     void bindStateSource() {
         new rs.slingshot.agent.repository.AgentSession().available(
@@ -518,12 +514,11 @@ final class EventStreamServletTest {
         StreamAdmission.prepare(session, caller());
         rs.slingshot.agent.store.LedgerAdmission.prepare(session, caller());
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
-                        boundOperation(), NOW,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), NOW,
                         CONTRACT), "the subscription was not taken");
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION + "-empty", generation(),
-                        event("nothing-waiting.json").identifier(), NOW, CONTRACT));
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION + "-empty",
+                        generation(), NOW, CONTRACT));
         return session;
     }
 

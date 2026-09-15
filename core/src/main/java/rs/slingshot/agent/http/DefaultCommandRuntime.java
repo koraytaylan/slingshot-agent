@@ -33,12 +33,6 @@ import rs.slingshot.agent.command.component.DeleteComponentCommand;
 import rs.slingshot.agent.command.component.ReorderComponentCommand;
 import rs.slingshot.agent.command.component.UpdateComponentCommand;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataCommand;
-import rs.slingshot.agent.command.fragment.CreateContentFragmentCommand;
-import rs.slingshot.agent.command.fragment.UpdateContentFragmentCommand;
-import rs.slingshot.agent.command.fragment.CreateExperienceFragmentCommand;
-import rs.slingshot.agent.command.fragment.UpdateExperienceFragmentCommand;
-import rs.slingshot.agent.command.fragment.FragmentMutationHandler;
-import rs.slingshot.agent.command.fragment.FragmentDeletion;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataHandler;
 import rs.slingshot.agent.command.content.FindAssetsReferencedByPageCommand;
 import rs.slingshot.agent.command.content.FindAssetsReferencedByPageHandler;
@@ -63,6 +57,12 @@ import rs.slingshot.agent.command.content.ReadContentFragmentCommand;
 import rs.slingshot.agent.command.content.ReadContentFragmentHandler;
 import rs.slingshot.agent.command.content.ResolveResourcePathCommand;
 import rs.slingshot.agent.command.content.ResolveResourcePathHandler;
+import rs.slingshot.agent.command.fragment.CreateContentFragmentCommand;
+import rs.slingshot.agent.command.fragment.CreateExperienceFragmentCommand;
+import rs.slingshot.agent.command.fragment.FragmentDeletion;
+import rs.slingshot.agent.command.fragment.FragmentMutationHandler;
+import rs.slingshot.agent.command.fragment.UpdateContentFragmentCommand;
+import rs.slingshot.agent.command.fragment.UpdateExperienceFragmentCommand;
 import rs.slingshot.agent.command.page.CreatePageCommand;
 import rs.slingshot.agent.command.page.CreatePageHandler;
 import rs.slingshot.agent.command.page.DeletePageCommand;
@@ -207,11 +207,14 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                 new CommandDispatch.Registration(FragmentDeletion.CONTENT_WIRE_NAME,
                         new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.CONTENT_REMOVAL)),
                 new CommandDispatch.Registration(CreateExperienceFragmentCommand.WIRE_NAME,
-                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.EXPERIENCE_CREATION)),
+                        new FragmentMutationHandler(contract,
+                                FragmentMutationHandler.Kind.EXPERIENCE_CREATION)),
                 new CommandDispatch.Registration(UpdateExperienceFragmentCommand.WIRE_NAME,
-                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.EXPERIENCE_UPDATE)),
+                        new FragmentMutationHandler(contract,
+                                FragmentMutationHandler.Kind.EXPERIENCE_UPDATE)),
                 new CommandDispatch.Registration(FragmentDeletion.EXPERIENCE_WIRE_NAME,
-                        new FragmentMutationHandler(contract, FragmentMutationHandler.Kind.EXPERIENCE_REMOVAL)));
+                        new FragmentMutationHandler(contract,
+                                FragmentMutationHandler.Kind.EXPERIENCE_REMOVAL)));
     }
 
     /** Writes only the fail-closed state because dispatch and contract are platform objects.

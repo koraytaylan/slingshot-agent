@@ -483,11 +483,6 @@ final class ArtifactIntakeServletTest {
                                 rs.slingshot.agent.store.SubscriptionLedger.subscribe(other,
                                         otherCaller,
                                         "following-daemon-one", identity().generation(),
-                                        assertInstanceOf(
-                                                rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
-                                                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
-                                                        "e".repeat(64), CONTRACT))
-                                                .identifier(),
                                         System.currentTimeMillis(), CONTRACT));
                     }
                 })) {

@@ -303,16 +303,9 @@ final class SubmitServletTest {
     @Test
     void oneSubscriptionServesEveryOperationItsCallerSubmits()
             throws RepositoryException, IOException, ServletException {
-        // A subscription belongs to the following daemon, not to one operation: the client
-        // derives one name per installation, target, revision and generation and submits every
-        // operation of that daemon under it. So a second operation under the same name is its
-        // caller's own next submission rather than a conflict.
         final Session session = prepared();
-        final var first = assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
-                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
-                        "e".repeat(64), CONTRACT)).identifier();
         assertInstanceOf(SubscriptionLedger.Subscribed.class, SubscriptionLedger.subscribe(session, caller(),
-                subscriptionName().rendered(), identityOf("a-submission.json").generation(), first,
+                subscriptionName().rendered(), identityOf("a-submission.json").generation(),
                 System.currentTimeMillis(), CONTRACT));
         final Counting commands = new Counting();
         assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus(),
@@ -335,16 +328,10 @@ final class SubmitServletTest {
         final StatePath.Caller somebodyElse =
                 assertInstanceOf(StatePath.Held.class,
                         StatePath.caller("following-daemon-two"), "the caller was refused").caller();
-        // The other caller's counters are prepared before they are charged, as the submission path
-        // prepares its own: a charge against nodes nothing has made could not be decided at all.
         SubscriptionLedger.prepare(session, somebodyElse);
         assertInstanceOf(SubscriptionLedger.Subscribed.class, SubscriptionLedger.subscribe(session,
                 somebodyElse, subscriptionName().rendered(),
-                identityOf("a-submission.json").generation(),
-                assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
-                        rs.slingshot.agent.identity.AgentOperationIdentifier.of(
-                                "e".repeat(64), CONTRACT)).identifier(),
-                System.currentTimeMillis(), CONTRACT));
+                identityOf("a-submission.json").generation(), System.currentTimeMillis(), CONTRACT));
         final Counting commands = new Counting();
         assertEquals(SubmitServlet.CONFLICT, answering(commands, "a-submission.json").getStatus());
         session.refresh(false);

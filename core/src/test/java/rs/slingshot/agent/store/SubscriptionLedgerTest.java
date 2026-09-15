@@ -91,12 +91,6 @@ final class SubscriptionLedgerTest {
         opened.forEach(org.apache.sling.api.resource.ResourceResolver::close);
     }
 
-    private static rs.slingshot.agent.identity.AgentOperationIdentifier boundOperation() {
-        return assertInstanceOf(rs.slingshot.agent.identity.AgentOperationIdentifier.Held.class,
-                rs.slingshot.agent.identity.AgentOperationIdentifier.of(
-                        "c".repeat(64), CONTRACT)).identifier();
-    }
-
     @Test
     void anExistingNameCannotMoveToAnotherCallerOrOperation() throws RepositoryException {
         final Session session = prepared();
@@ -106,7 +100,7 @@ final class SubscriptionLedgerTest {
         for (final var bindingCaller : List.of(other)) {
             final var refused = assertInstanceOf(SubscriptionLedger.Refused.class,
                     SubscriptionLedger.subscribe(session, bindingCaller, record.identifier().rendered(),
-                            generation(), boundOperation(), NOW, CONTRACT));
+                            generation(), NOW, CONTRACT));
             assertEquals(SubscriptionLedger.Refusal.BINDING_DIFFERS, refused.refusal());
         }
         assertEquals(record, SubscriptionLedger.read(session, record.identifier(), CONTRACT).orElseThrow());
@@ -125,8 +119,7 @@ final class SubscriptionLedgerTest {
         final var refused = assertInstanceOf(SubscriptionLedger.Refused.class,
                 SubscriptionLedger.subscribe(blindTo(session,
                                 SubscriptionRecord.pathOf(record.identifier()).path()),
-                        other, record.identifier().rendered(), generation(),
-                        boundOperation(), NOW, CONTRACT));
+                        other, record.identifier().rendered(), generation(), NOW, CONTRACT));
         assertEquals(SubscriptionLedger.Refusal.BINDING_DIFFERS, refused.refusal());
         assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
         assertEquals(0, CapacityLedger.heldBy(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
@@ -223,7 +216,7 @@ final class SubscriptionLedgerTest {
                 subscribe(session, "a-new-subscription", CONTRACT)).record();
         final SubscriptionLedger.Outcome late = SubscriptionLedger.subscribe(
                 blindTo(session, SubscriptionRecord.pathOf(taken.identifier()).path()), caller(),
-                fixture("a-new-subscription"), generation(), boundOperation(), NOW, CONTRACT);
+                fixture("a-new-subscription"), generation(), NOW, CONTRACT);
         assertInstanceOf(SubscriptionLedger.Resumed.class, late,
                 "a writer that raced for one name took a second subscription");
         assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
@@ -348,7 +341,7 @@ final class SubscriptionLedgerTest {
         assertEquals(2, refused.bound());
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 SubscriptionLedger.subscribe(session, caller("the-other-daemon"),
-                        fixture("at-the-bound"), generation(), boundOperation(), NOW, shares),
+                        fixture("at-the-bound"), generation(), NOW, shares),
                 "a second caller was refused because the first one was busy");
     }
 
@@ -359,7 +352,7 @@ final class SubscriptionLedgerTest {
         final SubscriptionLedger.NotCounted notCounted = assertInstanceOf(
                 SubscriptionLedger.NotCounted.class,
                 SubscriptionLedger.subscribe(session, caller("a-daemon-nobody-prepared"),
-                        fixture("a-new-subscription"), generation(), boundOperation(), NOW, CONTRACT),
+                        fixture("a-new-subscription"), generation(), NOW, CONTRACT),
                 "a store with no counters for this caller said it had room");
         assertEquals(AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
                 notCounted.notCounted().quantity());
@@ -387,7 +380,7 @@ final class SubscriptionLedgerTest {
         final Session session = prepared();
         assertEquals(SubscriptionLedger.Refusal.FOREIGN_GENERATION, SubscriptionLedger.refusalIn(
                 SubscriptionLedger.subscribe(session, caller(), fixture("a-new-subscription"),
-                        generationOf(9), boundOperation(), NOW, CONTRACT)).orElseThrow().refusal(),
+                        generationOf(9), NOW, CONTRACT)).orElseThrow().refusal(),
                 "a cursor into an incarnation nothing serves was written down");
         final SubscriptionRecord taken = assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 subscribe(session, "a-new-subscription", CONTRACT)).record();
@@ -397,7 +390,7 @@ final class SubscriptionLedgerTest {
         assertFalse(SubscriptionLedger.expired(taken, NOW + 1, CONTRACT));
         assertEquals(SubscriptionLedger.Refusal.EXPIRED, SubscriptionLedger.refusalIn(
                 SubscriptionLedger.subscribe(session, caller(), fixture("a-new-subscription"),
-                        generation(), boundOperation(), past, CONTRACT)).orElseThrow().refusal(),
+                        generation(), past, CONTRACT)).orElseThrow().refusal(),
                 "a record older than anything this side keeps was served");
         SubscriptionLedger.end(session, caller(), taken, CONTRACT);
         assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
@@ -426,8 +419,7 @@ final class SubscriptionLedgerTest {
     private SubscriptionLedger.Outcome subscribe(Session session, String fixture,
                                                  AgentContract contract)
             throws RepositoryException {
-        return SubscriptionLedger.subscribe(session, caller(), fixture(fixture), generation(),
-                        boundOperation(), NOW,
+        return SubscriptionLedger.subscribe(session, caller(), fixture(fixture), generation(), NOW,
                 contract);
     }
 
