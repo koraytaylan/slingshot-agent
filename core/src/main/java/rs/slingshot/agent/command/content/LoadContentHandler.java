@@ -69,7 +69,7 @@ public final class LoadContentHandler implements CommandHandler {
         }
         try {
             return answered(LoadContentResult.of(node, command.depth(),
-                    context.discovery().limit()), command, context);
+                    context.discovery().limit()), command);
         } catch (final RepositoryException failure) {
             return whenTheRepositoryFails(failure, command.repositoryPath());
         }
@@ -96,7 +96,7 @@ public final class LoadContentHandler implements CommandHandler {
     }
 
     private static Answer answered(LoadContentResult.Outcome rendered,
-                                   LoadContentCommand command, CallerContext context) {
+                                   LoadContentCommand command) {
         if (rendered instanceof final LoadContentResult.Refused refused) {
             return new Failed(refused.category(), refused.detail());
         }

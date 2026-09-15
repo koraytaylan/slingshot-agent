@@ -3,7 +3,7 @@
 
 package rs.slingshot.agent.command.mutation;
 
-import java.util.Optional;
+import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -56,7 +56,7 @@ public sealed interface MutationOutcome
      * @param detail what was refused, naming no content the caller cannot already see
      * @param refusal the command's own refusal document, where it produces one
      */
-    record Refused(String category, String detail, java.util.Optional<DocumentValue.Mapping> refusal)
+    record Refused(String category, String detail, CommandHandler.RefusalDocument refusal)
             implements MutationOutcome {
 
         /**
@@ -66,7 +66,7 @@ public sealed interface MutationOutcome
          * @param detail what was refused
          */
         public Refused(String category, String detail) {
-            this(category, detail, java.util.Optional.empty());
+            this(category, detail, new CommandHandler.Unstated());
         }
     }
 

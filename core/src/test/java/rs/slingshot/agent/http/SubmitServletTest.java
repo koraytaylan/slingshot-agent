@@ -281,7 +281,7 @@ final class SubmitServletTest {
         // nothing the client does not know is: an answer carrying a field it cannot read is an
         // answer it cannot interpret at all.
         assertEquals(SubmissionResponse.MEMBERS.stream()
-                        .filter(member -> !member.equals(SubmissionResponse.NON_EXECUTION))
+                        .filter(member -> !SubmissionResponse.NON_EXECUTION.equals(member))
                         .sorted()
                         .toList(),
                 acknowledgement.members().keySet().stream().sorted().toList(),

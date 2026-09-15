@@ -421,8 +421,8 @@ public final class TerminalCommit {
             // fetchable from the artifact: the artifact holds the bytes the document describes.
             // So it is written beside the reference, and a published answer without one leaves
             // the property absent rather than holding an empty document.
-            if (published.canonicalResult().isPresent()) {
-                record.setProperty(RESULT_PUBLISHED_DOCUMENT, published.canonicalResult().get());
+            if (published.canonicalResult() instanceof final ExecutionOutcome.Written written) {
+                record.setProperty(RESULT_PUBLISHED_DOCUMENT, written.document());
             } else if (record.hasProperty(RESULT_PUBLISHED_DOCUMENT)) {
                 record.getProperty(RESULT_PUBLISHED_DOCUMENT).remove();
             }
@@ -511,9 +511,11 @@ public final class TerminalCommit {
                 ArtifactSlot.of(record.getProperty(RESULT_SLOT).getString());
         final DigestValue.Outcome digest =
                 DigestValue.of(record.getProperty(RESULT_DIGEST).getString());
-        final java.util.Optional<String> document = record.hasProperty(RESULT_PUBLISHED_DOCUMENT)
-                ? java.util.Optional.of(record.getProperty(RESULT_PUBLISHED_DOCUMENT).getString())
-                : java.util.Optional.empty();
+        final ExecutionOutcome.CanonicalResult document =
+                record.hasProperty(RESULT_PUBLISHED_DOCUMENT)
+                        ? new ExecutionOutcome.Written(
+                                record.getProperty(RESULT_PUBLISHED_DOCUMENT).getString())
+                        : new ExecutionOutcome.Unwritten();
         return slot instanceof final ArtifactSlot.Held held
                 && digest instanceof final DigestValue.Held known
                 ? new ExecutionOutcome.Published(held.slot(),

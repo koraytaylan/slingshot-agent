@@ -48,7 +48,7 @@ public record SubmissionResponse(DocumentProvenance provenance, String revision,
                                  String submittedCommandDigest, String subscription,
                                  long retentionMilliseconds, Acceptance alreadyAccepted,
                                  List<String> physicalJobIdentifiers, Retirement retired,
-                                 Optional<NonExecution> nonExecution) {
+                                 NonExecution nonExecution) {
 
     /** The member the recorded provenance is carried in. */
     public static final String PROVENANCE = "provenance";
@@ -108,17 +108,33 @@ public record SubmissionResponse(DocumentProvenance provenance, String revision,
     }
 
     /**
-     * The one closed refusal the client's acknowledgement understands.
+     * The refusal this side named instead of running the command, or that it named none.
+     *
+     * <p>A case rather than a hole, because the member is written only for a refusal and the client
+     * refuses an answer where it arrives beside an acceptance, a retirement, or a physical job. A
+     * reader handed an absent value would have to invent which of the two it was looking at.</p>
+     */
+    public sealed interface NonExecution permits Refusal, NoRefusal {
+    }
+
+    /**
+     * One closed refusal the client's acknowledgement understands.
      *
      * <p>The two spellings are the client's own, and there is no third: a refusal naming anything
      * else is one the client cannot read, and an unreadable refusal to a submission is the outcome
      * the whole acknowledgement exists to avoid.</p>
      */
-    public enum NonExecution {
+    public enum Refusal implements NonExecution {
         /** One named capacity is full, and nothing was reserved. */
-        CAPACITY,
+        CAPACITY("capacity"),
         /** The command itself is one this agent will not run. */
-        SEMANTIC;
+        SEMANTIC("semantic");
+
+        private final String spelling;
+
+        Refusal(String spelling) {
+            this.spelling = spelling;
+        }
 
         /**
          * How this refusal is spelled on the wire.
@@ -126,8 +142,12 @@ public record SubmissionResponse(DocumentProvenance provenance, String revision,
          * @return the spelling
          */
         public String spelling() {
-            return this == CAPACITY ? "capacity" : "semantic";
+            return spelling;
         }
+    }
+
+    /** That this side refused nothing, so no refusal member is written at all. */
+    public record NoRefusal() implements NonExecution {
     }
 
     /** Holds an acknowledgement whose job list nothing can change afterwards. */
@@ -161,7 +181,7 @@ public record SubmissionResponse(DocumentProvenance provenance, String revision,
                 acceptance,
                 physicalJobIdentifiers,
                 Retirement.STILL_HELD,
-                Optional.empty());
+                new NoRefusal());
     }
 
     /**
@@ -190,8 +210,9 @@ public record SubmissionResponse(DocumentProvenance provenance, String revision,
         members.put(RETIRED, new DocumentValue.Flag(retired == Retirement.NO_LONGER_HELD
                 ? DocumentValue.Truth.TRUE
                 : DocumentValue.Truth.FALSE));
-        nonExecution.ifPresent(refusal -> members.put(NON_EXECUTION,
-                new DocumentValue.Text(refusal.spelling())));
+        if (nonExecution instanceof final Refusal named) {
+            members.put(NON_EXECUTION, new DocumentValue.Text(named.spelling()));
+        }
         return new DocumentValue.Mapping(members);
     }
 

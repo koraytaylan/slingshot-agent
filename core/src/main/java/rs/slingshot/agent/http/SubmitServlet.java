@@ -427,22 +427,32 @@ public final class SubmitServlet extends AgentServlet {
                     rs.slingshot.agent.store.SnapshotStore.record(session, operation.caller(),
                             named.event(), bytes.bytes(), System.currentTimeMillis(),
                             arriving.contract());
-            if (appended instanceof rs.slingshot.agent.store.EventLedger.AtCapacity) {
+            if (!recordedTheFirstEvent(appended)) {
                 return false;
-            }
-            if (!(appended instanceof rs.slingshot.agent.store.EventLedger.Appended)) {
-                // A repeat means another writer recorded the same first event, which is the
-                // ordinary race a resend produces and is not a failure to record.
-                if (!(appended instanceof final rs.slingshot.agent.store.EventLedger.Refused refused)
-                        || refused.refusal()
-                                != rs.slingshot.agent.store.EventLedger.Refusal.SEQUENCE_REPEAT) {
-                    return false;
-                }
             }
         }
         rs.slingshot.agent.execution.Outbox.recordRequestDelivery(session, operation,
                 REQUEST_DELIVERY, System.currentTimeMillis(), arriving.contract());
         return true;
+    }
+
+    /**
+     * Whether the store now holds the first event, either because this writer wrote it or because
+     * another writer already had.
+     *
+     * <p>A repeat means another writer recorded the same first event, which is the ordinary race a
+     * resend produces and is not a failure to record. Everything else — a ledger with no room, and
+     * a refusal naming anything else — is a failure to record.</p>
+     *
+     * @param appended what the ledger answered
+     * @return whether the accepted event is now recorded
+     */
+    private static boolean recordedTheFirstEvent(
+            rs.slingshot.agent.store.EventLedger.Outcome appended) {
+        return appended instanceof rs.slingshot.agent.store.EventLedger.Appended
+                || appended instanceof final rs.slingshot.agent.store.EventLedger.Refused refused
+                        && refused.refusal()
+                                == rs.slingshot.agent.store.EventLedger.Refusal.SEQUENCE_REPEAT;
     }
 
     /** What names the request that carried an immediate operation, as its own observer. */

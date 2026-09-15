@@ -88,7 +88,7 @@ public interface CommandHandler {
      * @param detail what was observed, which is for this side's own record
      * @param refusal the command's own refusal document, where it produces one
      */
-    record Failed(String category, String detail, java.util.Optional<DocumentValue.Mapping> refusal)
+    record Failed(String category, String detail, RefusalDocument refusal)
             implements Answer {
 
         /**
@@ -98,8 +98,31 @@ public interface CommandHandler {
          * @param detail what was observed, which is for this side's own record
          */
         public Failed(String category, String detail) {
-            this(category, detail, java.util.Optional.empty());
+            this(category, detail, new Unstated());
         }
+    }
+
+    /**
+     * A command's own refusal document, where its row declares a shape of its own to send one in.
+     *
+     * <p>A command whose row declares no refusal shape still fails, and saying so under its
+     * category is all it owes. So the two are a case rather than a hole: a reader that met an
+     * absent value would have to guess whether the command produced none or produced an empty
+     * one, and only one of those is a document.</p>
+     */
+    sealed interface RefusalDocument permits Stated, Unstated {
+    }
+
+    /**
+     * The refusal the command produced, in the shape its own row declares.
+     *
+     * @param document the document, whose members are the command's own
+     */
+    record Stated(DocumentValue.Mapping document) implements RefusalDocument {
+    }
+
+    /** That the command names no refusal document of its own. */
+    record Unstated() implements RefusalDocument {
     }
 
     /**

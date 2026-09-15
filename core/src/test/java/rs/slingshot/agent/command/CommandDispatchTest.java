@@ -132,8 +132,30 @@ final class CommandDispatchTest {
                 "a handler that failed answered with a result");
         assertEquals("not_found", failed.category());
         assertTrue(failed.detail().contains("nothing at the address"), failed.detail());
+        assertInstanceOf(CommandHandler.Unstated.class, failed.refusal(),
+                "a handler that named no refusal document was answered as though it had");
         assertEquals(List.of(), failing.categories(),
                 "a handler that declares nothing was taken to declare something");
+    }
+
+    @Test
+    @DisplayName("a handler's own refusal document is carried, and its absence is its own case")
+    void ahandlerRefusalDocumentIsCarried() {
+        final SequencedMap<String, DocumentValue> refusal = new LinkedHashMap<>();
+        refusal.put("failure_category", new DocumentValue.Text("not_found"));
+        refusal.put("target_path", new DocumentValue.Text("/content/site/article"));
+        final CommandHandler.Failed stated = new CommandHandler.Failed("not_found",
+                "nothing at the address this asked about",
+                new CommandHandler.Stated(new DocumentValue.Mapping(refusal)));
+        assertEquals(new DocumentValue.Mapping(refusal),
+                ((CommandHandler.Stated) stated.refusal()).document(),
+                "the command's own refusal document did not survive the answer");
+        assertTrue(!(stated.refusal() instanceof CommandHandler.Unstated),
+                "a refusal carrying a document was one of no document");
+        final CommandHandler.Failed unnamed = new CommandHandler.Failed("not_found",
+                "nothing at the address this asked about");
+        assertEquals(new CommandHandler.Unstated(), unnamed.refusal(),
+                "the two-argument failure did not answer as one that names no document");
     }
 
     @Test

@@ -242,6 +242,36 @@ final class MutationVocabularyTest {
                 new MutationOutcome.Unknown("the acknowledgement was lost").detail());
     }
 
+    @Test
+    @DisplayName("a refusal's own document reaches the caller, and naming none is its own case")
+    void arefusalsOwnDocumentReachesTheCaller() {
+        final SequencedMap<String, DocumentValue> refusal = new LinkedHashMap<>();
+        refusal.put(rs.slingshot.agent.wire.CommandFailure.CATEGORY,
+                new DocumentValue.Text("page_not_found"));
+        refusal.put("target_path", new DocumentValue.Text("/content/site/article"));
+        final MutationOutcome.Refused stated = new MutationOutcome.Refused("page_not_found",
+                "not there", new rs.slingshot.agent.command.CommandHandler.Stated(
+                        new DocumentValue.Mapping(refusal)));
+        assertEquals(List.of("page_not_found", "not there",
+                        new rs.slingshot.agent.command.CommandHandler.Stated(
+                                new DocumentValue.Mapping(refusal))),
+                List.of(stated.category(), stated.detail(), stated.refusal()),
+                "the refusal's own document did not survive the outcome");
+
+        final MutationOutcome.Refused unnamed =
+                new MutationOutcome.Refused("page_not_found", "not there");
+        assertEquals(new rs.slingshot.agent.command.CommandHandler.Unstated(),
+                unnamed.refusal(),
+                "a refusal that names no document answered as one that names one");
+        // And the document reaches the answer the dispatch understands, rather than being dropped
+        // on the way: the client validates a refusal against the request it made.
+        assertEquals(stated.refusal(),
+                ((rs.slingshot.agent.command.CommandHandler.Failed) MutationAnswer.of(
+                        new SingleCommit.Ran(stated), "repository_commit_failed",
+                        SingleCommit.OUTCOME_UNKNOWN)).refusal(),
+                "the refusal's own document was dropped between the outcome and the answer");
+    }
+
     private static List<String> componentsOf(Class<? extends MutationOutcome> shape) {
         return java.util.Arrays.stream(shape.getRecordComponents())
                 .map(java.lang.reflect.RecordComponent::getName)

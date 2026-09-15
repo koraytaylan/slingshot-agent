@@ -117,32 +117,44 @@ public final class OverflowPublication {
                                   ResultAssembly.Overflowed overflowed, byte[] bytes,
                                   long nowUnixMilliseconds, AgentContract contract)
             throws RepositoryException {
-        return publish(session, caller, operation, RESULT, overflowed, bytes, nowUnixMilliseconds,
-                contract);
+        return publish(session, new Publication(caller, operation, RESULT, contract), overflowed,
+                bytes, nowUnixMilliseconds);
+    }
+
+    /**
+     * What one publication is written from, so a call site cannot transpose two of them.
+     *
+     * <p>The session is not among these: a record holding one would be handing a live repository
+     * session out as its own accessor, which is exactly what a record is not for.</p>
+     *
+     * @param caller whose share the artifact comes out of
+     * @param operation the operation the result belongs to
+     * @param slot the slot the command's own artifact fills
+     * @param contract the authenticated contract, which declares every bound
+     */
+    public record Publication(StatePath.Caller caller, StatePath operation, ArtifactSlot slot,
+                              AgentContract contract) {
     }
 
     /**
      * Publishes an overflowing result into the slot its command declares, or nothing at all.
      *
      * @param session the session to write under
-     * @param caller whose share the artifact comes out of
-     * @param operation the operation the result belongs to
-     * @param slot the slot the command's own artifact fills
+     * @param publication where and under whose share it is written
      * @param overflowed the count and digest assembly measured
      * @param bytes the result, which is read once and never held
      * @param nowUnixMilliseconds what this side's clock says
-     * @param contract the authenticated contract, which declares every bound
      * @return the reference, or the category and detail of the failure
      * @throws RepositoryException if the repository fails
      */
-    public static Outcome publish(Session session, StatePath.Caller caller, StatePath operation,
-                                  ArtifactSlot slot, ResultAssembly.Overflowed overflowed,
-                                  byte[] bytes, long nowUnixMilliseconds, AgentContract contract)
-            throws RepositoryException {
-        final ArtifactStore.Publication publication = new ArtifactStore.Publication(
-                slot, overflowed.byteCount(), new ByteArrayInputStream(bytes));
-        return answerFor(ArtifactStore.publish(session, caller, operation, publication,
-                nowUnixMilliseconds, contract), overflowed);
+    public static Outcome publish(Session session, Publication publication,
+                                  ResultAssembly.Overflowed overflowed, byte[] bytes,
+                                  long nowUnixMilliseconds) throws RepositoryException {
+        final ArtifactStore.Publication written = new ArtifactStore.Publication(
+                publication.slot(), overflowed.byteCount(), new ByteArrayInputStream(bytes));
+        return answerFor(ArtifactStore.publish(session, publication.caller(),
+                publication.operation(), written, nowUnixMilliseconds, publication.contract()),
+                overflowed);
     }
 
     /**

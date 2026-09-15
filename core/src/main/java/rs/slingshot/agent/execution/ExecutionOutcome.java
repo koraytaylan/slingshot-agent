@@ -124,7 +124,7 @@ public record ExecutionOutcome(OperationState state, Result result,
      * @param canonicalResult the command's own result document, where this side wrote one
      */
     public record Published(ArtifactSlot slot, long byteCount, DigestValue digest,
-                            Optional<String> canonicalResult) implements Result {
+                            CanonicalResult canonicalResult) implements Result {
 
         /**
          * A published answer whose document the store holds separately, which is none of this
@@ -135,8 +135,36 @@ public record ExecutionOutcome(OperationState state, Result result,
          * @param digest what the store recorded them as digesting to
          */
         public Published(ArtifactSlot slot, long byteCount, DigestValue digest) {
-            this(slot, byteCount, digest, Optional.empty());
+            this(slot, byteCount, digest, new Unwritten());
         }
+    }
+
+    /**
+     * The command's own result document, where this side wrote one beside the reference.
+     *
+     * <p>The document travels beside the reference because the client validates both: only the
+     * reference is answered inline to a caller, and it is the document that the command's own
+     * result schema is checked against. So it is a case here rather than a hole — a reader that
+     * met an absent value would have to invent whether the command declared none.</p>
+     */
+    public sealed interface CanonicalResult permits Written, Unwritten {
+    }
+
+    /**
+     * The document this side wrote beside the reference.
+     *
+     * @param document the document's canonical bytes, as the text they were written as
+     */
+    public record Written(String document) implements CanonicalResult {
+    }
+
+    /**
+     * That this side wrote none, because the store holds the document separately.
+     *
+     * <p>It is the shape of an answer published by something whose result schema is checked
+     * elsewhere, and it is an answer rather than a failure.</p>
+     */
+    public record Unwritten() implements CanonicalResult {
     }
 
     /** That the command produces no answer at all. */

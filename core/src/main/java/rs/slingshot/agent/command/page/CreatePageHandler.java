@@ -143,7 +143,7 @@ public final class CreatePageHandler implements CommandHandler {
         refusal.put(CreatePageResult.FAILURE, new DocumentValue.Text(category));
         refusal.put(CreatePageResult.TARGET_PATH, new DocumentValue.Text(command.targetPath()));
         return new MutationOutcome.Refused(category, detail,
-                java.util.Optional.of(new DocumentValue.Mapping(refusal)));
+                new CommandHandler.Stated(new DocumentValue.Mapping(refusal)));
     }
 
     private static MutationOutcome templated(CreatePageCommand command, ResourceResolver session) {
