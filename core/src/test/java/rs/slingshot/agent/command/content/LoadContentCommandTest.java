@@ -113,7 +113,9 @@ final class LoadContentCommandTest {
             assertEquals(kind, RepositoryValueKind.of(kind.code()).orElseThrow(),
                     kind + " does not map back to itself from the repository's own code");
             assertTrue(!kind.spelling().isBlank(), kind + " is spelled as nothing");
-            assertInstanceOf(DocumentValue.class, RepositoryValueKind.documentValueOf(kind, session().getValueFactory().createValue("1"), 0),
+            assertInstanceOf(DocumentValue.class,
+                    RepositoryValueKind.documentValueOf(
+                            kind, session().getValueFactory().createValue("1"), 0),
                     kind + " renders no value at all");
         }
         assertEquals(TWELVE, RepositoryValueKind.values().length,
@@ -179,25 +181,29 @@ final class LoadContentCommandTest {
         assertTrue(children(rendered(root, 0)).items().isEmpty(),
                 "a depth of zero included children");
         final List<String> children1 = children(rendered(root, 1)).items().stream()
-                .map(c -> assertInstanceOf(DocumentValue.Mapping.class, c).member(LoadContentResult.PATH).orElseThrow())
-                .map(p -> assertInstanceOf(DocumentValue.Text.class, p).value())
+                .map(answer -> assertInstanceOf(DocumentValue.Mapping.class, answer)
+                        .member(LoadContentResult.PATH).orElseThrow())
+                .map(named -> assertInstanceOf(DocumentValue.Text.class, named).value())
                 .toList();
         assertTrue(children1.contains("/content/deep/child"),
                 "a depth of one did not include the child");
         assertTrue(children(childOf(rendered(root, 1), "child")).items().isEmpty(),
                 "a depth of one reached a grandchild");
         final List<String> children2 = children(childOf(rendered(root, 2), "child")).items().stream()
-                .map(c -> assertInstanceOf(DocumentValue.Mapping.class, c).member(LoadContentResult.PATH).orElseThrow())
-                .map(p -> assertInstanceOf(DocumentValue.Text.class, p).value())
+                .map(answer -> assertInstanceOf(DocumentValue.Mapping.class, answer)
+                        .member(LoadContentResult.PATH).orElseThrow())
+                .map(named -> assertInstanceOf(DocumentValue.Text.class, named).value())
                 .toList();
         assertTrue(children2.contains("/content/deep/child/grandchild"),
                 "a depth of two did not include the grandchild");
         assertTrue(!childOf(rendered(root, 2), "child").member(LoadContentResult.CHILDREN)
-                        .map(c -> ((DocumentValue.Sequence) c).items().stream()
-                                .anyMatch(gc -> {
-                                    final DocumentValue.Mapping mapping = assertInstanceOf(DocumentValue.Mapping.class, gc);
+                        .map(held -> ((DocumentValue.Sequence) held).items().stream()
+                                .anyMatch(grandchild -> {
+                                    final DocumentValue.Mapping mapping =
+                                            assertInstanceOf(DocumentValue.Mapping.class, grandchild);
                                     return mapping.member(LoadContentResult.PATH)
-                                            .map(p -> assertInstanceOf(DocumentValue.Text.class, p).value())
+                                            .map(path -> assertInstanceOf(DocumentValue.Text.class,
+                                                    path).value())
                                             .orElse("")
                                             .endsWith("/great");
                                 }))
@@ -298,7 +304,9 @@ final class LoadContentCommandTest {
 
     private DocumentValue.Mapping rendered(Node node, long depth) throws RepositoryException {
         final LoadContentResult.Outcome outcome = LoadContentResult.of(node, depth, NODE_BOUND);
-        final LoadContentResult.Rendered rendered = assertInstanceOf(LoadContentResult.Rendered.class, outcome, "the subtree was refused");
+        final LoadContentResult.Rendered rendered =
+                assertInstanceOf(LoadContentResult.Rendered.class, outcome,
+                        "the subtree was refused");
         return assertInstanceOf(DocumentValue.Mapping.class, rendered.document());
     }
 
@@ -316,9 +324,9 @@ final class LoadContentCommandTest {
     private static DocumentValue.Mapping childOf(DocumentValue.Mapping node, String name) {
         final DocumentValue.Sequence children = children(node);
         final DocumentValue.Mapping child = children.items().stream()
-                .map(v -> assertInstanceOf(DocumentValue.Mapping.class, v))
-                .filter(c -> c.member(LoadContentResult.PATH)
-                        .map(p -> assertInstanceOf(DocumentValue.Text.class, p).value())
+                .map(entry -> assertInstanceOf(DocumentValue.Mapping.class, entry))
+                .filter(held -> held.member(LoadContentResult.PATH)
+                        .map(path -> assertInstanceOf(DocumentValue.Text.class, path).value())
                         .orElse("")
                         .endsWith("/" + name))
                 .findFirst()

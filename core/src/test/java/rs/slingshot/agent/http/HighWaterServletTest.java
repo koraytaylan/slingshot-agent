@@ -141,7 +141,7 @@ final class HighWaterServletTest {
         final Session session = subscribed();
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 SubscriptionLedger.subscribe(session, caller(), ANOTHER_SUBSCRIPTION,
-                        generation(), boundOperation(), NOW, CONTRACT),
+                        generation(), NOW, CONTRACT),
                 "the second subscription was not taken");
         final String answered = ask(SUBSCRIPTION, 0).getOutputAsString();
         assertFalse(answered.contains(ANOTHER_SUBSCRIPTION),
@@ -170,7 +170,7 @@ final class HighWaterServletTest {
         clock = Clock.fixed(Instant.parse(date), ZoneOffset.UTC);
         final Session session = prepared();
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), boundOperation(),
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
                         clock.millis(), CONTRACT));
         assertEquals(OperationLookupServlet.SERVED, ask(SUBSCRIPTION, 0).getStatus());
         final long expiry = clock.millis() + CONTRACT.value(
@@ -206,8 +206,7 @@ final class HighWaterServletTest {
     private Session subscribed() throws RepositoryException {
         final Session session = prepared();
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
-                        boundOperation(), NOW,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), NOW,
                         CONTRACT), "the subscription was not taken");
         return session;
     }

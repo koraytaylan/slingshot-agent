@@ -296,12 +296,11 @@ final class HeartbeatTest {
         StreamAdmission.prepare(session, caller());
         LedgerAdmission.prepare(session, caller());
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(),
-                        boundOperation(), NOW,
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), NOW,
                         CONTRACT), "the subscription was not taken");
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
-                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION + "-empty", generation(),
-                        event("nothing-waiting.json").identifier(), NOW, CONTRACT));
+                SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION + "-empty",
+                        generation(), NOW, CONTRACT));
         return session;
     }
 

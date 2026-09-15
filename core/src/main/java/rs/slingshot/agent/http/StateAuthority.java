@@ -115,11 +115,32 @@ public final class StateAuthority {
         if (!viewer.caller().equals(subscription.binding().caller())) {
             return false;
         }
-        if (scope instanceof Scope.TheSubscriptionAlone) {
-            return true;
-        }
-        final StatePath path = StatePath.operation(subscription.generation(),
-                ((Scope.OneOperationOfIt) scope).operation());
+        // The scope is sealed and both of its shapes are named here, so a scope
+        // this method has not been taught about is a compile error rather than a
+        // cast that fails at run time. The subscription-alone shape is answered
+        // where it is matched, so no absent identifier is ever carried.
+        return switch (scope) {
+            case Scope.TheSubscriptionAlone ignored -> true;
+            case Scope.OneOperationOfIt(AgentOperationIdentifier one) -> named(store, subscription,
+                    viewer, one, route);
+        };
+    }
+
+    /**
+     * Authorizes one operation named under a subscription.
+     *
+     * @param store the internal state session
+     * @param subscription the complete subscription record
+     * @param viewer the original caller and membership source
+     * @param named the operation the request named
+     * @param route the route whose requirement applies
+     * @return whether the caller may follow that operation
+     * @throws RepositoryException if state cannot be read
+     */
+    private static boolean named(Session store, SubscriptionRecord subscription, Viewer viewer,
+                                 AgentOperationIdentifier named, String route)
+            throws RepositoryException {
+        final StatePath path = StatePath.operation(subscription.generation(), named);
         return owner(store, path).filter(subscription.binding().caller()::equals).isPresent()
                 && operation(store, path, viewer, route);
     }

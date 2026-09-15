@@ -11,7 +11,6 @@ import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
-import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 
 /**
@@ -104,20 +103,22 @@ public final class SubscriptionLedger {
     /**
      * Takes a subscription under one name, or resumes the one already under it.
      *
+     * <p>The name is the whole binding: a subscription belongs to the daemon that opened it, so
+     * every operation that daemon submits under the name follows it. Scoping it per operation
+     * would give one daemon a row per command, which is not a thing the client derives.</p>
+     *
      * @param session the session to write under
      * @param caller whose share the row and its bytes come out of
      * @param subscription the following daemon's own name for it
      * @param generation the incarnation it follows
-     * @param operation the only operation it follows
      * @param nowUnixMilliseconds what this side's clock says
      * @param contract the authenticated contract, which declares every bound
      * @return what subscribing did
      * @throws RepositoryException if the repository fails
      */
     public static Outcome subscribe(Session session, StatePath.Caller caller, String subscription,
-                                    EventStoreGeneration generation, AgentOperationIdentifier operation,
-                                    long nowUnixMilliseconds, AgentContract contract)
-            throws RepositoryException {
+                                    EventStoreGeneration generation, long nowUnixMilliseconds,
+                                    AgentContract contract) throws RepositoryException {
         final SubscriptionRecord.Outcome named =
                 SubscriptionRecord.identifier(subscription, contract);
         if (named instanceof final SubscriptionRecord.Refused refused) {
@@ -150,7 +151,7 @@ public final class SubscriptionLedger {
     private static Outcome resumed(Session session, SubscriptionRecord asked, AgentContract contract)
             throws RepositoryException {
         final Optional<SubscriptionRecord> current = readBack(session.getNode(
-                SubscriptionRecord.pathOf(asked.identifier()).path()), asked.identifier(), contract);
+                SubscriptionRecord.pathOf(asked.identifier()).path()), asked.identifier());
         if (current.isEmpty() || !current.get().binding().equals(asked.binding())
                 || !current.get().generation().equals(asked.generation())) {
             return new Refused(Refusal.BINDING_DIFFERS,
@@ -261,21 +262,23 @@ public final class SubscriptionLedger {
                                                      AgentContract contract) throws RepositoryException {
         final StatePath path = SubscriptionRecord.pathOf(identifier);
         return session.nodeExists(path.path())
-                ? readBack(session.getNode(path.path()), identifier, contract) : Optional.empty();
+                ? readBack(session.getNode(path.path()), identifier) : Optional.empty();
     }
 
-    private static Optional<SubscriptionRecord> readBack(Node held, SubscriptionRecord.Identifier identifier,
-                                                          AgentContract contract) throws RepositoryException {
+    private static Optional<SubscriptionRecord> readBack(Node held,
+                                                        SubscriptionRecord.Identifier identifier)
+            throws RepositoryException {
         if (!held.hasProperty(SUBSCRIBER)
                 || !held.hasProperty(SubscriptionRecord.GENERATION)
                 || !held.hasProperty(SubscriptionRecord.LAST_ADVANCED_AT)) {
             return Optional.empty();
         }
-        return decoded(held, identifier, contract);
+        return decoded(held, identifier);
     }
 
-    private static Optional<SubscriptionRecord> decoded(Node held, SubscriptionRecord.Identifier identifier,
-                                                         AgentContract contract) throws RepositoryException {
+    private static Optional<SubscriptionRecord> decoded(Node held,
+                                                        SubscriptionRecord.Identifier identifier)
+            throws RepositoryException {
         final StatePath.Outcome caller = StatePath.caller(held.getProperty(SUBSCRIBER).getString());
         final EventStoreGeneration.Outcome generation = EventStoreGeneration.of(
                 held.getProperty(SubscriptionRecord.GENERATION).getLong());

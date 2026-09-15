@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
@@ -216,6 +217,95 @@ final class LoadContentHandlerTest {
     }
 
     @Test
+    @DisplayName("a property holding several values is answered as several, of its own type")
+    void amultiValuedPropertyIsAnsweredAsSeveral() throws RepositoryException {
+        final javax.jcr.Node node = nodeAt("/content/multi");
+        node.setProperty("labels", new String[] {"first", "second"});
+        // A multi-valued binary is the case whose count is measured rather than
+        // reported: the property's own length is not the sum of its values', and
+        // a reader told the wrong length cannot ask for the right bytes back.
+        node.setProperty("payloads", new javax.jcr.Value[] {
+                session().getValueFactory().createValue(
+                        session().getValueFactory().createBinary(
+                                new java.io.ByteArrayInputStream(new byte[] {1, 2, 3}))),
+                session().getValueFactory().createValue(
+                        session().getValueFactory().createBinary(
+                                new java.io.ByteArrayInputStream(new byte[] {4, 5, 6, 7})))});
+        session().save();
+        final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
+                run("/content/multi", 0), "the subtree was refused");
+        final DocumentValue.Mapping document = (DocumentValue.Mapping) produced.result()
+                .member(LoadContentResult.DOCUMENT).orElseThrow();
+        final DocumentValue.Mapping properties = (DocumentValue.Mapping) document
+                .member(LoadContentResult.PROPERTIES).orElseThrow();
+        final DocumentValue.Mapping labels = (DocumentValue.Mapping) properties
+                .member("labels").orElseThrow();
+        assertEquals(new DocumentValue.Text("multiple"),
+                labels.member(LoadContentResult.CARDINALITY).orElseThrow());
+        assertEquals(2, ((DocumentValue.Sequence) labels
+                .member(LoadContentResult.VALUES).orElseThrow()).items().size());
+        final DocumentValue.Mapping payloads = (DocumentValue.Mapping) properties
+                .member("payloads").orElseThrow();
+        final List<DocumentValue> held = ((DocumentValue.Sequence) payloads
+                .member(LoadContentResult.VALUES).orElseThrow()).items();
+        assertEquals(2, held.size(), "a multi-valued binary was not answered as several");
+        assertEquals("3", ((DocumentValue.Mapping) held.get(0))
+                .member("byte_length").map(LoadContentHandlerTest::textOf).orElseThrow(),
+                "the first binary's length is not the length of its own bytes");
+        assertEquals("4", ((DocumentValue.Mapping) held.get(1))
+                .member("byte_length").map(LoadContentHandlerTest::textOf).orElseThrow(),
+                "the second binary's length is not the length of its own bytes");
+    }
+
+    private static String textOf(DocumentValue value) {
+        return ((DocumentValue.Text) value).value();
+    }
+
+    @Test
+    @DisplayName("a same-name sibling is ordered by the index the client writes it with")
+    void sameNameSiblingsAreOrderedByTheirIndex() throws RepositoryException {
+        // A repository that permits same-name siblings is the only way a node
+        // carries an index past the first, and the ordering key is what decides
+        // where such a node goes. The client compares this order and refuses a
+        // document whose children are not strictly ascending, so the two
+        // spellings are what a reader's own tree is rebuilt from.
+        assertEquals("alpha", LoadContentResult.LocalNameOrder.keyOf("alpha", 1),
+                "the first of a name is the plain name");
+        assertEquals("alpha[2]", LoadContentResult.LocalNameOrder.keyOf("alpha", 2),
+                "the second of a name carries the index the client reads");
+        assertTrue(LoadContentResult.LocalNameOrder.keyOf("alpha", 1)
+                        .compareTo(LoadContentResult.LocalNameOrder.keyOf("alpha", 2)) < 0,
+                "the first of a name does not sort before the second");
+        assertTrue(LoadContentResult.LocalNameOrder.keyOf("alpha[2]", 1)
+                        .compareTo(LoadContentResult.LocalNameOrder.keyOf("beta", 1)) < 0,
+                "a name with an index does not sort by its name alone");
+        // The ordering itself, over real nodes: it is what the walk hands the
+        // answer, so an order taken from the repository rather than from the
+        // keys would put the children back in an order the client refuses.
+        final javax.jcr.Node parent = nodeAt("/content/compare");
+        parent.addNode("beta", "nt:unstructured");
+        parent.addNode("alpha", "nt:unstructured");
+        session().save();
+        final List<String> ordered = new ArrayList<>();
+        for (final Node child : LoadContentResult.LocalNameOrder.of(parent)) {
+            ordered.add(child.getName());
+        }
+        assertEquals(List.of("alpha", "beta"), ordered,
+                "the children came back in the repository's order rather than the reader's");
+        final javax.jcr.Node empty = nodeAt("/content/compare/alpha");
+        assertEquals(List.of(), namesIn(LoadContentResult.LocalNameOrder.of(empty)),
+                "a node with no children was given some");
+    }
+
+    private static List<String> namesIn(List<Node> nodes) throws RepositoryException {
+        final List<String> names = new ArrayList<>();
+        for (final Node node : nodes) {
+            names.add(node.getName());
+        }
+        return names;
+    }
+
+    @Test
     @DisplayName("a document too large to carry is answered as a reference to it")
     void anoversizedDocumentBecomesAReference() {
         final DocumentValue.Mapping answered = LoadContentResult.artifactOf("/content/site",
@@ -238,6 +328,63 @@ final class LoadContentHandlerTest {
         assertEquals(DigestValue.RENDERED_LENGTH, ((DocumentValue.Text) artifact
                         .member(ArtifactDescriptor.DIGEST).orElseThrow()).value().length(),
                 "the reference carries no digest a reader could verify the bytes against");
+    }
+
+    @Test
+    @DisplayName("a node's children are answered in the order a reader can walk them")
+    void childrenAreAnsweredInAscendingOrder() throws RepositoryException {
+        // The order is the answer's own, not the repository's iteration order:
+        // a reader rebuilding a tree from this document needs the children in a
+        // sequence it can rely on, and what a repository hands back is whatever
+        // its storage happens to hold.
+        final javax.jcr.Node parent = nodeAt("/content/ordered");
+        parent.addNode("beta", "nt:unstructured");
+        parent.addNode("alpha", "nt:unstructured");
+        parent.addNode("gamma", "nt:unstructured");
+        session().save();
+        final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
+                run("/content/ordered", 1), "the subtree was refused");
+        final DocumentValue.Mapping document = (DocumentValue.Mapping) produced.result()
+                .member(LoadContentResult.DOCUMENT).orElseThrow();
+        assertEquals(List.of(
+                        "/content/ordered/alpha",
+                        "/content/ordered/beta",
+                        "/content/ordered/gamma"),
+                childPaths(document),
+                "a reader rebuilding the tree would put the children back in another order");
+    }
+
+    @Test
+    @DisplayName("a walk that stopped at its depth says so rather than saying it truncated")
+    void awalkAtItsDepthSaysItTruncated() throws RepositoryException {
+        nodeAt("/content/deep").addNode("child", "nt:unstructured")
+                .addNode("grandchild", "nt:unstructured");
+        session().save();
+        final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
+                run("/content/deep", 0), "the subtree was refused");
+        final DocumentValue.Mapping document = (DocumentValue.Mapping) produced.result()
+                .member(LoadContentResult.DOCUMENT).orElseThrow();
+        assertEquals(DocumentValue.Truth.TRUE, truncatedIn(document),
+                "a walk that stopped at its depth left children out and did not say so");
+        assertTrue(childPaths(document).isEmpty(),
+                "a walk asked for no generations below the node carried some anyway");
+    }
+
+    private static List<String> childPaths(DocumentValue.Mapping document) {
+        final DocumentValue.Sequence children = (DocumentValue.Sequence) document
+                .member(LoadContentResult.CHILDREN).orElseThrow();
+        final List<String> paths = new ArrayList<>();
+        for (final DocumentValue child : children.items()) {
+            final DocumentValue.Mapping held = (DocumentValue.Mapping) child;
+            paths.add(((DocumentValue.Text) held.member(LoadContentResult.PATH).orElseThrow())
+                    .value());
+        }
+        return paths;
+    }
+
+    private static DocumentValue.Truth truncatedIn(DocumentValue.Mapping document) {
+        return ((DocumentValue.Flag) document
+                .member(LoadContentResult.CHILDREN_TRUNCATED).orElseThrow()).value();
     }
 
     private static DigestValue digest() {
