@@ -86,4 +86,5 @@ jobs:
           else
             gh release create "$SNAPSHOT_TAG" --title "$SNAPSHOT_TITLE" --notes "Rolling candidate from develop commit $GITHUB_SHA. Assets are replaced after each successful verified build; this is not a stable release." --prerelease --target "$GITHUB_SHA"
           fi
-          gh release upload "$SNAPSHOT_TAG" assets/* --clobber
+          mapfile -d '' snapshot_assets < <(find assets -type f -print0)
+          gh release upload "$SNAPSHOT_TAG" "${snapshot_assets[@]}" --clobber
