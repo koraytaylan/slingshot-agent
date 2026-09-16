@@ -136,7 +136,19 @@ public final class Outbox {
      */
     public static long attemptsFor(Session session, OperationIdentity identity)
             throws RepositoryException {
-        final StatePath outbox = OperationStore.pathOf(identity).child(NODE);
+        return attemptsAt(session, OperationStore.pathOf(identity));
+    }
+
+    /**
+     * Counts durable deliveries when recovery already holds the operation's location.
+     *
+     * @param session the session to read under
+     * @param operation the operation's repository location
+     * @return the number of distinct recorded deliveries
+     * @throws RepositoryException if the repository fails
+     */
+    static long attemptsAt(Session session, StatePath operation) throws RepositoryException {
+        final StatePath outbox = operation.child(NODE);
         return session.nodeExists(outbox.path()) ? attempts(session, outbox) : 0;
     }
 

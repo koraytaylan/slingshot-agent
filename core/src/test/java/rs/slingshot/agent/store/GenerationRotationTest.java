@@ -45,6 +45,7 @@ import rs.slingshot.agent.identity.OperationIdentity;
 import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.proof.GenerationRotationProbe;
 import rs.slingshot.agent.wire.JobEvent;
 import rs.slingshot.agent.wire.JobEventKind;
 
@@ -69,6 +70,16 @@ final class GenerationRotationTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @Test
+    void theLiveCrashFixturePublishesReadableRecordsBeforeRotation()
+            throws RepositoryException, IOException {
+        final Session session = established();
+        assertEquals("generation-prepared", GenerationRotationProbe.prepare(session));
+        assertInstanceOf(GenerationRotation.Rotated.class,
+                GenerationRotation.rotate(session, generationOf(2), 1000, CONTRACT));
+        assertEquals("retained", GenerationRotationProbe.view(session));
+    }
 
     @Test
     void loweringTheGenerationBoundCannotDropAnyStillRetainedGeneration() throws RepositoryException {

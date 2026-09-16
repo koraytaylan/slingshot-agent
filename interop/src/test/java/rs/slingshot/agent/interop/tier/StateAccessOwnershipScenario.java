@@ -84,10 +84,14 @@ final class StateAccessOwnershipScenario {
         answer(tier, user, "snapshot" + QUERY, "GET", "", expected);
         answer(tier, user, "jobs" + QUERY, "GET", "", expected);
         answer(tier, user, "artifact" + QUERY + "&artifact_slot=proof-answer", "GET", "", expected);
+        // Operation inspection does not transfer another daemon's subscription.
+        // StateAuthority.subscription requires its original caller even for operators.
+        final int subscriptionExpected = "proof-owner".equals(user) ? 200
+                : "anonymous".equals(user) ? 401 : 404;
         answer(tier, user, "subscriptions/high-water", "POST",
                 "{\"daemon_subscription_identifier\":\"following-daemon-one\","
-                        + "\"agent_event_store_generation\":1}", expected);
-        stream(tier, user, expected);
+                        + "\"agent_event_store_generation\":1}", subscriptionExpected);
+        stream(tier, user, subscriptionExpected);
         if ("proof-reader".equals(user) || "proof-removed".equals(user)) {
             final var visible = send(tier.address() + "/var/slingshot-agent/operations/g1/d9/ba/"
                     + OPERATION + ".json", user, "GET", "", "application/json");

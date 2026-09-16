@@ -155,6 +155,27 @@ final class RestartRecoveryTest {
     }
 
     @Test
+    @DisplayName("recovery honors durable delivery exhaustion rather than the admission counter")
+    void recoveryHonorsRecordedExhaustion() throws RepositoryException {
+        final Session session = stored();
+        final String fixture = "accepted-never-started";
+        final long bound = CONTRACT.value(ContractLimit.MAXIMUM_LOGICAL_OUTBOX_ATTEMPTS);
+        attempts(session, fixture, bound - 1);
+        assertEquals(RecoveryDisposition.RESTARTABLE,
+                disposition(session, fixture, REQUEST_START));
+        attempts(session, fixture, bound - 1);
+        assertEquals(bound - 1, Outbox.attemptsFor(session, identity(fixture)),
+                "redelivering the same identifiers must not exhaust the operation");
+        attempts(session, fixture, bound);
+        assertEquals(bound, Outbox.attemptsFor(session, identity(fixture)));
+        assertEquals(0, session.getNode(operation(fixture).path())
+                .getProperty(OperationStore.ATTEMPTS).getLong());
+        assertEquals(RecoveryDisposition.UNDETERMINED,
+                disposition(session, fixture, REQUEST_START),
+                "an exhausted operation cannot be declared restartable");
+    }
+
+    @Test
     @DisplayName("recovery leaves everything exactly as it found it")
     void recoveryLeavesEverythingAsItFoundIt() throws RepositoryException {
         final Session session = stored();
@@ -347,7 +368,13 @@ final class RestartRecoveryTest {
 
     private void attempts(Session session, String fixture, long attempts)
             throws RepositoryException {
-        session.getNode(operation(fixture).path()).setProperty(OperationStore.ATTEMPTS, attempts);
+        for (long index = 0; index < attempts; index++) {
+            final PhysicalAttempt attempt = assertInstanceOf(PhysicalAttempt.Held.class,
+                    PhysicalAttempt.of("recovery-delivery-" + index, "recovery-test",
+                            REQUEST_START, CONTRACT)).attempt();
+            assertInstanceOf(Outbox.Wrote.class,
+                    Outbox.record(session, identity(fixture), attempt, CONTRACT));
+        }
     }
 
     private void lease(Session session, String fixture, long heldUntil)

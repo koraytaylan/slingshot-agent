@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -17,6 +18,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import rs.slingshot.agent.command.CommandRegistry;
+import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.identity.CommandContractIdentity;
+import rs.slingshot.agent.json.BoundedDocumentReader;
+import rs.slingshot.agent.json.DocumentValue;
 
 /**
  * The first scenario: install it, ask it what it is, and believe the running instance rather than
@@ -79,13 +85,40 @@ final class WalkingSkeletonScenario {
     void theCapabilityDocumentIsTheOneTheUnitSuiteProved() {
         final HttpResponse<String> answered = tier.readAsAuthenticatedUser(CAPABILITIES);
         assertEquals(200, answered.statusCode(), answered.body());
-        assertTrue(answered.body().contains("\"command_contracts\":[]"), answered.body());
+        final AgentContract contract = assertInstanceOf(AgentContract.Loaded.class,
+                AgentContract.load()).contract();
+        final DocumentValue.Mapping document = assertInstanceOf(DocumentValue.Mapping.class,
+                assertInstanceOf(BoundedDocumentReader.Read.class, BoundedDocumentReader.read(
+                        answered.body().getBytes(StandardCharsets.UTF_8),
+                        BoundedDocumentReader.Bounds.from(contract))).value());
+        final DocumentValue.Sequence commands = assertInstanceOf(DocumentValue.Sequence.class,
+                document.member("command_contracts").orElseThrow());
+        assertEquals(expectedCommands(contract), commands.items(),
+                "the live Sling-only command identities differ from the committed registry");
         assertTrue(answered.body().contains("\"agent_event_store_generation\":1"), answered.body());
         assertTrue(answered.body().contains("\"continuation_authority_ready\":true"),
                 answered.body());
         assertTrue(answered.body().contains("\"transport_contract_digest\":\""
                         + SIBLING_TRANSPORT_DIGEST + "\""),
                 answered.body());
+    }
+
+    private static List<DocumentValue.Mapping> expectedCommands(AgentContract contract) {
+        final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
+                CommandRegistry.read(REPOSITORY.resolve(CommandRegistry.REGISTRY_DIRECTORY))).registry();
+        final List<String> active = List.of("find_assets_by_metadata", "find_assets_referenced_by_page",
+                "find_pages_by_template", "find_pages_containing_phrase", "find_pages_using_components",
+                "list_asset_renditions", "list_child_pages", "list_resource_mappings", "load_content_as_json",
+                "map_resource_path", "query_paths", "read_content_fragment", "resolve_resource_path",
+                "add_component", "update_component", "delete_component", "reorder_component",
+                "create_asset_folder", "create_asset", "update_asset_metadata", "delete_asset", "move_asset",
+                "create_page", "delete_page", "move_page", "update_page", "create_content_fragment",
+                "update_content_fragment", "delete_content_fragment", "create_experience_fragment",
+                "update_experience_fragment", "delete_experience_fragment");
+        return assertInstanceOf(CommandRegistry.Loaded.class, registry.active(active)).registry().rows()
+                .stream().map(row -> assertInstanceOf(CommandContractIdentity.Held.class,
+                        row.identity(CommandContractIdentity.Bounds.from(contract))).identity().document())
+                .toList();
     }
 
     @Test

@@ -7,10 +7,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Everything a release consists of, and whether a rebuild can check it.
@@ -23,6 +31,57 @@ import org.junit.jupiter.api.Test;
 final class ReleaseArtifactsTest {
 
     private static final Path REPOSITORY = RepositoryTree.locate();
+
+    private static final long VERIFICATION_TIMEOUT_SECONDS = 10;
+
+    @ParameterizedTest
+    @ValueSource(strings = {"same", "changed", "tampered"})
+    @DisplayName("the executable verifier compares original recorded bytes despite inventory rewrites")
+    void verificationRetainsTheOriginalAuthority(String caseName, @TempDir Path scratch)
+            throws IOException, InterruptedException {
+        final Path scripts = Files.createDirectories(scratch.resolve("scripts"));
+        final Path support = Files.createDirectories(scratch.resolve("support"));
+        final Path artifact = scratch.resolve("artifact.txt");
+        Files.writeString(artifact, "before\n");
+        Files.writeString(support.resolve("release-artifacts.toml"),
+                "[[artifact]]\nfile = \"artifact.txt\"\ndigest = \""
+                        + ReleaseArtifacts.digestOf(artifact) + "\"\n");
+        if ("tampered".equals(caseName)) {
+            Files.writeString(artifact, "tampered\n");
+        }
+        Files.copy(REPOSITORY.resolve("scripts/verify_release_artifacts"),
+                scripts.resolve("verify_release_artifacts"));
+        final Path builder = scripts.resolve("build_release_artifacts");
+        Files.writeString(builder, """
+                #!/usr/bin/env bash
+                set -eu
+                root="$(cd "$(dirname "$0")/.." && pwd)"
+                printf '%s\\n' '@OUTPUT@' > "$root/artifact.txt"
+                digest="$(sha256sum "$root/artifact.txt" | cut -d' ' -f1)"
+                printf '[[artifact]]\\nfile = "artifact.txt"\\ndigest = "sha256:%s"\\n' \\
+                    "$digest" > "$root/support/release-artifacts.toml"
+                """.replace("@OUTPUT@", "changed".equals(caseName) ? "after" : "before"));
+        Files.setPosixFilePermissions(builder, PosixFilePermissions.fromString("rwx------"));
+        final Process process = new ProcessBuilder("bash", "scripts/verify_release_artifacts")
+                .directory(scratch.toFile())
+                .redirectErrorStream(true).start();
+        try {
+            assertTrue(process.waitFor(VERIFICATION_TIMEOUT_SECONDS, TimeUnit.SECONDS),
+                    "release verification did not finish");
+            final String output = new String(process.getInputStream().readAllBytes(),
+                    StandardCharsets.UTF_8);
+            if ("same".equals(caseName)) {
+                assertEquals(0, process.exitValue(), output);
+            } else {
+                assertTrue(process.exitValue() != 0,
+                        "verification accepted " + caseName + " bytes: " + output);
+            }
+        } finally {
+            if (process.isAlive()) {
+                process.destroyForcibly();
+            }
+        }
+    }
 
     @Test
     @DisplayName("the source declares the instant every archive entry carries, not the clock")

@@ -218,8 +218,7 @@ public final class RestartRecovery {
         if (outstanding > 0) {
             return intake(session, operation, record, moment, outstanding);
         }
-        final long attempts = record.hasProperty(OperationStore.ATTEMPTS)
-                ? record.getProperty(OperationStore.ATTEMPTS).getLong() : 0;
+        final long attempts = Outbox.attemptsAt(session, operation);
         if (attempts >= moment.contract().value(ContractLimit.MAXIMUM_LOGICAL_OUTBOX_ATTEMPTS)) {
             return new Finding(operation, RecoveryDisposition.UNDETERMINED, "it has had every"
                     + " delivery it may have and never ended, so whether its one commit landed is"

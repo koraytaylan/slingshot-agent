@@ -53,10 +53,11 @@ only two.
 - Every way a command can fail answers the status and the retryability the client already declares,
   one committed row per category with no default branch and no hint on a refusal that trying again
   cannot fix, as `policy/failure-status-mapping.toml` states. (stage: status-mapping-coverage)
-- The second paths this side carries for the client that exists today are exactly the ones it asks
-  for, compared in both directions against the constants `policy/client-route-constants.toml`
-  records out of that repository, each one naming the correction that removes it, and none of them
-  served by what a customer receives. (stage: tests-and-coverage-floor)
+- The compatibility paths match the historical constants recorded in
+  `policy/client-route-constants.toml`, compared in both directions, each naming its correction,
+  and none served by what a customer receives. This checks local policy consistency, not the
+  contents of the sibling repository or compatibility with a newer client.
+  (stage: tests-and-coverage-floor)
 - No command may traverse: every query is declared as data, checked at build time against the
   indexes `policy/query-index-coverage.toml` says each deployment already provides and at run time
   against the plan the instance really returns, and nothing shipped carries an index definition.

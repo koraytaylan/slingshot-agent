@@ -9,7 +9,7 @@
 # that the bytes were trustworthy when they were fetched. Nothing offline can establish
 # the second, and a command that implied it did would be worse than one that says so.
 
-prepared = "2026-09-06T21:48:13Z"
+prepared = "2026-09-15T22:15:59Z"
 
 [[artifact]]
 path = "aopalliance/aopalliance/1.0/aopalliance-1.0.jar"
@@ -6492,39 +6492,39 @@ path = "oro/oro/2.0.8/oro-2.0.8.pom"
 digest = "9aa9dfeb2e85e1d5e7932c87140697cecc2b0fadd933d679fd420a2e43831a82"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-aem/0.0.0/slingshot-agent-aem-0.0.0-javadoc.jar"
+path = "rs/slingshot/slingshot-agent-aem/0.1.0/slingshot-agent-aem-0.1.0-javadoc.jar"
 digest = "7db4eb5c6b35b8baef055e7d614652027bf218e480680629e385f7bb0e1962e3"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-aem/0.0.0/slingshot-agent-aem-0.0.0-sources.jar"
+path = "rs/slingshot/slingshot-agent-aem/0.1.0/slingshot-agent-aem-0.1.0-sources.jar"
 digest = "a4597897345968f5833d79abded3a326d2f9844c4afd3a51ecd0dbffba279658"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-aem/0.0.0/slingshot-agent-aem-0.0.0.jar"
+path = "rs/slingshot/slingshot-agent-aem/0.1.0/slingshot-agent-aem-0.1.0.jar"
 digest = "90639524b59a6e5904f9c7369a0c290a6a7c9e5d386f76220314021cbd270a00"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-aem/0.0.0/slingshot-agent-aem-0.0.0.pom"
+path = "rs/slingshot/slingshot-agent-aem/0.1.0/slingshot-agent-aem-0.1.0.pom"
 digest = "f74ce8a537f158988527b7d7ceb04fc2988b42d78f7526e2f40484695bcb719a"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-core/0.0.0/slingshot-agent-core-0.0.0-javadoc.jar"
+path = "rs/slingshot/slingshot-agent-core/0.1.0/slingshot-agent-core-0.1.0-javadoc.jar"
 digest = "6085c925d39197002ed383224dc73b3c863a5a11b2bf539e1e8b5e59adc2c9c3"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-core/0.0.0/slingshot-agent-core-0.0.0-sources.jar"
+path = "rs/slingshot/slingshot-agent-core/0.1.0/slingshot-agent-core-0.1.0-sources.jar"
 digest = "c63d4b4a0a4a37e582ddf1ad7279e745972390aa421c50311c4e44ce9c0c7660"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-core/0.0.0/slingshot-agent-core-0.0.0.jar"
+path = "rs/slingshot/slingshot-agent-core/0.1.0/slingshot-agent-core-0.1.0.jar"
 digest = "e1e5e810b03e1da9160794944bc6d03e072b2b54f7cb6fe10fc543850df970e3"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-core/0.0.0/slingshot-agent-core-0.0.0.pom"
+path = "rs/slingshot/slingshot-agent-core/0.1.0/slingshot-agent-core-0.1.0.pom"
 digest = "f0a0eee5b6ee5a1e31871ed936aa3541902786657035dc252686bc8fe17c45ff"
 
 [[artifact]]
-path = "rs/slingshot/slingshot-agent-parent/0.0.0/slingshot-agent-parent-0.0.0.pom"
+path = "rs/slingshot/slingshot-agent-parent/0.1.0/slingshot-agent-parent-0.1.0.pom"
 digest = "ffbf0f4ddabe45e9ccdadd77860f6e9ba4240cf516e7b7214f75c98b36635375"
 
 [[artifact]]

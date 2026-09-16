@@ -98,10 +98,13 @@ public record ReplayCursor(EventStoreGeneration generation, EventSequence sequen
     }
 
     private static Optional<Long> whole(String part) {
-        return part.chars().allMatch(scalar -> scalar >= '0' && scalar <= '9') && !part.isEmpty()
-                && part.length() < Long.toString(Long.MAX_VALUE).length()
-                ? Optional.of(Long.parseLong(part))
-                : Optional.empty();
+        final String maximum = Long.toString(Long.MAX_VALUE);
+        if (part.isEmpty() || part.length() > maximum.length()
+                || !part.chars().allMatch(scalar -> scalar >= '0' && scalar <= '9')
+                || (part.length() == maximum.length() && part.compareTo(maximum) > 0)) {
+            return Optional.empty();
+        }
+        return Optional.of(Long.parseLong(part));
     }
 
     /**

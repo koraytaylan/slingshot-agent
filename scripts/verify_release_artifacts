@@ -15,7 +15,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPOSITORY_ROOT
 readonly INVENTORY="${REPOSITORY_ROOT}/support/release-artifacts.toml"
 readonly EXIT_USAGE=2
 readonly EXIT_NOT_RECORDED=3
@@ -31,13 +32,16 @@ if ! grep -q 'digest = "sha256:' "${INVENTORY}"; then
     exit "${EXIT_NOT_RECORDED}"
 fi
 
-readonly BEFORE="$(mktemp -d)"
+BEFORE="$(mktemp -d)"
+readonly BEFORE
 trap 'rm -rf "${BEFORE}"' EXIT
+readonly ORIGINAL_INVENTORY="${BEFORE}/inventory.toml"
+cp "${INVENTORY}" "${ORIGINAL_INVENTORY}"
 
 while IFS='|' read -r file digest; do
     cp "${REPOSITORY_ROOT}/${file}" "${BEFORE}/$(basename "${file}")"
     printf '%s  %s\n' "${digest#sha256:}" "${BEFORE}/$(basename "${file}")" >> "${BEFORE}/recorded"
-done < <(python3 - "${INVENTORY}" <<'PYTHON'
+done < <(python3 - "${ORIGINAL_INVENTORY}" <<'PYTHON'
 import pathlib
 import sys
 
@@ -51,6 +55,9 @@ for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
         file = ""
 PYTHON
 )
+
+# Authenticate the first build before a rebuild can replace its bytes or record.
+sha256sum --check "${BEFORE}/recorded"
 
 "${REPOSITORY_ROOT}/scripts/build_release_artifacts" > /dev/null
 
@@ -82,7 +89,7 @@ except zipfile.BadZipFile:
 PYTHON
         differing=$((differing + 1))
     fi
-done < <(python3 - "${INVENTORY}" <<'PYTHON'
+done < <(python3 - "${ORIGINAL_INVENTORY}" <<'PYTHON'
 import pathlib
 import sys
 

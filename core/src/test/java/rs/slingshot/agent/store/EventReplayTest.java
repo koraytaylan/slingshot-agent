@@ -155,6 +155,23 @@ final class EventReplayTest {
     }
 
     @Test
+    @DisplayName("every representable cursor round trips and overflow is refused")
+    void largeCursorPositionsRoundTripWithoutOverflow() {
+        List.of(999_999_999_999_999_999L, 1_000_000_000_000_000_000L,
+                Long.MAX_VALUE - 1, Long.MAX_VALUE).forEach(position -> {
+                    final ReplayCursor original = assertInstanceOf(ReplayCursor.Held.class,
+                            ReplayCursor.of(position, position)).cursor();
+                    final ReplayCursor parsed = assertInstanceOf(ReplayCursor.Held.class,
+                            ReplayCursor.read(original.rendered())).cursor();
+                    assertEquals(original.rendered(), parsed.rendered());
+                });
+        List.of("9223372036854775808:1", "1:9223372036854775808",
+                "99999999999999999999:1", "1:99999999999999999999")
+                .forEach(rendered -> assertInstanceOf(ReplayCursor.Refused.class,
+                        ReplayCursor.read(rendered)));
+    }
+
+    @Test
     @DisplayName("one read carries no more than a stream may hold buffered for a slow reader")
     void oneReadIsBoundedByWhatAstreamMayBuffer() throws RepositoryException {
         final Session session = recorded();

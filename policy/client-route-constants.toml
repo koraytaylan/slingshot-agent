@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 Koray Taylan Davgana
 
-# Every route constant the client repository actually declares, read out of it rather than recalled.
+# Historical route constants recorded for the client commit below, not the current client.
 #
 # This file is evidence. Each row names the file and the symbol the value came from, at the client
 # commit recorded below, so the alias set can be compared with what the client really asks for
-# instead of with what somebody remembers it asking for. A row nobody can find in that repository is
-# a row that fails, and a constant in that repository with no row here is a constant this side has
-# not looked at.
+# instead of with what somebody remembers it asking for. RouteAliasCoverage compares this local
+# snapshot with the local alias table; it does not read sibling source or verify this provenance.
+# Missing, changed, or additional constants in another client commit do not fail that checker.
 #
-# The three spellings are the whole reason the file exists. The client's production code asks under
+# The three historical spellings are why this file exists. At the recorded commit, production asks under
 # `/libs`; its own simulator and daemon suites ask under `/bin`; and the two disagree again about
 # `operations` against `snapshot` and `artifacts` against `artifact`. No single spelling is served
 # by everything that expects it, which is a thing to fix in the client and to carry, deliberately
