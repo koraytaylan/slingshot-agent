@@ -54,8 +54,8 @@ public final class HighWaterServlet extends AgentServlet {
     /** The member the incarnation arrives and is answered in. */
     public static final String GENERATION = "agent_event_store_generation";
 
-    /** The member the cursor is answered in. */
-    public static final String EVENTS_SHOWN = "events_shown";
+    /** The member carrying the same opaque position as stream and snapshot cursors. */
+    public static final String HIGH_WATER_CURSOR = "high_water_cursor";
 
     /** What a subscription this side has swept is answered with. */
     public static final int EXPIRED = 410;
@@ -174,7 +174,7 @@ public final class HighWaterServlet extends AgentServlet {
         if (askedGeneration > 0 && askedGeneration != serving.number()) {
             // A cursor into an incarnation this store does not serve is not a position at all. The
             // answer names the one it does serve, so a client rebuilds rather than guesses.
-            answered(response, identifier, serving, RESET, 0);
+            answered(response, identifier, serving, RESET, 0, askedGeneration);
             return;
         }
         if (SubscriptionLedger.expired(record.get(), clock.millis(), contract)) {
@@ -182,7 +182,7 @@ public final class HighWaterServlet extends AgentServlet {
             return;
         }
         answered(response, identifier, serving, OperationLookupServlet.SERVED,
-                shownBy(session, identifier));
+                shownBy(session, identifier), askedGeneration);
     }
 
     private static long shownBy(Session session, SubscriptionRecord.Identifier identifier)
@@ -195,11 +195,23 @@ public final class HighWaterServlet extends AgentServlet {
 
     private void answered(SlingHttpServletResponse response,
                           SubscriptionRecord.Identifier identifier, EventStoreGeneration serving,
-                          int status, long shown) throws IOException {
+                          int status, long shown, long askedGeneration) throws IOException {
         final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
-        members.put(EVENTS_SHOWN, new DocumentValue.Whole(shown));
+        members.put("format", new DocumentValue.Text("slingshot.agent/1"));
+        members.put("transport_contract_digest",
+                new DocumentValue.Text(AgentContract.transportContractDigest()));
+        // An empty subscription uses the snapshot route's empty-position sentinel;
+        // a delivered position uses the stream's generation-qualified identifier.
+        members.put(HIGH_WATER_CURSOR, new DocumentValue.Text(
+                shown == 0 ? "0:0" : serving.number() + ":" + shown));
         members.put(GENERATION, new DocumentValue.Whole(serving.number()));
         members.put(SUBSCRIPTION, new DocumentValue.Text(identifier.rendered()));
+        if (status == RESET) {
+            members.put("reason", new DocumentValue.Text("generation_changed"));
+            members.put("requested_agent_event_store_generation",
+                    new DocumentValue.Whole(askedGeneration));
+            members.put("requested_last_event_identifier", new DocumentValue.Nothing());
+        }
         final CanonicalByteWriter.Outcome written =
                 CanonicalByteWriter.write(new DocumentValue.Mapping(members));
         if (!(written instanceof final CanonicalByteWriter.Written bytes)) {

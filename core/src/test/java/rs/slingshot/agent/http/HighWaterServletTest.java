@@ -95,7 +95,9 @@ final class HighWaterServletTest {
         assertEquals(OperationLookupServlet.SERVED, answered.getStatus(),
                 answered.getOutputAsString());
         assertEquals("{\"agent_event_store_generation\":1,\"daemon_subscription_identifier\":\""
-                        + SUBSCRIPTION + "\",\"events_shown\":2}",
+                        + SUBSCRIPTION + "\",\"format\":\"slingshot.agent/1\","
+                        + "\"high_water_cursor\":\"1:2\",\"transport_contract_digest\":\""
+                        + AgentContract.transportContractDigest() + "\"}",
                 answered.getOutputAsString(),
                 "the answer is not the cursor the store holds");
     }
@@ -126,9 +128,13 @@ final class HighWaterServletTest {
         final MockSlingHttpServletResponse answered = ask(SUBSCRIPTION, ANOTHER_GENERATION);
         assertEquals(HighWaterServlet.RESET, answered.getStatus(),
                 "a cursor into an incarnation this store does not serve was answered as a position");
-        assertTrue(answered.getOutputAsString().contains("\"agent_event_store_generation\":1"),
-                "the reset does not name the incarnation this store serves: "
-                        + answered.getOutputAsString());
+        assertEquals("{\"agent_event_store_generation\":1,\"daemon_subscription_identifier\":\""
+                        + SUBSCRIPTION + "\",\"format\":\"slingshot.agent/1\","
+                        + "\"high_water_cursor\":\"0:0\",\"reason\":\"generation_changed\","
+                        + "\"requested_agent_event_store_generation\":7,"
+                        + "\"requested_last_event_identifier\":null,\"transport_contract_digest\":\""
+                        + AgentContract.transportContractDigest() + "\"}",
+                answered.getOutputAsString(), "the reset must echo the request and current authority");
     }
 
     /** An incarnation this store does not serve. */
@@ -146,8 +152,10 @@ final class HighWaterServletTest {
         final String answered = ask(SUBSCRIPTION, 0).getOutputAsString();
         assertFalse(answered.contains(ANOTHER_SUBSCRIPTION),
                 "an answer named a subscription nobody asked about: " + answered);
-        assertEquals(3, answered.split("\":", -1).length - 1,
+        assertEquals(5, answered.split("\":", -1).length - 1,
                 "an answer carries a member this build did not mean to answer with: " + answered);
+        assertTrue(answered.contains("\"high_water_cursor\":\"0:0\""),
+                "an unserved subscription must use the snapshot's empty-position sentinel");
     }
 
     @Test

@@ -31,6 +31,7 @@ import rs.slingshot.agent.store.GenerationStore;
 import rs.slingshot.agent.store.LedgerAdmission;
 import rs.slingshot.agent.store.SaveInterleaving;
 import rs.slingshot.agent.store.SnapshotStore;
+import rs.slingshot.agent.wire.EventSequence;
 import rs.slingshot.agent.wire.JobEvent;
 import rs.slingshot.agent.wire.JobEventKind;
 
@@ -59,10 +60,14 @@ public final class GenerationRotationProbe {
         members.put(JobEvent.IDENTIFIER,
                 new DocumentValue.Text(submission.identity().identifier().rendered()));
         members.put(JobEvent.KIND, new DocumentValue.Text("accepted"));
-        members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(0));
+        members.put(JobEvent.SEQUENCE, new DocumentValue.Whole(EventSequence.FIRST));
         final DocumentValue.Mapping document = new DocumentValue.Mapping(members);
-        final JobEvent event = ((JobEvent.Held) JobEvent.read(document, submission.identity().generation(),
-                CONTRACT)).event();
+        final JobEvent.Outcome decoded = JobEvent.read(document, submission.identity().generation(),
+                CONTRACT);
+        if (!(decoded instanceof final JobEvent.Held held)) {
+            throw new IllegalStateException("the generation fixture event was refused: " + decoded);
+        }
+        final JobEvent event = held.event();
         final byte[] canonical = ((CanonicalByteWriter.Written) CanonicalByteWriter.write(document)).bytes();
         require(SnapshotStore.record(session, submission.caller(), event, canonical, NOW, CONTRACT)
                 instanceof EventLedger.Appended, "the snapshot was not published");

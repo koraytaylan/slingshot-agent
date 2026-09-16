@@ -102,6 +102,31 @@ final class OperationLookupServletTest {
     }
 
     @Test
+    @DisplayName("lookup counts recorded deliveries without counting an immediate resend twice")
+    void lookupCountsRecordedDeliveries() throws RepositoryException, IOException,
+            ServletException {
+        final Session session = recorded();
+        appended(session, JobEventKind.ACCEPTED);
+        final LogicalOperation record = assertInstanceOf(OperationStore.Held.class,
+                OperationStore.read(session, identity())).operation();
+        rs.slingshot.agent.execution.Outbox.recordRequestDelivery(session, record,
+                "lookup-test", NOW, CONTRACT);
+        rs.slingshot.agent.execution.Outbox.recordRequestDelivery(session, record,
+                "lookup-test", NOW, CONTRACT);
+        assertEquals(1, rs.slingshot.agent.execution.Outbox.attemptsFor(session, identity()));
+
+        final MockSlingHttpServletResponse answer = lookup(identifier(), "");
+        assertEquals(OperationLookupServlet.SERVED, answer.getStatus());
+        final DocumentValue.Mapping document = assertInstanceOf(DocumentValue.Mapping.class,
+                assertInstanceOf(BoundedDocumentReader.Read.class,
+                        BoundedDocumentReader.read(answer.getOutputAsString()
+                                .getBytes(StandardCharsets.UTF_8),
+                                BoundedDocumentReader.Bounds.from(CONTRACT))).value());
+        assertEquals(new DocumentValue.Whole(1), document.member("attempt").orElseThrow(),
+                "lookup must count the durable delivery, not the unchanged admission record");
+    }
+
+    @Test
     @DisplayName("a terminal lookup carries the durable inline result for response recovery")
     void terminalLookupCarriesInlineResult() throws RepositoryException, IOException,
             ServletException {

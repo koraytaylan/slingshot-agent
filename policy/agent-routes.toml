@@ -7,7 +7,8 @@
 # servlet path in that namespace is a collision waiting for an upgrade to happen, even though a
 # path registration creates no node. So every route sits under /bin/slingshot/agent.
 #
-# The sibling repository disagrees with itself about this. Its production constants say
+# The historical sibling snapshot in client-route-constants.toml disagrees with itself. It records
+# production constants under
 # /libs/slingshot/agent/..., while its own simulator and its daemon suites say
 # /bin/slingshot/agent/...; the two also disagree about whether the lookup route is `operations` or
 # `snapshot` and whether the artifact route is singular or plural. This file pins one table. Plan
@@ -93,8 +94,9 @@ body_permitted = true
 owning_plan = "0004"
 reason = "Bytes arriving for a command that has not started yet, taken in against a manifest declared before a byte is sent, so a command never starts against a payload still arriving."
 
-# The spellings the client's production code asks for, which this side does not serve by default.
+# Historical client spellings, which this side does not serve by default.
 #
+# Each row must name a declared canonical route; RouteAliasCoverage refuses unknown destinations.
 # Each row is a second path to one servlet and never a second implementation, and the whole set is
 # off unless a deployment turns it on. `/libs` is a namespace customers treat as static — their
 # dispatcher and their content delivery network are frequently configured to pass it more freely

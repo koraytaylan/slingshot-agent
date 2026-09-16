@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Whether the aliases this side carries are the ones the client actually asks for.
+ * Whether the aliases this side carries match its recorded historical client constants.
  *
  * <p>Both directions, because each one hides a different mistake. A client constant nothing serves
  * is a client that cannot talk to this agent at all, found here rather than by somebody watching a
@@ -18,9 +18,10 @@ import java.util.Optional;
  * reason it was added — which is how a temporary compatibility surface becomes a permanent one
  * nobody remembers deciding on.</p>
  *
- * <p>The client's constants are evidence rather than recollection: {@code
- * policy/client-route-constants.toml} records the file and the symbol each value was read from, at
- * a named commit, so a row somebody cannot find in that repository fails here.</p>
+ * <p>{@code policy/client-route-constants.toml} records file and symbol provenance at a named
+ * client commit. This checker reads only this repository's policy and configuration files. It
+ * does not open the client repository, verify that provenance, or detect changes in a newer
+ * client. A passing comparison proves local table consistency, not current interoperability.</p>
  */
 public final class RouteAliasCoverage {
 
@@ -39,13 +40,15 @@ public final class RouteAliasCoverage {
 
     private final List<ConstantRow> constants;
     private final List<AliasRow> aliases;
+    private final List<String> canonicalNames;
     private final List<String> served;
 
     private RouteAliasCoverage(List<ConstantRow> constants, List<AliasRow> aliases,
-                               List<String> served) {
+                               List<String> served, List<String> canonicalNames) {
         this.constants = constants;
         this.aliases = aliases;
         this.served = served;
+        this.canonicalNames = canonicalNames;
     }
 
     /**
@@ -157,11 +160,14 @@ public final class RouteAliasCoverage {
                         .map(row -> new AliasRow(row.text("path"), row.text("canonical"),
                                 row.text("client_version"), row.text("pending_correction")))
                         .toList(),
-                servedIn(RepositoryTree.text(shipped))));
+                servedIn(RepositoryTree.text(shipped)),
+                ((PolicyDocument.Loaded) table).document().rows("route").stream()
+                        .map(row -> row.text("name"))
+                        .toList()));
     }
 
     /**
-     * Every constant the client declares, in the order they were recorded.
+     * Every recorded client constant, in the order it appears in the policy snapshot.
      *
      * @return the constants
      */
@@ -192,11 +198,17 @@ public final class RouteAliasCoverage {
      *
      * @param canonicalPaths every path this side serves canonically
      * @return one finding per client constant nothing reaches, per alias no constant needs, per
-     *     alias with no client version or no pending correction, and per alias the shipped
+     *     alias with an unknown canonical destination, no client version or no pending correction,
+     *     and per alias the shipped
      *     configuration turns on
      */
     public PolicyReport against(List<String> canonicalPaths) {
         final List<PolicyFinding> findings = new ArrayList<>();
+        aliases.stream()
+                .filter(alias -> !canonicalNames.contains(alias.canonical()))
+                .map(alias -> PolicyFinding.inFile(ROUTES_FILE, "alias-unknown-canonical",
+                        alias.path() + " names undeclared canonical route " + alias.canonical()))
+                .forEach(findings::add);
         constants.stream()
                 .filter(constant -> !canonicalPaths.contains(constant.value()))
                 .filter(constant -> aliases.stream()

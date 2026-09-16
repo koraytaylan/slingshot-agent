@@ -283,7 +283,8 @@ public final class OperationLookupServlet extends AgentServlet {
                         .toList()));
         members.put(RETENTION, new DocumentValue.Whole(
                 contract.value(ContractLimit.MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS)));
-        members.put(ATTEMPT, new DocumentValue.Whole(record.attempts()));
+        members.put(ATTEMPT, new DocumentValue.Whole(
+                Outbox.attemptsFor(session, record.identity())));
         members.put(PROGRESS, new DocumentValue.Whole(
                 snapshot.kind().finality() == JobEventKind.Finality.ENDS ? COMPLETE_PROGRESS : 0));
         members.put(JobEvent.GENERATION,

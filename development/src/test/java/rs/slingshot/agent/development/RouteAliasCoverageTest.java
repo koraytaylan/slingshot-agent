@@ -92,6 +92,13 @@ final class RouteAliasCoverageTest {
                 "a constant declared for a half of the client nobody named was accepted");
     }
 
+    @Test
+    @DisplayName("a matching historical constant cannot justify an unknown alias destination")
+    void anAliasMustNameADeclaredCanonicalRoute() {
+        final PolicyReport report = at("unknown-canonical").against(canonicalPaths());
+        assertTrue(report.render().contains("alias-unknown-canonical"), report.render());
+    }
+
     private static RouteAliasCoverage at(String fixture) {
         return assertInstanceOf(RouteAliasCoverage.Loaded.class,
                 RouteAliasCoverage.readBoth(FIXTURES.resolve(fixture + "/constants.toml"),

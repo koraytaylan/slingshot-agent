@@ -3,11 +3,13 @@ SPDX-License-Identifier: MIT OR Apache-2.0
 Copyright 2026 Koray Taylan Davgana
 -->
 
-# Talking to the client that exists today
+# Canonical routes and historical client compatibility
 
-The two halves of Slingshot disagree about what the routes are called. This document says which
-spelling is canonical, what the other repository has to change, what this one carries in the
-meantime, and what it will remove when the change lands.
+This document distinguishes the canonical routes from opt-in compatibility paths for the client
+snapshot at `ee6013218f6213e3c0bce66b1b917522db1552d1`. The five production constants below
+already use the canonical paths in client commit `79397e8aa8e28bdeb65603ca7b68ae92d36c3584`,
+as verified from that commit's three source files. That source comparison is not a live
+interoperability test and does not establish support for every client version.
 
 ## The canonical spelling
 
@@ -30,9 +32,9 @@ the people running the instance did not choose and would not expect.
 `/bin` carries none of that. It is where a Sling servlet path belongs, dispatchers deny it by
 default, and a deployment that wants the agent reachable says so explicitly.
 
-## What the client repository declares today
+## What the historical client snapshot records
 
-Read out of it rather than recalled: `policy/client-route-constants.toml` records every route
+`policy/client-route-constants.toml` records historical route
 constant, with the file and the symbol each came from, at a named client commit. Three spellings
 appear across two repositories, and no single one of them is served by everything that expects it.
 
@@ -44,17 +46,18 @@ appear across two repositories, and no single one of them is served by everythin
 | `/libs/slingshot/agent/events` | `crates/slingshot-agent-connection/src/event_stream_reconnection.rs` | `/bin/slingshot/agent/events` |
 | `/libs/slingshot/agent/artifacts` | `crates/slingshot-agent-connection/src/artifact_download.rs` | `/bin/slingshot/agent/artifact` |
 
-The client's own simulator and its daemon suites already ask under `/bin`, and already spell the
+In that snapshot, the client's simulator and daemon suites ask under `/bin`, and spell the
 artifact route singular — so the client repository disagrees with itself, and the half that is
 wrong is its production constants.
 
-## What the client repository has to change
+## Corrections recorded for that snapshot
 
 Each of the five constants above moves to the canonical spelling. Every alias row in
 `policy/agent-routes.toml` names its own correction in exactly those terms — the symbol, the file,
 and the value it becomes — so the work is a list rather than an investigation. When a constant is
-corrected, the alias row that carried it goes, and the check that compares the two documents in both
-directions fails until it does.
+corrected in the policy snapshot, the alias table must be updated with it for the local comparison
+to pass. Changing client source alone does not make this checker fail. The newer client commit
+named above has all five corrections; it does not need these aliases for those constants.
 
 ## What this repository carries in the meantime, and how it is turned on
 
@@ -69,8 +72,10 @@ deployment whose client has caught up never has any of them at all.
 
 ## What is removed, and when
 
-Every alias, when the constant that asks for it is corrected. There is no row that outlives its
-correction: the alias table states a client version and a pending correction per row, the loader
-refuses a row that states neither, and `RouteAliasCoverage` fails on an alias no recorded client
-constant asks for. That is what stops "we still serve `/libs`" from becoming a thing nobody
-remembers deciding.
+Removing historical compatibility requires an explicit supported-client decision and coordinated
+updates to the snapshot and alias table. `RouteAliasCoverage` rejects an alias that no recorded
+constant asks for, a missing version or correction, and aliases enabled in shipped configuration.
+It reads neither the sibling source nor its Git history. It therefore cannot establish that a
+recorded constant really exists, discover a newly added constant, or automatically retire an alias
+when a newer client corrects it. These aliases remain opt-in historical compatibility, not a
+requirement for the newer commit named above.

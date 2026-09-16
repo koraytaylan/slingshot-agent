@@ -27,14 +27,14 @@ reason = "Building and verifying are two commands because they are two acts: one
 name = "slingshot-agent-all"
 kind = "container-package"
 file = "all/target/slingshot-agent-all-0.0.0.zip"
-digest = "sha256:d28bde75ca707905a66c8466202ebef8dde3fba3360eb02c102b7b97ccb665f8"
+digest = "sha256:15f5d0bf844a327cd841cc9015af678c366727ea197ab988122392335761732c"
 reason = "The one thing an operator installs. Everything else in this list is either inside it or is about it."
 
 [[artifact]]
 name = "slingshot-agent-core"
 kind = "bundle"
 file = "core/target/slingshot-agent-core-0.0.0.jar"
-digest = "sha256:f4cbe9457f97828cada59f87a7b4f7da2e640925673cdbca4b3242d57ac02917"
+digest = "sha256:cc4af8739fef393f839cf8edf089250bd002a89340b26b03de890adb7ae074a2"
 reason = "The Sling-only bundle, published separately because a customer project may embed it in a container of its own."
 
 [[artifact]]
@@ -48,7 +48,7 @@ reason = "The Adobe bundle, published for the same reason and separately because
 name = "slingshot-agent-core-sources"
 kind = "sources"
 file = "core/target/slingshot-agent-core-0.0.0-sources.jar"
-digest = "sha256:7a1555781a243f1b5ceb6c1b62d47c082e45e0d045ff3cf7520f61049ba2f852"
+digest = "sha256:a1b7368ed953d4d9a3ace74188d9af92034e9c18d48c2c1b3f8fab358820139c"
 reason = "The registry requires a sources archive for every published module, and somebody debugging inside their own author instance requires it rather more."
 
 [[artifact]]
@@ -62,7 +62,7 @@ reason = "The same, for the other bundle."
 name = "slingshot-agent-core-javadoc"
 kind = "documentation"
 file = "core/target/slingshot-agent-core-0.0.0-javadoc.jar"
-digest = "sha256:cadf2e20934da707c4f3391d79b34790fe60aa328acd0cd72453b509234fc393"
+digest = "sha256:c1649b776711d7a8acdd353152e422c1956b81394af9c5d5fbb013e409f74ec8"
 reason = "The registry requires it, and it is generated under the same warnings-as-errors every other compilation here is."
 
 [[artifact]]
