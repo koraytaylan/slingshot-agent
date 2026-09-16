@@ -77,7 +77,8 @@ jobs:
           SNAPSHOT_TITLE: Slingshot Agent develop snapshot
         run: |
           if gh release view "$SNAPSHOT_TAG" >/dev/null 2>&1; then
-            gh release edit "$SNAPSHOT_TAG" --title "$SNAPSHOT_TITLE" --prerelease --target "$GITHUB_SHA"
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${SNAPSHOT_TAG}" -f sha="$GITHUB_SHA" -F force=true
+            gh release edit "$SNAPSHOT_TAG" --title "$SNAPSHOT_TITLE" --notes "Rolling candidate from develop commit $GITHUB_SHA. Assets are replaced after each successful verified build; this is not a stable release." --prerelease --target "$GITHUB_SHA"
           else
             gh release create "$SNAPSHOT_TAG" --title "$SNAPSHOT_TITLE" --notes "Rolling candidate from develop commit $GITHUB_SHA. Assets are replaced after each successful verified build; this is not a stable release." --prerelease --target "$GITHUB_SHA"
           fi
