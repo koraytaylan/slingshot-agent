@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+# A trusted, rolling review channel for the head of develop. This is not the
+# stable release channel: every successful build replaces the assets on one
+# explicitly named prerelease, while the tag and release remain separate from
+# immutable release tags.
+name: develop snapshot
+
+on:
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build:
+    name: build and verify develop snapshot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: check out the source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: set up the declared runtime
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: prepare the locked dependency cache
+        run: scripts/prepare_locked_dependency_cache
+      - name: refuse a snapshot with unmet preconditions
+        run: ./mvnw --offline --batch-mode --no-transfer-progress -Dmaven.repo.local=.dependency-cache -Dsurefire.failIfNoSpecifiedTests=false test -Dtest=PublicationAuthorityTest,CentralPrerequisitesTest -pl development -am
+      - name: build the snapshot artifacts
+        run: scripts/build_release_artifacts
+      - name: prove two builds of this source agree
+        run: scripts/verify_release_artifacts
+      - name: keep the verified snapshot assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: develop-snapshot-assets
+          path: |
+            all/target/slingshot-agent-all-0.0.0.zip
+            all/target/slingshot-agent-all-0.0.0.bom.json
+            core/target/slingshot-agent-core-0.0.0.jar
+            core/target/slingshot-agent-core-0.0.0-sources.jar
+            core/target/slingshot-agent-core-0.0.0-javadoc.jar
+            aem/target/slingshot-agent-aem-0.0.0.jar
+            aem/target/slingshot-agent-aem-0.0.0-sources.jar
+            aem/target/slingshot-agent-aem-0.0.0-javadoc.jar
+
+  publish:
+    name: update rolling develop snapshot
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: take the verified snapshot assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: develop-snapshot-assets
+          path: assets
+      - name: replace the trusted rolling prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SNAPSHOT_TAG: develop-snapshot
+          SNAPSHOT_TITLE: Slingshot Agent develop snapshot
+        run: |
+          if gh release view "$SNAPSHOT_TAG" >/dev/null 2>&1; then
+            gh release edit "$SNAPSHOT_TAG" --title "$SNAPSHOT_TITLE" --prerelease --target "$GITHUB_SHA"
+          else
+            gh release create "$SNAPSHOT_TAG" --title "$SNAPSHOT_TITLE" --notes "Rolling candidate from develop commit $GITHUB_SHA. Assets are replaced after each successful verified build; this is not a stable release." --prerelease --target "$GITHUB_SHA"
+          fi
+          gh release upload "$SNAPSHOT_TAG" assets/* --clobber
