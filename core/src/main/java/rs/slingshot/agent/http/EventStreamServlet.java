@@ -221,6 +221,11 @@ public final class EventStreamServlet extends AgentServlet {
     private void admitted(SlingHttpServletRequest request, SlingHttpServletResponse response,
                           Session store, StreamSession session, AgentContract contract)
             throws IOException, RepositoryException {
+        // Prepared first, as every other admitted quantity prepares its own: taking a charge
+        // against a counter nothing has made is a decision that could not be made rather than one
+        // that ran out of room, and answering it the same way would tell a caller to come back to
+        // a store that is not full.
+        StreamAdmission.prepare(store, session.caller());
         final StreamAdmission.Outcome room =
                 StreamAdmission.open(store, session.caller(), contract);
         if (!(room instanceof final StreamAdmission.Admitted admitted)) {

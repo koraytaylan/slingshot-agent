@@ -254,6 +254,15 @@ final class EventStreamServletTest {
     }
 
     @Test
+    @DisplayName("a stream opens for a caller nothing has prepared a counter for yet")
+    void astreamOpensForAcallerNothingHasPreparedAcounterForYet() throws RepositoryException,
+            IOException, ServletException {
+        preparedWithoutAStreamCounter();
+        final MockSlingHttpServletResponse served = ask("with-nothing-waiting");
+        assertEquals(EventStreamServlet.SERVING, served.getStatus(), served.getOutputAsString());
+    }
+
+    @Test
     @DisplayName("the request thread is released before anything is waited for")
     void therequestThreadIsReleasedBeforeAnythingIsWaitedFor() {
         final String source = read(REPOSITORY.resolve(
@@ -516,6 +525,18 @@ final class EventStreamServletTest {
     }
 
     private Session prepared() throws RepositoryException {
+        final Session session = preparedWithoutAStreamCounter();
+        StreamAdmission.prepare(session, caller());
+        return session;
+    }
+
+    /**
+     * The same baseline {@link #prepared()} leaves a session in, without ever calling
+     * {@link StreamAdmission#prepare}: what a caller who has never opened a stream before actually
+     * looks like, so a test through {@link #ask} proves the servlet's own admission prepares the
+     * counter rather than assuming a fixture already did.
+     */
+    private Session preparedWithoutAStreamCounter() throws RepositoryException {
         final Session session = session();
         walked(session, StatePath.ROOT);
         walked(session, operation("accepted.json").path());
@@ -527,7 +548,6 @@ final class EventStreamServletTest {
         session.save();
         GenerationStore.establish(session);
         SubscriptionLedger.prepare(session, caller());
-        StreamAdmission.prepare(session, caller());
         rs.slingshot.agent.store.LedgerAdmission.prepare(session, caller());
         assertInstanceOf(SubscriptionLedger.Subscribed.class,
                 SubscriptionLedger.subscribe(session, caller(), SUBSCRIPTION, generation(), NOW,
