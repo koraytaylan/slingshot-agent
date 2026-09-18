@@ -198,8 +198,11 @@ public record StreamWriter(StreamSession session, AgentContract contract,
         private void closeQuietly() {
             try {
                 delegate.close();
-            } catch (final IOException ignored) {
-                // The deadline has already ended the stream.
+            } catch (final IOException | IllegalStateException ignored) {
+                // The deadline has already ended the stream, or the container closed
+                // this writer out from under it first. Either way this close was
+                // redundant, and the caller's own close below still decides how the
+                // room this stream held is given back.
             }
         }
 
@@ -394,8 +397,12 @@ public record StreamWriter(StreamSession session, AgentContract contract,
         try {
             writer.close();
             return Closing.CLOSED;
-        } catch (final IOException gone) {
-            // A client that is already gone cannot be told the stream ended.
+        } catch (final IOException | IllegalStateException gone) {
+            // A client that is already gone cannot be told the stream ended, and a
+            // container that already closed this writer out from under this call is
+            // telling this side exactly that: the client is gone, not this side's own
+            // graceful close. Either way this call must still say which, or the caller
+            // above never runs release() at all and the room this stream held leaks.
             return Closing.THE_CLIENT_WAS_ALREADY_GONE;
         }
     }

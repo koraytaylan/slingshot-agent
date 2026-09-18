@@ -158,6 +158,17 @@ final class StreamAdmissionTest {
     }
 
     @Test
+    @DisplayName("a writer the container already closed still gives the room back")
+    void awriterTheContainerAlreadyClosedStillGivesTheRoomBack() throws RepositoryException {
+        final Session session = recorded();
+        final StreamSession quiet = following(identifierOf("nothing-waiting.json"));
+        ended(session, admission -> assertEquals(StreamWriter.Ending.REACHED_THE_SESSION_BOUND,
+                new StreamWriter(quiet, CONTRACT, admission)
+                        .serve(new AlreadyClosedWriter(), session, new AdvancingTicker(), ""),
+                "a writer already closed by its container changed how the stream itself ended"));
+    }
+
+    @Test
     @DisplayName("an interrupted transfer ends as a client departure")
     void anInterruptedTransferEndsAsAClientDeparture() throws RepositoryException {
         final Session session = recorded();
@@ -394,6 +405,23 @@ final class StreamAdmissionTest {
     }
 
     /** Something that is not an ending at all, which must still end through the one path. */
+    /** A writer whose container closed it before this side got to, as Sling's own does. */
+    private static final class AlreadyClosedWriter extends Writer {
+
+        @Override
+        public void write(char[] buffer, int from, int length) {
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
+            throw new IllegalStateException("the writer is already closed");
+        }
+    }
+
     private static final class FaultingWriter extends Writer {
 
         @Override
