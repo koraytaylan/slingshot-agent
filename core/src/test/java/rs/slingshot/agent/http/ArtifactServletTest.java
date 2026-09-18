@@ -232,6 +232,25 @@ final class ArtifactServletTest {
     }
 
     @Test
+    @DisplayName("a response the container already closed still reports the transfer served")
+    void aresponseTheContainerAlreadyClosedStillReportsTheTransferServed()
+            throws RepositoryException, IOException, ServletException {
+        published("small.txt");
+        final MockSlingHttpServletRequest request =
+                new MockSlingHttpServletRequest(sling.resourceResolver());
+        request.setMethod("GET");
+        request.setParameterMap(Map.of(
+                ArtifactServlet.OPERATION_QUERY_MEMBER, OPERATION,
+                ArtifactServlet.SLOT_QUERY_MEMBER, SLOT));
+        ((MockRequestPathInfo) request.getRequestPathInfo())
+                .setResourcePath(ArtifactServlet.route().path());
+        final AlreadyClosedOutputResponse response = new AlreadyClosedOutputResponse();
+        new ArtifactServlet(new AdvancingTicker(0)).service(request, response);
+        assertEquals(ArtifactServlet.SERVED, response.getStatus(),
+                "a writer the container already closed changed how the transfer itself ended");
+    }
+
+    @Test
     @DisplayName("a request nobody authenticated is refused, and one this build cannot read too")
     void arequestNobodyAuthenticatedIsRefused() throws RepositoryException, IOException,
             ServletException {
@@ -354,7 +373,7 @@ final class ArtifactServletTest {
      * frames the transfer by is exactly what this suite has to see, so the two members that carry
      * it are the two this double supplies. Everything else is the mock's own.</p>
      */
-    private static final class DeclaringResponse extends MockSlingHttpServletResponse {
+    private static class DeclaringResponse extends MockSlingHttpServletResponse {
 
         private long declared;
 
@@ -374,6 +393,41 @@ final class ArtifactServletTest {
 
         private long declaredContentLength() {
             return declared;
+        }
+    }
+
+    /** A response whose body stream the container already closed, as Sling's own does. */
+    private static final class AlreadyClosedOutputResponse extends DeclaringResponse {
+
+        private AlreadyClosedOutputResponse() {
+            super();
+        }
+
+        @Override
+        public javax.servlet.ServletOutputStream getOutputStream() {
+            return new javax.servlet.ServletOutputStream() {
+
+                private final OutputStream delegate = new ByteArrayOutputStream();
+
+                @Override
+                public void write(int value) throws IOException {
+                    delegate.write(value);
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setWriteListener(javax.servlet.WriteListener listener) {
+                }
+
+                @Override
+                public void close() {
+                    throw new IllegalStateException("the writer is already closed");
+                }
+            };
         }
     }
 

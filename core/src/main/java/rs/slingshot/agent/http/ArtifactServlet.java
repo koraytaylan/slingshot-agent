@@ -260,6 +260,7 @@ public final class ArtifactServlet extends AgentServlet {
         }
     }
 
+    @SuppressWarnings("PMD.UseTryWithResources")
     private void served(SlingHttpServletResponse response, Session store, StatePath operation,
                         ArtifactRecord record, AgentContract contract)
             throws IOException, RepositoryException {
@@ -282,11 +283,22 @@ public final class ArtifactServlet extends AgentServlet {
         response.setContentLengthLong(record.byteCount());
         response.setHeader(BYTE_COUNT_HEADER, String.valueOf(record.byteCount()));
         response.setHeader(DIGEST_HEADER, headerSafe(record.digest().rendered()));
-        try (InputStream reading = bytes.get(); OutputStream writing = response.getOutputStream()) {
-            if (transfer(reading, writing, contract) < record.byteCount()) {
-                // A transfer that stopped short has already told the reader everything this side
-                // can: the count in the head is what should have arrived, and the body is what did.
-                response.flushBuffer();
+        try (InputStream reading = bytes.get()) {
+            // The response's own stream is closed explicitly rather than by a
+            // try-with-resources, because a container that already closed it out
+            // from under this route throws from that implicit close - past the
+            // reach of any catch inside the block - and an already-fully-served
+            // transfer must not be reported as this route's own failure over that.
+            final OutputStream writing = response.getOutputStream();
+            try {
+                if (transfer(reading, writing, contract) < record.byteCount()) {
+                    // A transfer that stopped short has already told the reader everything this
+                    // side can: the count in the head is what should have arrived, and the body is
+                    // what did.
+                    response.flushBuffer();
+                }
+            } finally {
+                closeQuietly(writing);
             }
         }
     }
@@ -435,8 +447,10 @@ public final class ArtifactServlet extends AgentServlet {
     private static void closeQuietly(Closeable closeable) {
         try {
             closeable.close();
-        } catch (final IOException ignored) {
-            // The deadline already ended the transfer; close is best effort.
+        } catch (final IOException | IllegalStateException ignored) {
+            // The deadline already ended the transfer, or the container already
+            // closed this stream out from under it; either way close is best
+            // effort and never this route's own failure to report.
         }
     }
 
