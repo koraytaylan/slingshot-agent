@@ -3,6 +3,7 @@
 
 package rs.slingshot.agent.http;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -25,9 +26,17 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
  * is available to administrators and to nobody else until somebody deliberately says otherwise, and
  * the configuration replaces the complete permitted group set. A configuration naming no group refuses
  * every submission rather than admitting everybody — the failure that looks like a broken install
- * is better than the one that looks like nothing — and a configuration naming a group that does not
- * exist is refused naming it, because an operator who believes they have granted access to a group
- * that is spelled differently has granted it to nobody and has no way to find out.</p>
+ * is better than the one that looks like nothing.</p>
+ *
+ * <p>Membership is asked before absence. A caller who is a member of any permitted group that exists
+ * is admitted, whichever other named groups this instance does not hold, because one configuration
+ * is deployed to several environments and each environment holds only its own group: on AEM as a
+ * Cloud Service the administrators of one environment arrive through a group named for that
+ * environment, and a configuration naming the development, stage and production groups would
+ * otherwise refuse everybody everywhere. Only where nothing admits the caller does a group that does
+ * not exist decide the answer, and then the refusal names every such group, because an operator who
+ * believes they have granted access to a group that is spelled differently has granted it to nobody
+ * and has no other way to find out.</p>
  *
  * <p>Reading is not submitting. Somebody who started work may follow it without being a member of
  * anything, because it is theirs; and a member may read anybody's, because that is what operating
@@ -127,7 +136,10 @@ public final class AuthorizationGate {
     public enum Refusal {
         /** No group is permitted at all, so nobody may start work. */
         NO_GROUP_IS_PERMITTED,
-        /** A permitted group is named that nothing on this instance is called. */
+        /**
+         * Nothing admits the caller, and at least one permitted group is named that nothing on this
+         * instance is called.
+         */
         NO_SUCH_GROUP,
         /** They are in none of the permitted groups, and this is not their own work. */
         NOT_PERMITTED,
@@ -202,16 +214,21 @@ public final class AuthorizationGate {
                     + " agent, so nobody may — which is a configuration nobody has made rather than"
                     + " an agent that admits everybody");
         }
+        final List<String> missing = new ArrayList<>();
         for (final String group : request.permitted()) {
             final Standing standing = request.groups().standing(group);
-            if (standing == Standing.NO_SUCH_GROUP) {
-                return new Refused(Refusal.NO_SUCH_GROUP, "the permitted group " + group
-                        + " is not a group on this instance, so whoever named it has permitted"
-                        + " nobody and has no way to notice");
-            }
             if (standing == Standing.A_MEMBER) {
                 return new Admitted(required);
             }
+            if (standing == Standing.NO_SUCH_GROUP) {
+                missing.add(group);
+            }
+        }
+        if (!missing.isEmpty()) {
+            return new Refused(Refusal.NO_SUCH_GROUP, "this caller is in none of the permitted"
+                    + " groups this instance holds, and no group on this instance is called "
+                    + String.join(" or ", missing) + ", so whoever named it has permitted nobody"
+                    + " through it and has no other way to notice");
         }
         return new Refused(Refusal.NOT_PERMITTED, "this caller is in none of the permitted groups"
                 + " and this is " + (request.ownership() == Ownership.NOT_ABOUT_AN_OPERATION

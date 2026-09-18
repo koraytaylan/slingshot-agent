@@ -173,12 +173,15 @@ public final class CapabilityServlet extends AgentServlet {
             // The base settles this before a servlet is reached at all. It is decided again here
             // because `answer` is also what a suite calls directly, and a check a suite can walk
             // around is a check that proves nothing about the route.
-            refuse(response, refused.get().refusal().status());
+            refuse(response, refused.get().refusal().status(), refused.get().refusal().name(),
+                    refused.get().detail());
             return;
         }
-        if (AuthenticationGate.refusalIn(
-                AuthenticationGate.of(request)).isPresent()) {
-            refuse(response, AuthenticationGate.STATUS);
+        final java.util.Optional<AuthenticationGate.Refused> anonymous =
+                AuthenticationGate.refusalIn(AuthenticationGate.of(request));
+        if (anonymous.isPresent()) {
+            refuse(response, AuthenticationGate.STATUS, anonymous.get().refusal().name(),
+                    anonymous.get().detail());
             return;
         }
         final String document = document(readiness(), binding.get().commands()).render();

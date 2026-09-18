@@ -26,11 +26,55 @@ packages. What each part is, and why the bundles are two rather than one, is in 
   the agent itself may not write your content, and widening who may call it does not change that.
 - **A permitted group.** The shipped configuration names `administrators` and nothing else. Nobody
   outside it may start work. Changing that list is the decision described in
-  [SECURITY.md](SECURITY.md).
+  [SECURITY.md](SECURITY.md), and on Adobe Experience Manager as a Cloud Service it is a change you
+  have to make, because the shipped group is not the one your administrators arrive through there.
+  The next section says why and what to name instead.
 - **Nothing else.** No index is shipped and none is required: every query this product issues is
   declared as data and checked against the indexes each row already provides. A command that would
   have needed a new index was refused at build time and rewritten to walk the resources it was given
   instead.
+
+## Permitted groups on AEM as a Cloud Service
+
+On Cloud Service the local `administrators` group does not contain the people you think of as
+administrators. A user made an administrator of an environment in the Adobe Admin Console, and a
+Developer Console technical account created for that environment, both arrive through a group the
+platform creates per environment, named like
+`AEM Administrators - author - Program 12345 - Environment 67890`. Neither is a member of
+`administrators`, so with the shipped configuration both authenticate and are then refused starting
+work with a bare `403` and an empty body.
+
+Name the environment's own group in `permitted.groups`, in your project's `ui.config` under
+`osgiconfig/config` (or a run-mode folder such as `config.author`), as
+`rs.slingshot.agent.http.AuthorizationGate.cfg.json`. The file replaces the complete list, so keep
+`administrators` in it if you still want that group admitted:
+
+```json
+{
+  "permitted.groups": [
+    "administrators",
+    "AEM Administrators - author - Program 12345 - Environment 67890",
+    "AEM Administrators - author - Program 12345 - Environment 67891",
+    "AEM Administrators - author - Program 12345 - Environment 67892"
+  ]
+}
+```
+
+One configuration may name the groups of several environments, as the example does for development,
+stage and production. A caller who is a member of any listed group that exists on the instance is
+admitted; the groups other environments hold are simply not found here and do not refuse anybody.
+Only when no listed group admits the caller does a missing group decide the answer, and then the
+refusal names every listed group the instance does not hold. The group is looked up with the
+caller's own session, so a group that caller cannot read is treated the same as one that does not
+exist. Take the exact group names from the environment's own group list, because a name that differs
+by a single character or space admits nobody.
+
+Every refusal an agent route answers is written to the instance's log as one warning under the
+logger `slingshot-agent`, naming the route, the status, the refusal and what was observed. For a
+refused submission that says whether no group is permitted (`NO_GROUP_IS_PERMITTED`), which listed
+groups this instance does not hold (`NO_SUCH_GROUP`), or that the caller is in none of them
+(`NOT_PERMITTED`). The response itself stays a status and an empty body, so the log is where to look
+when a caller who authenticated is refused.
 
 ## What it costs
 

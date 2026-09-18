@@ -62,9 +62,11 @@ reason = "Nothing this product does involves anybody's identity but its own. A s
 # `administrators` is one an operator can verify their install with; a default of nobody is one they
 # cannot tell apart from a broken install; and a default of everybody is not a default at all.
 #
-# A configuration naming no group refuses every submission rather than admitting everybody, and one
-# naming a group that does not exist is refused naming it rather than silently admitting fewer
-# people than the operator believes they named.
+# A configuration naming no group refuses every submission rather than admitting everybody. A caller
+# who is a member of any named group that exists is admitted, whichever other named groups this
+# instance does not hold, so one configuration can name the groups of several environments. Where
+# nothing admits the caller, a named group that does not exist is refused naming it rather than
+# silently admitting fewer people than the operator believes they named.
 [permitted_groups]
 configuration = "rs.slingshot.agent.http.AuthorizationGate"
 property = "permitted.groups"

@@ -60,6 +60,15 @@ public final class ArtifactServlet extends AgentServlet {
     /** The route this servlet answers, by the name the committed table gives it. */
     public static final String ROUTE_NAME = "artifact-transfer";
 
+    /** The refusal a line names where the operation holds no artifact bytes in the slot. */
+    private static final String NO_ARTIFACT = "NO_ARTIFACT";
+
+    /** The refusal a line names where no result references the artifact in the slot. */
+    private static final String UNREFERENCED_ARTIFACT = "UNREFERENCED_ARTIFACT";
+
+    /** The refusal a line names where the stored bytes are not the ones the record vouches for. */
+    private static final String DIGEST_DIFFERS = "DIGEST_DIFFERS";
+
     /** The query member naming which operation the artifact belongs to. */
     public static final String OPERATION_QUERY_MEMBER =
             OperationLookupServlet.OPERATION_QUERY_MEMBER;
@@ -155,12 +164,17 @@ public final class ArtifactServlet extends AgentServlet {
             return;
         }
         final AgentContract.Outcome loaded = AgentContract.load();
-        if (!(loaded instanceof final AgentContract.Loaded held)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        if (loaded instanceof final AgentContract.Refused unreadable) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, unreadable.failure().name(),
+                    unreadable.detail());
             return;
         }
-        if (AuthenticationGate.refusalIn(AuthenticationGate.of(request)).isPresent()) {
-            refuse(response, AuthenticationGate.STATUS);
+        final AgentContract.Loaded held = (AgentContract.Loaded) loaded;
+        final Optional<AuthenticationGate.Refused> anonymous =
+                AuthenticationGate.refusalIn(AuthenticationGate.of(request));
+        if (anonymous.isPresent()) {
+            refuse(response, AuthenticationGate.STATUS, anonymous.get().refusal().name(),
+                    anonymous.get().detail());
             return;
         }
         withState(response, state -> asked(request, response, held.contract(), state));
@@ -174,13 +188,15 @@ public final class ArtifactServlet extends AgentServlet {
                 ArtifactSlot.of(text(request.getParameter(SLOT_QUERY_MEMBER)));
         if (!(named instanceof final AgentOperationIdentifier.Held operation)
                 || !(slot instanceof final ArtifactSlot.Held held)) {
-            refuse(response, REFUSED);
+            refuse(response, REFUSED, UNREADABLE_REQUEST,
+                    "the request names no operation and slot this build reads");
             return;
         }
         final StatePath path = StatePath.operation(serving(store), operation.identifier());
         final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
         if (viewer.isEmpty() || !StateAuthority.operation(store, path, viewer.get(), ROUTE_NAME)) {
-            refuse(response, NOTHING_HERE);
+            refuse(response, NOTHING_HERE, NOT_HELD_FOR_THIS_CALLER,
+                    "no operation this caller may read is held under that identifier");
             return;
         }
         held(response, store, path, held.slot(), contract);
@@ -193,14 +209,16 @@ public final class ArtifactServlet extends AgentServlet {
         if (record.isEmpty()) {
             // The authorized operation no longer holds this artifact; expose no details about
             // records outside the requested operation and slot.
-            refuse(response, NOTHING_HERE);
+            refuse(response, NOTHING_HERE, NO_ARTIFACT,
+                    "the operation holds no artifact in that slot");
             return;
         }
         if (!referenced(store, operation, record.get())) {
             // Bytes nothing points at. An artifact a result does not reference is a leftover — from
             // an attempt that did not finish, or a payload that arrived for work that never ran —
             // and serving it would be this side vouching for something nothing here produced.
-            refuse(response, NOT_REFERENCED);
+            refuse(response, NOT_REFERENCED, UNREFERENCED_ARTIFACT,
+                    "no result of the operation references the artifact in that slot");
             return;
         }
         vouched(response, store, operation, record.get(), contract);
@@ -221,7 +239,8 @@ public final class ArtifactServlet extends AgentServlet {
         if (held.isEmpty() || !held.get().equals(record.digest())) {
             // Not a byte of it goes out. A reader handed bytes and then told they may be the wrong
             // ones has been given something it has to decide what to do with.
-            refuse(response, NOT_VOUCHED_FOR);
+            refuse(response, NOT_VOUCHED_FOR, DIGEST_DIFFERS,
+                    "the stored bytes do not digest to what the artifact record declares");
             return;
         }
         served(response, store, operation, record, contract);
@@ -246,7 +265,8 @@ public final class ArtifactServlet extends AgentServlet {
             throws IOException, RepositoryException {
         final Optional<InputStream> bytes = ArtifactStore.open(store, operation, record.slot());
         if (bytes.isEmpty()) {
-            refuse(response, NOTHING_HERE);
+            refuse(response, NOTHING_HERE, NO_ARTIFACT,
+                    "the artifact's bytes could not be opened");
             return;
         }
         response.setStatus(SERVED);

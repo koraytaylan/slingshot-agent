@@ -112,6 +112,13 @@ bundle = "core"
 provided_by = ["aem-cloud-service", "aem-6-5-lts"]
 reason = "Group membership, which is how an operator's decision about who may use this agent is answered by the repository rather than by the servlet container. The container can only say whether somebody is a member; only this can say that nothing is called that, which is the answer an operator who misspelled a group needs."
 
+[[package]]
+name = "org.slf4j"
+range = "[1.7,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The logging interface the one log writer writes through, so a refusal that is indistinguishable on the wire is still findable by whoever operates the instance. The range starts at the older line rather than at the version compiled against, because the writer calls only what both lines declare and a deployment still carrying the older one would otherwise not resolve the bundle at all."
+
 # The Adobe-only bundle's own footprint. It is four packages and that is the point: everything this
 # bundle does is call one platform service, and every decision about what to call it with was made
 # on the other side of the seam it imports.

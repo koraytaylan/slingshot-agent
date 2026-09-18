@@ -86,15 +86,19 @@ public final class ArtifactIntakeServlet extends AgentServlet {
     protected void serve(SlingHttpServletRequest request, SlingHttpServletResponse response)
             throws IOException {
         final AgentContract.Outcome loaded = AgentContract.load();
-        if (!(loaded instanceof final AgentContract.Loaded held)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        if (loaded instanceof final AgentContract.Refused unreadable) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, unreadable.failure().name(),
+                    unreadable.detail());
             return;
         }
+        final AgentContract.Loaded held = (AgentContract.Loaded) loaded;
         final AuthenticationGate.Outcome asking = AuthenticationGate.of(request);
-        if (!(asking instanceof final AuthenticationGate.Admitted admitted)) {
-            refuse(response, AuthenticationGate.STATUS);
+        if (asking instanceof final AuthenticationGate.Refused anonymous) {
+            refuse(response, AuthenticationGate.STATUS, anonymous.refusal().name(),
+                    anonymous.detail());
             return;
         }
+        final AuthenticationGate.Admitted admitted = (AuthenticationGate.Admitted) asking;
         withState(response, state -> answer(request, response, admitted.caller(), held.contract(), state));
     }
 
@@ -109,13 +113,15 @@ public final class ArtifactIntakeServlet extends AgentServlet {
         final Optional<ArtifactSlot> slot = slotIn(request.getParameter(SLOT_QUERY_MEMBER));
         final Optional<StatePath.Caller> counted = caller.counted();
         if (named.isEmpty() || slot.isEmpty() || counted.isEmpty()) {
-            refuse(response, REFUSED);
+            refuse(response, REFUSED, UNREADABLE_REQUEST,
+                    "the request names no operation and slot this build reads, or no counted caller");
             return;
         }
         final StatePath operation = StatePath.operation(serving(session), named.get());
         final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
         if (viewer.isEmpty() || !StateAuthority.operation(session, operation, viewer.get(), ROUTE_NAME)) {
-            refuse(response, NOT_WAITED_FOR);
+            refuse(response, NOT_WAITED_FOR, NOT_HELD_FOR_THIS_CALLER,
+                    "no operation this caller may write to is held under that identifier");
             return;
         }
         written(response, session, StateAuthority.owner(session, operation).orElseThrow(),
@@ -130,7 +136,8 @@ public final class ArtifactIntakeServlet extends AgentServlet {
         final IntakeSlotWrite.Outcome outcome =
                 IntakeSlotWrite.write(session, caller, arriving, contract);
         if (outcome instanceof IntakeSlotWrite.Unavailable) {
-            refuse(response, TEMPORARILY_UNAVAILABLE);
+            refuse(response, TEMPORARILY_UNAVAILABLE, STATE_UNAVAILABLE,
+                    "the intake slot could not be written yet");
             return;
         }
         final Optional<IntakeSlotWrite.Refused> refused = IntakeSlotWrite.refusalIn(outcome);
@@ -140,7 +147,8 @@ public final class ArtifactIntakeServlet extends AgentServlet {
             response.getOutputStream().flush();
             return;
         }
-        refuse(response, statusFor(refused.get().refusal()));
+        refuse(response, statusFor(refused.get().refusal()), refused.get().refusal().name(),
+                refused.get().detail());
     }
 
     /**

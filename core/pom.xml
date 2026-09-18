@@ -235,6 +235,7 @@ Bundle-SymbolicName: ${project.groupId}.agent.core
 Import-Package: \
   org.apache.jackrabbit.api;version="[2.4,3)", \
   org.apache.jackrabbit.api.security.user;version="[2.4,3)", \
+  org.slf4j;version="[1.7,3)", \
   *
 ]]></bnd>
         </configuration>

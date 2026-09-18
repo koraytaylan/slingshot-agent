@@ -81,6 +81,27 @@ final class AgentLogTest {
     }
 
     @Test
+    @DisplayName("a value carrying a line break cannot begin a second line")
+    void avalueCannotBeginAsecondLine() {
+        final String line = AgentLog.lineOf(LogEvent.of("a request was refused")
+                .with("detail", "arrived at /one\n*WARN* forged\r\tline"), SECRETS, BOUND);
+        assertEquals(1, line.lines().count(), "a value began a second line: " + line);
+        assertTrue(line.endsWith("detail=arrived at /one" + AgentLog.CONTROL + "*WARN* forged"
+                + AgentLog.CONTROL + AgentLog.CONTROL + "line"), line);
+    }
+
+    @Test
+    @DisplayName("an event is written as a warning under the product's name and not a class's")
+    void aneventIsWrittenUnderTheProductsName() {
+        AgentLog.warn(LogEvent.of("a request was refused").with("service.password", "hunter2"),
+                SECRETS, BOUND);
+        assertTrue(!AgentLog.WRITTEN_UNDER.contains(AgentLog.class.getPackageName()
+                        .substring(0, AgentLog.class.getPackageName().lastIndexOf('.'))),
+                "lines are written under a name that carries an internal name: "
+                        + AgentLog.WRITTEN_UNDER);
+    }
+
+    @Test
     @DisplayName("an event carries named fields rather than a sentence somebody built")
     void aneventCarriesFieldsRatherThanASentence() {
         final LogEvent event = LogEvent.of("the command failed")

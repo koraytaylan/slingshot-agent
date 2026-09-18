@@ -110,12 +110,17 @@ public final class HighWaterServlet extends AgentServlet {
     protected void serve(SlingHttpServletRequest request, SlingHttpServletResponse response)
             throws IOException {
         final AgentContract.Outcome loaded = AgentContract.load();
-        if (!(loaded instanceof final AgentContract.Loaded held)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        if (loaded instanceof final AgentContract.Refused unreadable) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, unreadable.failure().name(),
+                    unreadable.detail());
             return;
         }
-        if (AuthenticationGate.refusalIn(AuthenticationGate.of(request)).isPresent()) {
-            refuse(response, AuthenticationGate.STATUS);
+        final AgentContract.Loaded held = (AgentContract.Loaded) loaded;
+        final java.util.Optional<AuthenticationGate.Refused> anonymous =
+                AuthenticationGate.refusalIn(AuthenticationGate.of(request));
+        if (anonymous.isPresent()) {
+            refuse(response, AuthenticationGate.STATUS, anonymous.get().refusal().name(),
+                    anonymous.get().detail());
             return;
         }
         withState(response, state -> answer(request, response, held.contract(), state));
@@ -124,17 +129,23 @@ public final class HighWaterServlet extends AgentServlet {
     /** What a request is answered with when this build cannot read its own contract or store. */
     private static final int NOTHING_THIS_BUILD_CAN_SERVE = 500;
 
+    /** The refusal a line names where a subscription this caller holds has expired. */
+    private static final String SUBSCRIPTION_EXPIRED = "SUBSCRIPTION_EXPIRED";
+
     private void answer(SlingHttpServletRequest request, SlingHttpServletResponse response,
                         AgentContract contract, Session session) throws IOException, RepositoryException {
         final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
         if (viewer.isEmpty()) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, NO_CALLER_SESSION,
+                    "the platform bound this request to no repository session");
             return;
         }
         final BoundedRequestBody.Outcome body = BoundedRequestBody.read(request.getInputStream(),
                 request.getContentLength(), contract);
-        if (BoundedRequestBody.refusalIn(body).isPresent()) {
-            refuse(response, OperationLookupServlet.REFUSED);
+        final Optional<BoundedRequestBody.Refused> unbounded = BoundedRequestBody.refusalIn(body);
+        if (unbounded.isPresent()) {
+            refuse(response, OperationLookupServlet.REFUSED, unbounded.get().refusal().name(),
+                    unbounded.get().detail());
             return;
         }
         asked(response, session, ((BoundedRequestBody.Read) body).bytes(), contract, viewer.get());
@@ -148,13 +159,15 @@ public final class HighWaterServlet extends AgentServlet {
                         rs.slingshot.agent.json.BoundedDocumentReader.Bounds.from(contract));
         if (!(read instanceof final rs.slingshot.agent.json.BoundedDocumentReader.Read document)
                 || !(document.value() instanceof final DocumentValue.Mapping asked)) {
-            refuse(response, OperationLookupServlet.REFUSED);
+            refuse(response, OperationLookupServlet.REFUSED, UNREADABLE_REQUEST,
+                    "the body is not one document holding a mapping");
             return;
         }
         final SubscriptionRecord.Outcome named = SubscriptionRecord.identifier(
                 text(asked, SUBSCRIPTION), contract);
         if (!(named instanceof final SubscriptionRecord.Held identifier)) {
-            refuse(response, OperationLookupServlet.REFUSED);
+            refuse(response, OperationLookupServlet.REFUSED, UNREADABLE_REQUEST,
+                    "the body names no subscription this build reads");
             return;
         }
         found(response, session, identifier.identifier(), whole(asked, GENERATION), contract, viewer);
@@ -167,7 +180,8 @@ public final class HighWaterServlet extends AgentServlet {
         final Optional<SubscriptionRecord> record = SubscriptionLedger.read(session, identifier, contract);
         if (record.isEmpty() || !StateAuthority.subscription(session, record.get(), viewer,
                 new StateAuthority.Scope.TheSubscriptionAlone(), ROUTE_NAME)) {
-            refuse(response, UNKNOWN);
+            refuse(response, UNKNOWN, NOT_HELD_FOR_THIS_CALLER,
+                    "no subscription this caller holds is called that");
             return;
         }
         final EventStoreGeneration serving = serving(session);
@@ -178,7 +192,8 @@ public final class HighWaterServlet extends AgentServlet {
             return;
         }
         if (SubscriptionLedger.expired(record.get(), clock.millis(), contract)) {
-            refuse(response, EXPIRED);
+            refuse(response, EXPIRED, SUBSCRIPTION_EXPIRED,
+                    "the subscription has expired");
             return;
         }
         answered(response, identifier, serving, OperationLookupServlet.SERVED,
@@ -215,7 +230,8 @@ public final class HighWaterServlet extends AgentServlet {
         final CanonicalByteWriter.Outcome written =
                 CanonicalByteWriter.write(new DocumentValue.Mapping(members));
         if (!(written instanceof final CanonicalByteWriter.Written bytes)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, UNRENDERABLE,
+                    "the high-water document could not be rendered");
             return;
         }
         response.setStatus(status);

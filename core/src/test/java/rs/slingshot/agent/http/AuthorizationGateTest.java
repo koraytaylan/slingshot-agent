@@ -90,6 +90,42 @@ final class AuthorizationGateTest {
     }
 
     @Test
+    @DisplayName("a member of a later group is admitted although an earlier group does not exist")
+    void membershipIsAskedBeforeAbsence() {
+        final String elsewhere = "AEM Administrators - author - Program 1 - Environment 1";
+        final String here = "AEM Administrators - author - Program 1 - Environment 2";
+        final AuthorizationGate.Groups inTheSecond = group -> here.equals(group)
+                ? AuthorizationGate.Standing.A_MEMBER
+                : AuthorizationGate.Standing.NO_SUCH_GROUP;
+        assertInstanceOf(AuthorizationGate.Admitted.class, AuthorizationGate.of(
+                submitting(List.of(elsewhere, here), inTheSecond)),
+                "a group this instance does not hold refused a member of one it does");
+    }
+
+    @Test
+    @DisplayName("where nothing admits, a missing group is the answer and it is named")
+    void whereNothingAdmitsAmissingGroupIsNamed() {
+        final String missing = "a-group-nobody-created";
+        final AuthorizationGate.Groups outsideAndMissing = group -> missing.equals(group)
+                ? AuthorizationGate.Standing.NO_SUCH_GROUP
+                : AuthorizationGate.Standing.NOT_A_MEMBER;
+        final AuthorizationGate.Refused refused = AuthorizationGate.refusalIn(AuthorizationGate.of(
+                submitting(List.of(SHIPPED, missing, WIDENED), outsideAndMissing))).orElseThrow();
+        assertEquals(AuthorizationGate.Refusal.NO_SUCH_GROUP, refused.refusal());
+        assertTrue(refused.detail().contains(missing), refused.detail());
+        assertTrue(!refused.detail().contains(WIDENED), refused.detail());
+    }
+
+    @Test
+    @DisplayName("where nothing admits and every group exists, the caller is not permitted")
+    void whereNothingAdmitsAndEveryGroupExistsTheCallerIsNotPermitted() {
+        assertEquals(AuthorizationGate.Refusal.NOT_PERMITTED, AuthorizationGate.refusalIn(
+                AuthorizationGate.of(submitting(List.of(SHIPPED, WIDENED),
+                        group -> AuthorizationGate.Standing.NOT_A_MEMBER))).orElseThrow()
+                .refusal(), "a caller in no permitted group was told a group is missing");
+    }
+
+    @Test
     @DisplayName("widening the configuration admits the group named and changes nothing else")
     void wideningAdmitsTheGroupNamed() {
         final AuthorizationGate.Groups inTheWidenedOne = group -> WIDENED.equals(group)
