@@ -21,6 +21,7 @@ import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.route.AgentRoute;
 import rs.slingshot.agent.route.AgentRouteTable;
 
@@ -121,8 +122,18 @@ final class AuthenticationGateTest {
         }
         assertEquals("an-operator", new CallerIdentity("an-operator").counted().orElseThrow()
                 .name());
-        assertTrue(new CallerIdentity("a name with spaces").counted().isEmpty(),
-                "a caller the store cannot count was counted anyway");
+        assertEquals(digestOf("a name with spaces"), new CallerIdentity("a name with spaces")
+                        .counted().orElseThrow().name(),
+                "a name the store's own path rule would refuse outright is still a caller, under"
+                        + " a digest of it");
+        assertEquals(digestOf("00000000-0000-4000-8000-000000000000@techacct.example.com"),
+                new CallerIdentity("00000000-0000-4000-8000-000000000000@techacct.example.com")
+                        .counted().orElseThrow().name(),
+                "an IMS technical account's address-shaped name is not a caller the store can count");
+    }
+
+    private static String digestOf(String name) {
+        return Digest.of(name.getBytes(StandardCharsets.UTF_8)).rendered();
     }
 
     @Test

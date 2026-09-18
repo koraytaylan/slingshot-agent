@@ -23,8 +23,9 @@ public record CallerIdentity(String authorizable) {
      * The caller as the store counts them, where the name is one a path may be built from.
      *
      * <p>Capacity is accounted per caller, and a caller's counters live at a path derived from
-     * their name. A name a path cannot hold is therefore a caller nothing can count, which is a
-     * refusal rather than a caller counted as somebody else.</p>
+     * their name. {@link StatePath#caller(String)} decides what that path is built from: their own
+     * name where it already fits, and a digest of it otherwise, so nothing here has to decide it a
+     * second time.</p>
      *
      * @return the caller, or nothing where the name is not one the store can count
      */

@@ -3,8 +3,10 @@
 
 package rs.slingshot.agent.store;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 
@@ -18,7 +20,10 @@ import rs.slingshot.agent.identity.EventStoreGeneration;
  *
  * <p>A path cannot be built from a string. Every derivation takes a constructed identity, and a
  * caller's own name is constrained into one before it is used, because an unconstrained name is a
- * path separator waiting to be written by whoever sends it.</p>
+ * path separator waiting to be written by whoever sends it. A name that only carries characters
+ * this tree cannot safely hold as its own segment - an address, say, rather than a login name - is
+ * not refused for it: it is counted under a digest of itself instead, because the platform decides
+ * what a caller is called and this store still has to have somewhere for them.</p>
  */
 public final class StatePath {
 
@@ -55,9 +60,7 @@ public final class StatePath {
         /** It begins with a separator, which would make it an address rather than a name. */
         BEGINS_WITH_A_SEPARATOR,
         /** It is empty, or shorter than one bucket needs. */
-        TOO_SHORT,
-        /** It carries something that is not a letter, a digit, or a hyphen. */
-        NOT_A_NAME
+        TOO_SHORT
     }
 
     /** The result of constraining a name: the caller, or the one reason there is none. */
@@ -124,6 +127,12 @@ public final class StatePath {
     /**
      * Constrains a name into one a path may be derived from.
      *
+     * <p>A name carrying a separator, a parent reference, or shorter than one bucket needs is
+     * refused outright: each of those is a shape a legitimate login name has no reason to take, and
+     * admitting one would put the record somewhere this tree does not mean it to be. A name that is
+     * merely spelled with characters outside letters, digits, hyphens and underscores - the shape
+     * an IMS technical account's address takes - is not refused; see {@link #digested(String)}.</p>
+     *
      * @param name the name as it arrived
      * @return the caller, or the one reason there is none
      */
@@ -148,15 +157,27 @@ public final class StatePath {
     }
 
     private static Outcome named(String name) {
-        final Optional<Integer> outside = name.chars()
-                .filter(scalar -> !isNameCharacter(scalar))
-                .boxed()
-                .findFirst();
-        if (outside.isPresent()) {
-            return new Refused(Refusal.NOT_A_NAME,
-                    "a name carries letters, digits, hyphens, and underscores and nothing else");
-        }
-        return new Held(new Caller(name));
+        final boolean outside = name.chars().anyMatch(scalar -> !isNameCharacter(scalar));
+        return outside ? new Held(new Caller(digested(name))) : new Held(new Caller(name));
+    }
+
+    /**
+     * The name a platform-established identity is counted under where its own spelling is not one
+     * a path may hold.
+     *
+     * <p>An IMS technical account authenticates as an address such as
+     * {@code 00000000-...@techacct.example.com}: this repository decides nothing about what an
+     * authorizable is called, so a name shaped like that is not a defect to refuse but a caller
+     * this store still has to count. A digest is always letters and digits and nothing else, so it
+     * always fits; two different names cannot land on the same one; and one name always digests to
+     * the same one, so a caller found this way today is the same caller found this way tomorrow.
+     * </p>
+     *
+     * @param name the name as it arrived
+     * @return the digest a path may be built from instead
+     */
+    private static String digested(String name) {
+        return Digest.of(name.getBytes(StandardCharsets.UTF_8)).rendered();
     }
 
     private static boolean isNameCharacter(int scalar) {
