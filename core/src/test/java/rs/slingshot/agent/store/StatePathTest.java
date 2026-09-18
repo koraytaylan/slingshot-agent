@@ -98,7 +98,21 @@ final class StatePathTest {
         assertEquals(StatePath.Refusal.CLIMBS_OUT_OF_THE_TREE, refusalOf("..-and-out"));
         assertEquals(StatePath.Refusal.CARRIES_A_SEPARATOR, refusalOf("content-somewhere/else"));
         assertEquals(StatePath.Refusal.TOO_SHORT, refusalOf("ab"));
-        assertEquals(StatePath.Refusal.NOT_A_NAME, refusalOf("a name with spaces"));
+    }
+
+    @Test
+    @DisplayName("a name that is not a path segment is counted under a digest instead of refused")
+    void aNameOutsideTheAlphabetIsDigestedInsteadOfRefused() {
+        final StatePath.Caller spaced = caller("a name with spaces");
+        assertEquals(Digest.of("a name with spaces".getBytes(StandardCharsets.UTF_8)).rendered(),
+                spaced.name(), "a name outside the alphabet was not counted under its own digest");
+        final String technicalAccount = "00000000-0000-4000-8000-000000000000@techacct.example.com";
+        final StatePath.Caller account = caller(technicalAccount);
+        assertEquals(Digest.of(technicalAccount.getBytes(StandardCharsets.UTF_8)).rendered(),
+                account.name(), "an IMS technical account's address was not a caller the store"
+                        + " could count");
+        assertEquals(caller(technicalAccount), caller(technicalAccount),
+                "the same address digested into two different callers");
     }
 
     @Test
