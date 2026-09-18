@@ -96,12 +96,17 @@ public final class PhysicalJobServlet extends AgentServlet {
     protected void serve(SlingHttpServletRequest request, SlingHttpServletResponse response)
             throws IOException {
         final AgentContract.Outcome loaded = AgentContract.load();
-        if (!(loaded instanceof final AgentContract.Loaded held)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        if (loaded instanceof final AgentContract.Refused unreadable) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, unreadable.failure().name(),
+                    unreadable.detail());
             return;
         }
-        if (AuthenticationGate.refusalIn(AuthenticationGate.of(request)).isPresent()) {
-            refuse(response, AuthenticationGate.STATUS);
+        final AgentContract.Loaded held = (AgentContract.Loaded) loaded;
+        final Optional<AuthenticationGate.Refused> anonymous =
+                AuthenticationGate.refusalIn(AuthenticationGate.of(request));
+        if (anonymous.isPresent()) {
+            refuse(response, AuthenticationGate.STATUS, anonymous.get().refusal().name(),
+                    anonymous.get().detail());
             return;
         }
         withState(response, state -> answer(request, response, held.contract(), state));
@@ -115,7 +120,8 @@ public final class PhysicalJobServlet extends AgentServlet {
         final Optional<AgentOperationIdentifier> asked = identifierIn(
                 request.getParameter(OPERATION_QUERY_MEMBER), contract);
         if (asked.isEmpty()) {
-            refuse(response, OperationLookupServlet.REFUSED);
+            refuse(response, OperationLookupServlet.REFUSED, UNREADABLE_REQUEST,
+                    "the request names no operation identifier this build reads");
             return;
         }
         final EventStoreGeneration serving = serving(session);
@@ -124,7 +130,8 @@ public final class PhysicalJobServlet extends AgentServlet {
         if (viewer.isEmpty() || !StateAuthority.operation(session, operation, viewer.get(), ROUTE_NAME)) {
             // An operation nobody here holds and one belonging to somebody else are one answer:
             // a caller who could tell them apart could ask this route which identifiers exist.
-            refuse(response, OperationLookupServlet.NOT_YET);
+            refuse(response, OperationLookupServlet.NOT_YET, NOT_HELD_FOR_THIS_CALLER,
+                    "no operation this caller may read is held under that identifier");
             return;
         }
         answered(response, session, operation, new Asked(asked.get(), serving, contract));
@@ -156,7 +163,8 @@ public final class PhysicalJobServlet extends AgentServlet {
                 ? Completeness.CUT_AT_THE_BOUND
                 : Completeness.EVERYTHING_THERE_IS);
         if (rendered.isEmpty()) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, UNRENDERABLE,
+                    "the physical job document could not be rendered");
             return;
         }
         response.setStatus(OperationLookupServlet.SERVED);

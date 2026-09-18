@@ -184,6 +184,22 @@ final class EventStreamServletTest {
     }
 
     @Test
+    @DisplayName("a request from nobody in particular is refused before the store is read")
+    void arequestFromNobodyIsRefused() throws IOException, ServletException {
+        final SlingContext anonymous = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
+        final MockSlingHttpServletRequest request =
+                new MockSlingHttpServletRequest(anonymous.resourceResolver());
+        request.setMethod("GET");
+        ((MockRequestPathInfo) request.getRequestPathInfo())
+                .setResourcePath(EventStreamServlet.route().path());
+        final MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
+        new EventStreamServlet(new AdvancingTicker()).service(request, response);
+        assertEquals(AuthenticationGate.STATUS, response.getStatus(),
+                "a request nobody in particular made was answered with something else");
+        assertEquals("", response.getOutputAsString(), "a refusal said more than its status");
+    }
+
+    @Test
     @DisplayName("no request shape reaches an operation the caller did not name")
     void norequestShapeReachesAnotherOperation() throws RepositoryException, IOException,
             ServletException {

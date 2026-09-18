@@ -4,7 +4,10 @@
 package rs.slingshot.agent.log;
 
 import java.util.List;
+import java.util.SequencedMap;
 import java.util.function.Predicate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * What turns one event into one line, and what it refuses to write.
@@ -20,6 +23,20 @@ import java.util.function.Predicate;
  * was refused and why, which is the same information minus the part that would not fit.</p>
  */
 public final class AgentLog {
+
+    /**
+     * The name every line is written under.
+     *
+     * <p>The product's name rather than a class's. A platform log prints the name a line was
+     * written under beside the line, and a class name is an internal name the redaction corpus
+     * refuses: a writer named after one would put it on every line this agent writes.</p>
+     */
+    public static final String WRITTEN_UNDER = "slingshot-agent";
+
+    /** What stands in for a character that would start a second line or rewrite this one. */
+    public static final char CONTROL = '?';
+
+    private static final Logger WRITER = LoggerFactory.getLogger(WRITTEN_UNDER);
 
     private AgentLog() {
     }
@@ -53,8 +70,54 @@ public final class AgentLog {
             line.append(BETWEEN).append(OPERATION).append(ASSIGNS).append(event.operation());
         }
         event.fields().forEach((name, value) -> line.append(BETWEEN).append(name).append(ASSIGNS)
-                .append(covered.test(value) ? WITHHELD : value));
+                .append(covered.test(value) ? WITHHELD : oneLine(value)));
         return line.toString();
+    }
+
+    /**
+     * One event about nothing in particular, carrying the fields it is given.
+     *
+     * <p>So a writer outside this package can hand over fields without naming the event type,
+     * whose name the log-statement rule reads as the start of a statement.</p>
+     *
+     * @param message what happened
+     * @param fields what else is worth knowing, in the order a line carries them
+     * @return the event
+     */
+    public static LogEvent event(String message, SequencedMap<String, String> fields) {
+        return new LogEvent(message, LogEvent.OUTSIDE_AN_OPERATION, fields);
+    }
+
+    /**
+     * Writes one event as a warning, which is what a refusal an operator may need to find is.
+     *
+     * <p>The line is the one {@link #lineOf} makes, so what it withholds and what it refuses are
+     * decided in exactly one place whichever level it is written at.</p>
+     *
+     * @param event what happened
+     * @param covered whether one value is something that must never reach a line
+     * @param messageBound the most a message may be, which the contract states
+     */
+    public static void warn(LogEvent event, Predicate<String> covered, long messageBound) {
+        // Every value is already on one line; the two breaks are removed again from the whole
+        // line so that nothing a later change adds before this call can reintroduce a second one.
+        WRITER.warn(lineOf(event, covered, messageBound).replace("\r", "?").replace("\n", "?"));
+    }
+
+    /**
+     * A value with every control character replaced, so it cannot begin a second line.
+     *
+     * <p>A newline in a value is a second log line, and the second one is the one somebody wrote.
+     * </p>
+     *
+     * @param value what a field holds
+     * @return the same value on one line
+     */
+    private static String oneLine(String value) {
+        return value.codePoints()
+                .map(point -> Character.isISOControl(point) ? CONTROL : point)
+                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                .toString();
     }
 
     /**

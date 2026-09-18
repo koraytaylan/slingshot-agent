@@ -69,6 +69,9 @@ public final class OperationLookupServlet extends AgentServlet {
     /** The route this servlet answers, by the name the committed table gives it. */
     public static final String ROUTE_NAME = "operation-lookup";
 
+    /** The refusal a line names where the generation asked about is one nothing answers for. */
+    private static final String RETIRED_GENERATION = "RETIRED_GENERATION";
+
     /** The query member naming which operation is wanted, spelled as the client spells it. */
     public static final String OPERATION_QUERY_MEMBER = "agent_operation_identifier";
 
@@ -188,12 +191,17 @@ public final class OperationLookupServlet extends AgentServlet {
     protected void serve(SlingHttpServletRequest request, SlingHttpServletResponse response)
             throws IOException {
         final AgentContract.Outcome loaded = AgentContract.load();
-        if (!(loaded instanceof final AgentContract.Loaded held)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        if (loaded instanceof final AgentContract.Refused unreadable) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, unreadable.failure().name(),
+                    unreadable.detail());
             return;
         }
-        if (AuthenticationGate.refusalIn(AuthenticationGate.of(request)).isPresent()) {
-            refuse(response, AuthenticationGate.STATUS);
+        final AgentContract.Loaded held = (AgentContract.Loaded) loaded;
+        final Optional<AuthenticationGate.Refused> anonymous =
+                AuthenticationGate.refusalIn(AuthenticationGate.of(request));
+        if (anonymous.isPresent()) {
+            refuse(response, AuthenticationGate.STATUS, anonymous.get().refusal().name(),
+                    anonymous.get().detail());
             return;
         }
         withState(response, state -> answer(request, response, held.contract(), state));
@@ -205,7 +213,8 @@ public final class OperationLookupServlet extends AgentServlet {
         final Optional<AgentOperationIdentifier> asked =
                 identifierIn(request.getParameter(OPERATION_QUERY_MEMBER), contract);
         if (asked.isEmpty()) {
-            refuse(response, REFUSED);
+            refuse(response, REFUSED, UNREADABLE_REQUEST,
+                    "the request names no operation identifier this build reads");
             return;
         }
         final EventStoreGeneration named = generationIn(request, session);
@@ -213,7 +222,8 @@ public final class OperationLookupServlet extends AgentServlet {
         if (access instanceof GenerationRotation.Retired) {
             // An incarnation nothing answers about any more is a thing a client may stop waiting
             // for, and the only answer that lets it stop is one that says so.
-            refuse(response, GONE);
+            refuse(response, GONE, RETIRED_GENERATION,
+                    "the generation named is one this store no longer answers about");
             return;
         }
         final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
@@ -245,7 +255,8 @@ public final class OperationLookupServlet extends AgentServlet {
         final Optional<String> rendered =
                 rendered(session, operation, held.operation(), known.snapshot(), contract);
         if (rendered.isEmpty()) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, UNRENDERABLE,
+                    "the operation snapshot could not be rendered");
             return;
         }
         response.setStatus(SERVED);
@@ -259,7 +270,8 @@ public final class OperationLookupServlet extends AgentServlet {
         response.setHeader(RETRY_AFTER, String.valueOf(Math.max(1,
                 contract.value(ContractLimit.MISSING_OPERATION_GRACE_MILLISECONDS)
                         / MILLISECONDS_IN_A_SECOND)));
-        refuse(response, NOT_YET);
+        refuse(response, NOT_YET, NOT_HELD_FOR_THIS_CALLER,
+                "no operation this caller may read is held under that identifier yet");
     }
 
     private static Optional<String> rendered(Session session, StatePath operation,

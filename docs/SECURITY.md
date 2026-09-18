@@ -22,6 +22,27 @@ Two questions, answered in two places, and both have to say yes.
 - **Are you in a permitted group?** Starting work additionally requires membership of a group an
   operator configured. The shipped configuration names `administrators` and nothing else.
 
+Membership is asked of the repository with the caller's own session. A caller who is a member of
+any permitted group that exists is admitted, whichever other listed groups the instance does not
+hold, so one configuration can list the groups of several environments. Where nothing admits the
+caller, a listed group that does not exist, or that the caller's session cannot read, is refused as
+`NO_SUCH_GROUP` naming it; otherwise the refusal is `NOT_PERMITTED`, and an empty list is
+`NO_GROUP_IS_PERMITTED`. No configuration admits everybody.
+
+On AEM as a Cloud Service, `administrators` does not include the people an Adobe Admin Console
+administrator or a Developer Console technical account act as. Both arrive through the
+per-environment group `AEM Administrators - author - Program <program id> - Environment <environment
+id>`, so the shipped configuration refuses them. Widening `permitted.groups` to that group is the
+decision described above — it admits everybody the Admin Console makes an administrator of that
+environment — and [INSTALLING.md](INSTALLING.md) shows the configuration.
+
+A refusal answers with a status and an empty body, identical on the wire whichever refusal it was.
+What the caller is not told, the instance's log is: every refusal an agent route answers writes one
+warning under the logger `slingshot-agent` naming the route, the status, the refusal and what was
+observed. The line carries no request body, no parameter and no credential; the only things a caller
+sent that it can name are the path, method and media type of a request refused for its shape. A
+detail that would name where the agent keeps things or what it is built out of is withheld whole.
+
 The console applies the same requirement to every page and every data source, and it hides the
 navigation entry from a viewer who may not use it rather than showing them a refusal.
 

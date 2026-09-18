@@ -139,15 +139,19 @@ public final class EventStreamServlet extends AgentServlet {
     protected void serve(SlingHttpServletRequest request, SlingHttpServletResponse response)
             throws IOException {
         final AgentContract.Outcome loaded = AgentContract.load();
-        if (!(loaded instanceof final AgentContract.Loaded held)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        if (loaded instanceof final AgentContract.Refused unreadable) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, unreadable.failure().name(),
+                    unreadable.detail());
             return;
         }
+        final AgentContract.Loaded held = (AgentContract.Loaded) loaded;
         final AuthenticationGate.Outcome asking = AuthenticationGate.of(request);
-        if (!(asking instanceof final AuthenticationGate.Admitted admitted)) {
-            refuse(response, AuthenticationGate.STATUS);
+        if (asking instanceof final AuthenticationGate.Refused anonymous) {
+            refuse(response, AuthenticationGate.STATUS, anonymous.refusal().name(),
+                    anonymous.detail());
             return;
         }
+        final AuthenticationGate.Admitted admitted = (AuthenticationGate.Admitted) asking;
         dispatch(request, response, admitted.caller(), held.contract());
     }
 
@@ -175,8 +179,14 @@ public final class EventStreamServlet extends AgentServlet {
             throws IOException, RepositoryException {
         final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
         final Optional<StatePath.Caller> counted = caller.counted();
-        if (viewer.isEmpty() || counted.isEmpty()) {
-            refuse(response, viewer.isEmpty() ? NOTHING_THIS_BUILD_CAN_SERVE : REFUSED);
+        if (viewer.isEmpty()) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, NO_CALLER_SESSION,
+                    "the platform bound this request to no repository session");
+            return;
+        }
+        if (counted.isEmpty()) {
+            refuse(response, REFUSED, UNCOUNTED_CALLER,
+                    "this caller's name is not one the capacity ledger can count");
             return;
         }
         final StreamSession.Outcome opening = StreamSession.of(store,
@@ -186,7 +196,8 @@ public final class EventStreamServlet extends AgentServlet {
                 contract, viewer.get().groups());
         final Optional<StreamSession.Refused> refused = StreamSession.refusalIn(opening);
         if (refused.isPresent()) {
-            refuse(response, statusFor(refused.get().refusal()));
+            refuse(response, statusFor(refused.get().refusal()), refused.get().refusal().name(),
+                    refused.get().detail());
             return;
         }
         admitted(request, response, store, ((StreamSession.Held) opening).session(),
@@ -218,7 +229,8 @@ public final class EventStreamServlet extends AgentServlet {
             response.setHeader(RETRY_AFTER, String.valueOf(Math.max(1,
                     contract.value(ContractLimit.RETRY_AFTER_CAP_MILLISECONDS)
                             / MILLISECONDS_IN_A_SECOND)));
-            refuse(response, AT_CAPACITY);
+            refuse(response, AT_CAPACITY, AT_CAPACITY_REFUSAL,
+                    "this caller already holds every event stream the contract allows");
             return;
         }
         try (rs.slingshot.agent.store.CapacityReservation.Guard guard =

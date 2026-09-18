@@ -265,19 +265,35 @@ public final class SubmitServlet extends AgentServlet {
     protected void serve(SlingHttpServletRequest request, SlingHttpServletResponse response)
             throws IOException {
         final AgentContract.Outcome loaded = AgentContract.load();
-        if (!(loaded instanceof final AgentContract.Loaded held)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+        if (loaded instanceof final AgentContract.Refused unreadable) {
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, unreadable.failure().name(),
+                    unreadable.detail());
             return;
         }
-        if (AuthenticationGate.refusalIn(AuthenticationGate.of(request)).isPresent()) {
-            refuse(response, AuthenticationGate.STATUS);
+        final Optional<AuthenticationGate.Refused> anonymous =
+                AuthenticationGate.refusalIn(AuthenticationGate.of(request));
+        if (anonymous.isPresent()) {
+            refuse(response, AuthenticationGate.STATUS, anonymous.get().refusal().name(),
+                    anonymous.get().detail());
             return;
         }
-        answer(request, response, held.contract());
+        answer(request, response, ((AgentContract.Loaded) loaded).contract());
     }
 
     /** What a request is answered with when this build cannot read its own contract. */
     private static final int NOTHING_THIS_BUILD_CAN_SERVE = 500;
+
+    /** The refusal a line names where the body is not a submission this build reads. */
+    private static final String UNREADABLE_SUBMISSION = "UNREADABLE_SUBMISSION";
+
+    /** The refusal a line names where no bound runtime serves the command submitted. */
+    private static final String COMMAND_NOT_SERVED = "COMMAND_NOT_SERVED";
+
+    /** The refusal a line names where a submission disagrees with the one recorded under its name. */
+    private static final String CONFLICTING_SUBMISSION = "CONFLICTING_SUBMISSION";
+
+    /** The refusal a line names where an accepted operation could not be recorded. */
+    private static final String NOT_RECORDED = "NOT_RECORDED";
 
     private void answer(SlingHttpServletRequest request, SlingHttpServletResponse response,
                         AgentContract contract) throws IOException {
@@ -285,19 +301,24 @@ public final class SubmitServlet extends AgentServlet {
         final CallerIdentity caller = ((AuthenticationGate.Admitted) admitted).caller();
         final Optional<Session> asking = sessionOf(request);
         if (asking.isEmpty()) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, NO_CALLER_SESSION,
+                    "the platform bound this request to no repository session");
             return;
         }
-        if (AuthorizationGate.refusalIn(AuthorizationGate.of(new AuthorizationGate.Request(
-                ROUTE_NAME, permittedGroups(), groupsOf(asking.get(), caller),
-                AuthorizationGate.Ownership.NOT_ABOUT_AN_OPERATION))).isPresent()) {
-            refuse(response, AuthorizationGate.STATUS);
+        final Optional<AuthorizationGate.Refused> unpermitted = AuthorizationGate.refusalIn(
+                AuthorizationGate.of(new AuthorizationGate.Request(ROUTE_NAME, permittedGroups(),
+                        groupsOf(asking.get(), caller),
+                        AuthorizationGate.Ownership.NOT_ABOUT_AN_OPERATION)));
+        if (unpermitted.isPresent()) {
+            refuse(response, AuthorizationGate.STATUS, unpermitted.get().refusal().name(),
+                    unpermitted.get().detail());
             return;
         }
         final BoundedRequestBody.Outcome body = BoundedRequestBody.read(request.getInputStream(),
                 request.getContentLength(), contract);
-        if (BoundedRequestBody.refusalIn(body).isPresent()) {
-            refuse(response, REFUSED);
+        final Optional<BoundedRequestBody.Refused> unbounded = BoundedRequestBody.refusalIn(body);
+        if (unbounded.isPresent()) {
+            refuse(response, REFUSED, unbounded.get().refusal().name(), unbounded.get().detail());
             return;
         }
         recorded(request, response, new Arriving(caller, ((BoundedRequestBody.Read) body).bytes(),
@@ -323,13 +344,20 @@ public final class SubmitServlet extends AgentServlet {
                 BoundedDocumentReader.Bounds.from(arriving.contract()));
         if (!(read instanceof final BoundedDocumentReader.Read document)
                 || !(document.value() instanceof final DocumentValue.Mapping submission)) {
-            refuse(response, REFUSED);
+            refuse(response, REFUSED, UNREADABLE_SUBMISSION,
+                    "the body is not one document holding a mapping");
             return;
         }
         final Optional<SubmissionAdmission.Submission> asked = submissionOf(submission, arriving,
                 text(request.getHeader(IDEMPOTENCY_KEY)));
-        if (asked.isEmpty() || !commands.get().serves(asked.get().commandContract().wireName())) {
-            refuse(response, REFUSED);
+        if (asked.isEmpty()) {
+            refuse(response, REFUSED, UNREADABLE_SUBMISSION,
+                    "the document is not a submission this build reads");
+            return;
+        }
+        if (!commands.get().serves(asked.get().commandContract().wireName())) {
+            refuse(response, REFUSED, COMMAND_NOT_SERVED,
+                    "no command runtime bound to this agent serves the command submitted");
             return;
         }
         withState(response, state -> admitted(response, submission, arriving, state, asked.get()));
@@ -342,7 +370,8 @@ public final class SubmitServlet extends AgentServlet {
                 new SubmissionRegistration.Request(asked, text(submission, SUBSCRIPTION),
                         declaredSlots(submission)), System.currentTimeMillis(), arriving.contract());
         if (intake instanceof IntakeSlotWrite.AtCapacity || intake instanceof IntakeSlotWrite.NotCounted) {
-            refuse(response, AT_CAPACITY);
+            refuse(response, AT_CAPACITY, AT_CAPACITY_REFUSAL,
+                    "no intake slot could be counted for this submission");
             return;
         }
         final AdmissionOutcome outcome = ((IntakeSlotWrite.Decided) intake).outcome();
@@ -356,14 +385,22 @@ public final class SubmitServlet extends AgentServlet {
                     SubmissionResponse.Acceptance.ALREADY_HELD);
             return;
         }
-        refuse(response, outcome instanceof AdmissionOutcome.Conflicting ? CONFLICT : REFUSED);
+        if (outcome instanceof final AdmissionOutcome.Conflicting conflicting) {
+            // The member that disagreed and not what either side holds: the detail quotes part of
+            // what arrived, and a submission's content is not a thing a log line carries.
+            refuse(response, CONFLICT, CONFLICTING_SUBMISSION, conflicting.member());
+            return;
+        }
+        final AdmissionOutcome.Refused refused = (AdmissionOutcome.Refused) outcome;
+        refuse(response, REFUSED, refused.refusal().name(), refused.detail());
     }
 
     private void progress(SlingHttpServletResponse response, LogicalOperation operation,
                           DocumentValue.Mapping submission, Arriving arriving, Session session,
                           SubmissionResponse.Acceptance acceptance) throws IOException, RepositoryException {
         if (!recorded(session, operation, arriving)) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, NOT_RECORDED,
+                    "the accepted operation could not be recorded for this caller");
             return;
         }
         if (operation.state() == rs.slingshot.agent.execution.OperationState.RUNNING
@@ -476,7 +513,8 @@ public final class SubmitServlet extends AgentServlet {
             throws IOException, RepositoryException {
         final Optional<StatePath.Caller> caller = arriving.caller().counted();
         if (caller.isEmpty()) {
-            refuse(response, REFUSED);
+            refuse(response, REFUSED, UNCOUNTED_CALLER,
+                    "this caller's name is not one the capacity ledger can count");
             return;
         }
         // The counters this charge is decided against are prepared first, as
@@ -496,7 +534,8 @@ public final class SubmitServlet extends AgentServlet {
             // An executing command holds one of this instance's request threads. A bound on what
             // the store keeps is not a bound on how much of somebody's author this occupies.
             response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
-            refuse(response, AT_CAPACITY);
+            refuse(response, AT_CAPACITY, AT_CAPACITY_REFUSAL,
+                    "no concurrent command execution could be reserved for this caller");
             return;
         }
         try {
@@ -554,7 +593,8 @@ public final class SubmitServlet extends AgentServlet {
                 rs.slingshot.agent.execution.ExecutionJournal.pending(session, path, arriving.contract());
         if (pending.isEmpty()) {
             response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
-            refuse(response, AT_CAPACITY);
+            refuse(response, AT_CAPACITY, AT_CAPACITY_REFUSAL,
+                    "the operation holds no pending outcome to finalise yet");
             return;
         }
         final rs.slingshot.agent.execution.TerminalCommit.Outcome ended =
@@ -567,7 +607,8 @@ public final class SubmitServlet extends AgentServlet {
             return;
         }
         response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
-        refuse(response, AT_CAPACITY);
+        refuse(response, AT_CAPACITY, AT_CAPACITY_REFUSAL,
+                "the terminal outcome could not be committed yet");
     }
 
     private void startRefused(SlingHttpServletResponse response, LogicalOperation accepted,
@@ -581,7 +622,8 @@ public final class SubmitServlet extends AgentServlet {
             return;
         }
         response.setHeader(RETRY_AFTER, String.valueOf(retryAfterSeconds(arriving.contract())));
-        refuse(response, AT_CAPACITY);
+        refuse(response, AT_CAPACITY, AT_CAPACITY_REFUSAL,
+                "the accepted operation could not be started yet");
     }
 
     private void answered(SlingHttpServletResponse response, LogicalOperation operation,
@@ -599,7 +641,8 @@ public final class SubmitServlet extends AgentServlet {
                         rs.slingshot.agent.execution.Outbox.identifiersFor(session, record.identity()))
                 .rendered();
         if (rendered.isEmpty()) {
-            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE);
+            refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, UNRENDERABLE,
+                    "the submission response could not be rendered");
             return;
         }
         response.setStatus(ACCEPTED);

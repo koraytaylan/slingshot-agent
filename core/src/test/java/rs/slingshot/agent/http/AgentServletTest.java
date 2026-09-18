@@ -20,6 +20,7 @@ import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import rs.slingshot.agent.log.AgentLog;
 import rs.slingshot.agent.route.AgentRoute;
 import rs.slingshot.agent.route.AgentRouteTable;
 
@@ -108,6 +109,53 @@ final class AgentServletTest {
                 "a refusal read the request it was refusing");
         assertEquals("", response.getOutputAsString());
     }
+
+    @Test
+    @DisplayName("a refusal's line names the route, the status, the refusal and what was observed")
+    void arefusalsLineNamesWhatAnOperatorNeeds() {
+        final String line = AgentLog.lineOf(AgentLog.event(
+                AgentServlet.REFUSED_A_REQUEST, AgentServlet.refusal("submit",
+                AuthorizationGate.STATUS, AuthorizationGate.Refusal.NO_SUCH_GROUP.name(),
+                "no group on this instance is called operators")), AgentServlet::internal, BOUND);
+        assertEquals(AgentServlet.REFUSED_A_REQUEST + " route=submit status=403"
+                + " refusal=NO_SUCH_GROUP detail=no group on this instance is called operators",
+                line);
+        assertEquals(List.of(AgentServlet.ROUTE_FIELD, AgentServlet.STATUS_FIELD,
+                        AgentServlet.REFUSAL_FIELD),
+                List.copyOf(AgentServlet.refusal("submit", 400, "UNREADABLE_REQUEST", "")
+                        .keySet()),
+                "a refusal with nothing more to say carried an empty detail");
+    }
+
+    @Test
+    @DisplayName("a refusal's detail naming where things are kept or what this is built of is withheld")
+    void arefusalsDetailNamingAnInternalIsWithheld() {
+        for (final String internal : List.of(rs.slingshot.agent.store.StatePath.ROOT + "/operations",
+                rs.slingshot.agent.execution.CommandJobTopic.TOPIC,
+                AgentServlet.class.getName())) {
+            assertTrue(AgentServlet.internal("failed at " + internal), internal);
+        }
+        assertFalse(AgentServlet.internal("no group on this instance is called administrators"));
+        final String line = AgentLog.lineOf(AgentLog.event(
+                AgentServlet.REFUSED_A_REQUEST, AgentServlet.refusal("submit", 500, "UNREADABLE",
+                        "the contract at " + AgentServlet.class.getName())),
+                AgentServlet::internal, BOUND);
+        assertTrue(line.endsWith("detail=" + AgentLog.WITHHELD), line);
+    }
+
+    @Test
+    @DisplayName("a logged refusal is still a status and an empty body on the wire")
+    void aloggedRefusalIsStillIndistinguishableOnTheWire() throws IOException {
+        final MockSlingHttpServletResponse response = new MockSlingHttpServletResponse();
+        AgentServlet.refuse(response, AuthorizationGate.STATUS, "submit",
+                AuthorizationGate.Refusal.NOT_PERMITTED.name(), "this caller is in none of them");
+        assertEquals(AuthorizationGate.STATUS, response.getStatus());
+        assertEquals("", response.getOutputAsString(),
+                "a refusal said on the wire what it wrote to the log");
+    }
+
+    /** The most one log message may be, which the contract declares and this suite need not load. */
+    private static final long BOUND = 4096;
 
     @Test
     @DisplayName("the shape a request has is taken from the request and nothing else")
