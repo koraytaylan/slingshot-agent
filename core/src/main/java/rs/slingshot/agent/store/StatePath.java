@@ -5,7 +5,6 @@ package rs.slingshot.agent.store;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Optional;
 import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
