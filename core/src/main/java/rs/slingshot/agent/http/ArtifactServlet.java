@@ -260,7 +260,6 @@ public final class ArtifactServlet extends AgentServlet {
         }
     }
 
-    @SuppressWarnings("PMD.UseTryWithResources")
     private void served(SlingHttpServletResponse response, Session store, StatePath operation,
                         ArtifactRecord record, AgentContract contract)
             throws IOException, RepositoryException {
@@ -283,23 +282,47 @@ public final class ArtifactServlet extends AgentServlet {
         response.setContentLengthLong(record.byteCount());
         response.setHeader(BYTE_COUNT_HEADER, String.valueOf(record.byteCount()));
         response.setHeader(DIGEST_HEADER, headerSafe(record.digest().rendered()));
-        try (InputStream reading = bytes.get()) {
-            // The response's own stream is closed explicitly rather than by a
-            // try-with-resources, because a container that already closed it out
-            // from under this route throws from that implicit close - past the
-            // reach of any catch inside the block - and an already-fully-served
-            // transfer must not be reported as this route's own failure over that.
-            final OutputStream writing = response.getOutputStream();
-            try {
-                if (transfer(reading, writing, contract) < record.byteCount()) {
-                    // A transfer that stopped short has already told the reader everything this
-                    // side can: the count in the head is what should have arrived, and the body is
-                    // what did.
-                    response.flushBuffer();
-                }
-            } finally {
-                closeQuietly(writing);
+        try (InputStream reading = bytes.get();
+                OutputStream writing = new QuietlyClosingOutputStream(response.getOutputStream())) {
+            if (transfer(reading, writing, contract) < record.byteCount()) {
+                // A transfer that stopped short has already told the reader everything this
+                // side can: the count in the head is what should have arrived, and the body is
+                // what did.
+                response.flushBuffer();
             }
+        }
+    }
+
+    /**
+     * The response's own output stream, whose close a container that already ended the response
+     * must not be allowed to report as this route's own failure.
+     */
+    private static final class QuietlyClosingOutputStream extends OutputStream {
+
+        private final OutputStream delegate;
+
+        private QuietlyClosingOutputStream(OutputStream delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void write(int value) throws IOException {
+            delegate.write(value);
+        }
+
+        @Override
+        public void write(byte[] bytes, int offset, int length) throws IOException {
+            delegate.write(bytes, offset, length);
+        }
+
+        @Override
+        public void flush() throws IOException {
+            delegate.flush();
+        }
+
+        @Override
+        public void close() {
+            closeQuietly(delegate);
         }
     }
 
