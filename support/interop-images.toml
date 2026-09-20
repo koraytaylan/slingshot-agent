@@ -26,7 +26,7 @@ tier = "harness"
 registry = "docker.io"
 repository = "library/mongo"
 tag = "7"
-digest = "sha256:76f1e3cc36f46a79f98f30736174fa0c55a2ba41d6ce860e4e551e3ffbcce009"
+digest = "sha256:609d76574151bee8b148caee83cd9fec8b5f695e5a6db9f1e0f9dced0673574e"
 reason = "The shared document store two nodes run against. An author on the row this product is built for is a cluster, and every property about contention - a lease two workers race for, a count two nodes advance, a key ring two nodes rotate - is one a single instance cannot exhibit at all."
 
 [[image]]
@@ -34,7 +34,7 @@ tier = "harness"
 registry = "docker.io"
 repository = "library/alpine"
 tag = "3"
-digest = "sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f"
+digest = "sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395"
 reason = "The image the harness proves itself against. Proving a start, a readiness deadline, and a cleanup on the runtime a tier actually uses would make every harness assertion wait for that runtime to boot, which is how a suite about the harness turns into a suite about somebody else's startup time."
 
 [[image]]
@@ -42,7 +42,7 @@ tier = "a"
 registry = "docker.io"
 repository = "library/eclipse-temurin"
 tag = "21-jre"
-digest = "sha256:d1d7f43094ea37e9ae77ea3ca40026bc1de1bf1dc2cad37b08d66b9a016a2ea6"
+digest = "sha256:ca7551d4f36647207812e3c8c8596c89fd4e5226a061a5b8c8629839fe8969f6"
 reason = "The Java runtime every row in support/deployments.toml declares. The published Sling image carries an older one, and a bundle compiled to this release does not resolve on it at all, so a tier that used the published image unchanged would prove the product against a platform nobody this repository supports is running."
 
 # The image this repository builds for the public tier: the published Sling runtime with the
@@ -53,5 +53,5 @@ tier = "a"
 name = "localhost/slingshot-agent-public-sling:1"
 containerfile = "interop/tier/public-sling/Containerfile"
 base_images = ["docker.io/library/eclipse-temurin:21-jre", "docker.io/apache/sling:14"]
-identifier = "93e7a7155e861dbf749f3c6f26c2c2dfbcc230228dbf0dc00e4e5eef0fedfead"
+identifier = "59454e6a1ea9d7a10bf75e92646e8cea32530e4eb27c2a09139c74255f762d65"
 reason = "One image, built from two pinned ones, so the tier runs the product on the runtime its own deployment matrix declares rather than on whichever runtime somebody else's published image happened to carry."
