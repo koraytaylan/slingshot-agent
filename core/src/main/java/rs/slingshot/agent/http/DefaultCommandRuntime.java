@@ -273,7 +273,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         final CommandHandler.Answer answer = activeDispatch.run(operation.commandContract(),
                 CommandContractIdentity.Bounds.from(activeContract), arguments.orElseThrow(), resolver,
                 context);
-        return completion(answer, operation, session, activeContract);
+        return completion(answer, operation, session, activeContract, arguments.orElseThrow());
     }
 
     @Override
@@ -318,11 +318,12 @@ public final class DefaultCommandRuntime implements CommandRuntime {
     private static ExecutionOutcome.Completion completion(CommandHandler.Answer answer,
                                                           LogicalOperation operation,
                                                           javax.jcr.Session session,
-                                                          AgentContract contract) {
+                                                          AgentContract contract,
+                                                          DocumentValue.Mapping arguments) {
         return switch (answer) {
             case CommandHandler.Produced produced -> rendered(produced.result());
             case CommandHandler.Artifact artifact -> artifact(artifact, operation, session, contract);
-            case CommandHandler.Failed failed -> failed(failed);
+            case CommandHandler.Failed failed -> failed(failed, operation, arguments);
         };
     }
 
@@ -387,9 +388,29 @@ public final class DefaultCommandRuntime implements CommandRuntime {
      * @param failed the handler's declared failure
      * @return the completion
      */
-    private static ExecutionOutcome.Completion failed(CommandHandler.Failed failed) {
+    /**
+     * A failure as the answer the client reads.
+     *
+     * <p>A handler that stated its own refusal document sends exactly that. Every other handler
+     * sends its registry category, and the client authenticates an ending against the command's own
+     * closed refusal type rather than against a shared category: so the category is rendered
+     * through the one table that knows each command's own member names and correlation field. Only
+     * a refusal the client could not read at all falls back to the shared category document, and
+     * one that cannot be written in the canonical form is explicit uncertainty - never a document
+     * that claims something the handler did not say.</p>
+     *
+     * @param failed the handler's declared failure
+     * @param operation the operation it belongs to, which names the command
+     * @param arguments the argument document the caller sent, which carries the correlation value
+     * @return the completion
+     */
+    private static ExecutionOutcome.Completion failed(CommandHandler.Failed failed,
+                                                      LogicalOperation operation,
+                                                      DocumentValue.Mapping arguments) {
         final Optional<String> document = refusedDocument(failed.refusal())
                 .flatMap(DefaultCommandRuntime::canonical)
+                .or(() -> canonical(CommandRefusalDocuments.documentOf(
+                        operation.commandContract().wireName(), failed.category(), arguments)))
                 .or(() -> CommandFailure.Category.named(failed.category())
                         .flatMap(value -> canonical(CommandFailure.documentOf(value))));
         return document.<ExecutionOutcome.Completion>map(value ->

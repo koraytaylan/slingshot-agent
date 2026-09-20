@@ -1091,6 +1091,11 @@ pattern = "stateless-policy"
 reason = "How a mutation's three answers reach the one dispatch understands, written once because twenty handlers do it and twenty copies is twenty places for the third answer to be flattened into the second."
 
 [[type]]
+name = "CommandRefusalDocuments"
+pattern = "stateless-policy"
+reason = "How a handler's declared category becomes the document its own client authenticates an ending against, written once because sixty-four handlers fail and a copy per handler is a copy that drifts from the client's closed refusal type."
+
+[[type]]
 name = "AssetPayload"
 pattern = "value-object"
 reason = "The bytes an asset is made of and what kind of file they are, with the type declared rather than sniffed: sniffing is a guess that is right most of the time, and an asset stored under the wrong type renders wrongly for everybody afterwards. Both sizes are checked, the encoded one first, because decoding something to find out it is too large is the work the first bound exists to avoid."

@@ -153,17 +153,57 @@ final class DefaultCommandRuntimeTest {
         assertTrue(carried.contains("/content/site/article"),
                 "the command's own refusal document did not reach the wire: " + carried);
 
-        // The other case: a failure that names no document of its own is carried as the shared
-        // failure document for its category, which is what the client reads a bare category out of.
+        // The other case: a failure that names no document of its own is rendered as the command's
+        // own refusal document, which is what the client authenticates an ending against. A bare
+        // category is not that document, and the shared category shape is not either.
         final ExecutionOutcome.Failed unnamed = assertInstanceOf(ExecutionOutcome.Failed.class,
                 failureRuntime(registry, new CommandHandler.Unstated())
                         .run(operation(), submission, null, null, context()),
                 "a failure naming no refusal document did not reach the caller as a failure");
-        final String shared = ((ExecutionOutcome.Inline) unnamed.result()).document();
-        assertTrue(shared.contains(category),
-                "the shared failure document did not carry the declared category: " + shared);
-        assertTrue(!shared.contains("/content/site/article"),
-                "a failure that named no document was answered with one: " + shared);
+        final String rendered = ((ExecutionOutcome.Inline) unnamed.result()).document();
+        assertTrue(rendered.contains(category),
+                "the rendered refusal did not carry the declared category: " + rendered);
+        assertTrue(rendered.contains("\"failure\""),
+                "the rendered refusal is not the command's own closed shape: " + rendered);
+    }
+
+    @Test
+    void anUnstatedRefusalIsRenderedAsTheClientsOwnDocumentWithTheRequestsCorrelation()
+            throws java.io.IOException {
+        final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
+                CommandRegistry.read(FIXTURES)).registry();
+        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        members.put(SubmitServlet.ARGUMENTS,
+                new DocumentValue.Text("{\"root_path\":\"/content/site/en\"}"));
+        final ExecutionOutcome.Failed rendered = assertInstanceOf(ExecutionOutcome.Failed.class,
+                updatePageRuntime(registry).run(operationFor("list_child_pages"),
+                        new DocumentValue.Mapping(members), null, null, context()),
+                "a child listing refused as root not found did not produce a document");
+        final String document = ((ExecutionOutcome.Inline) rendered.result()).document();
+        assertTrue(document.contains("\"failure\":\"root_not_found\""),
+                "the refusal did not carry the category the handler declared: " + document);
+        assertTrue(document.contains("\"root_path\":\"/content/site/en\""),
+                "the refusal did not echo the anchor the caller named: " + document);
+    }
+
+    /** A runtime whose every handler fails as root not found, the shape a discovery refusal has. */
+    private DefaultCommandRuntime updatePageRuntime(CommandRegistry registry) {
+        final SequencedMap<String, CommandHandler> handlers = new LinkedHashMap<>();
+        registry.rows().forEach(row -> handlers.put(row.wireName(), new CommandHandler() {
+            @Override
+            public Answer run(DocumentValue.Mapping arguments,
+                              org.apache.sling.api.resource.ResourceResolver resolver,
+                              CallerContext context) {
+                return new Failed("root_not_found", "test failure");
+            }
+
+            @Override
+            public List<String> categories() {
+                return row.failureCategories();
+            }
+        }));
+        return new DefaultCommandRuntime(assertInstanceOf(CommandDispatch.Held.class,
+                CommandDispatch.of(registry, handlers)).dispatch(), CONTRACT);
     }
 
     private DefaultCommandRuntime failureRuntime(CommandRegistry registry,
@@ -269,6 +309,30 @@ final class DefaultCommandRuntimeTest {
         final rs.slingshot.agent.identity.CommandContractIdentity contract =
                 assertInstanceOf(rs.slingshot.agent.identity.CommandContractIdentity.Held.class,
                         registry.row("query_paths").orElseThrow().identity(
+                                rs.slingshot.agent.identity.CommandContractIdentity.Bounds.from(CONTRACT)))
+                        .identity();
+        final StatePath.Caller caller = assertInstanceOf(StatePath.Held.class,
+                StatePath.caller("admin")).caller();
+        return assertInstanceOf(LogicalOperation.Held.class, LogicalOperation.accepted(identity,
+                Digest.of("submission".getBytes(StandardCharsets.UTF_8)), contract, caller,
+                1_000L, 1_000L, CONTRACT)).operation();
+    }
+
+    /** The same operation, under one named command's own contract identity. */
+    private static LogicalOperation operationFor(String wireName) throws java.io.IOException {
+        final Path fixture = repositoryRoot().resolve(
+                "core/src/test/resources/fixtures/submit-servlet/a-submission.json");
+        final DocumentValue.Mapping document = assertInstanceOf(DocumentValue.Mapping.class,
+                assertInstanceOf(BoundedDocumentReader.Read.class,
+                BoundedDocumentReader.read(Files.readAllBytes(fixture),
+                        BoundedDocumentReader.Bounds.from(CONTRACT))).value());
+        final OperationIdentity identity = assertInstanceOf(OperationIdentity.Held.class,
+                OperationIdentity.of(document.member("operation").orElseThrow(), CONTRACT)).identity();
+        final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
+                CommandRegistry.read(FIXTURES)).registry();
+        final rs.slingshot.agent.identity.CommandContractIdentity contract =
+                assertInstanceOf(rs.slingshot.agent.identity.CommandContractIdentity.Held.class,
+                        registry.row(wireName).orElseThrow().identity(
                                 rs.slingshot.agent.identity.CommandContractIdentity.Bounds.from(CONTRACT)))
                         .identity();
         final StatePath.Caller caller = assertInstanceOf(StatePath.Held.class,
