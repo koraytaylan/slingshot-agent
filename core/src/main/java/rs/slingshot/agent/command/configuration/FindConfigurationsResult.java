@@ -64,6 +64,8 @@ public final class FindConfigurationsResult {
                                                    String nextContinuationToken) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(MATCHES, new DocumentValue.Sequence(entries.stream()
+                .sorted(java.util.Comparator.comparing(
+                        ConfigurationCatalogue.Entry::persistentIdentifier))
                 .map(FindConfigurationsResult::entryOf)
                 .toList()));
         if (!NO_MORE_PAGES.equals(nextContinuationToken)) {

@@ -121,6 +121,8 @@ public final class AgentResults {
                                                  String nextContinuationToken) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(MATCHES, new DocumentValue.Sequence(agents.stream()
+                .sorted(java.util.Comparator.comparing(
+                        ReplicationInventory.Agent::agentIdentifier))
                 .map(agent -> (DocumentValue) new DocumentValue.Mapping(agentMembers(agent)))
                 .toList()));
         if (!NO_MORE_PAGES.equals(nextContinuationToken)) {
@@ -158,6 +160,8 @@ public final class AgentResults {
         result.put(BLOCKED, flag(flow == ReplicationInventory.Flow.BLOCKED
                 ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
         result.put(ENTRIES, new DocumentValue.Sequence(entries.stream()
+                .sorted(java.util.Comparator.comparing(
+                        ReplicationInventory.Entry::entryIdentifier))
                 .map(AgentResults::entryOf)
                 .toList()));
         if (!NO_MORE_PAGES.equals(nextContinuationToken)) {

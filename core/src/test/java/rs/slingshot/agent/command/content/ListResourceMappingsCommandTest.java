@@ -88,13 +88,16 @@ final class ListResourceMappingsCommandTest {
     }
 
     @Test
-    @DisplayName("the entries are in the platform's own application order, not declaration order")
-    void theentriesAreInApplicationOrder() {
+    @DisplayName("the entries are in the ascending order the client's own contract requires")
+    void theentriesAreInTheContractsOrder() {
         inventory();
-        assertEquals(List.of("localhost.8080", "publish", "author"), patternsFrom(listed()),
-                "the entries are not in the order the repository holds them. Somebody reading this"
-                        + " has an address that resolved unexpectedly and wants to know which rule"
-                        + " got to it first; another order would lead them to the wrong rule.");
+        // The client's canonical contract declares this listing strictly ascending by entry-path
+        // bytes and refuses anything else. Application order is the question an operator has, and
+        // the answer to it is the pattern each entry carries rather than a position in the page;
+        // answering in application order would be answering something the client cannot read.
+        assertEquals(List.of("author", "localhost.8080", "publish"), patternsFrom(listed()),
+                "the entries are not in the ascending order the client's own contract requires, so"
+                        + " the client refuses the page and the operation never settles");
     }
 
     @Test

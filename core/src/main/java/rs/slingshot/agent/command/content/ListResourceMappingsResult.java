@@ -96,6 +96,7 @@ public final class ListResourceMappingsResult {
                                                    String continuationToken) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(ENTRIES, new DocumentValue.Sequence(entries.stream()
+                .sorted(java.util.Comparator.comparing(MappingEntry::entryPath))
                 .map(ListResourceMappingsResult::entryOf)
                 .toList()));
         if (!continuationToken.isEmpty()) {

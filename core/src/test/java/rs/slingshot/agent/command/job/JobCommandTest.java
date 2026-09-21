@@ -60,10 +60,10 @@ final class JobCommandTest {
                 "the inspection was refused").result();
         final DocumentValue.Sequence keys = assertInstanceOf(DocumentValue.Sequence.class,
                 read.member(JobResults.PROPERTY_KEYS).orElseThrow());
-        assertEquals(List.of(new DocumentValue.Text("path"), new DocumentValue.Text("agentId")),
+        assertEquals(List.of(new DocumentValue.Text("agentId"), new DocumentValue.Text("path")),
                 keys.items(),
-                "the names tell an operator what kind of work a stuck job is, and they are not"
-                        + " here");
+                "the names tell an operator what kind of work a stuck job is, and they are not here"
+                        + " in the ascending order the client's own contract requires");
         assertTrue(!String.valueOf(read).contains("/content/site")
                         && !String.valueOf(read).contains("hunter2"),
                 "the answer carries a job property value, which belongs to whatever created the"

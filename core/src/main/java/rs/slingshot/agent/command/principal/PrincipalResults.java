@@ -163,7 +163,12 @@ public final class PrincipalResults {
     /**
      * The result one membership listing produces.
      *
-     * @param members what it found, in the directory's own order
+     * <p>The members are sorted by identifier before the document is built, because the client's
+     * own canonical contract declares this listing strictly ascending and the directory's order is
+     * not that order. A continuation is only meaningful against one total order, and a page of a
+     * differently-ordered listing is a page whose next request can repeat or skip a member.</p>
+     *
+     * @param members what it found, in whatever order the directory returned them
      * @param nextContinuationToken the token reaching the next page, or {@link #NO_MORE_PAGES}
      * @return the result document
      */
@@ -171,6 +176,8 @@ public final class PrincipalResults {
                                                   String nextContinuationToken) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(MATCHES, new DocumentValue.Sequence(members.stream()
+                .sorted(java.util.Comparator.comparing(member ->
+                        member.principal().authorizableIdentifier()))
                 .map(PrincipalResults::memberOf)
                 .toList()));
         if (!NO_MORE_PAGES.equals(nextContinuationToken)) {

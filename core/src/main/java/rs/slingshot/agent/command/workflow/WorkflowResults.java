@@ -98,7 +98,10 @@ public final class WorkflowResults {
      */
     public static DocumentValue.Mapping modelsOf(List<WorkflowService.Model> models,
                                                  String nextContinuationToken) {
-        return paged(models.stream().map(WorkflowResults::modelOf).toList(),
+        return paged(models.stream()
+                .sorted(java.util.Comparator.comparing(
+                        WorkflowService.Model::modelIdentifier))
+                .map(WorkflowResults::modelOf).toList(),
                 nextContinuationToken);
     }
 
@@ -111,7 +114,10 @@ public final class WorkflowResults {
      */
     public static DocumentValue.Mapping instancesOf(List<WorkflowService.Instance> instances,
                                                     String nextContinuationToken) {
-        return paged(instances.stream().map(WorkflowResults::instanceOf).toList(),
+        return paged(instances.stream()
+                .sorted(java.util.Comparator.comparing(
+                        WorkflowService.Instance::instanceIdentifier))
+                .map(WorkflowResults::instanceOf).toList(),
                 nextContinuationToken);
     }
 
@@ -129,6 +135,8 @@ public final class WorkflowResults {
         result.put(PAYLOAD_PATH, new DocumentValue.Text(detail.instance().payloadPath()));
         result.put(STATE, new DocumentValue.Text(detail.instance().state().spelling()));
         result.put(WORK_ITEMS, new DocumentValue.Sequence(detail.workItems().stream()
+                .sorted(java.util.Comparator.comparing(
+                        WorkflowService.WorkItem::workItemIdentifier))
                 .map(WorkflowResults::workItemOf)
                 .toList()));
         return new DocumentValue.Mapping(result);

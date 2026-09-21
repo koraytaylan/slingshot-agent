@@ -130,7 +130,7 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
         }
 
         List<PageListingResult.Page> found() {
-            return Collections.unmodifiableList(found);
+            return PageListingResult.ascending(Collections.unmodifiableList(found));
         }
 
         private java.util.Optional<PageListingResult.Page> matched(

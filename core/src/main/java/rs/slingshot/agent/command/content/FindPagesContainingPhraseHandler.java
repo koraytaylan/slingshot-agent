@@ -152,7 +152,8 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
         }
 
         List<PageListingResult.Page> found() {
-            return java.util.Collections.unmodifiableList(found);
+            return PageListingResult.ascending(
+                    java.util.Collections.unmodifiableList(found));
         }
 
         private boolean contains(Resource page) {

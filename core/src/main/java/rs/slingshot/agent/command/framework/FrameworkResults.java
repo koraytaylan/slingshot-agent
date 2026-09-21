@@ -75,8 +75,10 @@ public final class FrameworkResults {
      */
     public static DocumentValue.Mapping bundlesOf(List<BundleInventory.BundleEntry> entries,
                                                   String nextContinuationToken) {
-        return paged(entries.stream().map(FrameworkResults::bundleOf).toList(),
-                nextContinuationToken);
+        return paged(entries.stream()
+                .sorted(java.util.Comparator.comparing(BundleInventory.BundleEntry::symbolicName)
+                        .thenComparing(BundleInventory.BundleEntry::version))
+                .map(FrameworkResults::bundleOf).toList(), nextContinuationToken);
     }
 
     /**
@@ -88,8 +90,10 @@ public final class FrameworkResults {
      */
     public static DocumentValue.Mapping componentsOf(
             List<BundleInventory.ComponentEntry> entries, String nextContinuationToken) {
-        return paged(entries.stream().map(FrameworkResults::componentOf).toList(),
-                nextContinuationToken);
+        return paged(entries.stream()
+                .sorted(java.util.Comparator.comparing(
+                        BundleInventory.ComponentEntry::name))
+                .map(FrameworkResults::componentOf).toList(), nextContinuationToken);
     }
 
     /**

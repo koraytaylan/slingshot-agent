@@ -162,12 +162,12 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
          * @return the matching pages, each once, in the order the search reached them
          */
         List<PageListingResult.Page> found(MatchMode mode) {
-            return found.entrySet().stream()
+            return PageListingResult.ascending(found.entrySet().stream()
                     .filter(page -> mode == MatchMode.ANY
                             || page.getValue().types().containsAll(wanted))
                     .map(page -> new PageListingResult.Page(page.getKey(),
                             page.getValue().title()))
-                    .toList();
+                    .toList());
         }
 
         /**

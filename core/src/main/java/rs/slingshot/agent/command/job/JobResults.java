@@ -88,7 +88,9 @@ public final class JobResults {
      */
     public static DocumentValue.Mapping queuesOf(List<JobInventory.Queue> queues,
                                                  String nextContinuationToken) {
-        return paged(queues.stream().map(JobResults::queueOf).toList(), nextContinuationToken);
+        return paged(queues.stream()
+                .sorted(java.util.Comparator.comparing(JobInventory.Queue::queueName))
+                .map(JobResults::queueOf).toList(), nextContinuationToken);
     }
 
     /**
@@ -100,7 +102,9 @@ public final class JobResults {
      */
     public static DocumentValue.Mapping jobsOf(List<JobInventory.Job> jobs,
                                                String nextContinuationToken) {
-        return paged(jobs.stream().map(JobResults::jobOf).toList(), nextContinuationToken);
+        return paged(jobs.stream()
+                .sorted(java.util.Comparator.comparing(JobInventory.Job::jobIdentifier))
+                .map(JobResults::jobOf).toList(), nextContinuationToken);
     }
 
     /**
@@ -113,7 +117,7 @@ public final class JobResults {
         final SequencedMap<String, DocumentValue> result =
                 new LinkedHashMap<>(jobMembers(detail.job()));
         result.put(MAXIMUM_RETRY_COUNT, new DocumentValue.Whole(detail.maximumRetryCount()));
-        result.put(PROPERTY_KEYS, new DocumentValue.Sequence(detail.propertyKeys().stream()
+        result.put(PROPERTY_KEYS, new DocumentValue.Sequence(detail.propertyKeys().stream().sorted()
                 .map(name -> (DocumentValue) new DocumentValue.Text(name))
                 .toList()));
         return new DocumentValue.Mapping(result);

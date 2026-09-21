@@ -17,13 +17,23 @@ import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * The children of one page, read directly rather than searched for.
+ * The pages among the immediate children of one anchor, read directly rather than searched for.
  *
  * <p>It issues no query. Not "a cheap query" — none at all, which is why this command appears in no
  * row of the declared-query inventory and needs no index on anybody's deployment. Listing what is
  * directly under a known node is something the repository answers by looking, and turning it into a
  * search would make the most common operation an operator performs depend on an index somebody has
  * to maintain.</p>
+ *
+ * <p>The anchor is any node this caller can read, not only a page. A site root, a language folder,
+ * and a page all hold pages somewhere directly beneath them, and the client's own contract names
+ * the anchor an anchor rather than a page: it says the command reports the pages that are immediate
+ * children of one anchor. Requiring the anchor itself to be a page would refuse the most ordinary
+ * question an operator asks — what is under this root — and answer it with a category whose closed
+ * vocabulary has one spelling for "this anchor cannot be listed".</p>
+ *
+ * <p>What a match is does not change: a child is listed only when it is exactly a page. A folder
+ * among the children is not one, and a grandchild is not a child.</p>
  *
  * <p>Order is the repository's own. A caller navigating a site sees what an author sees in their
  * own console; sorting here would answer a different question whose answer looks plausible and is
@@ -84,12 +94,7 @@ public final class ListChildPagesHandler implements CommandHandler {
                           ResourceResolver resolver, CallerContext context) {
         final Resource parent = resolver.getResource(command.rootPath());
         if (parent == null) {
-            return new Failed(ROOT_NOT_FOUND, whyNothingIsListed(Absence.NOTHING_IS_THERE,
-                    command.rootPath()));
-        }
-        if (!PAGE_TYPE.equals(typeOf(parent))) {
-            return new Failed(ROOT_NOT_FOUND, whyNothingIsListed(Absence.IT_IS_NOT_A_PAGE,
-                    command.rootPath()));
+            return new Failed(ROOT_NOT_FOUND, whyNothingIsListed(command.rootPath()));
         }
         final Gathered gathered = childrenOf(parent, context.discovery().limit());
         if (gathered.state() == BudgetState.EXCEEDED) {
@@ -117,33 +122,21 @@ public final class ListChildPagesHandler implements CommandHandler {
 
     }
 
-    /** Why a listing has no parent to list, which decides what the caller does next. */
-    public enum Absence {
-        /** There is nothing at that path, or nothing this caller may see. */
-        NOTHING_IS_THERE,
-        /** Something is there and it is not a page, so it has no child pages to list. */
-        IT_IS_NOT_A_PAGE
-    }
-
     /**
-     * What a caller is told when there are no children to list.
+     * What a caller is told when there is nothing to list.
      *
-     * <p>Both are the same category, because the client's own closed set has one spelling for a
-     * root that cannot anchor a listing. They are not the same sentence: a caller whose path is
-     * simply wrong retypes it, and a caller who pointed at a folder goes looking for the page
-     * inside it. The category tells them it failed; this tells them what to do.</p>
+     * <p>The category is the same one every rooted search reports for an anchor it cannot resolve,
+     * because the client's own closed set has one spelling for a root that cannot anchor a listing.
+     * The sentence is what tells the caller which of the two they did: a path that is not there and
+     * a path this caller may not read are the same answer, because telling them apart would tell a
+     * caller which nodes exist that they may not see.</p>
      *
-     * @param absence why nothing is listed
      * @param parent the path that was asked for
      * @return the sentence a caller receives
      */
-    public static String whyNothingIsListed(Absence absence, String parent) {
-        return switch (absence) {
-            case NOTHING_IS_THERE -> parent + " is not a path this caller can read, which is the"
-                    + " same answer as nothing being there";
-            case IT_IS_NOT_A_PAGE -> parent + " is not a page, so it has no child pages; a page is"
-                    + " what this command lists the children of";
-        };
+    public static String whyNothingIsListed(String parent) {
+        return parent + " is not a path this caller can read, which is the same answer as nothing"
+                + " being there";
     }
 
     private static Gathered childrenOf(Resource parent, long budget) {
@@ -160,7 +153,7 @@ public final class ListChildPagesHandler implements CommandHandler {
                 children.add(new PageListingResult.Page(child.getPath(), titleOf(child)));
             }
         }
-        return new Gathered(List.copyOf(children), BudgetState.WITHIN);
+        return new Gathered(PageListingResult.ascending(children), BudgetState.WITHIN);
     }
 
     /**

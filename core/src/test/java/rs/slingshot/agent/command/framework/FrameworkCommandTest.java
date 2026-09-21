@@ -51,6 +51,9 @@ final class FrameworkCommandTest {
 
     private static final String BUNDLE = "rs.slingshot.agent.core";
 
+    /** The bundle whose symbolic name sorts first, which is therefore the first match. */
+    private static final String FIRST_BUNDLE = "org.example.other";
+
     @Test
     @DisplayName("a listing reports every state by default, because a filter hides the broken one")
     void alistingReportsEveryStateByDefault() {
@@ -74,9 +77,11 @@ final class FrameworkCommandTest {
                 listed.member(FrameworkResults.MATCHES).orElseThrow());
         final DocumentValue.Mapping first = assertInstanceOf(DocumentValue.Mapping.class,
                 matches.items().getFirst());
-        assertEquals(new DocumentValue.Text(BUNDLE),
+        // The listing is ascending by symbolic name, as the client's own contract requires, and
+        // "org.example.other" sorts before "rs.slingshot.agent.core".
+        assertEquals(new DocumentValue.Text(FIRST_BUNDLE),
                 first.member(FrameworkResults.SYMBOLIC_NAME).orElseThrow());
-        assertEquals(new DocumentValue.Text("active"),
+        assertEquals(new DocumentValue.Text("resolved"),
                 first.member(FrameworkResults.STATE).orElseThrow());
         assertTrue(first.member(FrameworkResults.VERSION).isPresent()
                         && first.member(FrameworkResults.BUNDLE_IDENTIFIER).isPresent(),

@@ -83,7 +83,12 @@ public final class ListAssetRenditionsResult {
     /**
      * The result one window of renditions produces.
      *
-     * @param renditions the renditions
+     * <p>Sorted by rendition name, because the client's own canonical contract declares this
+     * listing strictly ascending by name and the repository's rendition order is not that order.
+     * The same rule as every other listing: one total order is what makes a continuation mean the
+     * same thing to both sides.</p>
+     *
+     * @param renditions the renditions, in whatever order the repository returned them
      * @param continuationToken the token reaching the next page, or empty where this is the end
      * @return the result document
      */
@@ -91,6 +96,7 @@ public final class ListAssetRenditionsResult {
                                                    String continuationToken) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(MATCHES, new DocumentValue.Sequence(renditions.stream()
+                .sorted(java.util.Comparator.comparing(Rendition::name))
                 .map(ListAssetRenditionsResult::renditionOf)
                 .toList()));
         if (!continuationToken.isEmpty()) {

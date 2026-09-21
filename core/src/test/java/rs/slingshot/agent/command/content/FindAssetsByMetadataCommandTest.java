@@ -85,7 +85,7 @@ final class FindAssetsByMetadataCommandTest {
     @DisplayName("a search naming nothing but a root is every asset under it")
     void arootAloneIsEveryAsset() {
         corpus();
-        assertEquals(List.of("/content/dam/report", "/content/dam/photo"), pathsFrom(listed()),
+        assertEquals(List.of("/content/dam/photo", "/content/dam/report"), pathsFrom(listed()),
                 "a search naming no narrowing did not answer every asset under the root, which is"
                         + " a question about a library that the asset index answers from the node"
                         + " type alone");
@@ -122,7 +122,7 @@ final class FindAssetsByMetadataCommandTest {
         assertEquals(List.of("/content/dam/report"),
                 pathsFrom(listed(tagged(MatchMode.ALL, FINANCE, PUBLISHED))),
                 "asking for assets carrying both tags answered one carrying only one of them");
-        assertEquals(List.of("/content/dam/report", "/content/dam/photo"),
+        assertEquals(List.of("/content/dam/photo", "/content/dam/report"),
                 pathsFrom(listed(tagged(MatchMode.ANY, FINANCE, PUBLISHED))),
                 "asking for assets carrying either tag answered fewer than carry either");
     }
@@ -161,7 +161,7 @@ final class FindAssetsByMetadataCommandTest {
         final SequencedMap<String, DocumentValue> asked = new LinkedHashMap<>();
         asked.put(PropertyPredicate.ARGUMENT_MEMBER, new DocumentValue.Sequence(
                 List.of(new DocumentValue.Mapping(predicate))));
-        assertEquals(List.of("/content/dam/report", "/content/dam/photo"),
+        assertEquals(List.of("/content/dam/photo", "/content/dam/report"),
                 pathsFrom(listed(asked)),
                 "a predicate every asset satisfies answered something other than every asset");
     }

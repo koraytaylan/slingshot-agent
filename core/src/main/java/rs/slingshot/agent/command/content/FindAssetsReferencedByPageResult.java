@@ -70,6 +70,11 @@ public final class FindAssetsReferencedByPageResult {
     /**
      * The result one window of referenced assets produces.
      *
+     * <p>Both orders the client's own canonical contract declares are imposed here: the assets
+     * strictly ascending by repository-path bytes, and each asset's reference paths strictly
+     * ascending. The walk that finds them returns neither order, and a page taken against a
+     * different order can repeat or skip an asset.</p>
+     *
      * @param referenced the referenced assets, each appearing once
      * @param continuationToken the token reaching the next page, or empty where this is the end
      * @return the result document
@@ -78,7 +83,10 @@ public final class FindAssetsReferencedByPageResult {
                                                    String continuationToken) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(MATCHES, new DocumentValue.Sequence(referenced.stream()
-                .map(FindAssetsReferencedByPageResult::assetOf)
+                .sorted(java.util.Comparator.comparing(
+                        FindAssetsReferencedByPageResult.ReferencedAsset::repositoryPath))
+                .map(asset -> assetOf(new ReferencedAsset(asset.repositoryPath(),
+                        asset.referencePaths().stream().sorted().toList())))
                 .toList()));
         if (!continuationToken.isEmpty()) {
             result.put(NEXT_CONTINUATION_TOKEN, new DocumentValue.Text(continuationToken));

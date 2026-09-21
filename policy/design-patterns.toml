@@ -1413,7 +1413,7 @@ reason = "A list of pages, each an address and a title and nothing else, shared 
 [[type]]
 name = "ListChildPagesHandler"
 pattern = "accessor"
-reason = "It issues no query — not a cheap one, none — which is why this command appears in no row of the declared-query inventory and needs no index on anybody's deployment. A parent that is not a page and one that is not there share a category, because the client's closed set has one spelling for a root that cannot anchor a listing, and are told apart in what the caller is actually told to do next."
+reason = "It issues no query — not a cheap one, none — which is why this command appears in no row of the declared-query inventory and needs no index on anybody's deployment. The anchor is any node the caller can read, because the client's own contract names it an anchor rather than a page; what stays page-only is the match, so a folder among the children is not listed. An anchor that is not there and one nobody may read share a category, because the client's closed set has one spelling for a root that cannot anchor a listing and telling them apart would say which nodes exist that the caller may not see."
 
 [[type]]
 name = "FindPagesContainingPhraseCommand"

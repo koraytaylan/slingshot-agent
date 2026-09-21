@@ -211,15 +211,25 @@ final class PrincipalCommandTest {
                 "the listing was refused").result();
         final List<DocumentValue> matches = assertInstanceOf(DocumentValue.Sequence.class,
                 listed.member(PrincipalResults.MATCHES).orElseThrow()).items();
-        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.TRUE),
-                assertInstanceOf(DocumentValue.Mapping.class, matches.getFirst())
-                        .member(PrincipalResults.DIRECT).orElseThrow());
-        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.FALSE),
-                assertInstanceOf(DocumentValue.Mapping.class, matches.get(1))
-                        .member(PrincipalResults.DIRECT).orElseThrow(),
+        // The fixture answers "jane" then "editors", which is not the order the client's own
+        // canonical contract declares. The listing is ascending by identifier, and the direct and
+        // inherited facts travel with the member rather than with the position.
+        assertEquals(List.of("editors", USER), matches.stream()
+                .map(match -> assertInstanceOf(DocumentValue.Mapping.class, match)
+                        .member(PrincipalResults.AUTHORIZABLE_IDENTIFIER).orElseThrow())
+                .map(identifier -> ((DocumentValue.Text) identifier).value())
+                .toList(),
+                "the listing is not in the ascending order the client's own contract requires");
+        final List<DocumentValue> flags = matches.stream()
+                .map(match -> assertInstanceOf(DocumentValue.Mapping.class, match)
+                        .member(PrincipalResults.DIRECT).orElseThrow())
+                .toList();
+        // "editors" sorts first and is held indirectly; "jane" second and directly.
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.FALSE), flags.getFirst(),
                 "a member held through another group was reported as held directly, which is the"
                         + " difference between a permission somebody granted and one they"
                         + " inherited");
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.TRUE), flags.get(1));
     }
 
     @Test

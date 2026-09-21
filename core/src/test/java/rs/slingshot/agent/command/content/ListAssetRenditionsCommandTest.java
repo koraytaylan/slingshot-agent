@@ -59,14 +59,15 @@ final class ListAssetRenditionsCommandTest {
         asset();
         final DocumentValue.Mapping listed = renditions();
         assertEquals(THREE, renditionsIn(listed).size(), "not every rendition was listed");
-        assertEquals(List.of("original", "cq5dam.thumbnail.140.100.png", "cq5dam.web.1280.1280.png"),
-                namesFrom(listed));
-        assertEquals(List.of(true, false, false), namesFrom(listed).stream()
-                        .map(ListAssetRenditionsResult.ORIGINAL_NAME::equals)
-                        .toList(),
-                "the asset's own original is not listed first among its renditions — an operator"
-                        + " adding up what this asset costs would be short by the largest thing in"
-                        + " the total");
+        // The client's own canonical contract declares this listing strictly ascending by
+        // rendition name, so the order is the contract's and not the repository's. The original
+        // is one of the three rather than a position in the answer.
+        assertEquals(List.of("cq5dam.thumbnail.140.100.png", "cq5dam.web.1280.1280.png", "original"),
+                namesFrom(listed),
+                "the listing is not in the ascending order the client's own contract requires");
+        assertTrue(namesFrom(listed).contains(ListAssetRenditionsResult.ORIGINAL_NAME),
+                "the asset's own original is missing from its renditions — an operator adding up"
+                        + " what this asset costs would be short by the largest thing in the total");
         assertTrue(sizesFrom(listed).stream().allMatch(size -> size > 0),
                 "a rendition was listed with no recorded size, and the size is the whole reason"
                         + " somebody asks this question");

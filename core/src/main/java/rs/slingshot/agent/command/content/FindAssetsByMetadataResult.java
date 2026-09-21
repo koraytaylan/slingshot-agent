@@ -90,13 +90,29 @@ public final class FindAssetsByMetadataResult {
     public static DocumentValue.Mapping documentOf(List<MatchedAsset> matched,
                                                    String continuationToken) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
-        result.put(MATCHES, new DocumentValue.Sequence(matched.stream()
+        result.put(MATCHES, new DocumentValue.Sequence(ascending(matched).stream()
                 .map(FindAssetsByMetadataResult::assetOf)
                 .toList()));
         if (!continuationToken.isEmpty()) {
             result.put(NEXT_CONTINUATION_TOKEN, new DocumentValue.Text(continuationToken));
         }
         return new DocumentValue.Mapping(result);
+    }
+
+    /**
+     * The assets of one listing, in the order the client's own contract requires.
+     *
+     * <p>The contract declares this listing strictly ascending by repository-path bytes, and the
+     * order an asset query returns is not that order: a continuation taken against a different
+     * order can repeat or skip an asset, which is a migration acting on the wrong set.</p>
+     *
+     * @param matched the assets, in whatever order the search returned them
+     * @return the same assets, strictly ascending by path
+     */
+    public static List<MatchedAsset> ascending(List<MatchedAsset> matched) {
+        return matched.stream()
+                .sorted(java.util.Comparator.comparing(MatchedAsset::repositoryPath))
+                .toList();
     }
 
     private static DocumentValue assetOf(MatchedAsset asset) {

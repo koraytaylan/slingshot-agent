@@ -84,6 +84,24 @@ public final class PageListingResult {
         return new DocumentValue.Mapping(result);
     }
 
+    /**
+     * The pages of one listing, in the order the client's own contract requires.
+     *
+     * <p>The contract declares every page listing strictly ascending by repository-path bytes, so
+     * the repository's order is not the answer: two pages must agree on one total order for a
+     * continuation to mean anything, and Adobe's own order is not that order. Sorting here rather
+     * than in each handler is deliberate — one home for the rule means a handler cannot forget it,
+     * which is exactly what four handlers each iterating children directly had done.</p>
+     *
+     * @param found the pages, in whatever order the repository returned them
+     * @return the same pages, strictly ascending by path
+     */
+    public static List<Page> ascending(List<Page> found) {
+        return found.stream()
+                .sorted(java.util.Comparator.comparing(Page::repositoryPath))
+                .toList();
+    }
+
     private static DocumentValue pageOf(Page child) {
         final SequencedMap<String, DocumentValue> page = new LinkedHashMap<>();
         page.put(REPOSITORY_PATH, new DocumentValue.Text(child.repositoryPath()));

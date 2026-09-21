@@ -81,24 +81,34 @@ final class ListChildPagesCommandTest {
     }
 
     @Test
-    @DisplayName("repository order survives paging, checked against a direct child iteration")
-    void repositoryOrderSurvivesPaging() {
+    @DisplayName("the listing is ascending by path, and paging preserves that one order")
+    void theListingIsAscendingAndPagingPreservesIt() {
+        // The children are created in an order that is deliberately not ascending, because the
+        // client's own canonical contract declares this array ascending by repository-path bytes.
+        // A repository-ordered answer is refused by the client, so the page would never settle and
+        // the operation would be retried forever. A fixture created in ascending order would hide
+        // exactly that defect, which is how it shipped once.
         final Resource parent = parentWithChildren(CHILDREN);
-        final List<String> iterated = new ArrayList<>();
+        final List<String> ascending = pathsFrom(listed(parent.getPath(), 0, CHILDREN * 2));
+        assertEquals(ascending.stream().sorted().toList(), ascending,
+                "the listing is not ascending by path, so the client refuses the result and the"
+                        + " operation can never settle");
+        assertEquals(CHILDREN, ascending.size(), "the paged read did not carry every child");
+        final List<String> repositoryOrder = new ArrayList<>();
         final Iterator<Resource> children = parent.listChildren();
         while (children.hasNext()) {
-            iterated.add(children.next().getPath());
+            repositoryOrder.add(children.next().getPath());
         }
-        assertEquals(iterated, pathsFrom(listed(parent.getPath(), 0, CHILDREN * 2)),
-                "the listing the handler answers is not in the order the repository holds the"
-                        + " children");
+        assertTrue(!repositoryOrder.equals(ascending) || repositoryOrder.equals(
+                        repositoryOrder.stream().sorted().toList()),
+                "the fixture does not exercise the defect it exists for");
         final List<String> paged = new ArrayList<>();
-        for (long offset = 0; offset < iterated.size(); offset = offset + PAGE) {
+        for (long offset = 0; offset < ascending.size(); offset = offset + PAGE) {
             paged.addAll(pathsFrom(listed(parent.getPath(), offset, PAGE)));
         }
-        assertEquals(iterated, paged,
-                "reading every page did not produce the repository's own order, so a caller"
-                        + " navigating the site sees something that is not the site");
+        assertEquals(ascending, paged,
+                "reading every page did not produce one consistent order, so a caller navigating"
+                        + " the site would see one address twice and another never");
     }
 
     /** How many children the parent has, which is more than one window. */
@@ -108,19 +118,22 @@ final class ListChildPagesCommandTest {
     private static final int PAGE = 4;
 
     @Test
-    @DisplayName("a parent that is not a page and one that is not there are told apart")
-    void thetwoAbsencesAreToldApart() {
-        nodeAt("/content/not-a-page");
-        final CommandHandler.Failed folder = assertInstanceOf(CommandHandler.Failed.class,
-                run("/content/not-a-page"), "a parent that is not a page was listed");
+    @DisplayName("an anchor that is a folder is listed, and a path nobody can read is refused")
+    void afolderAnchorIsListedAndAPathNobodyCanReadIsRefused() {
+        // The anchor is any readable node, because the client's own contract names it an anchor
+        // rather than a page. What stays page-only is the match: a folder under the anchor is a
+        // real thing to meet and is not a page, so it is not listed.
+        final Resource folder = nodeAt("/content/root");
+        final Resource page = pageAt("/content/root/child");
+        nodeAt("/content/root/plain");
+        sling.build().commit();
+        final DocumentValue.Mapping result = listed(folder.getPath(), 0, CHILDREN);
+        assertEquals(List.of(page.getPath()), pathsFrom(result),
+                "a folder anchor was not listed, or a child that is not a page reached the answer");
         final CommandHandler.Failed absent = assertInstanceOf(CommandHandler.Failed.class,
                 run("/content/nothing-is-here"), "a parent that is not there was listed");
-        assertEquals(ListChildPagesHandler.ROOT_NOT_FOUND, folder.category());
         assertEquals(ListChildPagesHandler.ROOT_NOT_FOUND, absent.category());
-        assertTrue(!folder.detail().equals(absent.detail()),
-                "a caller who pointed at a folder and one who mistyped a path are told the same"
-                        + " thing, and their next actions are different");
-        assertTrue(folder.detail().contains("not a page"), folder.detail());
+        assertTrue(absent.detail().contains("not a path this caller can read"), absent.detail());
     }
 
     @Test
@@ -267,13 +280,24 @@ final class ListChildPagesCommandTest {
 
     private Resource parentWithChildren(int count) {
         pageAt("/content/site");
-        for (int child = 0; child < count; child = child + 1) {
+        // A name order that runs against the creation order: the repository answers in creation
+        // order, so a handler that forgot to sort cannot accidentally look sorted.
+        for (final int child : descendingNames(count)) {
             final String path = "/content/site/child-" + String.format("%02d", child);
             pageAt(path);
             sling.create().resource(path + "/" + ListChildPagesHandler.PAGE_CONTENT,
                     java.util.Map.of(ListChildPagesHandler.TITLE_PROPERTY, "Child " + child));
         }
         return Objects.requireNonNull(sling.resourceResolver().getResource("/content/site"));
+    }
+
+    /** How many children one deliberately unordered fixture holds, largest name first. */
+    private static List<Integer> descendingNames(int count) {
+        final List<Integer> names = new ArrayList<>();
+        for (int child = count - 1; child >= 0; child = child - 1) {
+            names.add(child);
+        }
+        return names;
     }
 
     private Resource pageAt(String path) {
