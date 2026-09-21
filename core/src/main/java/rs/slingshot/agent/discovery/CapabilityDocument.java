@@ -31,6 +31,9 @@ public final class CapabilityDocument {
     /** The member the store's incarnation is carried in. */
     public static final String GENERATION = "agent_event_store_generation";
 
+    /** The member the behavioural revision is carried in. */
+    public static final String REVISION = "capability_revision";
+
     /** The member the canonical-form contract digest is carried in. */
     public static final String CANONICAL_DIGEST = "canonical_json_contract_digest";
 
@@ -54,8 +57,8 @@ public final class CapabilityDocument {
      * exchange, and no command could be derived.</p>
      */
     public static final List<String> MEMBERS =
-            List.of(GENERATION, CANONICAL_DIGEST, CONTRACTS, AUTHORITY_READY, TRANSPORT_DIGEST,
-                    FORMAT);
+            List.of(GENERATION, REVISION, CANONICAL_DIGEST, CONTRACTS, AUTHORITY_READY,
+                    TRANSPORT_DIGEST, FORMAT);
 
     private final AdvertisedCapabilities capabilities;
     private final byte[] bytes;
@@ -139,6 +142,7 @@ public final class CapabilityDocument {
                                        List<CommandContractIdentity> ordered) {
         final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
         members.put(GENERATION, new DocumentValue.Whole(capabilities.generation().number()));
+        members.put(REVISION, new DocumentValue.Whole(capabilities.capabilityRevision().number()));
         members.put(CANONICAL_DIGEST,
                 new DocumentValue.Text(capabilities.canonicalContractDigest().rendered()));
         members.put(CONTRACTS, new DocumentValue.Sequence(contracts(ordered)));

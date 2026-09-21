@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.DigestValue;
+import rs.slingshot.agent.identity.CapabilityRevision;
 import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.BoundedDocumentReader;
@@ -171,7 +172,7 @@ final class CapabilityDocumentTest {
 
     private static AdvertisedCapabilities capabilities(String fixture,
             AdvertisedCapabilities.ContinuationAuthority authority) {
-        return new AdvertisedCapabilities(generation(), digest("a canonical contract"),
+        return new AdvertisedCapabilities(generation(), revision(), digest("a canonical contract"),
                 contracts(fixture), authority, digest("a transport contract"));
     }
 
@@ -202,6 +203,12 @@ final class CapabilityDocumentTest {
         return assertInstanceOf(EventStoreGeneration.Held.class,
                 EventStoreGeneration.of(EventStoreGeneration.FIRST),
                 "the first generation is not one").generation();
+    }
+
+    private static CapabilityRevision revision() {
+        return assertInstanceOf(CapabilityRevision.Held.class,
+                CapabilityRevision.of(CapabilityRevision.CURRENT),
+                "the revision was refused").revision();
     }
 
     private static DigestValue digest(String seed) {

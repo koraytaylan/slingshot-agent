@@ -242,7 +242,8 @@ final class GenerationRotationTest {
         final EventStoreGeneration serving = assertInstanceOf(GenerationStore.Held.class,
                 GenerationStore.serving(session)).generation();
         final String rendered = assertInstanceOf(CapabilityDocument.Held.class,
-                CapabilityDocument.of(new AdvertisedCapabilities(serving, digest("canonical"),
+                CapabilityDocument.of(new AdvertisedCapabilities(serving, revision(),
+                        digest("canonical"),
                         List.of(), AdvertisedCapabilities.ContinuationAuthority.READY,
                         digest("transport")),
                         CONTRACT.value(ContractLimit.MAXIMUM_AGENT_PROTOCOL_DOCUMENT_BYTES)),
@@ -521,5 +522,12 @@ final class GenerationRotationTest {
             walked = walked.getParent();
         }
         return java.util.Objects.requireNonNull(walked, "this suite is not inside the repository");
+    }
+
+    private static rs.slingshot.agent.identity.CapabilityRevision revision() {
+        return assertInstanceOf(rs.slingshot.agent.identity.CapabilityRevision.Held.class,
+                rs.slingshot.agent.identity.CapabilityRevision.of(
+                        rs.slingshot.agent.identity.CapabilityRevision.CURRENT),
+                "the revision was refused").revision();
     }
 }

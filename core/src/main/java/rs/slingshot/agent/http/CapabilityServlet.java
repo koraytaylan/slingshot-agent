@@ -22,6 +22,7 @@ import rs.slingshot.agent.digest.CommittedResource;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
 import rs.slingshot.agent.discovery.CapabilityDocument;
+import rs.slingshot.agent.identity.CapabilityRevision;
 import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.route.AgentRoute;
@@ -235,6 +236,7 @@ public final class CapabilityServlet extends AgentServlet {
         final AgentContract contract = ((AgentContract.Loaded) outcome).contract();
         final AdvertisedCapabilities capabilities = new AdvertisedCapabilities(
                 generation(),
+                capabilityRevision(),
                 canonicalContractDigest(),
                 commands,
                 observing.observe(),
@@ -245,6 +247,21 @@ public final class CapabilityServlet extends AgentServlet {
             throw new IllegalStateException("cannot answer: " + refused.refusal() + refused.detail());
         }
         return ((CapabilityDocument.Held) built).document();
+    }
+
+    /**
+     * The behavioural revision this build declares.
+     *
+     * @return the revision
+     * @throws IllegalStateException if the declared revision is not one this build can hold, which
+     *     would mean the constant itself is wrong
+     */
+    public static CapabilityRevision capabilityRevision() {
+        final CapabilityRevision.Outcome held = CapabilityRevision.of(CapabilityRevision.CURRENT);
+        if (held instanceof final CapabilityRevision.Refused refused) {
+            throw new IllegalStateException("no revision: " + refused.detail());
+        }
+        return ((CapabilityRevision.Held) held).revision();
     }
 
     /**

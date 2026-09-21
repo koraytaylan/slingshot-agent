@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
+import rs.slingshot.agent.identity.CapabilityRevision;
 
 /**
  * The discovery document, field by field against the shape the client already expects.
@@ -72,6 +73,7 @@ final class CapabilityServletTest {
         assertEquals("{\"agent_event_store_generation\":1"
                         + ",\"canonical_json_contract_digest\":\""
                         + CapabilityServlet.canonicalContractDigest().rendered() + "\""
+                        + ",\"capability_revision\":" + CapabilityRevision.CURRENT
                         + ",\"command_contracts\":[]"
                         + ",\"continuation_authority_ready\":false"
                         + ",\"format\":\"slingshot.agent/1\""

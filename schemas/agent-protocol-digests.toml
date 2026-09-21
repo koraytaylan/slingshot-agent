@@ -45,7 +45,7 @@ reason = "A token as it crosses the wire: what it says and the digest binding it
 [[schema]]
 path = "schemas/agent-protocol/discovery/capabilities.json"
 model = "core/src/main/java/rs/slingshot/agent/discovery/CapabilityDocument.java"
-digest = "5dd33bedb4ae33110d9e87150f6916ed49ee66e5e61ef9a6d2be0ec15377b79c"
+digest = "f0e042cfb95d07b40eeb4a7961475e4ca56d09c08e89b7a79dcc74256296ffc3"
 reason = "What this agent says it is, read before a client sends it anything."
 unpublished = "The client publishes no document of its own for this one: what an agent can do is the agent's own statement about itself, and a client asserting it in a schema would be asserting something it cannot know. So there is nothing to compare, and this row says so rather than the check passing over it in silence."
 

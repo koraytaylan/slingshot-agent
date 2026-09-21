@@ -408,11 +408,18 @@ final class ProtocolVectorTest {
                 .toList();
         return identities.size() == contracts.size()
                 && CapabilityDocument.of(new rs.slingshot.agent.discovery.AdvertisedCapabilities(
-                        SERVING, canonicalContractDigest(), identities,
+                        SERVING, capabilityRevision(), canonicalContractDigest(), identities,
                         rs.slingshot.agent.discovery.AdvertisedCapabilities.ContinuationAuthority
                                 .NOT_READY,
                         transportDigest()),
                 DOCUMENT_BOUNDS.documentBytes()) instanceof CapabilityDocument.Held;
+    }
+
+    private static rs.slingshot.agent.identity.CapabilityRevision capabilityRevision() {
+        return assertInstanceOf(rs.slingshot.agent.identity.CapabilityRevision.Held.class,
+                rs.slingshot.agent.identity.CapabilityRevision.of(
+                        rs.slingshot.agent.identity.CapabilityRevision.CURRENT),
+                "the revision was refused").revision();
     }
 
     private static DocumentProvenance.ThisBuild build() {

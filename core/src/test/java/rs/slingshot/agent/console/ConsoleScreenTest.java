@@ -22,6 +22,7 @@ import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.discovery.AdvertisedCapabilities;
 import rs.slingshot.agent.http.AuthorizationGate;
+import rs.slingshot.agent.identity.CapabilityRevision;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.route.AgentRouteTable;
 import rs.slingshot.agent.route.RouteAlias;
@@ -450,7 +451,7 @@ final class ConsoleScreenTest {
 
     /** Discovery's own answer, with an authority that cannot issue a token. */
     private static AdvertisedCapabilities capabilities() {
-        return new AdvertisedCapabilities(generation(), digest(DIGEST), List.of(),
+        return new AdvertisedCapabilities(generation(), revision(), digest(DIGEST), List.of(),
                 AdvertisedCapabilities.ContinuationAuthority.NOT_READY, digest(DIGEST));
     }
 
@@ -462,6 +463,12 @@ final class ConsoleScreenTest {
     private static EventStoreGeneration generation() {
         return assertInstanceOf(EventStoreGeneration.Held.class, EventStoreGeneration.of(1),
                 "the generation was refused").generation();
+    }
+
+    private static CapabilityRevision revision() {
+        return assertInstanceOf(CapabilityRevision.Held.class,
+                CapabilityRevision.of(CapabilityRevision.CURRENT),
+                "the revision was refused").revision();
     }
 
     private static BuildIdentityDataSource.Build build() {

@@ -36,12 +36,16 @@ final class ConsoleRuntimeAssemblyTest {
         final rs.slingshot.agent.identity.EventStoreGeneration generation =
                 ((rs.slingshot.agent.identity.EventStoreGeneration.Held)
                         rs.slingshot.agent.identity.EventStoreGeneration.of(1)).generation();
+        final rs.slingshot.agent.identity.CapabilityRevision revision =
+                ((rs.slingshot.agent.identity.CapabilityRevision.Held)
+                        rs.slingshot.agent.identity.CapabilityRevision.of(
+                                rs.slingshot.agent.identity.CapabilityRevision.CURRENT)).revision();
         final rs.slingshot.agent.digest.DigestValue canonical =
                 rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[32]);
         final rs.slingshot.agent.digest.DigestValue transport =
                 rs.slingshot.agent.digest.DigestValue.ofBytes(new byte[32]);
         final ConsoleRuntimeAssembly.Inputs inputs = new ConsoleRuntimeAssembly.Inputs(
-                () -> new AdvertisedCapabilities(generation, canonical, List.of(),
+                () -> new AdvertisedCapabilities(generation, revision, canonical, List.of(),
                         AdvertisedCapabilities.ContinuationAuthority.READY, transport),
                 () -> new BuildIdentityDataSource.Build("v", "c", "row",
                         BuildIdentityDataSource.Claim.CLAIMED),

@@ -346,6 +346,11 @@ pattern = "value-object"
 reason = "Five fields and no identity beyond them: two identities carrying the same five are the same command contract, which is the whole point of not identifying a command by its name."
 
 [[type]]
+name = "CapabilityRevision"
+pattern = "value-object"
+reason = "A behavioural revision is the number it is, and two of them holding the same number describe the same behaviour. It is a type rather than a bundle version because it states what the code does: two builds with different versions and the same behaviour are the same revision, which is what makes a client's comparison meaningful."
+
+[[type]]
 name = "IdentityRefusal"
 pattern = "value-object"
 reason = "What was wrong and which of the five members it was wrong about, which two refusals naming the same pair are the same report of."

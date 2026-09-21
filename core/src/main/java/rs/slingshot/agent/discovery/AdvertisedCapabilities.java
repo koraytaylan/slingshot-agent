@@ -6,6 +6,7 @@ package rs.slingshot.agent.discovery;
 import java.util.Collections;
 import java.util.List;
 import rs.slingshot.agent.digest.DigestValue;
+import rs.slingshot.agent.identity.CapabilityRevision;
 import rs.slingshot.agent.identity.CommandContractIdentity;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 
@@ -16,16 +17,19 @@ import rs.slingshot.agent.identity.EventStoreGeneration;
  * was fully specified before this side existed. A client reads this document, compares it with what
  * it requires, and reports one distinct reason per thing that differs — so each thing that can
  * differ is a separate member: a transport disagreement is a version problem, a command-contract
- * disagreement is a build problem, and a changed generation is a store that was rebuilt underneath
- * rows that refer to it.</p>
+ * disagreement is a build problem, a behavioural revision older than the client is a deployment
+ * that needs updating, and a changed generation is a store that was rebuilt underneath rows that
+ * refer to it.</p>
  *
  * @param generation which incarnation of its event store this agent is serving
+ * @param capabilityRevision the behavioural revision this build was made with
  * @param canonicalContractDigest the canonical-byte contract its schemas are written under
  * @param commandContracts the command contracts it holds, in wire order
  * @param continuationAuthority whether its continuation-key authority can issue and validate
  * @param transportContractDigest the transport contract it speaks
  */
 public record AdvertisedCapabilities(EventStoreGeneration generation,
+                                     CapabilityRevision capabilityRevision,
                                      DigestValue canonicalContractDigest,
                                      List<CommandContractIdentity> commandContracts,
                                      ContinuationAuthority continuationAuthority,
