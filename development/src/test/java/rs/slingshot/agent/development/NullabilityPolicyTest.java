@@ -74,6 +74,22 @@ final class NullabilityPolicyTest {
     }
 
     @Test
+    @DisplayName("a null at a declared external position passes, and every other null is refused")
+    void aDeclaredExternalAbsenceCoversExactlyItsPosition() {
+        final NullabilityPolicy declaring = assertInstanceOf(NullabilityPolicy.Loaded.class,
+                NullabilityPolicy.read(FIXTURES.resolve("declared-absence"))).policy();
+        final List<PolicyFinding> findings = declaring.inFile("external-absence.java",
+                FIXTURES.resolve("external-absence.java"));
+        assertEquals(2, findings.stream()
+                        .filter(finding -> "null-argument".equals(finding.rule())).count(),
+                "a declared position was refused, or an undeclared one passed: " + findings);
+        assertEquals(4, policy().inFile("external-absence.java",
+                        FIXTURES.resolve("external-absence.java")).stream()
+                        .filter(finding -> "null-argument".equals(finding.rule())).count(),
+                "a position declared for another file was honoured here");
+    }
+
+    @Test
     @DisplayName("annotating a primitive states what the language already decides and is refused")
     void aRedundantAnnotationIsRefused() {
         assertRule(findings("redundant-annotation.java"), "redundant-annotation", "count");

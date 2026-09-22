@@ -48,18 +48,8 @@ reason = "A test constructs the shapes the rules refuse, on purpose, and holding
 importable = false
 reason = "Class-file retention means the annotation is never read at runtime, so an import of its package would be a requirement nothing satisfies."
 
-# The argument positions of external interfaces whose own contract gives an absent value a
-# meaning that no other value carries. Each is named by the one file that makes the call, the
-# method, and the zero-based position; a null anywhere else, including another argument of the same
-# call, is still refused.
 [[external_absence]]
-source = "core/src/main/java/rs/slingshot/agent/command/platform/DefaultPrincipalDirectory.java"
+source = "external-absence.java"
 method = "createUser"
 argument = 1
-reason = "Jackrabbit's user manager makes a user with no password at all when the password is absent. An empty password is a password anybody can sign in with, and no command in this product sets a real one, so the absence is the only value that means what the command promises."
-
-[[external_absence]]
-source = "core/src/main/java/rs/slingshot/agent/command/platform/DefaultPrincipalDirectory.java"
-method = "disable"
-argument = 0
-reason = "Jackrabbit's user interface has no method that turns an account back on; disabling with an absent reason is how its contract spells enabling."
+reason = "The fixture's interface gives an absent password a meaning."

@@ -49,6 +49,8 @@ public final class NullabilityPolicy {
 
     private static final String EXEMPT_ROWS = "exempt";
 
+    private static final String EXTERNAL_ABSENCE_ROWS = "external_absence";
+
     private static final String OPTIONAL_TYPE = "Optional";
 
     private static final JavaParser JAVA_PARSER = new JavaParser(new ParserConfiguration()
@@ -59,14 +61,32 @@ public final class NullabilityPolicy {
     private final String notNullByDefault;
     private final List<String> permittedForms;
     private final List<String> exemptKinds;
+    private final List<ExternalAbsence> externalAbsences;
 
     private NullabilityPolicy(String notNull, String nullable, String notNullByDefault,
-                              List<String> permittedForms, List<String> exemptKinds) {
+                              List<String> permittedForms, List<String> exemptKinds,
+                              List<ExternalAbsence> externalAbsences) {
         this.notNull = notNull;
         this.nullable = nullable;
         this.notNullByDefault = notNullByDefault;
         this.permittedForms = permittedForms;
         this.exemptKinds = exemptKinds;
+        this.externalAbsences = externalAbsences;
+    }
+
+    /**
+     * One argument position of one external interface whose own contract gives absence a meaning.
+     *
+     * <p>This is the one place a null is written, and it is named rather than tolerated: the file,
+     * the method, and the position, each with the reason the interface cannot be called any other
+     * way. A null anywhere else in the same file, in another argument of the same call, or in a
+     * method of the same name elsewhere is still refused.</p>
+     *
+     * @param source the repository path of the one file that makes the call
+     * @param method the external method's own name
+     * @param argument the zero-based position that may carry the absence
+     */
+    public record ExternalAbsence(String source, String method, long argument) {
     }
 
     /** Whether a package's own declaration carries the non-null default for what it holds. */
@@ -113,6 +133,8 @@ public final class NullabilityPolicy {
                 .text("runtime.reason")
                 .rows(PERMITTED_ROWS, row -> row.text("form").text("reason"))
                 .rows(EXEMPT_ROWS, row -> row.text("kind").text("reason"))
+                .rows(EXTERNAL_ABSENCE_ROWS, row -> row.text("source").text("method")
+                        .number("argument").text("reason"))
                 .build();
     }
 
@@ -136,7 +158,11 @@ public final class NullabilityPolicy {
                 document.text("annotations.nullable"),
                 document.text("annotations.not_null_by_default"),
                 document.rows(PERMITTED_ROWS).stream().map(row -> row.text("form")).toList(),
-                document.rows(EXEMPT_ROWS).stream().map(row -> row.text("kind")).toList()));
+                document.rows(EXEMPT_ROWS).stream().map(row -> row.text("kind")).toList(),
+                document.rows(EXTERNAL_ABSENCE_ROWS).stream()
+                        .map(row -> new ExternalAbsence(row.text("source"), row.text("method"),
+                                row.number("argument")))
+                        .toList()));
     }
 
     /**
@@ -155,6 +181,15 @@ public final class NullabilityPolicy {
      */
     public List<String> exemptKinds() {
         return Collections.unmodifiableList(exemptKinds);
+    }
+
+    /**
+     * The external argument positions whose contract gives an absent value a meaning.
+     *
+     * @return the declared absences, in the policy's own order
+     */
+    public List<ExternalAbsence> externalAbsences() {
+        return Collections.unmodifiableList(externalAbsences);
     }
 
     /**
@@ -221,7 +256,7 @@ public final class NullabilityPolicy {
         final List<PolicyFinding> findings = new ArrayList<>();
         findings.addAll(memberFindings(name, unit, declared));
         findings.addAll(optionalFindings(name, unit));
-        findings.addAll(nullValueFindings(name, unit));
+        findings.addAll(nullValueFindings(name, unit, externalAbsences));
         return Collections.unmodifiableList(findings);
     }
 
@@ -298,7 +333,8 @@ public final class NullabilityPolicy {
         return findings;
     }
 
-    private static List<PolicyFinding> nullValueFindings(String name, CompilationUnit unit) {
+    private static List<PolicyFinding> nullValueFindings(String name, CompilationUnit unit,
+                                                         List<ExternalAbsence> declared) {
         final List<PolicyFinding> findings = new ArrayList<>();
         unit.findAll(ReturnStmt.class).stream()
                 .filter(statement -> statement.getExpression()
@@ -306,11 +342,30 @@ public final class NullabilityPolicy {
                 .map(statement -> finding(name, statement, "null-return", "return null"))
                 .forEach(findings::add);
         final SequencedSet<String> nullValued = nullValuedNames(unit);
-        unit.findAll(MethodCallExpr.class).forEach(call ->
-                argumentFindings(name, call.getArguments(), nullValued, findings));
+        unit.findAll(MethodCallExpr.class).forEach(call -> argumentFindings(name,
+                undeclaredArguments(name, call, declared), nullValued, findings));
         unit.findAll(ObjectCreationExpr.class).forEach(creation ->
                 argumentFindings(name, creation.getArguments(), nullValued, findings));
         return findings;
+    }
+
+    /**
+     * The arguments of one call that no declared absence covers.
+     *
+     * <p>Only a null literal at a declared position is passed over. A variable holding null is
+     * still refused there, because the declaration is about what the call writes, not about
+     * whatever may reach it.</p>
+     */
+    private static List<Expression> undeclaredArguments(String name, MethodCallExpr call,
+                                                        List<ExternalAbsence> declared) {
+        final List<Expression> arguments = call.getArguments();
+        return java.util.stream.IntStream.range(0, arguments.size())
+                .filter(position -> !(arguments.get(position) instanceof NullLiteralExpr)
+                        || declared.stream().noneMatch(absence -> absence.source().equals(name)
+                                && absence.method().equals(call.getNameAsString())
+                                && absence.argument() == position))
+                .mapToObj(arguments::get)
+                .toList();
     }
 
     private static void argumentFindings(String name, List<Expression> arguments,
