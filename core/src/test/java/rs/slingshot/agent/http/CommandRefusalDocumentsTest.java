@@ -174,6 +174,7 @@ final class CommandRefusalDocumentsTest {
                     "list_content_fragments", "list_experience_fragments" -> List.of("root_path");
             case "find_pages_containing_phrase", "find_pages_using_components" -> List.of("root_path");
             case "find_assets_by_metadata", "query_paths" -> List.of("root_path");
+            case "list_child_nodes", "list_child_nodes_by_type" -> List.of("root_path");
             case "find_assets_referenced_by_page" -> List.of("page_path");
             case "load_content_as_json" -> List.of("path");
             case "read_content_fragment", "update_content_fragment" -> List.of("fragment_path");

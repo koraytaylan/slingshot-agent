@@ -248,6 +248,7 @@ public final class CommandRefusalDocuments {
                     Family.ROOTED_DISCOVERY;
             case "find_pages_using_components", "find_assets_by_metadata", "query_paths" ->
                     Family.ROOTED_DISCOVERY;
+            case "list_child_nodes", "list_child_nodes_by_type" -> Family.ROOTED_DISCOVERY;
             case "find_assets_referenced_by_page", "update_page", "delete_page" -> Family.PAGE;
             case "update_component", "delete_component", "reorder_component" -> Family.COMPONENT;
             case "list_asset_renditions", "update_asset_metadata", "delete_asset" -> Family.ASSET;
