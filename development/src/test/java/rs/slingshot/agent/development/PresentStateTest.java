@@ -40,7 +40,7 @@ final class PresentStateTest {
      * accepts either — what it is about is whether the document still names the count, not which
      * of the two spellings somebody used.</p>
      */
-    private static final String SPELLED_COUNT = "sixty-four";
+    private static final String SPELLED_COUNT = "seventy-two";
 
     @Test
     @DisplayName("the documents describe what is here rather than what is planned")

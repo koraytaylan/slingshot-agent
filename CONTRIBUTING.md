@@ -93,7 +93,7 @@ only two.
   does not — `support/deployments.toml` — and every control a command needs is one of the closed set
   in `ControlCapability`, mapped in `policy/control-capabilities.toml` and compared in both
   directions. (stage: control-capability)
-- This registry and the client's published table are the same sixty-four rows, compared field by
+- This registry and the client's published table are the same seventy-two rows, compared field by
   field because the fixes differ. (stage: registry-completeness)
 - The rendered command reference in `docs/COMMANDS.md` is generated from the registry and checked
   against it, so a command that exists appears there or the build does not pass.

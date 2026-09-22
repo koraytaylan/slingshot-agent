@@ -4,7 +4,7 @@ The Adobe Experience Manager half of Slingshot. The sibling repository holds the
 the local daemon that submit work over a versioned transport and follow it; this one holds the agent
 that receives it, runs it against the author's own repository, and reports what happened.
 
-It answers eight routes and sixty-four commands, renders five console screens an operator finds
+It answers eight routes and seventy-two commands, renders five console screens an operator finds
 under Adobe's own Tools navigation, and publishes six health checks into the author's own
 dashboard. Everything described here is in this commit; nothing here describes what the bundles
 under `docs/plans` intend, and the deployment rows carry the evidence that actually ran against them
