@@ -155,10 +155,17 @@ public final class ResolveResourcePathHandler implements CommandHandler {
         return fragment < 0 ? withoutQuery : withoutQuery.substring(0, fragment);
     }
 
+    /**
+     * The resource type one resolved resource declares, or {@link ResolveResourcePathResult#ABSENT}.
+     *
+     * <p>A resource that declares no type of its own - a page, a folder - is reported by the
+     * platform under its node type, such as {@code cq:Page}. That is not a resource type anything
+     * renders by, and a node type always names its namespace with a colon where a resource type
+     * never does, so one is told from the other by that and the node type is not reported.</p>
+     */
     private static String typeOf(Resource held) {
-        // Every resource has a type, including the one standing for an address nothing is at: its
-        // type is the platform's own name for nothing. So there is no absent case to answer here.
-        return held.getResourceType();
+        final String type = held.getResourceType();
+        return type.contains(":") ? ResolveResourcePathResult.ABSENT : type;
     }
 
     /**

@@ -171,6 +171,23 @@ final class ResourceResolutionCommandTest {
     }
 
     @Test
+    @DisplayName("a page's node type is not reported as a resource type, and a declared one is")
+    void anodeTypeIsNotAResourceType() {
+        sling.create().resource("/content/site/page", Map.of("jcr:primaryType", "cq:Page"));
+        sling.create().resource("/content/site/page/jcr:content",
+                Map.of("sling:resourceType", "site/components/page"));
+        final DocumentValue.Mapping page = resolved("/content/site/page");
+        assertEquals(new DocumentValue.Text("/content/site/page"),
+                page.member(ResolveResourcePathResult.RESOLVED_PATH).orElseThrow(),
+                "the page itself did not resolve, so this proves nothing about its type");
+        assertTrue(page.member(ResolveResourcePathResult.RESOURCE_TYPE).isEmpty(),
+                "a page's node type was reported as the resource type it renders by");
+        assertEquals(new DocumentValue.Text("site/components/page"),
+                resolved("/content/site/page/jcr:content")
+                        .member(ResolveResourcePathResult.RESOURCE_TYPE).orElseThrow());
+    }
+
+    @Test
     @DisplayName("an address nothing is at is answered with no resolved path and no type")
     void anaddressNothingIsAtHasNoResolvedPath() {
         final DocumentValue.Mapping answered = resolved("https://author.example.com/content/none");
