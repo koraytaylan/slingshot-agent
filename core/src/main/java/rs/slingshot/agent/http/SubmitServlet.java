@@ -143,12 +143,18 @@ public final class SubmitServlet extends AgentServlet {
 
         /**
          * Supplies request-scoped continuation authority when this runtime has one.
-         * @param operation the accepted operation
+         *
+         * <p>The key ring is the agent's own state, so it is read on the state session rather than
+         * the caller's. A runtime without one answers a listing that fits on one page and refuses
+         * every listing that does not.</p>
+         *
+         * @param operation the accepted operation, whose target and generation a token is bound to
          * @param contract the authenticated contract
+         * @param state the agent's own state session, which holds the key ring
          * @return the paging context
          */
         default CallerContext.Paging paging(LogicalOperation operation,
-                                            AgentContract contract) {
+                                            AgentContract contract, Session state) {
             return CallerContext.Unavailable.INSTANCE;
         }
 
@@ -578,7 +584,7 @@ public final class SubmitServlet extends AgentServlet {
                     new Budget(Budget.Kind.RESULT,
                             contract.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
                     ProgressSink.under(contract),
-                    commands.get().paging(running, contract));
+                    commands.get().paging(running, contract, session));
             attempt.complete(commands.get().run(running, submission, arriving.effects(),
                     arriving.resolver(), context));
         }

@@ -92,6 +92,7 @@ import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
 import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.store.ArtifactStore;
+import rs.slingshot.agent.store.DefaultContinuationKeyAuthority;
 import rs.slingshot.agent.wire.CommandFailure;
 
 /** Adapts a verified command dispatch to the submission servlet's execution contract. */
@@ -327,9 +328,27 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                 rs.slingshot.agent.command.ProgressSink.under(activeContract)));
     }
 
+    /**
+     * Continuation authority over the agent's own key ring, bound to the operation's target.
+     *
+     * <p>Without it every listing longer than one page is refused as a token this agent cannot
+     * issue, so a runtime that can open the ring always supplies it. The ring is established by the
+     * state lifecycle before discovery reports the authority ready; this only reads it.</p>
+     *
+     * @param operation the accepted operation, whose target and generation a token is bound to
+     * @param contract the authenticated contract
+     * @param stateSession the agent's own state session, which holds the key ring
+     * @return the paging context, or unavailable where this runtime has no strong secure source
+     */
     @Override
-    public CallerContext.Paging paging(LogicalOperation operation, AgentContract ignored) {
-        return CallerContext.Unavailable.INSTANCE;
+    public CallerContext.Paging paging(LogicalOperation operation, AgentContract contract,
+                                       javax.jcr.Session stateSession) {
+        if (!(DefaultContinuationKeyAuthority.open(stateSession, contract)
+                instanceof final DefaultContinuationKeyAuthority.Opened opened)) {
+            return CallerContext.Unavailable.INSTANCE;
+        }
+        return new CallerContext.Available(opened.authority(), operation.identity().targetDigest(),
+                operation.identity().generation(), System.currentTimeMillis());
     }
 
     private Optional<DocumentValue.Mapping> argumentsOf(DocumentValue.Mapping submission,

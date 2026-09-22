@@ -82,7 +82,34 @@ final class DefaultCommandRuntimeTest {
         assertInstanceOf(ExecutionOutcome.Uncertain.class, runtime.run(null, empty, null));
         assertInstanceOf(ExecutionOutcome.Uncertain.class,
                 runtime.run(null, empty, null, null, null));
-        assertInstanceOf(CallerContext.Unavailable.class, runtime.paging(null, CONTRACT));
+    }
+
+    @Test
+    void pagingIsBoundToTheOperationsTargetAndGeneration() throws java.io.IOException {
+        final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
+                CommandRegistry.read(FIXTURES)).registry();
+        final SequencedMap<String, CommandHandler> handlers = new LinkedHashMap<>();
+        registry.rows().forEach(row -> handlers.put(row.wireName(), new CommandHandler() {
+            @Override
+            public Answer run(DocumentValue.Mapping arguments,
+                              org.apache.sling.api.resource.ResourceResolver resolver,
+                              CallerContext context) {
+                return new Produced(new DocumentValue.Mapping(new LinkedHashMap<>()));
+            }
+
+            @Override
+            public List<String> categories() {
+                return row.failureCategories();
+            }
+        }));
+        final DefaultCommandRuntime runtime = new DefaultCommandRuntime(
+                assertInstanceOf(CommandDispatch.Held.class,
+                        CommandDispatch.of(registry, handlers)).dispatch(), CONTRACT);
+        final LogicalOperation operation = operation();
+        final CallerContext.Available paging = assertInstanceOf(CallerContext.Available.class,
+                runtime.paging(operation, CONTRACT, null));
+        assertEquals(operation.identity().targetDigest(), paging.targetDigest());
+        assertEquals(operation.identity().generation(), paging.generation());
     }
 
     @Test
