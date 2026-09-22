@@ -35,6 +35,12 @@ import rs.slingshot.agent.command.content.FindPagesContainingPhraseCommand;
 import rs.slingshot.agent.command.content.FindPagesUsingComponentsCommand;
 import rs.slingshot.agent.command.content.ListAssetRenditionsCommand;
 import rs.slingshot.agent.command.content.ListChildPagesCommand;
+import rs.slingshot.agent.command.content.ContentCatalogCommands.ListComponentDefinitionsCommand;
+import rs.slingshot.agent.command.content.ContentCatalogCommands.ComponentInstancesCommand;
+import rs.slingshot.agent.command.content.ContentCatalogCommands.ListContentFragmentsCommand;
+import rs.slingshot.agent.command.content.ContentCatalogCommands.ListExperienceFragmentsCommand;
+import rs.slingshot.agent.command.content.ListContentFragmentModelsCommand;
+import rs.slingshot.agent.command.content.ListPageTemplatesCommand;
 import rs.slingshot.agent.command.content.ListResourceMappingsCommand;
 import rs.slingshot.agent.command.content.LoadContentCommand;
 import rs.slingshot.agent.command.content.MapResourcePathCommand;
@@ -103,7 +109,7 @@ final class ProtocolVectorTest {
     private static final EventStoreGeneration SERVING = JobEventTest.generation(1);
 
     /** How many document kinds carry vectors: twelve protocol documents and fourteen commands. */
-    private static final int SEVENTYSIX_KINDS = 76;
+    private static final int SEVENTYSIX_KINDS = 82;
 
     @Test
     @DisplayName("every vector is accepted or refused exactly as it declares")
@@ -225,6 +231,23 @@ final class ProtocolVectorTest {
                     QueryPathsCommand.of(document, CONTRACT) instanceof QueryPathsCommand.Held;
             case "list-child-pages-argument" -> ListChildPagesCommand.of(document, CONTRACT)
                     instanceof ListChildPagesCommand.Held;
+            case "list-content-fragment-models-argument" ->
+                    ListContentFragmentModelsCommand.of(document, CONTRACT)
+                            instanceof ListContentFragmentModelsCommand.Held;
+            case "list-page-templates-argument" -> ListPageTemplatesCommand.of(document, CONTRACT)
+                    instanceof ListPageTemplatesCommand.Held;
+            case "list-component-definitions-argument" ->
+                    ListComponentDefinitionsCommand.of(document, CONTRACT)
+                            instanceof ListComponentDefinitionsCommand.Held;
+            case "list-components-catalog-argument" ->
+                    ComponentInstancesCommand.of(document, CONTRACT)
+                            instanceof ComponentInstancesCommand.Held;
+            case "list-content-fragments-argument" ->
+                    ListContentFragmentsCommand.of(document, CONTRACT)
+                            instanceof ListContentFragmentsCommand.Held;
+            case "list-experience-fragments-argument" ->
+                    ListExperienceFragmentsCommand.of(document, CONTRACT)
+                            instanceof ListExperienceFragmentsCommand.Held;
             case "update-page-argument" ->
                     UpdatePageCommand.of(document, CONTRACT) instanceof UpdatePageCommand.Held;
             case "delete-page-argument" ->

@@ -28,7 +28,7 @@ final class EscalationSurfaceTest {
     private static final Path REPOSITORY = RepositoryTree.locate();
 
     /** How many commands the client's own table publishes, which this registry matches. */
-    private static final int PUBLISHED_COMMANDS = 64;
+    private static final int PUBLISHED_COMMANDS = 66;
 
     @Test
     @DisplayName("no way to run as somebody else exists, and every access class matches behaviour")

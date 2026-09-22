@@ -4,8 +4,8 @@
 [scenario]
 id = "list-components"
 kind = "command"
-feature = "list_open_service_gateway_initiative_components"
+feature = "list_components"
 tier = "a"
 deployments = ["aem-cloud-service", "aem-6-5-lts"]
-runner = "rs.slingshot.agent.interop.tier.ListComponentsScenario"
-reason = "The listing that shows what the bundle listing cannot: a component whose requirement is missing inside a bundle the framework reports as active. What this proves that no unit suite can is that the component runtime is actually reachable on a real instance, which is the one thing a mock cannot say."
+runner = "rs.slingshot.agent.interop.tier.ContentCatalogScenario"
+reason = "The component instances under one anchor. What this proves that no unit suite can: that the command is registered, and that the query it declares is the resource-type query Adobe's own index answers."

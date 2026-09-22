@@ -241,7 +241,10 @@ public final class CommandRefusalDocuments {
     /** Which family one wire name belongs to. */
     private static Family familyOf(String wireName) {
         return switch (wireName) {
-            case "list_child_pages", "find_pages_by_template", "find_pages_containing_phrase" ->
+            case "list_child_pages", "find_pages_by_template", "find_pages_containing_phrase",
+                    "list_page_templates", "list_content_fragment_models",
+                    "list_component_definitions", "list_components", "list_content_fragments",
+                    "list_experience_fragments" ->
                     Family.ROOTED_DISCOVERY;
             case "find_pages_using_components", "find_assets_by_metadata", "query_paths" ->
                     Family.ROOTED_DISCOVERY;

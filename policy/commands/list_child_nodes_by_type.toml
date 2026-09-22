@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row.
+
+[command]
+wire_name = "list_child_nodes_by_type"
+contract_version = "0.0.0"
+access = "read"
+
+# Intrinsically idempotent: asking one node for its children of one type twice is asking once, so a
+# key would decide nothing.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
+argument_schema_digest = "590a5e091b35284ff4645581259b0d36c898a30169667ffd474488914edf42a6"
+result_schema_digest = "c750d76945fce5eb5497a87b7dc1672e82258539cdcf88554f936a4490e090aa"
+contract_limits_digest = "5afebb38aab4322731e6872e02fadb111beb61ee457976b4e573f891943452c9"
+staging_bytes = 0
+execution = "immediate"

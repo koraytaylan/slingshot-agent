@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 final class CommandArgumentFuzzTest {
 
     /** How many commands the client's own table publishes, which this registry matches. */
-    private static final int PUBLISHED_COMMANDS = 64;
+    private static final int PUBLISHED_COMMANDS = 66;
 
     @Test
     @DisplayName("every registry row has a target, because the target is derived from the registry")

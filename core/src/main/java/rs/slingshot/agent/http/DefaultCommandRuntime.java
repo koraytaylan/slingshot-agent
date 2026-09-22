@@ -32,6 +32,8 @@ import rs.slingshot.agent.command.component.ComponentPathHandler;
 import rs.slingshot.agent.command.component.DeleteComponentCommand;
 import rs.slingshot.agent.command.component.ReorderComponentCommand;
 import rs.slingshot.agent.command.component.UpdateComponentCommand;
+import rs.slingshot.agent.command.content.AuthoringCatalogHandler;
+import rs.slingshot.agent.command.content.ChildListingHandler;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataCommand;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataHandler;
 import rs.slingshot.agent.command.content.FindAssetsReferencedByPageCommand;
@@ -44,8 +46,17 @@ import rs.slingshot.agent.command.content.FindPagesUsingComponentsCommand;
 import rs.slingshot.agent.command.content.FindPagesUsingComponentsHandler;
 import rs.slingshot.agent.command.content.ListAssetRenditionsCommand;
 import rs.slingshot.agent.command.content.ListAssetRenditionsHandler;
+import rs.slingshot.agent.command.content.ListChildNodesByTypeCommand;
+import rs.slingshot.agent.command.content.ListChildNodesCommand;
 import rs.slingshot.agent.command.content.ListChildPagesCommand;
 import rs.slingshot.agent.command.content.ListChildPagesHandler;
+import rs.slingshot.agent.command.content.ContentCatalogCommands.ListComponentDefinitionsCommand;
+import rs.slingshot.agent.command.content.ContentCatalogCommands.ComponentInstancesCommand;
+import rs.slingshot.agent.command.content.ContentCatalogCommands.ListContentFragmentsCommand;
+import rs.slingshot.agent.command.content.ContentCatalogCommands.ListExperienceFragmentsCommand;
+import rs.slingshot.agent.command.content.ContentCatalogHandler;
+import rs.slingshot.agent.command.content.ListContentFragmentModelsCommand;
+import rs.slingshot.agent.command.content.ListPageTemplatesCommand;
 import rs.slingshot.agent.command.content.ListResourceMappingsCommand;
 import rs.slingshot.agent.command.content.ListResourceMappingsHandler;
 import rs.slingshot.agent.command.content.LoadContentHandler;
@@ -160,8 +171,29 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                         new FindPagesUsingComponentsHandler(contract)),
                 new CommandDispatch.Registration(ListAssetRenditionsCommand.WIRE_NAME,
                         new ListAssetRenditionsHandler(contract)),
+                new CommandDispatch.Registration(ListChildNodesCommand.WIRE_NAME,
+                        new ChildListingHandler(contract)),
+                new CommandDispatch.Registration(ListChildNodesByTypeCommand.WIRE_NAME,
+                        new ChildListingHandler(contract)),
                 new CommandDispatch.Registration(ListChildPagesCommand.WIRE_NAME,
                         new ListChildPagesHandler(contract)),
+                new CommandDispatch.Registration(ListPageTemplatesCommand.WIRE_NAME,
+                        new AuthoringCatalogHandler(contract,
+                                AuthoringCatalogHandler.Kind.PAGE_TEMPLATES)),
+                new CommandDispatch.Registration(ListContentFragmentModelsCommand.WIRE_NAME,
+                        new AuthoringCatalogHandler(contract,
+                                AuthoringCatalogHandler.Kind.FRAGMENT_MODELS)),
+                new CommandDispatch.Registration(ListComponentDefinitionsCommand.WIRE_NAME,
+                        new ContentCatalogHandler(contract,
+                                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS)),
+                new CommandDispatch.Registration(ComponentInstancesCommand.WIRE_NAME,
+                        new ContentCatalogHandler(contract, ContentCatalogHandler.Kind.COMPONENTS)),
+                new CommandDispatch.Registration(ListContentFragmentsCommand.WIRE_NAME,
+                        new ContentCatalogHandler(contract,
+                                ContentCatalogHandler.Kind.CONTENT_FRAGMENTS)),
+                new CommandDispatch.Registration(ListExperienceFragmentsCommand.WIRE_NAME,
+                        new ContentCatalogHandler(contract,
+                                ContentCatalogHandler.Kind.EXPERIENCE_FRAGMENTS)),
                 new CommandDispatch.Registration(ListResourceMappingsCommand.WIRE_NAME,
                         new ListResourceMappingsHandler(contract)),
                 new CommandDispatch.Registration("load_content_as_json",

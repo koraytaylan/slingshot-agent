@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["authorizable_access_denied", "authorizable_kind_mismatch", "authorizable_not_found", "mutation_outcome_unknown", "property_not_removable", "property_rejected", "repository_commit_failed"]
-argument_schema_digest = "376f5a69720ccb53a18853e6a481483a4f435ea6385ce2b7283f782ebd92d79d"
-result_schema_digest = "6fce9802ae44f6119d74caa0e8a7362f4b78cf9aee52892eff02c8eb7937b218"
-contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+argument_schema_digest = "99e5eb7ac27ba1a4a48d67e2848213eb40304278cc7c99ff11bb090fe5260326"
+result_schema_digest = "97a9c81bdb85a50caabe4bf4f69aa3b2de882bc8281c33052f6b873b8bc4fc15"
+contract_limits_digest = "5afebb38aab4322731e6872e02fadb111beb61ee457976b4e573f891943452c9"
 staging_bytes = 0
 execution = "immediate"

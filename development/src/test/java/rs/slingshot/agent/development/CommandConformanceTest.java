@@ -170,7 +170,7 @@ final class CommandConformanceTest {
     }
 
     /** How many commands the client's own table publishes. */
-    private static final int SIXTY_FOUR = 64;
+    private static final int SIXTY_FOUR = 72;
 
     private static String without(Path root, String named, String fact) {
         final Path tree = copied(COMPLETE, root.resolve(named));

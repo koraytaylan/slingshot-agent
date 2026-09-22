@@ -85,6 +85,36 @@ schema = "schemas/agent-protocol/command/list_child_pages-arguments.json"
 reason = "One page whose immediate children are wanted, and which window of them."
 
 [[kind]]
+name = "list-content-fragment-models-argument"
+schema = "schemas/agent-protocol/command/list_content_fragment_models-arguments.json"
+reason = "One anchor whose content fragment models are wanted, and which window of them."
+
+[[kind]]
+name = "list-component-definitions-argument"
+schema = "schemas/agent-protocol/command/list_component_definitions-arguments.json"
+reason = "One anchor whose component definitions are wanted, and which window of them."
+
+[[kind]]
+name = "list-components-catalog-argument"
+schema = "schemas/agent-protocol/command/list_components-arguments.json"
+reason = "One anchor whose component instances are wanted, and which window of them."
+
+[[kind]]
+name = "list-content-fragments-argument"
+schema = "schemas/agent-protocol/command/list_content_fragments-arguments.json"
+reason = "One anchor whose content fragments are wanted, and which window of them."
+
+[[kind]]
+name = "list-experience-fragments-argument"
+schema = "schemas/agent-protocol/command/list_experience_fragments-arguments.json"
+reason = "One anchor whose experience fragments are wanted, and which window of them."
+
+[[kind]]
+name = "list-page-templates-argument"
+schema = "schemas/agent-protocol/command/list_page_templates-arguments.json"
+reason = "One anchor whose editable page templates are wanted, and which window of them."
+
+[[kind]]
 name = "find-pages-containing-phrase-argument"
 schema = "schemas/agent-protocol/command/find_pages_containing_phrase-arguments.json"
 reason = "A phrase to look for, a subtree to look in, and which page of the matches is wanted."

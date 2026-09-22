@@ -108,6 +108,48 @@ issued_by = "find_pages_using_components"
 reason = "Which nodes carry one of these component resource types, under one subtree. It filters on the resource type and on nothing else, because that is what one index can answer: a query naming two properties no single index covers is answered by walking, whatever the union of the indexes happens to contain. What makes a match into a page happens after the query, by folding each match up to its nearest page-typed ancestor. A search with no type at all would be a walk of everything under the root, which is why an empty list is refused at construction."
 
 [[query]]
+name = "list-component-definitions"
+roots = ["/apps", "/libs"]
+properties = ["jcr:primaryType"]
+issued_by = "list_component_definitions"
+reason = "Component definitions under one anchor, found by the node type Oak's own node-type index covers. The resource type a definition resolves as is the remainder of its path, applied to the rows that index returns."
+
+[[query]]
+name = "list-components"
+roots = ["/content"]
+properties = ["sling:resourceType"]
+issued_by = "list_components"
+reason = "Component instances under one anchor, found by the resource type Adobe's own resource-type index covers. A node with no resource type is not a component, so the question does not walk every node to discover that."
+
+[[query]]
+name = "list-content-fragments"
+roots = ["/content/dam"]
+properties = ["jcr:primaryType"]
+issued_by = "list_content_fragments"
+reason = "Content fragments under one anchor, found by the asset node type Oak's own node-type index covers. The fragment flag that tells a fragment apart from every other asset is applied to the rows that index returns."
+
+[[query]]
+name = "list-experience-fragments"
+roots = ["/content/experience-fragments"]
+properties = ["jcr:primaryType"]
+issued_by = "list_experience_fragments"
+reason = "Experience fragments under one anchor, found by the page node type Oak's own node-type index covers. Which of those pages are fragments rather than variations is applied to the rows that index returns."
+
+[[query]]
+name = "list-page-templates"
+roots = ["/conf"]
+properties = ["jcr:primaryType"]
+issued_by = "list_page_templates"
+reason = "Editable page templates under one configuration, found by the node type Oak's own node-type index covers. The folder they sit in is applied to the rows that index returns, so the question does not walk the repository."
+
+[[query]]
+name = "list-content-fragment-models"
+roots = ["/conf"]
+properties = ["jcr:primaryType"]
+issued_by = "list_content_fragment_models"
+reason = "Content fragment models under one configuration, found by the node type Oak's own node-type index covers. Which of those nodes declare elements is applied to the rows that index returns."
+
+[[query]]
 name = "find-assets-by-metadata"
 roots = ["/content/dam"]
 properties = ["jcr:primaryType"]

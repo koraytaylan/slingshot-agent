@@ -27,7 +27,7 @@ final class SchemaCorrespondenceTest {
             "development/src/test/resources/fixtures/schema-correspondence");
 
     /** How many schemas this build commits: twelve protocol documents and fourteen commands's two. */
-    private static final int ONEHUNDRED_AND_FORTY_SCHEMAS = 140;
+    private static final int ONEHUNDRED_AND_FORTY_SCHEMAS = 156;
 
     @Test
     @DisplayName("every committed schema describes the model it names, in both directions")

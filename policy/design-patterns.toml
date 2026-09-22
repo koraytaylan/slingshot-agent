@@ -1401,6 +1401,26 @@ pattern = "accessor"
 reason = "One declared query, filtering on a primary type and nothing else, which is the shape Oak's own node-type index answers on every supported deployment rather than by walking somebody's author instance. Results are ordered by path because two pages must agree on some total order and path is the only property this command may look at — an unordered query would let a caller read one address twice and another never with nothing to tell them."
 
 [[type]]
+name = "ListChildNodesCommand"
+pattern = "value-object"
+reason = "An anchor and which window of its children is wanted. This is the general read whose narrow form is the page listing: it admits every child, so a folder, a fragment, an asset, and a component beside the pages are all listed rather than dropped."
+
+[[type]]
+name = "ListChildNodesByTypeCommand"
+pattern = "value-object"
+reason = "A required primary type, an anchor, and which window of the matching children is wanted. The page listing is this command with cq:Page, which is why the two agree on every rule but the filter."
+
+[[type]]
+name = "ChildNodeListingResult"
+pattern = "stateless-policy"
+reason = "A list of child nodes, each an address, its primary type, and a title where it has one, shared by the two general listings. The primary type is reported because it is what tells a page from the folder beside it, and a listing that dropped it would leave a caller unable to say what it was looking at. The order is strictly ascending by repository-path bytes, which is what makes a continuation token mean one page after another."
+
+[[type]]
+name = "ChildListingHandler"
+pattern = "accessor"
+reason = "It issues no query at all, and it is the one place a child listing decides what matches: the untyped listing admits every child, the typed listing admits exactly the named primary type, and the page listing is that same code path with cq:Page. One filter rather than three copies is what keeps the three from disagreeing about which children are immediate or in what order they are answered."
+
+[[type]]
 name = "ListChildPagesCommand"
 pattern = "value-object"
 reason = "A parent and which window of its children is wanted. Navigating a site one level at a time is what an operator does most and what a query does worst, so this command is written as a read of a known node rather than a search for one."

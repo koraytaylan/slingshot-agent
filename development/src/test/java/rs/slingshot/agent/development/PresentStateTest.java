@@ -28,7 +28,7 @@ final class PresentStateTest {
     private static final Path REPOSITORY = RepositoryTree.locate();
 
     /** How many commands the client's own table publishes, which this registry matches. */
-    private static final int PUBLISHED_COMMANDS = 64;
+    private static final int PUBLISHED_COMMANDS = 66;
 
     /** How many checks this agent publishes. */
     private static final int HEALTH_CHECKS = 6;

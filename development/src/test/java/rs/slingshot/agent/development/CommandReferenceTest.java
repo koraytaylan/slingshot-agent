@@ -38,7 +38,7 @@ final class CommandReferenceTest {
         final String table = CommandReference.render(REGISTRY);
         assertEquals(RegistryCompleteness.SIXTYFOUR_COMMANDS + 2,
                 table.split("\n").length,
-                "the rendered table is not sixty-four rows and a two-line heading");
+                "the rendered table is not sixty-eight rows and a two-line heading");
     }
 
     @Test

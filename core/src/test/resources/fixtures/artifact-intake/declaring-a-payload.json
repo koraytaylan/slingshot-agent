@@ -20,7 +20,7 @@
     "selected_environment_revision": "revision-2026-09-01"
   },
   "provenance": {
-    "canonical_json_contract_digest": "b493d188f04f13f130649f0c2ce18230ad4dc9eeec8e158ae6172c49c285e8ef",
+    "canonical_json_contract_digest": "4f6927f3c0936c16935786f8479db2c1530c6d567c56a8b1d6041bb836631f54",
     "command_contract": {
       "argument_schema_digest": "f0fe55f1d5895947e87b79104be45f51b5cb644f2dfd3d1d4d1858bb5a0bc822",
       "command_contract_limits_digest": "8a46fd6fc3d79d419361a7043d0365b6dfeb6b92da9e376450898ff88d9cea00",

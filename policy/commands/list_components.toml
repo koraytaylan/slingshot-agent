@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row.
+
+[command]
+wire_name = "list_components"
+contract_version = "0.0.0"
+access = "read"
+
+# Intrinsically idempotent: asking which component instances sit under an anchor twice is asking once, so a key would decide nothing.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
+argument_schema_digest = "9160469d2dc73506be07bb613e4472d98d6b52374e926b19f084bc67353c43fd"
+result_schema_digest = "0792c89a78d7640ebd63ada3c9c08cefafa49eb77773990d7e171c9c50f28782"
+contract_limits_digest = "5afebb38aab4322731e6872e02fadb111beb61ee457976b4e573f891943452c9"
+staging_bytes = 0
+execution = "immediate"

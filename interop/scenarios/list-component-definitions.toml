@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+
+[scenario]
+id = "list-component-definitions"
+kind = "command"
+feature = "list_component_definitions"
+tier = "a"
+deployments = ["aem-cloud-service", "aem-6-5-lts"]
+runner = "rs.slingshot.agent.interop.tier.ContentCatalogScenario"
+reason = "The component definitions add_component is pointed at. What this proves that no unit suite can: that the command is registered, and that the query it declares is the node-type query Oak's own index answers."

@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row.
+
+[command]
+wire_name = "list_page_templates"
+contract_version = "0.0.0"
+access = "read"
+
+# Intrinsically idempotent: asking which templates sit under an anchor twice is asking once, so a
+# key would decide nothing.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
+argument_schema_digest = "e13f37f760d3ff09f8e327fddaccaa6b2c003977691a251ccfd64d8525468b2b"
+result_schema_digest = "07b6e40f111d6e70cca42fa2e2ece47d605c47cc9675a4e78db6dfeac096efd5"
+contract_limits_digest = "5afebb38aab4322731e6872e02fadb111beb61ee457976b4e573f891943452c9"
+staging_bytes = 0
+execution = "immediate"

@@ -42,7 +42,7 @@ public final class RegistryCompleteness {
     public static final String REGISTRY_DIRECTORY = "policy/commands";
 
     /** How many commands both halves of this protocol have. */
-    public static final int SIXTYFOUR_COMMANDS = 64;
+    public static final int SIXTYFOUR_COMMANDS = 72;
 
     /** A command this registry declares and the client does not publish. */
     public static final String UNPUBLISHED = "command-the-client-does-not-publish";

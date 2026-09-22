@@ -169,7 +169,9 @@ final class CommandRefusalDocumentsTest {
             };
         }
         return switch (wireName) {
-            case "list_child_pages", "find_pages_by_template" -> List.of("root_path");
+            case "list_child_pages", "find_pages_by_template", "list_page_templates",
+                    "list_content_fragment_models", "list_component_definitions", "list_components",
+                    "list_content_fragments", "list_experience_fragments" -> List.of("root_path");
             case "find_pages_containing_phrase", "find_pages_using_components" -> List.of("root_path");
             case "find_assets_by_metadata", "query_paths" -> List.of("root_path");
             case "find_assets_referenced_by_page" -> List.of("page_path");
