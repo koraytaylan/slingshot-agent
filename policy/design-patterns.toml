@@ -2169,3 +2169,48 @@ reason = "The console resource types are assembled in one place from live state 
 name = "HealthDataSource"
 pattern = "accessor"
 reason = "Health checks are read from live state only after console authorization and expose no mutable access to their source."
+
+[[type]]
+name = "ContentCatalogHandler"
+pattern = "accessor"
+reason = "It issues no query: it walks the subtree under one anchor through the caller's own read-only resolver and decides, for one catalogue at a time, what a component definition, a component instance, a content fragment, or an experience fragment is. The walk is bounded by the discovery and time budgets and a walk that runs out answers nothing rather than part of the catalogue."
+
+[[type]]
+name = "AuthoringCatalogHandler"
+pattern = "accessor"
+reason = "It reads the templates or fragment models directly inside one configuration folder through the caller's own read-only resolver. Those live in a fixed place under each configuration, so a direct read of that place is the whole answer and no search is needed to find them."
+
+[[type]]
+name = "ComponentListingResult"
+pattern = "stateless-policy"
+reason = "A list of components, each an address, the resource type it resolves as or declares, and a title where it has one, shared by the definition and instance listings. The order is strictly ascending by repository-path bytes, which is what lets a continuation token mean one page after another."
+
+[[type]]
+name = "ListComponentDefinitionsCommand"
+pattern = "value-object"
+reason = "An anchor and which window of the component definitions under it is wanted. A caller asking for every component on an environment names /apps, and an anchor that names the environment rather than a folder is read as that same question."
+
+[[type]]
+name = "ComponentInstancesCommand"
+pattern = "value-object"
+reason = "An anchor and which window of the component instances under it is wanted, each reported with the resource type it declares."
+
+[[type]]
+name = "ListContentFragmentsCommand"
+pattern = "value-object"
+reason = "An anchor and which window of the content fragments under it is wanted, and not the assets beside them."
+
+[[type]]
+name = "ListExperienceFragmentsCommand"
+pattern = "value-object"
+reason = "An anchor and which window of the experience fragments under it is wanted, and not the variations each fragment holds."
+
+[[type]]
+name = "ListContentFragmentModelsCommand"
+pattern = "value-object"
+reason = "An anchor and which window of the content fragment models its configuration folders hold is wanted."
+
+[[type]]
+name = "ListPageTemplatesCommand"
+pattern = "value-object"
+reason = "An anchor and which window of the editable page templates its configuration folders hold is wanted."

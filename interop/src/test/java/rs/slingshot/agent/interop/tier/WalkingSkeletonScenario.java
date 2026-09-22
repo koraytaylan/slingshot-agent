@@ -108,7 +108,8 @@ final class WalkingSkeletonScenario {
                 CommandRegistry.read(REPOSITORY.resolve(CommandRegistry.REGISTRY_DIRECTORY))).registry();
         final List<String> active = List.of("find_assets_by_metadata", "find_assets_referenced_by_page",
                 "find_pages_by_template", "find_pages_containing_phrase", "find_pages_using_components",
-                "list_asset_renditions", "list_child_pages", "list_component_definitions",
+                "list_asset_renditions", "list_child_nodes", "list_child_nodes_by_type",
+                "list_child_pages", "list_component_definitions",
                 "list_components", "list_content_fragment_models", "list_content_fragments",
                 "list_experience_fragments", "list_page_templates", "list_resource_mappings",
                 "load_content_as_json",

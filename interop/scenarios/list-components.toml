@@ -8,4 +8,4 @@ feature = "list_components"
 tier = "a"
 deployments = ["aem-cloud-service", "aem-6-5-lts"]
 runner = "rs.slingshot.agent.interop.tier.ContentCatalogScenario"
-reason = "The component instances under one anchor. What this proves that no unit suite can: that the command is registered, and that the query it declares is the resource-type query Adobe's own index answers."
+reason = "The component instances under one anchor. What this proves that no unit suite can: that the command is registered on a real Sling runtime and reads the tree through the caller's own resolver rather than issuing a query, so it needs no index on anybody's deployment."
