@@ -955,7 +955,7 @@ reason = "The editable page templates under one anchor, each an address and a ti
 
 [[schema]]
 path = "schemas/agent-protocol/command/list_component_definitions-arguments.json"
-model = "core/src/main/java/rs/slingshot/agent/command/content/ContentCatalogCommands.java"
+model = "core/src/main/java/rs/slingshot/agent/command/content/ListComponentDefinitionsCommand.java"
 digest = "2f989deb64ef25a24c4b59dfe0cf7d853afd6cbaf3a4667b677d39330006c5df"
 reason = "One anchor whose component definitions are wanted, and which window of them."
 
@@ -967,7 +967,7 @@ reason = "The component definitions under one anchor, each an address, a resourc
 
 [[schema]]
 path = "schemas/agent-protocol/command/list_components-arguments.json"
-model = "core/src/main/java/rs/slingshot/agent/command/content/ContentCatalogCommands.java"
+model = "core/src/main/java/rs/slingshot/agent/command/content/ComponentInstancesCommand.java"
 digest = "9160469d2dc73506be07bb613e4472d98d6b52374e926b19f084bc67353c43fd"
 reason = "One anchor whose component instances are wanted, and which window of them."
 
@@ -979,7 +979,7 @@ reason = "The component instances under one anchor, each an address, a resource 
 
 [[schema]]
 path = "schemas/agent-protocol/command/list_content_fragments-arguments.json"
-model = "core/src/main/java/rs/slingshot/agent/command/content/ContentCatalogCommands.java"
+model = "core/src/main/java/rs/slingshot/agent/command/content/ListContentFragmentsCommand.java"
 digest = "f227b7140f4d1e3c0b7470c120f62ccb713ef0b4c3b200dfc2e0fac8a4581bfe"
 reason = "One anchor whose content fragments are wanted, and which window of them."
 
@@ -991,7 +991,7 @@ reason = "The content fragments under one anchor, each an address and a title."
 
 [[schema]]
 path = "schemas/agent-protocol/command/list_experience_fragments-arguments.json"
-model = "core/src/main/java/rs/slingshot/agent/command/content/ContentCatalogCommands.java"
+model = "core/src/main/java/rs/slingshot/agent/command/content/ListExperienceFragmentsCommand.java"
 digest = "5bca0b8619df2c4fbfca3ca559ae33bc01dcfd06f5c9dbba950e763c6ad771ef"
 reason = "One anchor whose experience fragments are wanted, and which window of them."
 

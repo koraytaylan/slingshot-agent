@@ -4,6 +4,7 @@
 package rs.slingshot.agent.command.content;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -24,11 +25,11 @@ import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
 import rs.slingshot.agent.command.ReadOnlyResolver;
 import rs.slingshot.agent.command.page.CreatePageHandler;
-import rs.slingshot.agent.contract.AgentContract;
-import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
 import rs.slingshot.agent.continuation.KeyRing;
 import rs.slingshot.agent.continuation.KeyRingRefusal;
+import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.identity.EventStoreGeneration;
@@ -160,7 +161,7 @@ final class AuthoringCatalogCommandTest {
         assertTrue(AuthoringCatalogHandler.directChildOf(
                 "/conf/site/settings/wcm/templates/article",
                 List.of("settings", "wcm", "templates")));
-        assertTrue(!AuthoringCatalogHandler.directChildOf(
+        assertFalse(AuthoringCatalogHandler.directChildOf(
                 "/conf/site/settings/wcm/templates/article/jcr:content",
                 List.of("settings", "wcm", "templates")));
     }

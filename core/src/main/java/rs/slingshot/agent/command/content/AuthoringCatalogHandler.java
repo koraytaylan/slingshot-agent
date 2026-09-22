@@ -137,17 +137,24 @@ public final class AuthoringCatalogHandler implements CommandHandler {
                 found.add(new PageListingResult.Page(current.getPath(), titleOf(current)));
             }
             pending.push(current.listChildren());
-            current = null;
-            while (!pending.isEmpty() && current == null) {
-                final Iterator<Resource> children = pending.peek();
-                if (children.hasNext()) {
-                    current = children.next();
-                } else {
-                    pending.pop();
-                }
+            final Resource next = nextChild(pending);
+            if (next == null) {
+                break;
             }
+            current = next;
         }
         return new Gathered(PageListingResult.ascending(found), false);
+    }
+
+    private static Resource nextChild(Deque<Iterator<Resource>> pending) {
+        while (!pending.isEmpty()) {
+            final Iterator<Resource> children = pending.peek();
+            if (children.hasNext()) {
+                return children.next();
+            }
+            pending.pop();
+        }
+        return null;
     }
 
     private boolean matches(Resource resource, String anchor) {

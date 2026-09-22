@@ -15,10 +15,6 @@ import org.apache.sling.api.resource.ValueMap;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.PagingSupport;
-import rs.slingshot.agent.command.content.ContentCatalogCommands.ListComponentDefinitionsCommand;
-import rs.slingshot.agent.command.content.ContentCatalogCommands.ComponentInstancesCommand;
-import rs.slingshot.agent.command.content.ContentCatalogCommands.ListContentFragmentsCommand;
-import rs.slingshot.agent.command.content.ContentCatalogCommands.ListExperienceFragmentsCommand;
 import rs.slingshot.agent.command.fragment.FragmentHandlers;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -200,15 +196,11 @@ public final class ContentCatalogHandler implements CommandHandler {
             }
             consider(current, root.getPath(), components, pages);
             pending.push(current.listChildren());
-            current = null;
-            while (!pending.isEmpty() && current == null) {
-                final Iterator<Resource> children = pending.peek();
-                if (children.hasNext()) {
-                    current = children.next();
-                } else {
-                    pending.pop();
-                }
+            final Resource next = nextChild(pending);
+            if (next == null) {
+                break;
             }
+            current = next;
         }
         return new Gathered(ComponentListingResult.ascending(components),
                 PageListingResult.ascending(pages), false);
@@ -220,34 +212,40 @@ public final class ContentCatalogHandler implements CommandHandler {
         if (anchor.equals(resource.getPath())) {
             return;
         }
-        switch (kind) {
-            case COMPONENT_DEFINITIONS -> {
-                final String type = definitionType(resource);
-                if (type != null) {
-                    components.add(new ComponentListingResult.Component(resource.getPath(), type,
-                            titleOf(resource)));
-                }
+        if (kind == Kind.COMPONENT_DEFINITIONS) {
+            final String type = definitionType(resource);
+            if (type != null) {
+                components.add(new ComponentListingResult.Component(resource.getPath(), type,
+                        titleOf(resource)));
             }
-            case COMPONENTS -> {
-                final String type = instanceType(resource);
-                if (type != null) {
-                    components.add(new ComponentListingResult.Component(resource.getPath(), type,
-                            titleOf(resource)));
-                }
-            }
-            case CONTENT_FRAGMENTS -> {
-                if (isContentFragment(resource)) {
-                    pages.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
-                }
-            }
-            case EXPERIENCE_FRAGMENTS -> {
-                if (isExperienceFragment(resource)) {
-                    pages.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
-                }
-            }
-            default -> {
-            }
+            return;
         }
+        if (kind == Kind.COMPONENTS) {
+            final String type = instanceType(resource);
+            if (type != null) {
+                components.add(new ComponentListingResult.Component(resource.getPath(), type,
+                        titleOf(resource)));
+            }
+            return;
+        }
+        if (kind == Kind.CONTENT_FRAGMENTS && isContentFragment(resource)) {
+            pages.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
+            return;
+        }
+        if (kind == Kind.EXPERIENCE_FRAGMENTS && isExperienceFragment(resource)) {
+            pages.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
+        }
+    }
+
+    private static Resource nextChild(Deque<Iterator<Resource>> pending) {
+        while (!pending.isEmpty()) {
+            final Iterator<Resource> children = pending.peek();
+            if (children.hasNext()) {
+                return children.next();
+            }
+            pending.pop();
+        }
+        return null;
     }
 
     private String definitionType(Resource resource) {

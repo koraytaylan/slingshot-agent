@@ -104,8 +104,8 @@ final class ChildListingsCommandTest {
         assertEquals(List.of(FOLDER_TYPE, ListChildPagesHandler.PAGE_TYPE,
                 ListChildPagesHandler.PAGE_TYPE), types(listed));
         assertEquals(List.of("", "", TITLE), titles(listed));
-        assertTrue(paths(listed).stream().noneMatch(path -> path.equals(GRANDCHILD)
-                || path.equals(NESTED)), "a grandchild was listed as a child");
+        assertTrue(paths(listed).stream().noneMatch(path -> GRANDCHILD.equals(path)
+                || NESTED.equals(path)), "a grandchild was listed as a child");
         final DocumentValue.Mapping folderOnly = produced(new ChildListingHandler(CONTRACT),
                 byType(FOLDER_TYPE, ANCHOR, window), readOnly());
         assertEquals(List.of(FOLDER), paths(folderOnly),
@@ -159,8 +159,9 @@ final class ChildListingsCommandTest {
         assertEquals(paths(typed), paths(pages),
                 "the page listing's paths are not the typed cq:Page listing's");
         assertEquals(titles(typed), titles(pages));
-        assertTrue(paths(pages).stream().noneMatch(path -> path.equals(FOLDER) || path.equals(GRANDCHILD)
-                || path.equals(NESTED)), "a non-page sibling or a grandchild was listed");
+        assertTrue(paths(pages).stream().noneMatch(path -> FOLDER.equals(path)
+                || GRANDCHILD.equals(path) || NESTED.equals(path)),
+                "a non-page sibling or a grandchild was listed");
         for (final DocumentValue item : ((DocumentValue.Sequence) pages.member(
                 PageListingResult.MATCHES).orElseThrow()).items()) {
             assertFalse(((DocumentValue.Mapping) item).members()
@@ -393,10 +394,10 @@ final class ChildListingsCommandTest {
     /** How many times the anchor's own children were listed. */
     private static final class Walks {
 
-        private int walks;
+        private int visits;
 
         private int walks() {
-            return walks;
+            return visits;
         }
 
         private ResourceResolver around(ResourceResolver resolver) {
@@ -421,7 +422,7 @@ final class ChildListingsCommandTest {
                 return new ResourceWrapper(resource) {
                     @Override
                     public Iterator<Resource> listChildren() {
-                        counted.walks = counted.walks + 1;
+                        counted.visits = counted.visits + 1;
                         return super.listChildren();
                     }
                 };
@@ -447,6 +448,7 @@ final class ChildListingsCommandTest {
         private Observed(CommandHandler delegate, Walks walks) {
             this.delegate = delegate;
             this.walks = walks;
+            this.arguments = new DocumentValue.Mapping(new LinkedHashMap<>());
         }
 
         @Override
