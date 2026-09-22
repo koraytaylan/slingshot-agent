@@ -3,6 +3,8 @@
 
 package rs.slingshot.agent.command.content;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -84,7 +86,13 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
                     + " read, which is the same answer as nothing being there");
         }
         final Search search = new Search(command.resourceTypes());
-        search.under(root);
+        if (!search.under(root, context)) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search examined more than the "
+                    + context.discovery().limit() + " nodes or ran longer than the "
+                    + context.time().limit() + " milliseconds it is allowed before it had visited"
+                    + " every node under " + command.rootPath() + ", and stopped rather than"
+                    + " answer with part of them; name a narrower root instead");
+        }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
                 search.found(command.matchMode()), command.window(),
                 FindPagesUsingComponentsCommand.WIRE_NAME, arguments, context, contract);
@@ -113,12 +121,40 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
             this.wanted = wanted;
         }
 
-        void under(Resource resource) {
-            matchOn(resource);
-            final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext()) {
-                under(children.next());
+        /**
+         * Examines every node under one root, depth first, inside the caller's budgets.
+         *
+         * <p>A component lives inside a page's content, so this walk has to open what a page walk
+         * passes over. It is iterative rather than recursive, because a deep tree would otherwise
+         * end the request with a stack overflow, and it stops the moment either the node count or
+         * the elapsed time is past what the caller was granted.</p>
+         *
+         * @param root where the search starts
+         * @param context the caller's budgets
+         * @return whether every node was examined; false where a budget ran out first
+         */
+        boolean under(Resource root, CallerContext context) {
+            final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
+            final long started = System.currentTimeMillis();
+            long examined = 1;
+            matchOn(root);
+            pending.push(root.listChildren());
+            while (!pending.isEmpty()) {
+                final Iterator<Resource> children = pending.peek();
+                if (!children.hasNext()) {
+                    pending.pop();
+                    continue;
+                }
+                examined++;
+                if (context.exceeded(examined, System.currentTimeMillis() - started, 0)
+                        .isPresent()) {
+                    return false;
+                }
+                final Resource next = children.next();
+                matchOn(next);
+                pending.push(next.listChildren());
             }
+            return true;
         }
 
         private void matchOn(Resource resource) {

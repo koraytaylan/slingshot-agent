@@ -179,6 +179,31 @@ final class ContentCatalogCommandTest {
                 "a missing anchor was answered, which reads as there being no components");
     }
 
+    @Test
+    @DisplayName("a walk that reaches its node budget exactly answers, and one node more is refused")
+    void aWalkPastItsNodeBudgetIsRefusedRatherThanAnsweredInPart() {
+        sling.create().resource("/content/site/first", Map.of(
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/components/text"));
+        sling.create().resource("/content/site/second", Map.of(
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/components/title"));
+        final ContentCatalogHandler handler = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENTS);
+        final int everyNode = 3;
+        assertInstanceOf(CommandHandler.Produced.class,
+                handler.run(arguments("/content/site"), readOnly(), budgeted(everyNode)));
+        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                handler.run(arguments("/content/site"), readOnly(), budgeted(everyNode - 1)));
+        assertEquals(ContentCatalogHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
+    }
+
+    private static CallerContext budgeted(long nodes) {
+        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, nodes),
+                Budget.time(CONTRACT), new Budget(Budget.Kind.RESULT,
+                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
+                ProgressSink.under(CONTRACT),
+                new CallerContext.Available(authority(), target(), generation(), 1_000L));
+    }
+
     private DocumentValue.Mapping listed(ContentCatalogHandler.Kind kind, String root) {
         final CommandHandler.Answer answer = new ContentCatalogHandler(CONTRACT, kind)
                 .run(arguments(root), readOnly(), context());

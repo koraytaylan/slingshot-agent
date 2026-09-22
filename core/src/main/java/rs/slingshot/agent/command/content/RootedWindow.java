@@ -45,7 +45,12 @@ final class RootedWindow {
         WINDOW_REFUSED
     }
 
-    /** An anchor and the window of results wanted under it. */
+    /**
+     * An anchor and the window of results wanted under it.
+     *
+     * @param rootPath the anchor the catalogue is listed under
+     * @param window which page of the catalogue is wanted
+     */
     record Asked(String rootPath, ResultWindow window) {
     }
 
@@ -53,11 +58,20 @@ final class RootedWindow {
     sealed interface Outcome permits Held, Refused {
     }
 
-    /** An argument these catalogues take. */
+    /**
+     * An argument these catalogues take.
+     *
+     * @param asked the anchor and window it names
+     */
     record Held(Asked asked) implements Outcome {
     }
 
-    /** One they do not. */
+    /**
+     * One they do not.
+     *
+     * @param refusal which rule the argument broke
+     * @param detail what was wrong with it, in words a caller can act on
+     */
     record Refused(Refusal refusal, String detail) implements Outcome {
     }
 

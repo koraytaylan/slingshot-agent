@@ -55,17 +55,26 @@ final class FindPagesUsingComponentsCommandTest {
     }
 
     @Test
-    void asearchFinishesTheTreeItWasAskedAbout() {
+    @DisplayName("a search that reaches its node budget exactly answers, and one node more is refused")
+    void asearchPastItsNodeBudgetIsRefusedRatherThanAnsweredInPart() {
         corpus();
+        final long everyNode = CORPUS_NODES_BEFORE_TEASERS + TEASERS;
         final CommandHandler.Answer whole = new FindPagesUsingComponentsHandler(CONTRACT).run(
                 argument("/content/site", List.of(TEASER), 100), readOnly(), context());
-        final CommandHandler.Answer pastTheOldCap = new FindPagesUsingComponentsHandler(CONTRACT)
-                .run(argument("/content/site", List.of(TEASER), 100), readOnly(), narrowContext());
-        assertInstanceOf(CommandHandler.Produced.class, pastTheOldCap,
-                "a tree larger than the old examination cap was refused");
+        final CommandHandler.Answer exactly = new FindPagesUsingComponentsHandler(CONTRACT)
+                .run(argument("/content/site", List.of(TEASER), 100), readOnly(),
+                        budgeted(everyNode));
         assertEquals(((CommandHandler.Produced) whole).result(),
-                ((CommandHandler.Produced) pastTheOldCap).result());
+                assertInstanceOf(CommandHandler.Produced.class, exactly).result());
+        final CommandHandler.Failed past = assertInstanceOf(CommandHandler.Failed.class,
+                new FindPagesUsingComponentsHandler(CONTRACT).run(
+                        argument("/content/site", List.of(TEASER), 100), readOnly(),
+                        budgeted(everyNode - 1)));
+        assertEquals(FindPagesUsingComponentsHandler.DISCOVERY_BUDGET_EXCEEDED, past.category());
     }
+
+    /** Nodes the corpus holds besides its teasers: two pages' worth of structure and three more. */
+    private static final long CORPUS_NODES_BEFORE_TEASERS = 7;
 
     private static final AgentContract CONTRACT = contract();
 
@@ -255,8 +264,8 @@ final class FindPagesUsingComponentsCommandTest {
         return ReadOnlyResolver.around(sling.resourceResolver());
     }
 
-    private static CallerContext narrowContext() {
-        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, 1),
+    private static CallerContext budgeted(long nodes) {
+        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, nodes),
                 Budget.time(CONTRACT),
                 new Budget(Budget.Kind.RESULT,
                         CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),

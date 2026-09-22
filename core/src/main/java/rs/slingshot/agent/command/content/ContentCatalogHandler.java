@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ValueMap;
@@ -78,12 +79,20 @@ public final class ContentCatalogHandler implements CommandHandler {
             return new Failed(refused.category(), refused.detail());
         }
         final Held held = (Held) asked;
-        final Resource root = anchor(resolver, held.rootPath(), kind);
-        if (root == null) {
+        final Optional<Resource> root = anchor(resolver, held.rootPath(), kind);
+        if (root.isEmpty()) {
             return new Failed(ListChildPagesHandler.ROOT_NOT_FOUND,
                     ListChildPagesHandler.whyNothingIsListed(held.rootPath()));
         }
-        final Gathered gathered = gather(root);
+        final Optional<Gathered> walked = gather(root.get(), context);
+        if (walked.isEmpty()) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this listing examined more than the "
+                    + context.discovery().limit() + " nodes or ran longer than the "
+                    + context.time().limit() + " milliseconds it is allowed before it had visited"
+                    + " every node under " + root.get().getPath() + ", and stopped rather than"
+                    + " answer with part of them; name a narrower root instead");
+        }
+        final Gathered gathered = walked.get();
         return switch (kind) {
             case COMPONENT_DEFINITIONS, COMPONENTS -> pagedComponents(gathered.components(), held,
                     arguments, context);
@@ -179,24 +188,33 @@ public final class ContentCatalogHandler implements CommandHandler {
         return new Held(command.rootPath(), command.window());
     }
 
-    private Gathered gather(Resource root) {
+    /**
+     * Every match under one root, or nothing where the walk ran out of its budget first.
+     *
+     * <p>A partial catalogue is not answered: a list that stopped partway reads as the whole of
+     * what is there. The node count and the elapsed time are both checked, because an author that
+     * answers slowly exhausts the request it is answered on long before it exhausts the count.</p>
+     */
+    private Optional<Gathered> gather(Resource root, CallerContext context) {
         final List<ComponentListingResult.Component> components = new ArrayList<>();
         final List<PageListingResult.Page> pages = new ArrayList<>();
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
-        Resource current = root;
-        while (current != null) {
-            consider(current, root.getPath(), components, pages);
-            if (descends(current)) {
-                pending.push(current.listChildren());
+        final long started = System.currentTimeMillis();
+        long examined = 0;
+        Optional<Resource> current = Optional.of(root);
+        while (current.isPresent()) {
+            examined++;
+            if (context.exceeded(examined, System.currentTimeMillis() - started, 0).isPresent()) {
+                return Optional.empty();
             }
-            final Resource next = nextChild(pending);
-            if (next == null) {
-                break;
+            consider(current.get(), root.getPath(), components, pages);
+            if (descends(current.get())) {
+                pending.push(current.get().listChildren());
             }
-            current = next;
+            current = nextChild(pending);
         }
-        return new Gathered(ComponentListingResult.ascending(components),
-                PageListingResult.ascending(pages));
+        return Optional.of(new Gathered(ComponentListingResult.ascending(components),
+                PageListingResult.ascending(pages)));
     }
 
     private void consider(Resource resource, String anchor,
@@ -206,19 +224,15 @@ public final class ContentCatalogHandler implements CommandHandler {
             return;
         }
         if (kind == Kind.COMPONENT_DEFINITIONS) {
-            final String type = definitionType(resource);
-            if (type != null) {
-                components.add(new ComponentListingResult.Component(resource.getPath(), type,
-                        titleOf(resource)));
-            }
+            definitionType(resource).ifPresent(type -> components.add(
+                    new ComponentListingResult.Component(resource.getPath(), type,
+                            titleOf(resource))));
             return;
         }
         if (kind == Kind.COMPONENTS) {
-            final String type = instanceType(resource);
-            if (type != null) {
-                components.add(new ComponentListingResult.Component(resource.getPath(), type,
-                        titleOf(resource)));
-            }
+            instanceType(resource).ifPresent(type -> components.add(
+                    new ComponentListingResult.Component(resource.getPath(), type,
+                            titleOf(resource))));
             return;
         }
         if (kind == Kind.CONTENT_FRAGMENTS && isContentFragment(resource)) {
@@ -245,46 +259,45 @@ public final class ContentCatalogHandler implements CommandHandler {
      * @param kind which catalogue is being listed
      * @return the node to walk, or nothing where no ancestor of it is readable
      */
-    private static Resource anchor(ResourceResolver resolver, String path, Kind kind) {
-        final Resource exact = resolver.getResource(path);
-        if (exact != null) {
+    private static Optional<Resource> anchor(ResourceResolver resolver, String path, Kind kind) {
+        final Optional<Resource> exact = Optional.ofNullable(resolver.getResource(path));
+        if (exact.isPresent()) {
             return exact;
         }
-        Resource deepest = null;
+        final Optional<Resource> deepest = deepestAncestor(resolver, path);
+        if (deepest.isEmpty()) {
+            return deepest;
+        }
+        if (kind == Kind.COMPONENT_DEFINITIONS && underAppsOrLibs(deepest.get().getPath())) {
+            return deepest;
+        }
+        return descend(deepest.get(), path.substring(deepest.get().getPath().length()));
+    }
+
+    private static Optional<Resource> deepestAncestor(ResourceResolver resolver, String path) {
         String cursor = path;
         while (cursor.length() > 1) {
             final int slash = cursor.lastIndexOf('/');
             cursor = slash <= 0 ? "/" : cursor.substring(0, slash);
-            deepest = resolver.getResource(cursor);
-            if (deepest != null) {
-                break;
+            final Optional<Resource> found = Optional.ofNullable(resolver.getResource(cursor));
+            if (found.isPresent()) {
+                return found;
             }
         }
-        if (deepest == null) {
-            return null;
-        }
-        if (kind == Kind.COMPONENT_DEFINITIONS && underAppsOrLibs(deepest.getPath())) {
-            return deepest;
-        }
-        return descend(deepest, path.substring(deepest.getPath().length()));
+        return Optional.empty();
     }
 
-    private static Resource descend(Resource parent, String rest) {
+    private static Optional<Resource> descend(Resource parent, String rest) {
         if (rest.isEmpty() || "/".equals(rest)) {
-            return parent;
+            return Optional.of(parent);
         }
         final String body = rest.startsWith("/") ? rest.substring(1) : rest;
         final int slash = body.indexOf('/');
         final String segment = slash < 0 ? body : body.substring(0, slash);
         final String after = slash < 0 ? "" : body.substring(slash);
-        Resource child = parent.getChild(segment);
-        if (child == null) {
-            child = uniqueExtension(parent, segment);
-        }
-        if (child == null) {
-            return null;
-        }
-        return descend(child, after);
+        return Optional.ofNullable(parent.getChild(segment))
+                .or(() -> uniqueExtension(parent, segment))
+                .flatMap(child -> descend(child, after));
     }
 
     /**
@@ -294,19 +307,15 @@ public final class ContentCatalogHandler implements CommandHandler {
      * brand} is not. Two children that both qualify is no answer: guessing between them would list
      * the wrong project.</p>
      */
-    private static Resource uniqueExtension(Resource parent, String wanted) {
-        Resource match = null;
+    private static Optional<Resource> uniqueExtension(Resource parent, String wanted) {
+        final List<Resource> matches = new ArrayList<>();
         for (final Resource child : parent.getChildren()) {
             final String name = child.getName();
-            if (!extendsName(wanted, name) && !extendsName(name, wanted)) {
-                continue;
+            if (extendsName(wanted, name) || extendsName(name, wanted)) {
+                matches.add(child);
             }
-            if (match != null) {
-                return null;
-            }
-            match = child;
         }
-        return match;
+        return matches.size() == 1 ? Optional.of(matches.getFirst()) : Optional.empty();
     }
 
     private static boolean extendsName(String longer, String shorter) {
@@ -328,29 +337,25 @@ public final class ContentCatalogHandler implements CommandHandler {
      * the catalogue is answered on.</p>
      */
     private boolean descends(Resource current) {
-        if (kind != Kind.CONTENT_FRAGMENTS) {
-            return true;
-        }
-        if ("jcr:content".equals(current.getName())) {
-            return false;
-        }
-        return !FragmentHandlers.CONTENT_FRAGMENT_TYPE.equals(ChildListingHandler.typeOf(current));
+        return kind != Kind.CONTENT_FRAGMENTS
+                || !"jcr:content".equals(current.getName())
+                && !FragmentHandlers.CONTENT_FRAGMENT_TYPE.equals(ChildListingHandler.typeOf(current));
     }
 
-    private static Resource nextChild(Deque<Iterator<Resource>> pending) {
+    private static Optional<Resource> nextChild(Deque<Iterator<Resource>> pending) {
         while (!pending.isEmpty()) {
             final Iterator<Resource> children = pending.peek();
             if (children.hasNext()) {
-                return children.next();
+                return Optional.of(children.next());
             }
             pending.pop();
         }
-        return null;
+        return Optional.empty();
     }
 
-    private String definitionType(Resource resource) {
+    private Optional<String> definitionType(Resource resource) {
         if (!COMPONENT_DEFINITION_TYPE.equals(ChildListingHandler.typeOf(resource))) {
-            return null;
+            return Optional.empty();
         }
         return acceptable(resourceTypeOf(resource.getPath()));
     }
@@ -374,24 +379,24 @@ public final class ContentCatalogHandler implements CommandHandler {
         return path;
     }
 
-    private String instanceType(Resource resource) {
+    private Optional<String> instanceType(Resource resource) {
         final Object held = resource.getValueMap().get(RESOURCE_TYPE_PROPERTY);
-        return held instanceof final String type ? acceptable(type) : null;
+        return held instanceof final String type ? acceptable(type) : Optional.empty();
     }
 
-    private String acceptable(String type) {
+    private Optional<String> acceptable(String type) {
         if (type.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         final long bound = contract.value(ContractLimit.MAXIMUM_COMPONENT_RESOURCE_TYPE_BYTES);
         if (type.getBytes(StandardCharsets.UTF_8).length > bound) {
-            return null;
+            return Optional.empty();
         }
         if (type.endsWith("/") || type.contains("//") || type.contains(":") || type.contains("[")
                 || type.contains("]") || type.contains("*") || type.contains("|")) {
-            return null;
+            return Optional.empty();
         }
-        return type;
+        return Optional.of(type);
     }
 
     private static boolean isContentFragment(Resource resource) {
