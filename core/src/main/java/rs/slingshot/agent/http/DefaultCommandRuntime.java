@@ -14,6 +14,9 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicyOption;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.CommandHandler;
@@ -82,6 +85,8 @@ import rs.slingshot.agent.command.page.MovePageCommand;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.command.page.UpdatePageCommand;
 import rs.slingshot.agent.command.page.UpdatePageHandler;
+import rs.slingshot.agent.command.platform.ContentAdmission;
+import rs.slingshot.agent.command.platform.JobInventory;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.execution.ExecutionOutcome;
 import rs.slingshot.agent.execution.LogicalOperation;
@@ -103,6 +108,16 @@ public final class DefaultCommandRuntime implements CommandRuntime {
     private static final long serialVersionUID = 1L;
     /** Runtime state, which is temporarily replaced by the fail-closed state during serialization. */
     private final AtomicReference<State> state = new AtomicReference<>(Missing.INSTANCE);
+
+    /**
+     * The platform adapters another bundle provides, which are replaced by none during
+     * serialization.
+     *
+     * <p>Bound before activation and changed only by rebinding, which reactivates this component,
+     * so the command set a runtime advertises is always the set its bound adapters can answer.</p>
+     */
+    private final AtomicReference<PlatformSeams> seams =
+            new AtomicReference<>(PlatformSeams.NONE);
 
     private sealed interface State extends Serializable permits Active, Missing {
     }
@@ -141,7 +156,8 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         }
         final java.util.List<CommandDispatch.Registration> registrations =
                 java.util.stream.Stream.concat(registrations(present.contract()).stream(),
-                        PlatformRegistrations.registrations(present.contract()).stream()).toList();
+                        PlatformRegistrations.registrations(present.contract(), seams.get())
+                                .stream()).toList();
         final CommandRegistry.Outcome active = embedded.registry().active(registrations.stream()
                 .map(CommandDispatch.Registration::wireName).toList());
         if (!(active instanceof final CommandRegistry.Loaded selected)) {
@@ -151,6 +167,46 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         if (dispatch instanceof final CommandDispatch.Held ready) {
             state.set(new Active(ready.dispatch(), present.contract()));
         }
+    }
+
+    /**
+     * Binds the job inventory the platform bundle provides.
+     *
+     * @param inventory what answers the four job commands
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL,
+            policyOption = ReferencePolicyOption.GREEDY, unbind = "jobsUnavailable")
+    public void jobsAvailable(JobInventory inventory) {
+        seams.updateAndGet(held -> held.withJobs(java.util.List.of(inventory)));
+    }
+
+    /**
+     * Unbinds the job inventory, after which the job commands are not advertised.
+     *
+     * @param inventory the inventory going away
+     */
+    public void jobsUnavailable(JobInventory inventory) {
+        seams.updateAndGet(held -> held.withJobs(java.util.List.of()));
+    }
+
+    /**
+     * Binds what offers content to the platform's replication service.
+     *
+     * @param admission what the replication command offers content through
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL,
+            policyOption = ReferencePolicyOption.GREEDY, unbind = "admissionUnavailable")
+    public void admissionAvailable(ContentAdmission admission) {
+        seams.updateAndGet(held -> held.withAdmissions(java.util.List.of(admission)));
+    }
+
+    /**
+     * Unbinds the replication admission, after which the replication command is not advertised.
+     *
+     * @param admission the admission going away
+     */
+    public void admissionUnavailable(ContentAdmission admission) {
+        seams.updateAndGet(held -> held.withAdmissions(java.util.List.of()));
     }
 
     /** Revokes the runtime before the DS component is released. */
@@ -257,10 +313,12 @@ public final class DefaultCommandRuntime implements CommandRuntime {
      */
     private void writeObject(ObjectOutputStream output) throws IOException {
         final State active = state.getAndSet(Missing.INSTANCE);
+        final PlatformSeams bound = seams.getAndSet(PlatformSeams.NONE);
         try {
             output.defaultWriteObject();
         } finally {
             state.set(active);
+            seams.set(bound);
         }
     }
 

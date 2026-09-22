@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Optional;
 import javax.jcr.Session;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
 import rs.slingshot.agent.command.platform.ContentAdmission;
 
 /**
@@ -25,6 +28,7 @@ import rs.slingshot.agent.command.platform.ContentAdmission;
  * <p>A session that cannot be obtained is a rejection rather than an unknown. Nothing was offered,
  * and nothing is in doubt.</p>
  */
+@Component(service = ContentAdmission.class)
 public final class ReplicatorAdmission implements ContentAdmission {
 
     private final Replicator replicator;
@@ -34,7 +38,8 @@ public final class ReplicatorAdmission implements ContentAdmission {
      *
      * @param replicator the service that queues content for publication
      */
-    public ReplicatorAdmission(Replicator replicator) {
+    @Activate
+    public ReplicatorAdmission(@Reference Replicator replicator) {
         this.replicator = replicator;
     }
 

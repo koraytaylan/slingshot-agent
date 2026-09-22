@@ -63,3 +63,9 @@ source = "core/src/main/java/rs/slingshot/agent/command/platform/DefaultPrincipa
 method = "disable"
 argument = 0
 reason = "Jackrabbit's user interface has no method that turns an account back on; disabling with an absent reason is how its contract spells enabling."
+
+[[external_absence]]
+source = "aem/src/main/java/rs/slingshot/agent/aem/job/DefaultJobInventory.java"
+method = "findJobs"
+argument = 1
+reason = "Sling's job manager searches every topic when the topic is absent. An empty topic is a topic nothing is posted under, so it would find nothing at all."

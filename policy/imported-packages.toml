@@ -124,6 +124,13 @@ reason = "The logging interface the one log writer writes through, so a refusal 
 # on the other side of the seam it imports.
 
 [[package]]
+name = "org.apache.sling.event.jobs"
+range = "[2.0,3)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The platform's own job manager, which answers the four job commands: its queues, its jobs by state and topic, one job's property names, and a cancellation. Nothing else in the bundle reaches it."
+
+[[package]]
 name = "com.day.cq.replication"
 range = "[6.16,7)"
 bundle = "aem"

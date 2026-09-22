@@ -2219,3 +2219,8 @@ reason = "An anchor and which window of the editable page templates its configur
 name = "DefaultPrincipalDirectory"
 pattern = "accessor"
 reason = "The repository's own user manager, reached through the caller's own session and answered rather than held: it keeps nothing between calls, so whether a caller may make, change, or remove a user or a group is the repository's decision exactly as it would be by hand. No password crosses it in either direction."
+
+[[type]]
+name = "DefaultJobInventory"
+pattern = "accessor"
+reason = "The platform's own job manager, answered rather than held: it keeps nothing between calls, reads the queues and the jobs the client asks about, and reports a job's property names and never a value. A cancellation arrives here only after the deployment's control gate has permitted it."

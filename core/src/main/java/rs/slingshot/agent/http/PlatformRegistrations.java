@@ -6,11 +6,16 @@ package rs.slingshot.agent.http;
 import java.util.EnumSet;
 import java.util.List;
 import rs.slingshot.agent.command.CommandDispatch;
+import rs.slingshot.agent.command.job.JobCommands;
+import rs.slingshot.agent.command.job.JobHandler;
 import rs.slingshot.agent.command.platform.ControlCapability;
 import rs.slingshot.agent.command.platform.DefaultPrincipalDirectory;
+import rs.slingshot.agent.command.platform.JobInventory;
 import rs.slingshot.agent.command.platform.PlatformControl;
 import rs.slingshot.agent.command.principal.PrincipalCommands;
 import rs.slingshot.agent.command.principal.PrincipalHandler;
+import rs.slingshot.agent.command.replication.ReplicateContentCommand;
+import rs.slingshot.agent.command.replication.ReplicateContentHandler;
 import rs.slingshot.agent.contract.AgentContract;
 
 /**
@@ -58,7 +63,54 @@ final class PlatformRegistrations {
      * @return the registrations, in the order they are declared
      */
     static List<CommandDispatch.Registration> registrations(AgentContract contract) {
+        return registrations(contract, PlatformSeams.NONE);
+    }
+
+    /**
+     * Every platform command this bundle answers with the adapters another bundle bound.
+     *
+     * <p>The user and group commands need no adapter beyond the caller's own session, so they are
+     * always registered. The rest are registered exactly when something answers their seam.</p>
+     *
+     * @param contract the authenticated contract
+     * @param seams the adapters bound, each list empty where nothing provides it
+     * @return the registrations, in the order they are declared
+     */
+    static List<CommandDispatch.Registration> registrations(AgentContract contract,
+                                                           PlatformSeams seams) {
         final PlatformControl control = deploymentControl();
+        final List<CommandDispatch.Registration> registered =
+                new java.util.ArrayList<>(principals(contract, control));
+        seams.jobs().forEach(inventory -> registered.addAll(jobs(contract, inventory, control)));
+        seams.admissions().forEach(admission -> registered.add(new CommandDispatch.Registration(
+                ReplicateContentCommand.WIRE_NAME, new ReplicateContentHandler(contract,
+                        admission))));
+        return List.copyOf(registered);
+    }
+
+    private static List<CommandDispatch.Registration> jobs(AgentContract contract,
+                                                          JobInventory inventory,
+                                                          PlatformControl control) {
+        return List.of(
+                job(contract, JobCommands.QUEUES_WIRE_NAME, JobHandler.Kind.QUEUES, inventory,
+                        control),
+                job(contract, JobCommands.JOBS_WIRE_NAME, JobHandler.Kind.JOBS, inventory,
+                        control),
+                job(contract, JobCommands.INSPECT_WIRE_NAME, JobHandler.Kind.INSPECTION,
+                        inventory, control),
+                job(contract, JobCommands.CANCEL_WIRE_NAME, JobHandler.Kind.CANCELLATION,
+                        inventory, control));
+    }
+
+    private static CommandDispatch.Registration job(AgentContract contract, String wireName,
+                                                   JobHandler.Kind kind, JobInventory inventory,
+                                                   PlatformControl control) {
+        return new CommandDispatch.Registration(wireName, new JobHandler(contract, kind,
+                inventory, control));
+    }
+
+    private static List<CommandDispatch.Registration> principals(AgentContract contract,
+                                                                 PlatformControl control) {
         return List.of(
                 principal(contract, PrincipalCommands.CREATE_USER_WIRE_NAME,
                         PrincipalHandler.Kind.USER_CREATION, control),

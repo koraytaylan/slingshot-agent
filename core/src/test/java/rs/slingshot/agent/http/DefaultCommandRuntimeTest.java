@@ -322,6 +322,42 @@ final class DefaultCommandRuntimeTest {
         assertFalse(runtime.serves("query_paths"));
     }
 
+    @Test
+    void aplatformCommandIsAdvertisedExactlyWhileItsAdapterIsBound() {
+        final DefaultCommandRuntime runtime = new DefaultCommandRuntime();
+        runtime.activate();
+        assertTrue(runtime.serves("list_group_members"),
+                "the user and group commands need no adapter and were not advertised");
+        assertFalse(runtime.serves("find_sling_jobs"),
+                "a job command was advertised with nothing bound to answer it");
+        assertFalse(runtime.serves("replicate_content"));
+        final Class<?>[] seam = {rs.slingshot.agent.command.platform.JobInventory.class};
+        final rs.slingshot.agent.command.platform.JobInventory inventory =
+                (rs.slingshot.agent.command.platform.JobInventory) java.lang.reflect.Proxy
+                        .newProxyInstance(Thread.currentThread().getContextClassLoader(), seam,
+                                (proxy, method, arguments) -> {
+                                    throw new UnsupportedOperationException(method.getName());
+                                });
+        final rs.slingshot.agent.command.platform.ContentAdmission admission =
+                (paths, session) -> new rs.slingshot.agent.command.platform.ContentAdmission
+                        .Admitted(paths.size());
+        runtime.deactivate();
+        runtime.jobsAvailable(inventory);
+        runtime.admissionAvailable(admission);
+        runtime.activate();
+        assertTrue(runtime.serves("find_sling_jobs"));
+        assertTrue(runtime.serves("cancel_sling_job"));
+        assertTrue(runtime.serves("replicate_content"));
+        runtime.deactivate();
+        runtime.jobsUnavailable(inventory);
+        runtime.admissionUnavailable(admission);
+        runtime.activate();
+        assertFalse(runtime.serves("find_sling_jobs"),
+                "a job command stayed advertised after its adapter went away");
+        assertFalse(runtime.serves("replicate_content"));
+        runtime.deactivate();
+    }
+
     private static LogicalOperation operation() throws java.io.IOException {
         final Path fixture = repositoryRoot().resolve(
                 "core/src/test/resources/fixtures/submit-servlet/a-submission.json");
