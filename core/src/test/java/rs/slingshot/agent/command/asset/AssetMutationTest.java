@@ -106,6 +106,10 @@ final class AssetMutationTest {
         assertInstanceOf(AssetPayload.Held.class,
                 AssetPayload.of(payload("image/png", largest), CONTRACT),
                 "a payload exactly at both bounds was refused");
+        assertInstanceOf(AssetPayload.Held.class,
+                AssetPayload.of(payload("text/markdown", Base64.getEncoder().encodeToString(
+                        "a report".getBytes(java.nio.charset.StandardCharsets.UTF_8))), CONTRACT),
+                "a markdown report was refused as a kind of file this build does not store");
         assertEquals(AssetPayload.Refusal.ENCODED_TOO_LARGE,
                 assertInstanceOf(AssetPayload.Refused.class,
                         AssetPayload.of(payload("image/png", largest + "A"), CONTRACT),

@@ -24,10 +24,11 @@ import rs.slingshot.agent.json.DocumentValue;
  * Component definitions, component instances, content fragments, or experience fragments under one
  * anchor.
  *
- * <p>Each is a walk of one subtree bounded by the caller's examination budget. What distinguishes
- * a match is a fact about the node — its type, a flag, or a resource type — applied to the nodes
- * the walk reaches. The walk stops at the budget rather than returning a shortened page, because a
- * shortened page reads as the whole answer.</p>
+ * <p>Each is a walk of the whole subtree the caller named. What distinguishes a match is a fact
+ * about the node — its type, a flag, or a resource type — applied to every node the walk reaches.
+ * The walk finishes that subtree. A cap that stopped it would answer a question about part of the
+ * tree as though it were a question about the tree, which is the thing a caller cannot already
+ * learn from the authoring interface.</p>
  */
 public final class ContentCatalogHandler implements CommandHandler {
 
@@ -77,17 +78,12 @@ public final class ContentCatalogHandler implements CommandHandler {
             return new Failed(refused.category(), refused.detail());
         }
         final Held held = (Held) asked;
-        final Resource root = resolver.getResource(held.rootPath());
+        final Resource root = anchor(resolver, held.rootPath(), kind);
         if (root == null) {
             return new Failed(ListChildPagesHandler.ROOT_NOT_FOUND,
                     ListChildPagesHandler.whyNothingIsListed(held.rootPath()));
         }
-        final Gathered gathered = gather(root, context.discovery().limit());
-        if (gathered.exceeded()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search examined more than the "
-                    + context.discovery().limit() + " nodes it is allowed, and stopped rather than"
-                    + " going on");
-        }
+        final Gathered gathered = gather(root);
         return switch (kind) {
             case COMPONENT_DEFINITIONS, COMPONENTS -> pagedComponents(gathered.components(), held,
                     arguments, context);
@@ -183,17 +179,12 @@ public final class ContentCatalogHandler implements CommandHandler {
         return new Held(command.rootPath(), command.window());
     }
 
-    private Gathered gather(Resource root, long budget) {
+    private Gathered gather(Resource root) {
         final List<ComponentListingResult.Component> components = new ArrayList<>();
         final List<PageListingResult.Page> pages = new ArrayList<>();
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
         Resource current = root;
-        long examined = 0;
         while (current != null) {
-            examined = examined + 1;
-            if (examined > budget) {
-                return new Gathered(List.of(), List.of(), true);
-            }
             consider(current, root.getPath(), components, pages);
             pending.push(current.listChildren());
             final Resource next = nextChild(pending);
@@ -203,7 +194,7 @@ public final class ContentCatalogHandler implements CommandHandler {
             current = next;
         }
         return new Gathered(ComponentListingResult.ascending(components),
-                PageListingResult.ascending(pages), false);
+                PageListingResult.ascending(pages));
     }
 
     private void consider(Resource resource, String anchor,
@@ -235,6 +226,100 @@ public final class ContentCatalogHandler implements CommandHandler {
         if (kind == Kind.EXPERIENCE_FRAGMENTS && isExperienceFragment(resource)) {
             pages.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
         }
+    }
+
+    /**
+     * The node a catalogue walks, which is the path the caller named when that node is there.
+     *
+     * <p>A caller names the environment where the repository names the project: {@code
+     * /apps/acme-rde} is not a node when the project is {@code /apps/acme}. The
+     * missing segment is the existing child's name extended by a hyphen, or, for component
+     * definitions and no such child, the nearest {@code /apps} or {@code /libs} ancestor. A
+     * catalogue that refused the first and had no second would answer that nothing exists
+     * because of how the folder was spelled.</p>
+     *
+     * @param resolver the caller's read-only resolver
+     * @param path the path the caller named
+     * @param kind which catalogue is being listed
+     * @return the node to walk, or nothing where no ancestor of it is readable
+     */
+    private static Resource anchor(ResourceResolver resolver, String path, Kind kind) {
+        final Resource exact = resolver.getResource(path);
+        if (exact != null) {
+            return exact;
+        }
+        Resource deepest = null;
+        String cursor = path;
+        while (cursor.length() > 1) {
+            final int slash = cursor.lastIndexOf('/');
+            cursor = slash <= 0 ? "/" : cursor.substring(0, slash);
+            deepest = resolver.getResource(cursor);
+            if (deepest != null) {
+                break;
+            }
+        }
+        if (deepest == null) {
+            return null;
+        }
+        final String rest = path.substring(deepest.getPath().length());
+        final Resource resolved = descend(deepest, rest);
+        if (resolved != null) {
+            return resolved;
+        }
+        if (kind == Kind.COMPONENT_DEFINITIONS && underAppsOrLibs(deepest.getPath())) {
+            return deepest;
+        }
+        return null;
+    }
+
+    private static Resource descend(Resource parent, String rest) {
+        if (rest.isEmpty() || "/".equals(rest)) {
+            return parent;
+        }
+        final String body = rest.startsWith("/") ? rest.substring(1) : rest;
+        final int slash = body.indexOf('/');
+        final String segment = slash < 0 ? body : body.substring(0, slash);
+        final String after = slash < 0 ? "" : body.substring(slash);
+        Resource child = parent.getChild(segment);
+        if (child == null) {
+            child = uniqueExtension(parent, segment);
+        }
+        if (child == null) {
+            return null;
+        }
+        return descend(child, after);
+    }
+
+    /**
+     * The one child whose name the missing segment extends, or that extends the missing segment.
+     *
+     * <p>The boundary is a hyphen, so {@code acme-rde} is {@code acme} and {@code
+     * brand} is not. Two children that both qualify is no answer: guessing between them would list
+     * the wrong project.</p>
+     */
+    private static Resource uniqueExtension(Resource parent, String wanted) {
+        Resource match = null;
+        for (final Resource child : parent.getChildren()) {
+            final String name = child.getName();
+            if (!extendsName(wanted, name) && !extendsName(name, wanted)) {
+                continue;
+            }
+            if (match != null) {
+                return null;
+            }
+            match = child;
+        }
+        return match;
+    }
+
+    private static boolean extendsName(String longer, String shorter) {
+        return longer.length() > shorter.length() && longer.startsWith(shorter)
+                && longer.charAt(shorter.length()) == '-';
+    }
+
+    private static boolean underAppsOrLibs(String path) {
+        return "/apps".equals(path) || path.startsWith("/apps/") || "/libs".equals(path)
+                || path.startsWith("/libs/");
     }
 
     private static Resource nextChild(Deque<Iterator<Resource>> pending) {
@@ -341,6 +426,6 @@ public final class ContentCatalogHandler implements CommandHandler {
     }
 
     private record Gathered(List<ComponentListingResult.Component> components,
-                            List<PageListingResult.Page> pages, boolean exceeded) {
+                            List<PageListingResult.Page> pages) {
     }
 }

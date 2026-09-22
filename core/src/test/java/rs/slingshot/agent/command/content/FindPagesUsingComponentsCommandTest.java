@@ -55,13 +55,16 @@ final class FindPagesUsingComponentsCommandTest {
     }
 
     @Test
-    void discoveryBudgetIsRefusedRatherThanReturningPartialResults() {
+    void asearchFinishesTheTreeItWasAskedAbout() {
         corpus();
-        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
-                new FindPagesUsingComponentsHandler(CONTRACT).run(
-                        argument("/content/site", List.of(TEASER), 100), readOnly(), narrowContext()),
-                "a traversal beyond the discovery budget returned partial results");
-        assertEquals(FindPagesUsingComponentsHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
+        final CommandHandler.Answer whole = new FindPagesUsingComponentsHandler(CONTRACT).run(
+                argument("/content/site", List.of(TEASER), 100), readOnly(), context());
+        final CommandHandler.Answer pastTheOldCap = new FindPagesUsingComponentsHandler(CONTRACT)
+                .run(argument("/content/site", List.of(TEASER), 100), readOnly(), narrowContext());
+        assertInstanceOf(CommandHandler.Produced.class, pastTheOldCap,
+                "a tree larger than the old examination cap was refused");
+        assertEquals(((CommandHandler.Produced) whole).result(),
+                ((CommandHandler.Produced) pastTheOldCap).result());
     }
 
     private static final AgentContract CONTRACT = contract();

@@ -83,14 +83,8 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
             return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
                     + " read, which is the same answer as nothing being there");
         }
-        final Search search = new Search(command.resourceTypes(), context.discovery().limit());
+        final Search search = new Search(command.resourceTypes());
         search.under(root);
-        if (search.reachedTheBudget()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search reached the "
-                    + context.discovery().limit() + " nodes it may examine and stopped; it is"
-                    + " refused rather than shortened, because a partial list of pages using a"
-                    + " component reads as the complete one and a migration would miss the rest");
-        }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
                 search.found(command.matchMode()), command.window(),
                 FindPagesUsingComponentsCommand.WIRE_NAME, arguments, context, contract);
@@ -113,24 +107,16 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
     private static final class Search {
 
         private final List<String> wanted;
-        private final long budget;
         private final SequencedMap<String, Matched> found = new LinkedHashMap<>();
-        private final java.util.concurrent.atomic.AtomicLong examined =
-                new java.util.concurrent.atomic.AtomicLong();
 
-        Search(List<String> wanted, long budget) {
+        Search(List<String> wanted) {
             this.wanted = wanted;
-            this.budget = budget;
         }
 
         void under(Resource resource) {
-            if (reachedTheBudget()) {
-                return;
-            }
-            examined.incrementAndGet();
             matchOn(resource);
             final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext() && !reachedTheBudget()) {
+            while (children.hasNext()) {
                 under(children.next());
             }
         }
@@ -143,10 +129,6 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
             containingPage(resource).ifPresent(page -> found.computeIfAbsent(page.getPath(),
                     path -> new Matched(ListChildPagesHandler.titleOf(page),
                             new LinkedHashSet<>())).types().add(type));
-        }
-
-        boolean reachedTheBudget() {
-            return examined.get() >= budget;
         }
 
         /**

@@ -40,11 +40,20 @@ public record ListContentFragmentsCommand(String rootPath, ResultWindow window) 
     public sealed interface Outcome permits Held, Refused {
     }
 
-    /** An argument this command takes. */
+    /**
+     * An argument this command takes.
+     *
+     * @param command what was asked
+     */
     public record Held(ListContentFragmentsCommand command) implements Outcome {
     }
 
-    /** One it does not. */
+    /**
+     * One it does not.
+     *
+     * @param refusal why it does not
+     * @param detail what was seen, which names no content the caller cannot already see
+     */
     public record Refused(Refusal refusal, String detail) implements Outcome {
     }
 

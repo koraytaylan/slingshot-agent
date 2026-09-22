@@ -22,6 +22,7 @@ import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
 import rs.slingshot.agent.command.ReadOnlyResolver;
+import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.fragment.FragmentHandlers;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
 import rs.slingshot.agent.continuation.KeyRing;
@@ -43,6 +44,18 @@ final class ContentCatalogCommandTest {
             AgentContract.load(), "the contract did not authenticate").contract();
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
+
+    @Test
+    @DisplayName("a project folder named as the environment still lists that project's definitions")
+    void aProjectFolderNamedAsTheEnvironmentListsItsDefinitions() {
+        sling.create().resource("/apps/acme/components/text", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
+        sling.create().resource("/apps/other/components/title", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
+        final DocumentValue.Mapping answered = listed(
+                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, "/apps/acme-rde");
+        assertEquals(List.of("/apps/acme/components/text"), paths(answered));
+    }
 
     @Test
     @DisplayName("a definition is the component node, and its type is the path under apps")
@@ -108,6 +121,34 @@ final class ContentCatalogCommandTest {
     }
 
     @Test
+    @DisplayName("an argument this catalogue does not take is refused before any node is read")
+    void anArgumentThisCatalogueDoesNotTakeIsRefused() {
+        for (final ContentCatalogHandler.Kind kind : ContentCatalogHandler.Kind.values()) {
+            final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                    new ContentCatalogHandler(CONTRACT, kind).run(stray(), readOnly(), context()));
+            assertEquals(ContentCatalogHandler.ARGUMENT_REJECTED, failed.category());
+        }
+        final List<String> expected = List.of("NOT_A_DOCUMENT", "MEMBER_UNKNOWN", "MEMBER_ABSENT",
+                "NOT_AN_ABSOLUTE_PATH", "NOT_AN_ABSOLUTE_PATH", "WINDOW_REFUSED");
+        assertEquals(expected, refusedArguments().stream()
+                .map(arguments -> assertInstanceOf(ListComponentDefinitionsCommand.Refused.class,
+                        ListComponentDefinitionsCommand.of(arguments, CONTRACT)).refusal().name())
+                .toList());
+        assertEquals(expected, refusedArguments().stream()
+                .map(arguments -> assertInstanceOf(ComponentInstancesCommand.Refused.class,
+                        ComponentInstancesCommand.of(arguments, CONTRACT)).refusal().name())
+                .toList());
+        assertEquals(expected, refusedArguments().stream()
+                .map(arguments -> assertInstanceOf(ListContentFragmentsCommand.Refused.class,
+                        ListContentFragmentsCommand.of(arguments, CONTRACT)).refusal().name())
+                .toList());
+        assertEquals(expected, refusedArguments().stream()
+                .map(arguments -> assertInstanceOf(ListExperienceFragmentsCommand.Refused.class,
+                        ListExperienceFragmentsCommand.of(arguments, CONTRACT)).refusal().name())
+                .toList());
+    }
+
+    @Test
     @DisplayName("an anchor nothing is at is refused rather than answered empty")
     void anAnchorNothingIsAtIsRefused() {
         final CommandHandler.Answer answer = new ContentCatalogHandler(CONTRACT,
@@ -137,6 +178,30 @@ final class ContentCatalogCommandTest {
                 ((DocumentValue.Sequence) answered.member(PageListingResult.MATCHES).orElseThrow())
                         .items().getFirst();
         return ((DocumentValue.Text) row.member(member).orElseThrow()).value();
+    }
+
+    private static DocumentValue.Mapping stray() {
+        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        members.put("other", new DocumentValue.Text("x"));
+        return new DocumentValue.Mapping(members);
+    }
+
+    private static List<DocumentValue> refusedArguments() {
+        final SequencedMap<String, DocumentValue> unknown = new LinkedHashMap<>();
+        unknown.put("other", new DocumentValue.Text("x"));
+        final SequencedMap<String, DocumentValue> untyped = new LinkedHashMap<>();
+        untyped.put(RootedWindow.ROOT_PATH, new DocumentValue.Whole(1));
+        final SequencedMap<String, DocumentValue> relative = new LinkedHashMap<>();
+        relative.put(RootedWindow.ROOT_PATH, new DocumentValue.Text("content"));
+        final SequencedMap<String, DocumentValue> window = new LinkedHashMap<>();
+        window.put(RootedWindow.ROOT_PATH, new DocumentValue.Text("/content"));
+        final SequencedMap<String, DocumentValue> mode = new LinkedHashMap<>();
+        mode.put(ResultWindow.MODE, new DocumentValue.Text("sideways"));
+        window.put(ResultWindow.ARGUMENT_MEMBER, new DocumentValue.Mapping(mode));
+        return List.of(new DocumentValue.Text("no"), new DocumentValue.Mapping(unknown),
+                new DocumentValue.Mapping(new LinkedHashMap<>()),
+                new DocumentValue.Mapping(untyped), new DocumentValue.Mapping(relative),
+                new DocumentValue.Mapping(window));
     }
 
     private static DocumentValue.Mapping arguments(String root) {

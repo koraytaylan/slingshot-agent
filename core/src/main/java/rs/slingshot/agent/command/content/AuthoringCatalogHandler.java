@@ -21,11 +21,11 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * The editable page templates, or the content fragment models, under one anchor.
  *
- * <p>Both are a walk of one subtree bounded by the caller's examination budget. A query would ask
+ * <p>Both are a walk of the whole subtree the caller named. A query would ask
  * the repository for every {@code cq:Template} and then throw away the ones that are not the
  * catalogue being asked for, and the two catalogues are told apart by where they sit, which is a
- * fact about the path rather than a property an index covers. The walk stops at the budget rather
- * than returning a shortened page, because a shortened page reads as the whole answer.</p>
+ * fact about the path rather than a property an index covers. The walk finishes that subtree,
+ * because a shortened page reads as the whole answer.</p>
  */
 public final class AuthoringCatalogHandler implements CommandHandler {
 
@@ -79,14 +79,9 @@ public final class AuthoringCatalogHandler implements CommandHandler {
                     + " is not a path this caller can read, which is the same answer as nothing"
                     + " being there");
         }
-        final Gathered gathered = gather(root, context.discovery().limit());
-        if (gathered.exceeded()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search examined more than the "
-                    + context.discovery().limit() + " nodes it is allowed, and stopped rather than"
-                    + " going on");
-        }
+        final List<PageListingResult.Page> found = gather(root);
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
-                gathered.found(), held.window(), wireName(), arguments, context, contract);
+                found, held.window(), wireName(), arguments, context, contract);
         if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
             return new Failed(refused.category(), refused.detail());
         }
@@ -123,16 +118,11 @@ public final class AuthoringCatalogHandler implements CommandHandler {
         return new Held(command.rootPath(), command.window());
     }
 
-    private Gathered gather(Resource root, long budget) {
+    private List<PageListingResult.Page> gather(Resource root) {
         final List<PageListingResult.Page> found = new ArrayList<>();
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
         Resource current = root;
-        long examined = 0;
         while (current != null) {
-            examined = examined + 1;
-            if (examined > budget) {
-                return new Gathered(List.of(), true);
-            }
             if (matches(current, root.getPath())) {
                 found.add(new PageListingResult.Page(current.getPath(), titleOf(current)));
             }
@@ -143,7 +133,7 @@ public final class AuthoringCatalogHandler implements CommandHandler {
             }
             current = next;
         }
-        return new Gathered(PageListingResult.ascending(found), false);
+        return PageListingResult.ascending(found);
     }
 
     private static Resource nextChild(Deque<Iterator<Resource>> pending) {
@@ -221,8 +211,5 @@ public final class AuthoringCatalogHandler implements CommandHandler {
     }
 
     private record Refused(String category, String detail) implements Asked {
-    }
-
-    private record Gathered(List<PageListingResult.Page> found, boolean exceeded) {
     }
 }

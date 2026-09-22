@@ -154,14 +154,15 @@ final class ListChildPagesCommandTest {
     private static final int TWO = 2;
 
     @Test
-    @DisplayName("a parent holding more children than the caller may examine is refused")
-    void abudgetRefusalReachesTheCaller() {
+    @DisplayName("a parent is listed whole however many children it holds")
+    void aparentIsListedWholeHoweverManyChildrenItHolds() {
         final Resource parent = parentWithChildren(CHILDREN);
-        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+        final DocumentValue.Mapping result = assertInstanceOf(CommandHandler.Produced.class,
                 new ListChildPagesHandler(CONTRACT).run(
                         argument(parent.getPath(), window(CHILDREN)), readOnly(), narrowContext()),
-                "a parent holding more children than the budget allows was listed anyway");
-        assertEquals(ListChildPagesHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
+                "a parent was refused because of how many children it holds").result();
+        assertEquals(CHILDREN, ((DocumentValue.Sequence) result.member(PageListingResult.MATCHES)
+                .orElseThrow()).items().size());
     }
 
     private static CallerContext narrowContext() {

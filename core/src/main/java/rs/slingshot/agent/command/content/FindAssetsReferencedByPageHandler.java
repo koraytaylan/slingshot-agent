@@ -91,12 +91,8 @@ public final class FindAssetsReferencedByPageHandler implements CommandHandler {
             return new Failed(PAGE_INVALID, command.pagePath() + " is there and is not a page, so it"
                     + " has no page to look through; the page is probably inside it");
         }
-        final Walk walk = new Walk(context.discovery().limit(), command.pagePath());
+        final Walk walk = new Walk(command.pagePath());
         walk.under(page);
-        if (walk.reachedTheBudget()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this page holds more than the "
-                    + context.discovery().limit() + " nodes this caller may examine");
-        }
         final PagingSupport.Outcome<FindAssetsReferencedByPageResult.ReferencedAsset> pagingPage =
                 PagingSupport.page(walk.found(), command.window(),
                         FindAssetsReferencedByPageCommand.WIRE_NAME, arguments, context, contract);
@@ -114,26 +110,18 @@ public final class FindAssetsReferencedByPageHandler implements CommandHandler {
     /** One walk of one page, gathering every reference to an asset it is asked to look for. */
     private static final class Walk {
 
-        private final long budget;
         private final String page;
         private final SequencedMap<String, SequencedSet<String>> found = new LinkedHashMap<>();
-        private final java.util.concurrent.atomic.AtomicLong examined =
-                new java.util.concurrent.atomic.AtomicLong();
 
-        Walk(long budget, String page) {
-            this.budget = budget;
+        Walk(String page) {
             this.page = page;
         }
 
         void under(Resource resource) {
-            if (reachedTheBudget()) {
-                return;
-            }
-            examined.incrementAndGet();
             resource.getValueMap().forEach((property, value) ->
                     referencesIn(resource, property, value));
             final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext() && !reachedTheBudget()) {
+            while (children.hasNext()) {
                 under(children.next());
             }
         }
@@ -173,10 +161,6 @@ public final class FindAssetsReferencedByPageHandler implements CommandHandler {
 
         private static boolean isAssetPath(String value) {
             return value.startsWith(ASSET_ROOT);
-        }
-
-        boolean reachedTheBudget() {
-            return examined.get() >= budget;
         }
 
         List<FindAssetsReferencedByPageResult.ReferencedAsset> found() {

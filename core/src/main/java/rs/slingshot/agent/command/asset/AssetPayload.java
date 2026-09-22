@@ -47,7 +47,7 @@ public record AssetPayload(String mediaType, byte[] content) {
      */
     public static final List<String> SUPPORTED_MEDIA_TYPES = List.of(
             "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml",
-            "application/pdf", "text/plain", "text/csv", "application/json",
+            "application/pdf", "text/plain", "text/csv", "text/markdown", "application/json",
             "video/mp4", "audio/mpeg");
 
     /** Holds the bytes apart from whatever the caller still has a reference to. */

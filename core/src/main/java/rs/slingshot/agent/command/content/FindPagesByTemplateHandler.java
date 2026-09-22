@@ -79,14 +79,8 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
                     + " empty answer to a root nobody can read says this change affects nothing —"
                     + " and somebody planning a migration would believe it.");
         }
-        final Search search = new Search(command.templatePath(), context.discovery().limit());
+        final Search search = new Search(command.templatePath());
         search.under(root);
-        if (search.reachedTheBudget()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search reached the "
-                    + context.discovery().limit() + " nodes it may examine and stopped; it is"
-                    + " refused rather than shortened, for the same reason an empty answer to a"
-                    + " wrong root is refused");
-        }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
                 search.found(), command.window(), FindPagesByTemplateCommand.WIRE_NAME, arguments,
                 context, contract);
@@ -103,30 +97,18 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
     private static final class Search {
 
         private final String template;
-        private final long budget;
         private final List<PageListingResult.Page> found = new ArrayList<>();
-        private final java.util.concurrent.atomic.AtomicLong examined =
-                new java.util.concurrent.atomic.AtomicLong();
 
-        Search(String template, long budget) {
+        Search(String template) {
             this.template = template;
-            this.budget = budget;
         }
 
         void under(Resource resource) {
-            if (reachedTheBudget()) {
-                return;
-            }
-            examined.incrementAndGet();
             matched(resource).ifPresent(found::add);
             final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext() && !reachedTheBudget()) {
+            while (children.hasNext()) {
                 under(children.next());
             }
-        }
-
-        boolean reachedTheBudget() {
-            return examined.get() >= budget;
         }
 
         List<PageListingResult.Page> found() {

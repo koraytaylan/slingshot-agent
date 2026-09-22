@@ -76,14 +76,8 @@ public final class FindAssetsByMetadataHandler implements CommandHandler {
             return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
                     + " read, which is the same answer as nothing being there");
         }
-        final Search search = new Search(command, context.discovery().limit());
+        final Search search = new Search(command);
         search.under(root);
-        if (search.reachedTheBudget()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search reached the "
-                    + context.discovery().limit() + " nodes it may examine and stopped; it is"
-                    + " refused rather than shortened, because a partial list of assets reads as"
-                    + " the complete one");
-        }
         final PagingSupport.Outcome<FindAssetsByMetadataResult.MatchedAsset> page =
                 PagingSupport.page(search.found(), command.window(),
                         FindAssetsByMetadataCommand.WIRE_NAME, arguments, context,
@@ -101,30 +95,18 @@ public final class FindAssetsByMetadataHandler implements CommandHandler {
     private static final class Search {
 
         private final FindAssetsByMetadataCommand command;
-        private final long budget;
         private final List<FindAssetsByMetadataResult.MatchedAsset> found = new ArrayList<>();
-        private final java.util.concurrent.atomic.AtomicLong examined =
-                new java.util.concurrent.atomic.AtomicLong();
 
-        Search(FindAssetsByMetadataCommand command, long budget) {
+        Search(FindAssetsByMetadataCommand command) {
             this.command = command;
-            this.budget = budget;
         }
 
         void under(Resource resource) {
-            if (reachedTheBudget()) {
-                return;
-            }
-            examined.incrementAndGet();
             matched(resource).ifPresent(found::add);
             final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext() && !reachedTheBudget()) {
+            while (children.hasNext()) {
                 under(children.next());
             }
-        }
-
-        boolean reachedTheBudget() {
-            return examined.get() >= budget;
         }
 
         List<FindAssetsByMetadataResult.MatchedAsset> found() {

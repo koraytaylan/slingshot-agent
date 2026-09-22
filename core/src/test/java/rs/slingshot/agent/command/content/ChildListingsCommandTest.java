@@ -6,6 +6,7 @@ package rs.slingshot.agent.command.content;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -131,12 +132,20 @@ final class ChildListingsCommandTest {
                 new Budget(Budget.Kind.RESULT,
                         CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
                 ProgressSink.under(CONTRACT));
-        refused(new ChildListingHandler(CONTRACT), nodes(ANCHOR, window),
-                ListChildPagesHandler.DISCOVERY_BUDGET_EXCEEDED, narrow);
-        refused(new ChildListingHandler(CONTRACT), byType(ListChildPagesHandler.PAGE_TYPE, ANCHOR,
-                window), ListChildPagesHandler.DISCOVERY_BUDGET_EXCEEDED, narrow);
-        refused(new ListChildPagesHandler(CONTRACT), pages(ANCHOR, window),
-                ListChildPagesHandler.DISCOVERY_BUDGET_EXCEEDED, narrow);
+        assertEquals(paths(produced(new ChildListingHandler(CONTRACT), nodes(ANCHOR, window),
+                readOnly())), paths(assertInstanceOf(CommandHandler.Produced.class,
+                        new ChildListingHandler(CONTRACT).run(nodes(ANCHOR, window), readOnly(),
+                                narrow), "a wide folder was refused").result()));
+        assertEquals(paths(produced(new ChildListingHandler(CONTRACT),
+                byType(ListChildPagesHandler.PAGE_TYPE, ANCHOR, window), readOnly())),
+                paths(assertInstanceOf(CommandHandler.Produced.class,
+                        new ChildListingHandler(CONTRACT).run(byType(
+                                ListChildPagesHandler.PAGE_TYPE, ANCHOR, window), readOnly(),
+                                narrow), "a wide folder was refused").result()));
+        assertEquals(paths(produced(new ListChildPagesHandler(CONTRACT), pages(ANCHOR, window),
+                readOnly())), paths(assertInstanceOf(CommandHandler.Produced.class,
+                        new ListChildPagesHandler(CONTRACT).run(pages(ANCHOR, window), readOnly(),
+                                narrow), "a wide folder was refused").result()));
     }
 
     @Test
@@ -204,6 +213,66 @@ final class ChildListingsCommandTest {
             assertFalse(pool.contains("matching"),
                     "the page listing walks children beside the typed listing");
         }
+    }
+
+    @Test
+    @DisplayName("a continuation token this command cannot read is refused before any child is listed")
+    void agarbageContinuationIsRefused() {
+        node(ANCHOR, FOLDER_TYPE);
+        refused(new ListChildPagesHandler(CONTRACT), pages(ANCHOR, continuation("not-a-token")),
+                "continuation_token_integrity_invalid", context());
+    }
+
+    @Test
+    @DisplayName("an argument a child listing does not take is the refusal its own reading names")
+    void anArgumentAChildListingDoesNotTakeIsNamed() {
+        final List<String> expected = List.of("NOT_A_DOCUMENT", "MEMBER_UNKNOWN", "MEMBER_ABSENT",
+                "NOT_AN_ABSOLUTE_PATH", "NOT_AN_ABSOLUTE_PATH", "WINDOW_REFUSED");
+        assertEquals(expected, childArguments(false).stream()
+                .map(arguments -> assertInstanceOf(ListChildNodesCommand.Refused.class,
+                        ListChildNodesCommand.of(arguments, CONTRACT)).refusal().name())
+                .toList());
+        assertEquals(expected, childArguments(true).stream()
+                .map(arguments -> assertInstanceOf(ListChildNodesByTypeCommand.Refused.class,
+                        ListChildNodesByTypeCommand.of(arguments, CONTRACT)).refusal().name())
+                .toList());
+        final ListChildNodesCommand.Held nodes = assertInstanceOf(ListChildNodesCommand.Held.class,
+                ListChildNodesCommand.of(nodes(ANCHOR, window(0, 1)), CONTRACT));
+        assertEquals(ANCHOR, nodes.command().rootPath());
+        final ListChildNodesByTypeCommand.Held typed = assertInstanceOf(
+                ListChildNodesByTypeCommand.Held.class,
+                ListChildNodesByTypeCommand.of(byType(FOLDER_TYPE, ANCHOR, window(0, 1)),
+                        CONTRACT));
+        assertEquals(FOLDER_TYPE, typed.command().primaryNodeType());
+        assertEquals(ChildListingArgument.Refusal.MEMBER_ABSENT,
+                ChildListingArgument.typeRefusal(new DocumentValue.Mapping(new LinkedHashMap<>())));
+        assertEquals(ChildListingArgument.Refusal.NOT_A_DOCUMENT,
+                ChildListingArgument.typeRefusal(new DocumentValue.Text("no")));
+        assertNull(ChildListingArgument.typeRefusal(byType(FOLDER_TYPE, ANCHOR, window(0, 1))));
+    }
+
+    private static List<DocumentValue> childArguments(boolean typed) {
+        final SequencedMap<String, DocumentValue> unknown = new LinkedHashMap<>();
+        unknown.put("other", new DocumentValue.Text("x"));
+        final SequencedMap<String, DocumentValue> untyped = new LinkedHashMap<>();
+        untyped.put(ListChildNodesCommand.ROOT_PATH, new DocumentValue.Whole(1));
+        final SequencedMap<String, DocumentValue> relative = new LinkedHashMap<>();
+        relative.put(ListChildNodesCommand.ROOT_PATH, new DocumentValue.Text("content"));
+        final SequencedMap<String, DocumentValue> window = new LinkedHashMap<>();
+        window.put(ListChildNodesCommand.ROOT_PATH, new DocumentValue.Text("/content"));
+        final SequencedMap<String, DocumentValue> mode = new LinkedHashMap<>();
+        mode.put(ResultWindow.MODE, new DocumentValue.Text("sideways"));
+        window.put(ResultWindow.ARGUMENT_MEMBER, new DocumentValue.Mapping(mode));
+        if (typed) {
+            final DocumentValue.Text type = new DocumentValue.Text(FOLDER_TYPE);
+            untyped.put(ListChildNodesByTypeCommand.PRIMARY_NODE_TYPE, type);
+            relative.put(ListChildNodesByTypeCommand.PRIMARY_NODE_TYPE, type);
+            window.put(ListChildNodesByTypeCommand.PRIMARY_NODE_TYPE, type);
+        }
+        return List.of(new DocumentValue.Text("no"), new DocumentValue.Mapping(unknown),
+                new DocumentValue.Mapping(new LinkedHashMap<>()),
+                new DocumentValue.Mapping(untyped), new DocumentValue.Mapping(relative),
+                new DocumentValue.Mapping(window));
     }
 
     @Test

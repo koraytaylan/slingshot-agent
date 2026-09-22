@@ -84,12 +84,7 @@ public final class QueryPathsHandler implements CommandHandler {
             return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
                     + " read, which is the same answer as nothing being there");
         }
-        final Gathered gathered = gather(root, command, context.discovery().limit());
-        if (gathered.ending() == Ending.THE_BUDGET_RAN_OUT) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search examined more than the "
-                    + context.discovery().limit() + " nodes it is allowed, and stopped rather than"
-                    + " going on");
-        }
+        final List<String> gathered = gather(root, command);
         final Optional<PagedQuery> query = context.paging() instanceof CallerContext.Available paging
                 ? Optional.of(new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(),
                         paging.generation())) : Optional.empty();
@@ -111,7 +106,7 @@ public final class QueryPathsHandler implements CommandHandler {
         final long limit = command.window() instanceof ResultWindow.Initial initial
                 ? initial.limit()
                 : contract.value(rs.slingshot.agent.contract.ContractLimit.DEFAULT_RESULT_LIMIT);
-        final List<String> fromOffset = gathered.paths().stream().skip(offset).toList();
+        final List<String> fromOffset = gathered.stream().skip(offset).toList();
         final PagedQuery.Page<String> page = PagedQuery.pageOf(fromOffset, limit, offset);
         final Optional<String> token = nextToken(page, held.digest(), context);
         if (token.isEmpty()) {
@@ -167,30 +162,12 @@ public final class QueryPathsHandler implements CommandHandler {
     }
 
     /**
-     * What one search found, and whether it was allowed to finish.
-     *
-     * @param paths the addresses, in ascending path order
-     * @param ending whether the search reached the end of the subtree or ran out of examinations
-     */
-    private record Gathered(List<String> paths, Ending ending) {
-    }
-
-    /** How a search stopped. */
-    private enum Ending {
-        /** It reached the end of the subtree, so what it found is everything there is. */
-        NOTHING_LEFT_TO_EXAMINE,
-        /** It ran out of examinations, so what it found is not an answer to anything. */
-        THE_BUDGET_RAN_OUT
-    }
-
-    /**
      * Whether one candidate is one of the addresses this search is for.
      *
      * <p>The type narrows what the query returns; the predicates are applied to those rows here.
      * That is the split the index requires: a query can be answered from an index because it asks
      * about a node's type and its path, and a predicate about an arbitrary property is a filter
-     * over rows already found rather than a second index nobody has. Which is why the predicates
-     * are bounded by the examination budget and the query is not.</p>
+     * over rows already found rather than a second index nobody has.</p>
      *
      * @param resource the candidate
      * @param command what was asked
@@ -234,17 +211,12 @@ public final class QueryPathsHandler implements CommandHandler {
         return one == null ? List.of() : List.of(one);
     }
 
-    private static Gathered gather(Resource root, QueryPathsCommand command, long budget) {
+    private static List<String> gather(Resource root, QueryPathsCommand command) {
         final List<String> found = new ArrayList<>();
         final java.util.Deque<Iterator<Resource>> pending = new java.util.ArrayDeque<>();
         java.util.Optional<Resource> held = java.util.Optional.of(root);
-        long examined = 0;
         while (held.isPresent()) {
             final Resource current = held.orElseThrow();
-            examined = examined + 1;
-            if (examined > budget) {
-                return new Gathered(List.of(), Ending.THE_BUDGET_RAN_OUT);
-            }
             if (matches(current, command)) {
                 found.add(current.getPath());
             }
@@ -259,7 +231,7 @@ public final class QueryPathsHandler implements CommandHandler {
                 }
             }
         }
-        return new Gathered(found.stream().sorted().toList(), Ending.NOTHING_LEFT_TO_EXAMINE);
+        return found.stream().sorted().toList();
     }
 
     private static String typeOf(Resource resource) {

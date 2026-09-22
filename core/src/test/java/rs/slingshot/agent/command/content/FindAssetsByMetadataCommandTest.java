@@ -60,13 +60,18 @@ final class FindAssetsByMetadataCommandTest {
     }
 
     @Test
-    void discoveryBudgetIsRefusedRatherThanReturningPartialResults() {
+    void asearchFinishesTheTreeItWasAskedAbout() {
         corpus();
-        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+        final DocumentValue.Mapping whole = assertInstanceOf(CommandHandler.Produced.class,
                 new FindAssetsByMetadataHandler(CONTRACT).run(
-                        argument("/content/dam", new LinkedHashMap<>()), readOnly(), narrowContext()),
-                "a traversal beyond the discovery budget returned partial results");
-        assertEquals(FindAssetsByMetadataHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
+                        argument("/content/dam", new LinkedHashMap<>()), readOnly(), context()),
+                "the search was refused").result();
+        final DocumentValue.Mapping pastTheOldCap = assertInstanceOf(CommandHandler.Produced.class,
+                new FindAssetsByMetadataHandler(CONTRACT).run(
+                        argument("/content/dam", new LinkedHashMap<>()), readOnly(),
+                        narrowContext()),
+                "a tree larger than the old examination cap was refused").result();
+        assertEquals(pathsFrom(whole), pathsFrom(pastTheOldCap));
     }
 
     private static final AgentContract CONTRACT = contract();

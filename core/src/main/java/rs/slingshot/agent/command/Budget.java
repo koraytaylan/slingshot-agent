@@ -71,14 +71,18 @@ public record Budget(Kind kind, long limit) {
     }
 
     /**
-     * How many rows a command may examine, which is the contract's own bound.
+     * How many nodes a command may examine, which is the contract's discovery bound.
+     *
+     * <p>That bound is the discovery candidate limit, not the maintenance sweep's row bound. The
+     * sweep bound is how much bookkeeping one pass of maintenance may do. A catalogue of a real
+     * author tree examines more nodes than that and would stop before it had a list.</p>
      *
      * @param contract the authenticated contract
      * @return the budget
      */
     public static Budget discovery(AgentContract contract) {
         return new Budget(Kind.DISCOVERY,
-                contract.value(ContractLimit.MAINTENANCE_SWEEP_WORK_BOUND_ROWS));
+                contract.value(ContractLimit.MAXIMUM_DISCOVERY_CANDIDATE_NODES));
     }
 
     /**

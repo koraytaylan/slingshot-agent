@@ -121,13 +121,9 @@ public final class ChildListingHandler implements CommandHandler {
         if (parent == null) {
             return new Failed(ROOT_NOT_FOUND, whyNothingIsListed(accepted.rootPath()));
         }
-        final Gathered gathered = matching(parent, type, context.discovery().limit());
-        if (gathered.state() == BudgetState.EXCEEDED) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this parent holds more than the "
-                    + context.discovery().limit() + " children this caller may examine");
-        }
+        final List<ChildNodeListingResult.Child> children = matching(parent, type);
         final PagingSupport.Outcome<ChildNodeListingResult.Child> page = PagingSupport.page(
-                gathered.children(), accepted.window(), wireName(type), arguments, context,
+                children, accepted.window(), wireName(type), arguments, context,
                 contract);
         if (page instanceof final PagingSupport.Refused<ChildNodeListingResult.Child> refused) {
             return new Failed(refused.category(), refused.detail());
@@ -152,26 +148,20 @@ public final class ChildListingHandler implements CommandHandler {
      *
      * @param parent the anchor
      * @param type the exact primary type a child must have, or empty for every child
-     * @param budget how many children the caller may examine
-     * @return the matching children and whether the budget ran out
+     * @return the matching children, which is every child of that type
      */
-    static Gathered matching(Resource parent, String type, long budget) {
+    static List<ChildNodeListingResult.Child> matching(Resource parent, String type) {
         final List<ChildNodeListingResult.Child> children = new ArrayList<>();
         final Iterator<Resource> held = parent.listChildren();
-        long examined = 0;
         while (held.hasNext()) {
             final Resource child = held.next();
-            examined = examined + 1;
-            if (examined > budget) {
-                return new Gathered(List.copyOf(children), BudgetState.EXCEEDED);
-            }
             final String childType = typeOf(child);
             if (EVERY_TYPE.equals(type) || type.equals(childType)) {
                 children.add(new ChildNodeListingResult.Child(child.getPath(), childType,
                         ListChildPagesHandler.titleOf(child)));
             }
         }
-        return new Gathered(ChildNodeListingResult.ascending(children), BudgetState.WITHIN);
+        return ChildNodeListingResult.ascending(children);
     }
 
     /**
@@ -193,23 +183,6 @@ public final class ChildListingHandler implements CommandHandler {
      */
     static String typeOf(Resource resource) {
         return String.valueOf(resource.getValueMap().get(TYPE_PROPERTY, String.class));
-    }
-
-    /**
-     * The children a listing gathered, and whether the budget ran out.
-     *
-     * @param children the matching children, in ascending path order
-     * @param state whether the caller's examination budget held or ran out first
-     */
-    record Gathered(List<ChildNodeListingResult.Child> children, BudgetState state) {
-    }
-
-    /** Whether a listing finished inside its examination budget or ran out of it. */
-    enum BudgetState {
-        /** Every child was examined and the page was built from them. */
-        WITHIN,
-        /** The caller may examine no more children, so the page is refused rather than partial. */
-        EXCEEDED
     }
 
     @Override

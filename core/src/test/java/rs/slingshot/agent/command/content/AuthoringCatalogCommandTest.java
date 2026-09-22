@@ -24,6 +24,7 @@ import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
 import rs.slingshot.agent.command.ReadOnlyResolver;
+import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.page.CreatePageHandler;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
 import rs.slingshot.agent.continuation.KeyRing;
@@ -81,6 +82,27 @@ final class AuthoringCatalogCommandTest {
     }
 
     @Test
+    @DisplayName("an argument this catalogue does not take is refused before any node is read")
+    void anArgumentThisCatalogueDoesNotTakeIsRefused() {
+        for (final AuthoringCatalogHandler.Kind kind : AuthoringCatalogHandler.Kind.values()) {
+            final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                    new AuthoringCatalogHandler(CONTRACT, kind).run(stray(), readOnly(),
+                            context()));
+            assertEquals(AuthoringCatalogHandler.ARGUMENT_REJECTED, failed.category());
+        }
+        final List<String> expected = List.of("NOT_A_DOCUMENT", "MEMBER_UNKNOWN", "MEMBER_ABSENT",
+                "NOT_AN_ABSOLUTE_PATH", "NOT_AN_ABSOLUTE_PATH", "WINDOW_REFUSED");
+        assertEquals(expected, catalogArguments().stream()
+                .map(arguments -> assertInstanceOf(ListPageTemplatesCommand.Refused.class,
+                        ListPageTemplatesCommand.of(arguments, CONTRACT)).refusal().name())
+                .toList());
+        assertEquals(expected, catalogArguments().stream()
+                .map(arguments -> assertInstanceOf(ListContentFragmentModelsCommand.Refused.class,
+                        ListContentFragmentModelsCommand.of(arguments, CONTRACT)).refusal().name())
+                .toList());
+    }
+
+    @Test
     @DisplayName("an anchor nothing is at is refused rather than answered empty")
     void anAnchorNothingIsAtIsRefused() {
         final CommandHandler.Answer answer = new AuthoringCatalogHandler(CONTRACT,
@@ -103,6 +125,30 @@ final class AuthoringCatalogCommandTest {
                 .map(item -> ((DocumentValue.Text) ((DocumentValue.Mapping) item)
                         .member(PageListingResult.REPOSITORY_PATH).orElseThrow()).value())
                 .toList();
+    }
+
+    private static DocumentValue.Mapping stray() {
+        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        members.put("other", new DocumentValue.Text("x"));
+        return new DocumentValue.Mapping(members);
+    }
+
+    private static List<DocumentValue> catalogArguments() {
+        final SequencedMap<String, DocumentValue> unknown = new LinkedHashMap<>();
+        unknown.put("other", new DocumentValue.Text("x"));
+        final SequencedMap<String, DocumentValue> untyped = new LinkedHashMap<>();
+        untyped.put(RootedWindow.ROOT_PATH, new DocumentValue.Whole(1));
+        final SequencedMap<String, DocumentValue> relative = new LinkedHashMap<>();
+        relative.put(RootedWindow.ROOT_PATH, new DocumentValue.Text("content"));
+        final SequencedMap<String, DocumentValue> window = new LinkedHashMap<>();
+        window.put(RootedWindow.ROOT_PATH, new DocumentValue.Text("/content"));
+        final SequencedMap<String, DocumentValue> mode = new LinkedHashMap<>();
+        mode.put(ResultWindow.MODE, new DocumentValue.Text("sideways"));
+        window.put(ResultWindow.ARGUMENT_MEMBER, new DocumentValue.Mapping(mode));
+        return List.of(new DocumentValue.Text("no"), new DocumentValue.Mapping(unknown),
+                new DocumentValue.Mapping(new LinkedHashMap<>()),
+                new DocumentValue.Mapping(untyped), new DocumentValue.Mapping(relative),
+                new DocumentValue.Mapping(window));
     }
 
     private static DocumentValue.Mapping arguments(String root) {

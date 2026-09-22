@@ -73,20 +73,18 @@ final class FindPagesContainingPhraseCommandTest {
     private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
 
     @Test
-    @DisplayName("the budget refuses rather than trims, one node past its limit")
-    void thebudgetRefusesRatherThanTrims() {
+    @DisplayName("a search finishes the tree it was asked about, one node past the old cap included")
+    void asearchFinishesTheTreeItWasAskedAbout() {
         corpus(PAGES);
-        final CommandHandler.Answer within = new FindPagesContainingPhraseHandler(CONTRACT)
-                .run(argument("/content/site", PHRASE, 100), readOnly(), budgeted(PAGES * 4));
-        assertInstanceOf(CommandHandler.Produced.class, within,
-                "a search inside its budget was refused");
-        final CommandHandler.Failed past = assertInstanceOf(CommandHandler.Failed.class,
+        final CommandHandler.Produced within = assertInstanceOf(CommandHandler.Produced.class,
+                new FindPagesContainingPhraseHandler(CONTRACT)
+                        .run(argument("/content/site", PHRASE, 100), readOnly(), budgeted(PAGES * 4)),
+                "the search was refused");
+        final CommandHandler.Produced past = assertInstanceOf(CommandHandler.Produced.class,
                 new FindPagesContainingPhraseHandler(CONTRACT)
                         .run(argument("/content/site", PHRASE, 100), readOnly(), budgeted(2)),
-                "a search past its budget answered with a list, and a caller reading it would"
-                        + " conclude the pages it never reached do not contain the phrase");
-        assertEquals(FindPagesContainingPhraseHandler.DISCOVERY_BUDGET_EXCEEDED, past.category());
-        assertTrue(past.detail().contains("refused rather than shortened"), past.detail());
+                "a tree larger than the old examination cap was refused");
+        assertEquals(within.result(), past.result());
     }
 
     /** How many pages the corpus holds. */

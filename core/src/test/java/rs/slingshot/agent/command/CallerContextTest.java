@@ -76,7 +76,11 @@ final class CallerContextTest {
                         rs.slingshot.agent.contract.ContractLimit
                                 .MAXIMUM_COMMAND_EXECUTION_MILLISECONDS),
                 Budget.time(CONTRACT).limit(), "a time budget is not the contract's own");
-        assertTrue(Budget.discovery(CONTRACT).limit() > 0);
+        assertEquals(CONTRACT.value(
+                        rs.slingshot.agent.contract.ContractLimit
+                                .MAXIMUM_DISCOVERY_CANDIDATE_NODES),
+                Budget.discovery(CONTRACT).limit(),
+                "a discovery budget is not the contract's candidate-node bound");
         assertThrows(IllegalArgumentException.class,
                 () -> new Budget(Budget.Kind.RESULT, 0),
                 "an unbounded budget was accepted, which is a command deciding for itself");

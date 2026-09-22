@@ -91,15 +91,8 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
             return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
                     + " read, which is the same answer as nothing being there");
         }
-        final Search search = new Search(command.phrase(), context.discovery().limit());
+        final Search search = new Search(command.phrase());
         search.under(root);
-        if (search.reachedTheBudget()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search reached the "
-                    + context.discovery().limit() + " nodes it may examine and stopped. It is"
-                    + " refused rather than shortened: a list of matches that stopped early reads"
-                    + " as the complete answer, and every page it did not reach would look like a"
-                    + " page that does not match.");
-        }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
                 search.found(), command.window(), FindPagesContainingPhraseCommand.WIRE_NAME,
                 arguments, context, contract);
@@ -112,43 +105,24 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
                 accepted.continuationToken()));
     }
 
-    /**
-     * One search of one subtree, carrying what it has examined and what it has found.
-     *
-     * <p>The count is held here rather than passed down and back because every level has to see
-     * the same one: a budget counted per branch is a budget a wide tree never reaches and a deep
-     * one reaches at once, which is a bound meaning something different for every shape of site.
-     * </p>
-     */
+    /** One search of one subtree, carrying what it has found. */
     private static final class Search {
 
         private final String phrase;
-        private final long budget;
         private final List<PageListingResult.Page> found = new ArrayList<>();
-        private final java.util.concurrent.atomic.AtomicLong examined =
-                new java.util.concurrent.atomic.AtomicLong();
 
-        Search(String phrase, long budget) {
+        Search(String phrase) {
             this.phrase = phrase.toLowerCase(Locale.ROOT);
-            this.budget = budget;
         }
 
         void under(Resource resource) {
-            if (reachedTheBudget()) {
-                return;
-            }
-            examined.incrementAndGet();
             if (ListChildPagesHandler.PAGE_TYPE.equals(typeOf(resource)) && contains(resource)) {
                 found.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
             }
             final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext() && !reachedTheBudget()) {
+            while (children.hasNext()) {
                 under(children.next());
             }
-        }
-
-        boolean reachedTheBudget() {
-            return examined.get() >= budget;
         }
 
         List<PageListingResult.Page> found() {
