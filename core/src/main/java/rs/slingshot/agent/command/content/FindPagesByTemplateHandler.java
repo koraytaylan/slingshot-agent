@@ -5,7 +5,6 @@ package rs.slingshot.agent.command.content;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -80,7 +79,14 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
                     + " and somebody planning a migration would believe it.");
         }
         final Search search = new Search(command.templatePath());
-        search.under(root);
+        final PageTree.Walk walked = PageTree.pagesUnder(resolver, root,
+                context.discovery().limit(), search::consider);
+        if (walked == PageTree.Walk.EXHAUSTED) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search read more than the "
+                    + context.discovery().limit() + " nodes it is allowed before it had visited"
+                    + " every page, and stopped rather than answer with part of them; name a"
+                    + " narrower root under " + PageTree.CONTENT + " instead");
+        }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
                 search.found(), command.window(), FindPagesByTemplateCommand.WIRE_NAME, arguments,
                 context, contract);
@@ -103,12 +109,8 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
             this.template = template;
         }
 
-        void under(Resource resource) {
-            matched(resource).ifPresent(found::add);
-            final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext()) {
-                under(children.next());
-            }
+        void consider(Resource page) {
+            matched(page).ifPresent(found::add);
         }
 
         List<PageListingResult.Page> found() {

@@ -54,16 +54,16 @@ final class FindPagesByTemplateCommandTest {
     }
 
     @Test
-    void asearchFinishesTheTreeItWasAskedAbout() {
+    @DisplayName("a tree past the examination budget is refused rather than answered in part")
+    void atreePastTheBudgetIsRefused() {
         corpus();
-        final CommandHandler.Answer whole = new FindPagesByTemplateHandler(CONTRACT).run(
-                argument("/content/site", TEMPLATE, 100), readOnly(), context());
-        final CommandHandler.Answer pastTheOldCap = new FindPagesByTemplateHandler(CONTRACT).run(
-                argument("/content/site", TEMPLATE, 100), readOnly(), narrowContext());
-        assertInstanceOf(CommandHandler.Produced.class, pastTheOldCap,
-                "a tree larger than the old examination cap was refused");
-        assertEquals(((CommandHandler.Produced) whole).result(),
-                ((CommandHandler.Produced) pastTheOldCap).result());
+        assertInstanceOf(CommandHandler.Produced.class, new FindPagesByTemplateHandler(CONTRACT)
+                .run(argument("/content/site", TEMPLATE, 100), readOnly(), context()));
+        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                new FindPagesByTemplateHandler(CONTRACT).run(
+                        argument("/content/site", TEMPLATE, 100), readOnly(), narrowContext()),
+                "a search past its budget was answered with part of the tree");
+        assertEquals(FindPagesByTemplateHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
     }
 
     private static final AgentContract CONTRACT = contract();

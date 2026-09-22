@@ -4,7 +4,6 @@
 package rs.slingshot.agent.command.content;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import org.apache.sling.api.resource.Resource;
@@ -92,7 +91,14 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
                     + " read, which is the same answer as nothing being there");
         }
         final Search search = new Search(command.phrase());
-        search.under(root);
+        final PageTree.Walk walked = PageTree.pagesUnder(resolver, root,
+                context.discovery().limit(), search::consider);
+        if (walked == PageTree.Walk.EXHAUSTED) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search read more than the "
+                    + context.discovery().limit() + " nodes it is allowed before it had visited"
+                    + " every page, and stopped rather than answer with part of them; name a"
+                    + " narrower root under " + PageTree.CONTENT + " instead");
+        }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
                 search.found(), command.window(), FindPagesContainingPhraseCommand.WIRE_NAME,
                 arguments, context, contract);
@@ -115,13 +121,9 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
             this.phrase = phrase.toLowerCase(Locale.ROOT);
         }
 
-        void under(Resource resource) {
-            if (ListChildPagesHandler.PAGE_TYPE.equals(typeOf(resource)) && contains(resource)) {
-                found.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
-            }
-            final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext()) {
-                under(children.next());
+        void consider(Resource page) {
+            if (contains(page)) {
+                found.add(new PageListingResult.Page(page.getPath(), titleOf(page)));
             }
         }
 
@@ -147,11 +149,6 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
         return content == null ? ""
                 : String.valueOf(content.getValueMap()
                         .get(ListChildPagesHandler.TITLE_PROPERTY, ""));
-    }
-
-    private static String typeOf(Resource resource) {
-        return String.valueOf(resource.getValueMap()
-                .get(ListChildPagesHandler.TYPE_PROPERTY, String.class));
     }
 
     /**
