@@ -186,7 +186,9 @@ public final class ContentCatalogHandler implements CommandHandler {
         Resource current = root;
         while (current != null) {
             consider(current, root.getPath(), components, pages);
-            pending.push(current.listChildren());
+            if (descends(current)) {
+                pending.push(current.listChildren());
+            }
             final Resource next = nextChild(pending);
             if (next == null) {
                 break;
@@ -231,12 +233,12 @@ public final class ContentCatalogHandler implements CommandHandler {
     /**
      * The node a catalogue walks, which is the path the caller named when that node is there.
      *
-     * <p>A caller names the environment where the repository names the project: {@code
-     * /apps/acme-rde} is not a node when the project is {@code /apps/acme}. The
-     * missing segment is the existing child's name extended by a hyphen, or, for component
-     * definitions and no such child, the nearest {@code /apps} or {@code /libs} ancestor. A
-     * catalogue that refused the first and had no second would answer that nothing exists
-     * because of how the folder was spelled.</p>
+     * <p>Every component available on an author is a definition under {@code /apps}. An
+     * environment name is that author, so {@code /apps/acme-rde} names no folder and
+     * the walk starts at the nearest {@code /apps} or {@code /libs} ancestor. A project folder
+     * the caller named exactly, such as {@code /apps/acme}, stays that folder. Other
+     * catalogues still accept a missing segment that is one existing child's name extended by
+     * a hyphen.</p>
      *
      * @param resolver the caller's read-only resolver
      * @param path the path the caller named
@@ -261,15 +263,10 @@ public final class ContentCatalogHandler implements CommandHandler {
         if (deepest == null) {
             return null;
         }
-        final String rest = path.substring(deepest.getPath().length());
-        final Resource resolved = descend(deepest, rest);
-        if (resolved != null) {
-            return resolved;
-        }
         if (kind == Kind.COMPONENT_DEFINITIONS && underAppsOrLibs(deepest.getPath())) {
             return deepest;
         }
-        return null;
+        return descend(deepest, path.substring(deepest.getPath().length()));
     }
 
     private static Resource descend(Resource parent, String rest) {
@@ -320,6 +317,24 @@ public final class ContentCatalogHandler implements CommandHandler {
     private static boolean underAppsOrLibs(String path) {
         return "/apps".equals(path) || path.startsWith("/apps/") || "/libs".equals(path)
                 || path.startsWith("/libs/");
+    }
+
+    /**
+     * Whether the walk opens this node's children.
+     *
+     * <p>A content fragment is the asset itself. Its children are renditions and metadata, and a
+     * folder's {@code jcr:content} is the folder, not another fragment. Opening either turns a
+     * catalogue of assets into a walk of every binary under the dam, which outlives the request
+     * the catalogue is answered on.</p>
+     */
+    private boolean descends(Resource current) {
+        if (kind != Kind.CONTENT_FRAGMENTS) {
+            return true;
+        }
+        if ("jcr:content".equals(current.getName())) {
+            return false;
+        }
+        return !FragmentHandlers.CONTENT_FRAGMENT_TYPE.equals(ChildListingHandler.typeOf(current));
     }
 
     private static Resource nextChild(Deque<Iterator<Resource>> pending) {

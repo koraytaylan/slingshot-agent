@@ -46,14 +46,29 @@ final class ContentCatalogCommandTest {
     private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
 
     @Test
-    @DisplayName("a project folder named as the environment still lists that project's definitions")
-    void aProjectFolderNamedAsTheEnvironmentListsItsDefinitions() {
+    @DisplayName("an environment-shaped anchor lists every definition under /apps")
+    void anEnvironmentShapedAnchorListsEveryDefinitionUnderApps() {
+        sling.create().resource("/apps/acme/components/text", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
+        sling.create().resource("/apps/other/components/title", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
+        sling.create().resource("/libs/core/components/image", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
+        final DocumentValue.Mapping answered = listed(
+                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, "/apps/acme-rde");
+        assertEquals(List.of("/apps/acme/components/text", "/apps/other/components/title"),
+                paths(answered));
+    }
+
+    @Test
+    @DisplayName("a named project folder lists that project's definitions")
+    void aNamedProjectFolderListsThatProjectsDefinitions() {
         sling.create().resource("/apps/acme/components/text", Map.of(
                 ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
         sling.create().resource("/apps/other/components/title", Map.of(
                 ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
         final DocumentValue.Mapping answered = listed(
-                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, "/apps/acme-rde");
+                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, "/apps/acme");
         assertEquals(List.of("/apps/acme/components/text"), paths(answered));
     }
 
@@ -96,9 +111,15 @@ final class ContentCatalogCommandTest {
                 ListChildPagesHandler.TYPE_PROPERTY, FragmentHandlers.CONTENT_FRAGMENT_TYPE));
         sling.create().resource("/content/dam/site/photo/jcr:content", Map.of(
                 FragmentHandlers.CONTENT_FRAGMENT_FLAG, false));
+        sling.create().resource("/content/dam/site/article/jcr:content/renditions/original");
+        sling.create().resource("/content/dam/site/later", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, FragmentHandlers.CONTENT_FRAGMENT_TYPE));
+        sling.create().resource("/content/dam/site/later/jcr:content", Map.of(
+                FragmentHandlers.CONTENT_FRAGMENT_FLAG, true));
         final DocumentValue.Mapping answered = listed(ContentCatalogHandler.Kind.CONTENT_FRAGMENTS,
                 "/content/dam");
-        assertEquals(List.of("/content/dam/site/article"), paths(answered));
+        assertEquals(List.of("/content/dam/site/article", "/content/dam/site/later"),
+                paths(answered));
     }
 
     @Test
