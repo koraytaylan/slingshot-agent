@@ -35,8 +35,6 @@ public record ListResourceMappingsCommand(ResultWindow window) {
     public enum Refusal {
         /** The argument is not an object. */
         NOT_A_DOCUMENT,
-        /** The window is absent, and this command chooses no page for a caller. */
-        MEMBER_ABSENT,
         /**
          * A member nobody declared is present.
          *
@@ -88,10 +86,6 @@ public record ListResourceMappingsCommand(ResultWindow window) {
                     + " command's argument. There is no filter: rules interact, so a filtered view"
                     + " hides the ones that would have applied first and the reader concludes"
                     + " something wrong about the very thing they were checking.");
-        }
-        if (mapping.member(ResultWindow.ARGUMENT_MEMBER).isEmpty()) {
-            return new Refused(Refusal.MEMBER_ABSENT,
-                    ResultWindow.ARGUMENT_MEMBER + " is required; this command chooses no page");
         }
         final ResultWindow.Outcome window =
                 ResultWindow.asked(mapping, contract);

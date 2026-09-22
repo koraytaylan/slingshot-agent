@@ -121,8 +121,11 @@ final class ListResourceMappingsCommandTest {
                 refusalOf(new DocumentValue.Mapping(members)).refusal(),
                 "a filter was ignored rather than refused, and a caller who sent one would believe"
                         + " they had read a filtered view of rules that interact");
-        assertEquals(ListResourceMappingsCommand.Refusal.MEMBER_ABSENT,
-                refusalOf(new DocumentValue.Mapping(new LinkedHashMap<>())).refusal());
+        assertInstanceOf(ListResourceMappingsCommand.Held.class,
+                ListResourceMappingsCommand.of(new DocumentValue.Mapping(new LinkedHashMap<>()),
+                        CONTRACT),
+                "an argument naming no window was refused, and the client's own schema makes the"
+                        + " window optional");
         assertEquals(ListResourceMappingsCommand.Refusal.WINDOW_REFUSED,
                 refusalOf(argument(0)).refusal());
     }
