@@ -5,7 +5,6 @@ package rs.slingshot.agent.command.content;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import org.apache.sling.api.resource.Resource;
@@ -84,7 +83,15 @@ public final class QueryPathsHandler implements CommandHandler {
             return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
                     + " read, which is the same answer as nothing being there");
         }
-        final List<String> gathered = gather(root, command);
+        final Optional<List<String>> walked = gather(root, command, context);
+        if (walked.isEmpty()) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search examined more than the "
+                    + context.discovery().limit() + " nodes or ran longer than the "
+                    + context.time().limit() + " milliseconds it is allowed before it had visited"
+                    + " every node under " + command.rootPath() + ", and stopped rather than"
+                    + " answer with part of them; name a narrower root instead");
+        }
+        final List<String> gathered = walked.get();
         final Optional<PagedQuery> query = context.paging() instanceof CallerContext.Available paging
                 ? Optional.of(new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(),
                         paging.generation())) : Optional.empty();
@@ -211,27 +218,15 @@ public final class QueryPathsHandler implements CommandHandler {
         return one == null ? List.of() : List.of(one);
     }
 
-    private static List<String> gather(Resource root, QueryPathsCommand command) {
+    private static Optional<List<String>> gather(Resource root, QueryPathsCommand command,
+                                                 CallerContext context) {
         final List<String> found = new ArrayList<>();
-        final java.util.Deque<Iterator<Resource>> pending = new java.util.ArrayDeque<>();
-        java.util.Optional<Resource> held = java.util.Optional.of(root);
-        while (held.isPresent()) {
-            final Resource current = held.orElseThrow();
-            if (matches(current, command)) {
-                found.add(current.getPath());
+        final boolean finished = BoundedWalk.every(root, context, resource -> true, resource -> {
+            if (matches(resource, command)) {
+                found.add(resource.getPath());
             }
-            pending.push(current.listChildren());
-            held = java.util.Optional.empty();
-            while (!pending.isEmpty() && held.isEmpty()) {
-                final Iterator<Resource> children = pending.peek();
-                if (children.hasNext()) {
-                    held = java.util.Optional.ofNullable(children.next());
-                } else {
-                    pending.pop();
-                }
-            }
-        }
-        return found.stream().sorted().toList();
+        });
+        return finished ? Optional.of(found.stream().sorted().toList()) : Optional.empty();
     }
 
     private static String typeOf(Resource resource) {

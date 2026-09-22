@@ -60,19 +60,28 @@ final class FindAssetsByMetadataCommandTest {
     }
 
     @Test
-    void asearchFinishesTheTreeItWasAskedAbout() {
+    @DisplayName("a search reaching its node budget exactly answers, and one node more is refused")
+    void asearchPastItsNodeBudgetIsRefusedRatherThanAnsweredInPart() {
         corpus();
         final DocumentValue.Mapping whole = assertInstanceOf(CommandHandler.Produced.class,
                 new FindAssetsByMetadataHandler(CONTRACT).run(
                         argument("/content/dam", new LinkedHashMap<>()), readOnly(), context()),
                 "the search was refused").result();
-        final DocumentValue.Mapping pastTheOldCap = assertInstanceOf(CommandHandler.Produced.class,
+        final DocumentValue.Mapping exactly = assertInstanceOf(CommandHandler.Produced.class,
                 new FindAssetsByMetadataHandler(CONTRACT).run(
                         argument("/content/dam", new LinkedHashMap<>()), readOnly(),
-                        narrowContext()),
-                "a tree larger than the old examination cap was refused").result();
-        assertEquals(pathsFrom(whole), pathsFrom(pastTheOldCap));
+                        budgeted(FOLDER_AND_ITS_ASSETS)),
+                "a search inside its budget was refused").result();
+        assertEquals(pathsFrom(whole), pathsFrom(exactly));
+        final CommandHandler.Failed past = assertInstanceOf(CommandHandler.Failed.class,
+                new FindAssetsByMetadataHandler(CONTRACT).run(
+                        argument("/content/dam", new LinkedHashMap<>()), readOnly(),
+                        budgeted(FOLDER_AND_ITS_ASSETS - 1)));
+        assertEquals(FindAssetsByMetadataHandler.DISCOVERY_BUDGET_EXCEEDED, past.category());
     }
+
+    /** The corpus folder and its two assets, whose renditions and metadata are never walked. */
+    private static final long FOLDER_AND_ITS_ASSETS = 3;
 
     private static final AgentContract CONTRACT = contract();
 
@@ -289,8 +298,8 @@ final class FindAssetsByMetadataCommandTest {
         return ReadOnlyResolver.around(sling.resourceResolver());
     }
 
-    private static CallerContext narrowContext() {
-        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, 1),
+    private static CallerContext budgeted(long nodes) {
+        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, nodes),
                 Budget.time(CONTRACT),
                 new Budget(Budget.Kind.RESULT,
                         CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),

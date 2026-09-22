@@ -3,9 +3,6 @@
 
 package rs.slingshot.agent.command.content;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -134,27 +131,7 @@ public final class FindPagesUsingComponentsHandler implements CommandHandler {
          * @return whether every node was examined; false where a budget ran out first
          */
         boolean under(Resource root, CallerContext context) {
-            final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
-            final long started = System.currentTimeMillis();
-            long examined = 1;
-            matchOn(root);
-            pending.push(root.listChildren());
-            while (!pending.isEmpty()) {
-                final Iterator<Resource> children = pending.peek();
-                if (!children.hasNext()) {
-                    pending.pop();
-                    continue;
-                }
-                examined++;
-                if (context.exceeded(examined, System.currentTimeMillis() - started, 0)
-                        .isPresent()) {
-                    return false;
-                }
-                final Resource next = children.next();
-                matchOn(next);
-                pending.push(next.listChildren());
-            }
-            return true;
+            return BoundedWalk.every(root, context, resource -> true, this::matchOn);
         }
 
         private void matchOn(Resource resource) {

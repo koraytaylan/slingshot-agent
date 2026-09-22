@@ -92,10 +92,11 @@ public final class FindPagesContainingPhraseHandler implements CommandHandler {
         }
         final Search search = new Search(command.phrase());
         final PageTree.Walk walked = PageTree.pagesUnder(resolver, root,
-                context.discovery().limit(), search::consider);
+                context.discovery().limit(), context.time().limit(), search::consider);
         if (walked == PageTree.Walk.EXHAUSTED) {
             return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search read more than the "
-                    + context.discovery().limit() + " nodes it is allowed before it had visited"
+                    + context.discovery().limit() + " nodes or ran longer than the " + context.time().limit()
+                    + " milliseconds it is allowed before it had visited"
                     + " every page, and stopped rather than answer with part of them; name a"
                     + " narrower root under " + PageTree.CONTENT + " instead");
         }

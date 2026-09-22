@@ -4,10 +4,7 @@
 package rs.slingshot.agent.command.content;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import org.apache.sling.api.resource.Resource;
@@ -198,23 +195,10 @@ public final class ContentCatalogHandler implements CommandHandler {
     private Optional<Gathered> gather(Resource root, CallerContext context) {
         final List<ComponentListingResult.Component> components = new ArrayList<>();
         final List<PageListingResult.Page> pages = new ArrayList<>();
-        final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
-        final long started = System.currentTimeMillis();
-        long examined = 0;
-        Optional<Resource> current = Optional.of(root);
-        while (current.isPresent()) {
-            examined++;
-            if (context.exceeded(examined, System.currentTimeMillis() - started, 0).isPresent()) {
-                return Optional.empty();
-            }
-            consider(current.get(), root.getPath(), components, pages);
-            if (descends(current.get())) {
-                pending.push(current.get().listChildren());
-            }
-            current = nextChild(pending);
-        }
-        return Optional.of(new Gathered(ComponentListingResult.ascending(components),
-                PageListingResult.ascending(pages)));
+        final boolean finished = BoundedWalk.every(root, context, this::descends,
+                resource -> consider(resource, root.getPath(), components, pages));
+        return finished ? Optional.of(new Gathered(ComponentListingResult.ascending(components),
+                PageListingResult.ascending(pages))) : Optional.empty();
     }
 
     private void consider(Resource resource, String anchor,
@@ -340,17 +324,6 @@ public final class ContentCatalogHandler implements CommandHandler {
         return kind != Kind.CONTENT_FRAGMENTS
                 || !"jcr:content".equals(current.getName())
                 && !FragmentHandlers.CONTENT_FRAGMENT_TYPE.equals(ChildListingHandler.typeOf(current));
-    }
-
-    private static Optional<Resource> nextChild(Deque<Iterator<Resource>> pending) {
-        while (!pending.isEmpty()) {
-            final Iterator<Resource> children = pending.peek();
-            if (children.hasNext()) {
-                return Optional.of(children.next());
-            }
-            pending.pop();
-        }
-        return Optional.empty();
     }
 
     private Optional<String> definitionType(Resource resource) {

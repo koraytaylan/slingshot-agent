@@ -226,6 +226,21 @@ final class QueryPathsCommandTest {
     }
 
     @Test
+    @DisplayName("a search reaching its node budget exactly answers, and one node more is refused")
+    void asearchPastItsNodeBudgetIsRefused() throws RepositoryException {
+        corpus(SMALL);
+        final long everyNode = SMALL + 1;
+        assertInstanceOf(CommandHandler.Produced.class, new QueryPathsHandler(CONTRACT).run(
+                argument("/content/corpus", null, window("initial", 0, PAGE, "")), readOnly(),
+                budgeted(everyNode)));
+        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                new QueryPathsHandler(CONTRACT).run(
+                        argument("/content/corpus", null, window("initial", 0, PAGE, "")),
+                        readOnly(), budgeted(everyNode - 1)));
+        assertEquals(QueryPathsHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
+    }
+
+    @Test
     @DisplayName("a search finds every node of the asked-for type and no node of another")
     void thesearchFindsExactlyTheAskedForType() throws RepositoryException {
         corpus(SMALL);
@@ -338,6 +353,13 @@ final class QueryPathsCommandTest {
 
     private ResourceResolver readOnly() {
         return ReadOnlyResolver.around(sling.resourceResolver());
+    }
+
+    private static CallerContext budgeted(long nodes) {
+        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, nodes),
+                Budget.time(CONTRACT), new Budget(Budget.Kind.RESULT,
+                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
+                ProgressSink.under(CONTRACT));
     }
 
     private static CallerContext context() {

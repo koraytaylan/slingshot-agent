@@ -49,10 +49,13 @@ final class PageTree {
             List.of("sling:Folder", "sling:OrderedFolder", "nt:folder");
 
     private final long budget;
+    private final long timeLimitMilliseconds;
+    private final long startedMilliseconds = System.currentTimeMillis();
     private final AtomicLong examined = new AtomicLong();
 
-    private PageTree(long budget) {
+    private PageTree(long budget, long timeLimitMilliseconds) {
         this.budget = budget;
+        this.timeLimitMilliseconds = timeLimitMilliseconds;
     }
 
     /** How a walk ended. */
@@ -74,18 +77,43 @@ final class PageTree {
      */
     static Walk pagesUnder(ResourceResolver resolver, Resource anchor, long budget,
                            Consumer<Resource> visitor) {
+        return pagesUnder(resolver, anchor, budget, Long.MAX_VALUE, visitor);
+    }
+
+    /**
+     * Visits every page under one anchor inside a node budget and a time limit.
+     *
+     * <p>The time limit is the command's own. A walk that outlived it would still be reading when
+     * the request it answers on has already been given up, which is a caller told nothing while an
+     * author keeps working; stopping at the limit is what lets the refusal reach them.</p>
+     *
+     * @param resolver the caller's read-only resolver
+     * @param anchor the node the caller named
+     * @param budget how many nodes the walk may read
+     * @param timeLimitMilliseconds how long the walk may take
+     * @param visitor what is done with each page
+     * @return whether every page was visited
+     */
+    static Walk pagesUnder(ResourceResolver resolver, Resource anchor, long budget,
+                           long timeLimitMilliseconds, Consumer<Resource> visitor) {
         final Optional<Resource> start = "/".equals(anchor.getPath())
                 ? Optional.ofNullable(resolver.getResource(CONTENT)) : Optional.of(anchor);
-        final PageTree tree = new PageTree(budget);
+        final PageTree tree = new PageTree(budget, timeLimitMilliseconds);
         start.ifPresent(top -> tree.walk(top, visitor));
-        return tree.examined.get() > budget ? Walk.EXHAUSTED : Walk.FINISHED;
+        return tree.within() ? Walk.FINISHED : Walk.EXHAUSTED;
+    }
+
+    /** Whether the walk is still inside both its node budget and its time limit. */
+    private boolean within() {
+        return examined.get() <= budget
+                && System.currentTimeMillis() - startedMilliseconds <= timeLimitMilliseconds;
     }
 
     private void walk(Resource top, Consumer<Resource> visitor) {
         final Deque<Level> pending = new ArrayDeque<>();
         examined.incrementAndGet();
         Optional<Resource> next = Optional.of(top);
-        while (next.isPresent() && examined.get() <= budget) {
+        while (next.isPresent() && within()) {
             final Resource current = next.orElseThrow();
             final Opens opens = isPage(current) || level(pending) == Opens.PAGES
                     ? Opens.PAGES : Opens.FOLDERS_AND_PAGES;
@@ -98,7 +126,7 @@ final class PageTree {
     }
 
     private Optional<Resource> nextOpened(Deque<Level> pending) {
-        while (!pending.isEmpty() && examined.get() <= budget) {
+        while (!pending.isEmpty() && within()) {
             final Level level = pending.peek();
             final Optional<Resource> child = level.children().hasNext()
                     ? Optional.of(level.children().next()) : Optional.empty();

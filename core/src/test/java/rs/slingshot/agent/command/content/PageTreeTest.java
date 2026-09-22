@@ -89,6 +89,21 @@ final class PageTreeTest {
                 readOnly().getResource("/content/site"), NARROW, page -> { }));
     }
 
+    @Test
+    @DisplayName("a walk with no time left stops and says so, and one with time finishes")
+    void aWalkPastItsTimeLimitSaysSo() {
+        page("/content/site");
+        page("/content/site/first");
+        final Resource root = readOnly().getResource("/content/site");
+        assertEquals(PageTree.Walk.EXHAUSTED, PageTree.pagesUnder(readOnly(), root, WIDE,
+                NO_TIME_LEFT, page -> { }));
+        assertEquals(PageTree.Walk.FINISHED, PageTree.pagesUnder(readOnly(), root, WIDE,
+                Long.MAX_VALUE, page -> { }));
+    }
+
+    /** A time limit already spent before the walk begins. */
+    private static final long NO_TIME_LEFT = -1;
+
     private List<String> visited(String anchor, long budget) {
         final Resource root = readOnly().getResource(anchor);
         final List<String> pages = new ArrayList<>();

@@ -5,7 +5,6 @@ package rs.slingshot.agent.command.content;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -77,7 +76,13 @@ public final class FindAssetsByMetadataHandler implements CommandHandler {
                     + " read, which is the same answer as nothing being there");
         }
         final Search search = new Search(command);
-        search.under(root);
+        if (!search.under(root, context)) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search examined more than the "
+                    + context.discovery().limit() + " nodes or ran longer than the "
+                    + context.time().limit() + " milliseconds it is allowed before it had visited"
+                    + " every asset under " + command.rootPath() + ", and stopped rather than"
+                    + " answer with part of them; name a narrower folder instead");
+        }
         final PagingSupport.Outcome<FindAssetsByMetadataResult.MatchedAsset> page =
                 PagingSupport.page(search.found(), command.window(),
                         FindAssetsByMetadataCommand.WIRE_NAME, arguments, context,
@@ -101,12 +106,25 @@ public final class FindAssetsByMetadataHandler implements CommandHandler {
             this.command = command;
         }
 
-        void under(Resource resource) {
-            matched(resource).ifPresent(found::add);
-            final Iterator<Resource> children = resource.listChildren();
-            while (children.hasNext()) {
-                under(children.next());
-            }
+        /**
+         * Examines every folder and asset under one root, inside the caller's budgets.
+         *
+         * <p>An asset is not opened: what lies below one is its renditions and its metadata, and
+         * the metadata is read from the asset itself. Opening them would make a search of a
+         * library a walk of every rendition in it.</p>
+         *
+         * @param root where the search starts
+         * @param context the caller's budgets
+         * @return whether every candidate was examined; false where a budget ran out first
+         */
+        boolean under(Resource root, CallerContext context) {
+            return BoundedWalk.every(root, context, resource -> !isAsset(resource),
+                    resource -> matched(resource).ifPresent(found::add));
+        }
+
+        private static boolean isAsset(Resource resource) {
+            return ASSET_TYPE.equals(String.valueOf(resource.getValueMap()
+                    .get(ListChildPagesHandler.TYPE_PROPERTY, String.class)));
         }
 
         List<FindAssetsByMetadataResult.MatchedAsset> found() {
