@@ -2224,3 +2224,8 @@ reason = "The repository's own user manager, reached through the caller's own se
 name = "DefaultJobInventory"
 pattern = "accessor"
 reason = "The platform's own job manager, answered rather than held: it keeps nothing between calls, reads the queues and the jobs the client asks about, and reports a job's property names and never a value. A cancellation arrives here only after the deployment's control gate has permitted it."
+
+[[type]]
+name = "DefaultWorkflowService"
+pattern = "accessor"
+reason = "The platform's own workflow engine, reached through the caller's own workflow session and answered rather than held: a model or an instance the caller cannot see is one it answers as not there. Whether the caller could change a payload is decided before a start reaches it, and every control reads the instance's state back rather than assuming it."

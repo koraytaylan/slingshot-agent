@@ -124,6 +124,34 @@ reason = "The logging interface the one log writer writes through, so a refusal 
 # on the other side of the seam it imports.
 
 [[package]]
+name = "com.adobe.granite.workflow"
+range = "[1.2,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The workflow engine's session, adapted from the caller's own resolver, through which every workflow command asks and acts: a model or an instance the caller cannot see is one the engine does not show them."
+
+[[package]]
+name = "com.adobe.granite.workflow.collection.util"
+range = "[1.0,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The bounded result set an instance search is read through, so a search is limited where the engine can limit it rather than read whole."
+
+[[package]]
+name = "com.adobe.granite.workflow.exec"
+range = "[1.2,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "Instances, their work items, and the payload a workflow runs on: what the search, the inspection and the three controls report."
+
+[[package]]
+name = "com.adobe.granite.workflow.model"
+range = "[1.2,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "Workflow models, which the listing reports and a start runs."
+
+[[package]]
 name = "org.apache.sling.event.jobs"
 range = "[2.0,3)"
 bundle = "aem"

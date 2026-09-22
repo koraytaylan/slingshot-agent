@@ -341,17 +341,29 @@ final class DefaultCommandRuntimeTest {
         final rs.slingshot.agent.command.platform.ContentAdmission admission =
                 (paths, session) -> new rs.slingshot.agent.command.platform.ContentAdmission
                         .Admitted(paths.size());
+        final Class<?>[] engine = {rs.slingshot.agent.command.platform.WorkflowService.class};
+        final rs.slingshot.agent.command.platform.WorkflowService workflows =
+                (rs.slingshot.agent.command.platform.WorkflowService) java.lang.reflect.Proxy
+                        .newProxyInstance(Thread.currentThread().getContextClassLoader(), engine,
+                                (proxy, method, arguments) -> {
+                                    throw new UnsupportedOperationException(method.getName());
+                                });
         runtime.deactivate();
         runtime.jobsAvailable(inventory);
         runtime.admissionAvailable(admission);
+        runtime.workflowsAvailable(workflows);
         runtime.activate();
+        assertTrue(runtime.serves("start_workflow"));
+        assertTrue(runtime.serves("set_workflow_instance_suspension"));
         assertTrue(runtime.serves("find_sling_jobs"));
         assertTrue(runtime.serves("cancel_sling_job"));
         assertTrue(runtime.serves("replicate_content"));
         runtime.deactivate();
         runtime.jobsUnavailable(inventory);
         runtime.admissionUnavailable(admission);
+        runtime.workflowsUnavailable(workflows);
         runtime.activate();
+        assertFalse(runtime.serves("list_workflow_models"));
         assertFalse(runtime.serves("find_sling_jobs"),
                 "a job command stayed advertised after its adapter went away");
         assertFalse(runtime.serves("replicate_content"));

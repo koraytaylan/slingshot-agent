@@ -87,6 +87,7 @@ import rs.slingshot.agent.command.page.UpdatePageCommand;
 import rs.slingshot.agent.command.page.UpdatePageHandler;
 import rs.slingshot.agent.command.platform.ContentAdmission;
 import rs.slingshot.agent.command.platform.JobInventory;
+import rs.slingshot.agent.command.platform.WorkflowService;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.execution.ExecutionOutcome;
 import rs.slingshot.agent.execution.LogicalOperation;
@@ -207,6 +208,26 @@ public final class DefaultCommandRuntime implements CommandRuntime {
      */
     public void admissionUnavailable(ContentAdmission admission) {
         seams.updateAndGet(held -> held.withAdmissions(java.util.List.of()));
+    }
+
+    /**
+     * Binds the workflow service the platform bundle provides.
+     *
+     * @param workflows what answers the six workflow commands
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL,
+            policyOption = ReferencePolicyOption.GREEDY, unbind = "workflowsUnavailable")
+    public void workflowsAvailable(WorkflowService workflows) {
+        seams.updateAndGet(held -> held.withWorkflows(java.util.List.of(workflows)));
+    }
+
+    /**
+     * Unbinds the workflow service, after which the workflow commands are not advertised.
+     *
+     * @param workflows the service going away
+     */
+    public void workflowsUnavailable(WorkflowService workflows) {
+        seams.updateAndGet(held -> held.withWorkflows(java.util.List.of()));
     }
 
     /** Revokes the runtime before the DS component is released. */

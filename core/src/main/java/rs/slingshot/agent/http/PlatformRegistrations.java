@@ -12,10 +12,16 @@ import rs.slingshot.agent.command.platform.ControlCapability;
 import rs.slingshot.agent.command.platform.DefaultPrincipalDirectory;
 import rs.slingshot.agent.command.platform.JobInventory;
 import rs.slingshot.agent.command.platform.PlatformControl;
+import rs.slingshot.agent.command.platform.WorkflowService;
 import rs.slingshot.agent.command.principal.PrincipalCommands;
 import rs.slingshot.agent.command.principal.PrincipalHandler;
 import rs.slingshot.agent.command.replication.ReplicateContentCommand;
 import rs.slingshot.agent.command.replication.ReplicateContentHandler;
+import rs.slingshot.agent.command.workflow.FindWorkflowInstancesCommand;
+import rs.slingshot.agent.command.workflow.ListWorkflowModelsCommand;
+import rs.slingshot.agent.command.workflow.StartWorkflowCommand;
+import rs.slingshot.agent.command.workflow.WorkflowHandler;
+import rs.slingshot.agent.command.workflow.WorkflowInstanceCommand;
 import rs.slingshot.agent.contract.AgentContract;
 
 /**
@@ -85,7 +91,35 @@ final class PlatformRegistrations {
         seams.admissions().forEach(admission -> registered.add(new CommandDispatch.Registration(
                 ReplicateContentCommand.WIRE_NAME, new ReplicateContentHandler(contract,
                         admission))));
+        seams.workflows().forEach(workflows ->
+                registered.addAll(workflows(contract, workflows, control)));
         return List.copyOf(registered);
+    }
+
+    private static List<CommandDispatch.Registration> workflows(AgentContract contract,
+                                                               WorkflowService workflows,
+                                                               PlatformControl control) {
+        return List.of(
+                workflow(contract, ListWorkflowModelsCommand.WIRE_NAME, WorkflowHandler.Kind.MODELS,
+                        workflows, control),
+                workflow(contract, StartWorkflowCommand.WIRE_NAME, WorkflowHandler.Kind.START,
+                        workflows, control),
+                workflow(contract, FindWorkflowInstancesCommand.WIRE_NAME,
+                        WorkflowHandler.Kind.INSTANCES, workflows, control),
+                workflow(contract, WorkflowInstanceCommand.INSPECT_WIRE_NAME,
+                        WorkflowHandler.Kind.INSPECTION, workflows, control),
+                workflow(contract, WorkflowInstanceCommand.TERMINATE_WIRE_NAME,
+                        WorkflowHandler.Kind.TERMINATION, workflows, control),
+                workflow(contract, WorkflowInstanceCommand.SUSPEND_WIRE_NAME,
+                        WorkflowHandler.Kind.SUSPENSION, workflows, control));
+    }
+
+    private static CommandDispatch.Registration workflow(AgentContract contract, String wireName,
+                                                        WorkflowHandler.Kind kind,
+                                                        WorkflowService workflows,
+                                                        PlatformControl control) {
+        return new CommandDispatch.Registration(wireName, new WorkflowHandler(contract, kind,
+                workflows, control));
     }
 
     private static List<CommandDispatch.Registration> jobs(AgentContract contract,
