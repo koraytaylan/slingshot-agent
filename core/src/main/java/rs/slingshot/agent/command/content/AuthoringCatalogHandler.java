@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
@@ -21,11 +23,21 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * The editable page templates, or the content fragment models, under one anchor.
  *
- * <p>Both are a walk of the whole subtree the caller named. A query would ask
- * the repository for every {@code cq:Template} and then throw away the ones that are not the
- * catalogue being asked for, and the two catalogues are told apart by where they sit, which is a
- * fact about the path rather than a property an index covers. The walk finishes that subtree,
- * because a shortened page reads as the whole answer.</p>
+ * <p>Neither is searched for, because neither can be just anywhere. Each sits directly inside one
+ * fixed folder of a configuration — {@code settings/wcm/templates} or {@code
+ * settings/dam/cfm/models} — and configurations sit under {@code /conf}, nested as deep as a
+ * site's own folders go, with {@code /apps} and {@code /libs} as the two global ones. So this goes
+ * to those folders by name: it walks only the configuration folders under the anchor, reads each
+ * one's catalogue folder directly, and lists that folder's children. It never opens the rest of a
+ * configuration's settings, a template's own structure, or any content, which is where an author's
+ * nodes actually are. An anchor above {@code /conf}, such as {@code /}, is every configuration; an
+ * anchor that holds no configuration holds no catalogue.</p>
+ *
+ * <p>The alternative was a walk of every node under the anchor, which at {@code /} is the whole
+ * repository and outlives the request it is answered on; a query would need an index, and nothing
+ * here issues one. What this does examine is still counted against the discovery budget, so a
+ * configuration tree nobody expected is refused as too large rather than left to run the request
+ * out, and the answer is never a shortened page that reads as the whole catalogue.</p>
  */
 public final class AuthoringCatalogHandler implements CommandHandler {
 
@@ -37,13 +49,26 @@ public final class AuthoringCatalogHandler implements CommandHandler {
         FRAGMENT_MODELS
     }
 
-    /** The segments immediately above an editable page template, in order. */
-    private static final List<String> PAGE_TEMPLATE_PARENTS =
-            List.of("settings", "wcm", "templates");
+    /** The folder, relative to a configuration, every editable page template sits directly in. */
+    private static final String PAGE_TEMPLATE_FOLDER = "settings/wcm/templates";
 
-    /** The segments immediately above a content fragment model, in order. */
-    private static final List<String> FRAGMENT_MODEL_PARENTS =
-            List.of("settings", "dam", "cfm", "models");
+    /** The folder, relative to a configuration, every content fragment model sits directly in. */
+    private static final String FRAGMENT_MODEL_FOLDER = "settings/dam/cfm/models";
+
+    /** The node a configuration keeps its settings in, which is never another configuration. */
+    private static final String SETTINGS = "settings";
+
+    /** Where configurations are, nested as deep as a site's own folders. */
+    private static final String CONFIGURATIONS = "/conf";
+
+    /** The two global configurations, each of which is the folder itself and nothing below it. */
+    private static final List<String> GLOBAL_CONFIGURATIONS = List.of("/apps", "/libs");
+
+    /** A configuration's own properties, which are never another configuration. */
+    private static final String CONTENT = "jcr:content";
+
+    /** How access-control nodes are named, which are never a configuration either. */
+    private static final String ACCESS_CONTROL = "rep:";
 
     /** The category a search that ran out of its examination budget is refused under. */
     static final String DISCOVERY_BUDGET_EXCEEDED = "discovery_budget_exceeded";
@@ -79,9 +104,16 @@ public final class AuthoringCatalogHandler implements CommandHandler {
                     + " is not a path this caller can read, which is the same answer as nothing"
                     + " being there");
         }
-        final List<PageListingResult.Page> found = gather(root);
+        final Search search = new Search(kind, context.discovery().limit());
+        search.from(resolver, root.getPath());
+        if (search.exhausted()) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this listing examined more than the "
+                    + context.discovery().limit() + " nodes it is allowed, and stopped rather than"
+                    + " answer with part of the catalogue; name one configuration under "
+                    + CONFIGURATIONS + " as the anchor instead");
+        }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
-                found, held.window(), wireName(), arguments, context, contract);
+                search.pages(), held.window(), wireName(), arguments, context, contract);
         if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
             return new Failed(refused.category(), refused.detail());
         }
@@ -118,81 +150,37 @@ public final class AuthoringCatalogHandler implements CommandHandler {
         return new Held(command.rootPath(), command.window());
     }
 
-    private List<PageListingResult.Page> gather(Resource root) {
-        final List<PageListingResult.Page> found = new ArrayList<>();
-        final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
-        Resource current = root;
-        while (current != null) {
-            if (matches(current, root.getPath())) {
-                found.add(new PageListingResult.Page(current.getPath(), titleOf(current)));
-            }
-            pending.push(current.listChildren());
-            final Resource next = nextChild(pending);
-            if (next == null) {
-                break;
-            }
-            current = next;
-        }
-        return PageListingResult.ascending(found);
-    }
-
-    private static Resource nextChild(Deque<Iterator<Resource>> pending) {
-        while (!pending.isEmpty()) {
-            final Iterator<Resource> children = pending.peek();
-            if (children.hasNext()) {
-                return children.next();
-            }
-            pending.pop();
-        }
-        return null;
-    }
-
-    private boolean matches(Resource resource, String anchor) {
-        if (anchor.equals(resource.getPath())) {
-            return false;
-        }
-        if (!CreatePageHandler.TEMPLATE_TYPE.equals(ChildListingHandler.typeOf(resource))) {
-            return false;
-        }
-        final List<String> parents = kind == Kind.PAGE_TEMPLATES
-                ? PAGE_TEMPLATE_PARENTS : FRAGMENT_MODEL_PARENTS;
-        if (!directChildOf(resource.getPath(), parents)) {
-            return false;
-        }
-        return kind == Kind.PAGE_TEMPLATES
-                || resource.getChild(FragmentHandlers.MODEL_ELEMENTS) != null;
-    }
-
-    /**
-     * Whether {@code path} is the node directly inside {@code folders}.
-     *
-     * @param path the repository path
-     * @param folders the segments immediately above the node, in order
-     * @return whether it sits there
-     */
-    static boolean directChildOf(String path, List<String> folders) {
-        if (path.length() < 2 || path.charAt(0) != '/') {
-            return false;
-        }
-        final String[] segments = path.substring(1).split("/", -1);
-        if (segments.length <= folders.size()) {
-            return false;
-        }
-        final int start = segments.length - folders.size() - 1;
-        for (int index = 0; index < folders.size(); index = index + 1) {
-            if (!folders.get(index).equals(segments[start + index])) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private static String titleOf(Resource resource) {
         final String titled = ListChildPagesHandler.titleOf(resource);
         if (!titled.isEmpty()) {
             return titled;
         }
         return String.valueOf(resource.getValueMap().get(ListChildPagesHandler.TITLE_PROPERTY, ""));
+    }
+
+    /**
+     * Whether {@code path} is {@code anchor} or somewhere beneath it.
+     *
+     * @param path the repository path
+     * @param anchor the path it may sit under
+     * @return whether it does
+     */
+    static boolean atOrBelow(String path, String anchor) {
+        if (path.equals(anchor) || "/".equals(anchor)) {
+            return path.startsWith("/");
+        }
+        return path.startsWith(anchor + "/");
+    }
+
+    /**
+     * The configuration whose settings a path is inside, when it is inside any.
+     *
+     * @param path the repository path
+     * @return the configuration's path, or nothing where the path is above every settings folder
+     */
+    static Optional<String> configurationHolding(String path) {
+        final int settings = (path + "/").indexOf("/" + SETTINGS + "/");
+        return settings < 0 ? Optional.empty() : Optional.of(path.substring(0, settings));
     }
 
     @Override
@@ -211,5 +199,137 @@ public final class AuthoringCatalogHandler implements CommandHandler {
     }
 
     private record Refused(String category, String detail) implements Asked {
+    }
+
+    /**
+     * One listing: what it found, and how much of the discovery budget finding it spent.
+     *
+     * <p>Every node it reads is one examination, including the ones it passes over, so the budget
+     * bounds the work done rather than the size of the answer.</p>
+     */
+    private static final class Search {
+
+        private final Kind kind;
+        private final String folder;
+        private final long budget;
+        private final List<PageListingResult.Page> found = new ArrayList<>();
+        private final AtomicLong examined = new AtomicLong();
+
+        private Search(Kind kind, long budget) {
+            this.kind = kind;
+            this.folder = kind == Kind.PAGE_TEMPLATES ? PAGE_TEMPLATE_FOLDER : FRAGMENT_MODEL_FOLDER;
+            this.budget = budget;
+        }
+
+        /**
+         * Finds the catalogue under one anchor.
+         *
+         * <p>The anchor is placed against the configuration layout first. Above {@code /conf} it
+         * is every configuration there; inside it, it is the configurations under it, or the one
+         * catalogue folder it is on the way to; and it is each global configuration whose
+         * catalogue folder it is at or above.</p>
+         */
+        private void from(ResourceResolver resolver, String anchor) {
+            if (atOrBelow(CONFIGURATIONS, anchor)) {
+                Optional.ofNullable(resolver.getResource(CONFIGURATIONS))
+                        .ifPresent(this::everyConfigurationUnder);
+            } else if (atOrBelow(anchor, CONFIGURATIONS)) {
+                insideConfigurations(resolver, anchor);
+            }
+            GLOBAL_CONFIGURATIONS.forEach(global -> catalogueOf(resolver, anchor, global));
+        }
+
+        private void insideConfigurations(ResourceResolver resolver, String anchor) {
+            final Optional<String> configuration = configurationHolding(anchor);
+            if (configuration.isPresent()) {
+                catalogueOf(resolver, anchor, configuration.orElseThrow());
+                return;
+            }
+            Optional.ofNullable(resolver.getResource(anchor))
+                    .ifPresent(this::everyConfigurationUnder);
+        }
+
+        /** Lists one configuration's catalogue, where its folder is at or below the anchor. */
+        private void catalogueOf(ResourceResolver resolver, String anchor, String configuration) {
+            final String path = configuration + "/" + folder;
+            if (exhausted() || !atOrBelow(path, anchor)) {
+                return;
+            }
+            Optional.ofNullable(resolver.getResource(path)).ifPresent(this::list);
+        }
+
+        /**
+         * Visits every configuration folder under one node, and lists each one's catalogue.
+         *
+         * <p>A configuration's settings, its own properties, and its access control are passed
+         * over rather than opened: none of them is another configuration, and the settings folder
+         * is where every template's structure and every other kind of setting is.</p>
+         */
+        private void everyConfigurationUnder(Resource top) {
+            final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
+            examine();
+            Optional<Resource> next = Optional.of(top);
+            while (next.isPresent() && !exhausted()) {
+                final Resource configuration = next.orElseThrow();
+                Optional.ofNullable(configuration.getChild(folder)).ifPresent(this::list);
+                pending.push(configuration.listChildren());
+                next = nextConfiguration(pending);
+            }
+        }
+
+        private Optional<Resource> nextConfiguration(Deque<Iterator<Resource>> pending) {
+            while (!pending.isEmpty() && !exhausted()) {
+                final Iterator<Resource> children = pending.peek();
+                final Optional<Resource> child = children.hasNext()
+                        ? Optional.of(children.next()) : Optional.empty();
+                if (child.isEmpty()) {
+                    pending.pop();
+                } else if (worthOpening(child.orElseThrow())) {
+                    return child;
+                }
+            }
+            return Optional.empty();
+        }
+
+        /** Examines one child of a configuration, and answers whether it may be another one. */
+        private boolean worthOpening(Resource child) {
+            examine();
+            final String name = child.getName();
+            return !SETTINGS.equals(name) && !CONTENT.equals(name)
+                    && !name.startsWith(ACCESS_CONTROL);
+        }
+
+        /** Takes the catalogue out of one catalogue folder, which is its direct children. */
+        private void list(Resource catalogue) {
+            examine();
+            final Iterator<Resource> children = catalogue.listChildren();
+            while (children.hasNext() && !exhausted()) {
+                final Resource child = children.next();
+                examine();
+                if (belongs(child)) {
+                    found.add(new PageListingResult.Page(child.getPath(), titleOf(child)));
+                }
+            }
+        }
+
+        private boolean belongs(Resource child) {
+            if (!CreatePageHandler.TEMPLATE_TYPE.equals(ChildListingHandler.typeOf(child))) {
+                return false;
+            }
+            return kind == Kind.PAGE_TEMPLATES
+                    || child.getChild(FragmentHandlers.MODEL_ELEMENTS) != null;
+        }
+
+        private void examine() {
+            examined.incrementAndGet();
+        }
+
+        private boolean exhausted() {
+            return examined.get() > budget;
+        }
+
+        private List<PageListingResult.Page> pages() {
+            return PageListingResult.ascending(found);
+        }
     }
 }

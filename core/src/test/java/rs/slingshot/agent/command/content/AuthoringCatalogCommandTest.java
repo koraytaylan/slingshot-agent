@@ -45,6 +45,12 @@ final class AuthoringCatalogCommandTest {
     private static final AgentContract CONTRACT = assertInstanceOf(AgentContract.Loaded.class,
             AgentContract.load(), "the contract did not authenticate").contract();
 
+    /** How many nodes each subtree a listing must not open is given. */
+    private static final int WIDE = 200;
+
+    /** A discovery budget far below any of those subtrees, and above every configuration. */
+    private static final int NARROW_BUDGET = 40;
+
     private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
 
     @Test
@@ -202,13 +208,97 @@ final class AuthoringCatalogCommandTest {
     }
 
     @Test
-    @DisplayName("the folder rule agrees with the path a caller would hand to create")
-    void theFolderRuleAgrees() {
-        assertTrue(AuthoringCatalogHandler.directChildOf(
-                "/conf/site/settings/wcm/templates/article",
-                List.of("settings", "wcm", "templates")));
-        assertFalse(AuthoringCatalogHandler.directChildOf(
-                "/conf/site/settings/wcm/templates/article/jcr:content",
-                List.of("settings", "wcm", "templates")));
+    @DisplayName("an anchor above every configuration lists each one's catalogue and nothing else")
+    void anAnchorAboveEveryConfigurationListsEachCatalogue() {
+        final String site = "/conf/site/settings/wcm/templates/article";
+        final String nested = "/conf/tenant/brand/settings/wcm/templates/landing";
+        final String global = "/apps/settings/wcm/templates/blank";
+        for (final String template : List.of(site, nested, global,
+                "/content/site/settings/wcm/templates/decoy",
+                "/apps/site/settings/wcm/templates/decoy")) {
+            sling.create().resource(template, Map.of(
+                    ListChildPagesHandler.TYPE_PROPERTY, CreatePageHandler.TEMPLATE_TYPE));
+        }
+        assertEquals(List.of(global, site, nested), paths(assertInstanceOf(
+                DocumentValue.Mapping.class,
+                listed(AuthoringCatalogHandler.Kind.PAGE_TEMPLATES, "/"))),
+                "the catalogue from the root was not every configuration's templates, and only"
+                        + " those");
+    }
+
+    @Test
+    @DisplayName("content, a template's own structure, and the rest of settings are never opened")
+    void onlyConfigurationFoldersAreOpened() {
+        final String template = "/conf/site/settings/wcm/templates/article";
+        sling.create().resource(template, Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, CreatePageHandler.TEMPLATE_TYPE));
+        for (int node = 0; node < WIDE; node = node + 1) {
+            sling.create().resource(template + "/structure/jcr:content/root/item" + node);
+            sling.create().resource("/conf/site/settings/cloudconfigs/item" + node);
+            sling.create().resource("/content/site/page" + node + "/jcr:content");
+        }
+        final CommandHandler.Answer answer = new AuthoringCatalogHandler(CONTRACT,
+                AuthoringCatalogHandler.Kind.PAGE_TEMPLATES)
+                .run(arguments("/"), readOnly(), context(NARROW_BUDGET));
+        final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
+                answer, "a listing spent its budget on nodes that cannot hold a template: "
+                        + answer);
+        assertEquals(List.of(template), paths(produced.result()));
+    }
+
+    @Test
+    @DisplayName("a configuration tree larger than the budget is refused, not answered in part")
+    void aConfigurationTreeLargerThanTheBudgetIsRefused() {
+        for (int node = 0; node < NARROW_BUDGET; node = node + 1) {
+            sling.create().resource("/conf/site" + node + "/settings/wcm/templates/article",
+                    Map.of(ListChildPagesHandler.TYPE_PROPERTY, CreatePageHandler.TEMPLATE_TYPE));
+        }
+        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                new AuthoringCatalogHandler(CONTRACT, AuthoringCatalogHandler.Kind.PAGE_TEMPLATES)
+                        .run(arguments("/conf"), readOnly(), context(NARROW_BUDGET)),
+                "a listing past its budget was answered with part of the catalogue");
+        assertEquals(AuthoringCatalogHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
+    }
+
+    @Test
+    @DisplayName("an anchor inside settings lists the one catalogue folder it leads to")
+    void anAnchorInsideSettingsListsTheFolderItLeadsTo() {
+        final String template = "/conf/site/settings/wcm/templates/article";
+        sling.create().resource(template, Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, CreatePageHandler.TEMPLATE_TYPE));
+        sling.create().resource(template + "/structure", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, CreatePageHandler.TEMPLATE_TYPE));
+        assertEquals(List.of(template), paths(assertInstanceOf(DocumentValue.Mapping.class,
+                listed(AuthoringCatalogHandler.Kind.PAGE_TEMPLATES, "/conf/site/settings/wcm"))));
+        assertEquals(List.of(), paths(assertInstanceOf(DocumentValue.Mapping.class,
+                listed(AuthoringCatalogHandler.Kind.PAGE_TEMPLATES, template))),
+                "the parts of a template were listed as templates");
+        assertEquals(List.of(), paths(assertInstanceOf(DocumentValue.Mapping.class,
+                listed(AuthoringCatalogHandler.Kind.FRAGMENT_MODELS, "/conf/site/settings/wcm"))),
+                "a models folder was looked for under the templates folder");
+    }
+
+    @Test
+    @DisplayName("the layout rules place an anchor the way a configuration is laid out")
+    void theLayoutRulesPlaceAnAnchor() {
+        assertTrue(AuthoringCatalogHandler.atOrBelow("/conf/site", "/"));
+        assertTrue(AuthoringCatalogHandler.atOrBelow("/conf", "/conf"));
+        assertTrue(AuthoringCatalogHandler.atOrBelow("/conf/site", "/conf"));
+        assertFalse(AuthoringCatalogHandler.atOrBelow("/confidential", "/conf"));
+        assertFalse(AuthoringCatalogHandler.atOrBelow("/conf", "/conf/site"));
+        assertEquals(java.util.Optional.of("/conf/tenant/brand"),
+                AuthoringCatalogHandler.configurationHolding("/conf/tenant/brand/settings/wcm"));
+        assertEquals(java.util.Optional.of("/conf/site"),
+                AuthoringCatalogHandler.configurationHolding("/conf/site/settings"));
+        assertEquals(java.util.Optional.empty(),
+                AuthoringCatalogHandler.configurationHolding("/conf/settings-archive/site"));
+    }
+
+    private static CallerContext context(long discovery) {
+        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, discovery),
+                Budget.time(CONTRACT), new Budget(Budget.Kind.RESULT,
+                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
+                ProgressSink.under(CONTRACT),
+                new CallerContext.Available(authority(), target(), generation(), 1_000L));
     }
 }
