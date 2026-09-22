@@ -21,7 +21,7 @@ final class CapabilityRevisionTest {
             + " as its number")
     void anumberBeforeTheFirstIsNotARevision() {
         final CapabilityRevision.Refused refused = assertInstanceOf(CapabilityRevision.Refused.class,
-                CapabilityRevision.of(0), "zero was held as a revision");
+                CapabilityRevision.of(-1), "a number before zero was held as a revision");
         assertEquals(CapabilityRevision.Refusal.BEFORE_THE_FIRST, refused.refusal());
         assertTrue(refused.detail().contains(Long.toString(CapabilityRevision.FIRST)),
                 refused.detail());

@@ -12,17 +12,17 @@ package rs.slingshot.agent.identity;
  * format and holds the same contracts while answering differently, and a client that could not tell
  * the two apart would read the older build's refusal as an outcome nobody can interpret.</p>
  *
- * <p>So the number is bumped whenever this agent's behaviour changes without a contract change, and
- * the client compares it exactly. It is deliberately not the bundle version: a bundle version is
- * whatever a release pipeline assigned, while this is a statement about what the code does.</p>
+ * <p>The number stays at zero. The client compares it exactly. It is deliberately not the bundle
+ * version: a bundle version is whatever a release pipeline assigned, while this is a statement
+ * about what the code does.</p>
  */
 public final class CapabilityRevision {
 
-    /** The revision this build declares, which is bumped with every behavioural change. */
-    public static final long CURRENT = 2;
+    /** The revision this build declares. It stays at zero. */
+    public static final long CURRENT = 0;
 
-    /** The first revision, which nothing is before. */
-    public static final long FIRST = 1;
+    /** The first revision, which is zero, and nothing is before it. */
+    public static final long FIRST = 0;
 
     private final long number;
 
