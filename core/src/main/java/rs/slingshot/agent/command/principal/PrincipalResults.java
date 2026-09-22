@@ -152,11 +152,14 @@ public final class PrincipalResults {
         // Granting says "it was already there" and withdrawing says "it was there". Two members
         // rather than one because the two commands answer opposite questions, and a caller reading
         // an audit needs the sentence to be true rather than merely consistent.
-        result.put(change == PrincipalDirectory.MembershipChange.GRANTED
-                        ? ALREADY_A_MEMBER : WAS_A_MEMBER,
-                new DocumentValue.Flag(
-                        settlement == PrincipalDirectory.Settlement.ALREADY_AS_ASKED
-                                ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
+        // A withdrawal that had to change something found the member there; one already as asked
+        // found it absent. The same settlement is the opposite answer to the other question.
+        final boolean granted = change == PrincipalDirectory.MembershipChange.GRANTED;
+        final boolean held = granted
+                ? settlement == PrincipalDirectory.Settlement.ALREADY_AS_ASKED
+                : settlement == PrincipalDirectory.Settlement.CHANGED;
+        result.put(granted ? ALREADY_A_MEMBER : WAS_A_MEMBER,
+                new DocumentValue.Flag(held ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
         return new DocumentValue.Mapping(result);
     }
 

@@ -190,6 +190,10 @@ final class PrincipalCommandTest {
         assertTrue(withdrawn.member(PrincipalResults.WAS_A_MEMBER).isPresent()
                         && withdrawn.member(PrincipalResults.ALREADY_A_MEMBER).isEmpty(),
                 "a withdrawal answered the grant's own member: " + withdrawn);
+        // The fake directory changes every membership it is asked to, so the member was there.
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.TRUE),
+                withdrawn.member(PrincipalResults.WAS_A_MEMBER).orElseThrow(),
+                "a withdrawal that took a member out said the member was never there");
     }
 
     @Test
