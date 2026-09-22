@@ -153,6 +153,34 @@ final class ResourceResolutionCommandTest {
     }
 
     @Test
+    @DisplayName("an address with a host resolves its path, and its host is not its extension")
+    void anaddressWithAHostResolvesItsPath() {
+        assertEquals("/content/site/page.html",
+                ResolveResourcePathHandler.pathOf("https://author.example.com/content/site/page.html"));
+        assertEquals("/content/site/page.html",
+                ResolveResourcePathHandler.pathOf("https://author.example.com/content/site/page.html?a=b#c"));
+        assertEquals("/", ResolveResourcePathHandler.pathOf("https://author.example.com"));
+        assertEquals("/content/site", ResolveResourcePathHandler.pathOf("/content/site"));
+        sling.create().resource("/content/site/page", Map.of());
+        final DocumentValue.Mapping answered = resolved("https://author.example.com/content/site/page");
+        assertEquals(new DocumentValue.Text("/content/site/page"),
+                answered.member(ResolveResourcePathResult.RESOLVED_PATH).orElseThrow(),
+                "the host was resolved as part of the path");
+        assertTrue(answered.member(ResolveResourcePathResult.EXTENSION).isEmpty(),
+                "the host's top-level domain was reported as the request's extension");
+    }
+
+    @Test
+    @DisplayName("an address nothing is at is answered with no resolved path and no type")
+    void anaddressNothingIsAtHasNoResolvedPath() {
+        final DocumentValue.Mapping answered = resolved("https://author.example.com/content/none");
+        assertTrue(answered.member(ResolveResourcePathResult.RESOLVED_PATH).isEmpty(),
+                "the platform's placeholder for nothing was reported as a resolved resource");
+        assertTrue(answered.member(ResolveResourcePathResult.RESOURCE_TYPE).isEmpty(),
+                "the platform's placeholder type was reported as a resource type");
+    }
+
+    @Test
     @DisplayName("both rows are the client's own and differ by exactly the request address")
     void thetworowsDifferByOneThing() {
         final RegistryRow resolve = row(ResolveResourcePathCommand.WIRE_NAME);

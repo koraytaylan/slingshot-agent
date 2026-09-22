@@ -79,7 +79,17 @@ public final class ResolveResourcePathHandler implements CommandHandler {
         // Resolving always produces a resource: an address nothing is at produces one standing for
         // nothing, whose path is still the address. So a resolution that produced nothing is a
         // blank path rather than an absence.
-        final Resource held = resolver.resolve(command.requestAddress());
+        final Resource held = resolver.resolve(pathOf(command.requestAddress()));
+        if (org.apache.sling.api.resource.ResourceUtil.isNonExistingResource(held)) {
+            // A miss is an answer rather than a failure: the address is well formed and nothing
+            // is there. The platform's placeholder for nothing is not a resource and its type is
+            // not a resource type, so neither is reported as though it were.
+            return new Produced(ResolveResourcePathResult.documentOf(
+                    new ResolveResourcePathResult.Resolution(command.requestAddress(),
+                            ResolveResourcePathResult.ABSENT, ResolveResourcePathResult.ABSENT,
+                            List.of(), ResolveResourcePathResult.ABSENT,
+                            ResolveResourcePathResult.ABSENT, List.of())));
+        }
         final String path = held.getPath();
         if (path.isBlank()) {
             return new Failed(RESOLUTION_FAILED, command.requestAddress() + " resolved to nothing."
@@ -117,6 +127,32 @@ public final class ResolveResourcePathHandler implements CommandHandler {
             return List.of();
         }
         return List.of(resolved);
+    }
+
+    /**
+     * The part of one request address the resolver takes, which is its path.
+     *
+     * <p>An address may name a scheme and a host. Those are not part of what the resolver matches
+     * a path against, and a host is full of dots: handing the whole address over reads the host's
+     * top-level domain as the request's extension and everything after it as a suffix. The query
+     * and the fragment are not part of the path either.</p>
+     *
+     * @param address the address the caller named
+     * @return its path, which is the root where the address names only a host
+     */
+    static String pathOf(String address) {
+        final int scheme = address.indexOf("://");
+        final String afterHost;
+        if (scheme < 0) {
+            afterHost = address;
+        } else {
+            final int pathStart = address.indexOf('/', scheme + "://".length());
+            afterHost = pathStart < 0 ? "/" : address.substring(pathStart);
+        }
+        final int query = afterHost.indexOf('?');
+        final String withoutQuery = query < 0 ? afterHost : afterHost.substring(0, query);
+        final int fragment = withoutQuery.indexOf('#');
+        return fragment < 0 ? withoutQuery : withoutQuery.substring(0, fragment);
     }
 
     private static String typeOf(Resource held) {
