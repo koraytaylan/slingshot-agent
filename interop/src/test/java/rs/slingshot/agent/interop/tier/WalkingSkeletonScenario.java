@@ -118,7 +118,10 @@ final class WalkingSkeletonScenario {
                 "create_asset_folder", "create_asset", "update_asset_metadata", "delete_asset", "move_asset",
                 "create_page", "delete_page", "move_page", "update_page", "create_content_fragment",
                 "update_content_fragment", "delete_content_fragment", "create_experience_fragment",
-                "update_experience_fragment", "delete_experience_fragment");
+                "update_experience_fragment", "delete_experience_fragment", "create_user",
+                "create_group", "update_user_profile", "set_user_disabled",
+                "delete_authorizable", "add_group_member", "remove_group_member",
+                "list_group_members");
         return assertInstanceOf(CommandRegistry.Loaded.class, registry.active(active)).registry().rows()
                 .stream().map(row -> assertInstanceOf(CommandContractIdentity.Held.class,
                         row.identity(CommandContractIdentity.Bounds.from(contract))).identity().document())

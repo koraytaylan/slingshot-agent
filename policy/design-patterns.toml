@@ -2214,3 +2214,8 @@ reason = "An anchor and which window of the content fragment models its configur
 name = "ListPageTemplatesCommand"
 pattern = "value-object"
 reason = "An anchor and which window of the editable page templates its configuration folders hold is wanted."
+
+[[type]]
+name = "DefaultPrincipalDirectory"
+pattern = "accessor"
+reason = "The repository's own user manager, reached through the caller's own session and answered rather than held: it keeps nothing between calls, so whether a caller may make, change, or remove a user or a group is the repository's decision exactly as it would be by hand. No password crosses it in either direction."

@@ -139,8 +139,9 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         if (!(rows instanceof final CommandRegistry.Loaded embedded)) {
             return;
         }
-        final java.util.List<CommandDispatch.Registration> registrations = registrations(
-                present.contract());
+        final java.util.List<CommandDispatch.Registration> registrations =
+                java.util.stream.Stream.concat(registrations(present.contract()).stream(),
+                        PlatformRegistrations.registrations(present.contract()).stream()).toList();
         final CommandRegistry.Outcome active = embedded.registry().active(registrations.stream()
                 .map(CommandDispatch.Registration::wireName).toList());
         if (!(active instanceof final CommandRegistry.Loaded selected)) {
