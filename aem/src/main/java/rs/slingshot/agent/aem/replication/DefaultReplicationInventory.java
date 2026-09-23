@@ -35,6 +35,9 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
     /** What a flush whose caller believed a different count is reported as. */
     private static final String QUEUE_EXPECTATION_MISMATCH = "queue_expectation_mismatch";
 
+    /** What a control the platform itself will not perform is reported as. */
+    private static final String CONTROL_REJECTED = "platform_control_rejected";
+
     /** What an entry that has been tried and is still waiting is reported as having failed with. */
     private static final String DELIVERY_FAILED = "delivery_failed";
 
@@ -93,8 +96,14 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
                     + " entries, not the " + expectation + " the caller expected, so nothing was"
                     + " removed");
         }
-        if (queue != null) {
+        if (held == 0) {
+            return new Flushed(held);
+        }
+        try {
             queue.clear();
+        } catch (final UnsupportedOperationException | IllegalStateException refused) {
+            return new Refused(CONTROL_REJECTED, agentIdentifier + "'s queue is one this platform"
+                    + " does not let be emptied from inside; its own distribution console does");
         }
         return new Flushed(held);
     }
@@ -116,7 +125,12 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
         if (entry.get().getQueuePosition() != HEAD) {
             return new Resubmitted(Resubmission.DECLINED);
         }
-        queue.forceRetry();
+        try {
+            queue.forceRetry();
+        } catch (final UnsupportedOperationException | IllegalStateException refused) {
+            return new Refused(CONTROL_REJECTED, agentIdentifier + "'s queue is one this platform"
+                    + " does not let be retried from inside; its own distribution console does");
+        }
         return new Resubmitted(Resubmission.TAKEN);
     }
 

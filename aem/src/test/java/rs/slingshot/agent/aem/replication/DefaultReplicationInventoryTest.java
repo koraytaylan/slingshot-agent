@@ -41,6 +41,9 @@ final class DefaultReplicationInventoryTest {
                 new ReplicationInventory.Agent("flush", "Dispatcher Flush", "/etc/flush",
                         ReplicationInventory.TransportKind.FLUSH,
                         ReplicationInventory.Switch.DISABLED, ReplicationInventory.Flow.MOVING, 0),
+                new ReplicationInventory.Agent("managed", "Managed", "/etc/managed",
+                        ReplicationInventory.TransportKind.PUBLISH,
+                        ReplicationInventory.Switch.ENABLED, ReplicationInventory.Flow.BLOCKED, 1),
                 new ReplicationInventory.Agent("publish", "Publish", "/etc/publish",
                         ReplicationInventory.TransportKind.PUBLISH,
                         ReplicationInventory.Switch.ENABLED, ReplicationInventory.Flow.BLOCKED, 3),
@@ -97,7 +100,12 @@ final class DefaultReplicationInventoryTest {
         assertEquals(0, assertInstanceOf(ReplicationInventory.Flushed.class,
                 platform.inventory().flush("static", ReplicationInventory.ANY_COUNT))
                 .removedEntryCount());
-        assertEquals(List.of("clear:publish", "clear:static"), platform.controls);
+        assertEquals(List.of("clear:publish"), platform.controls,
+                "an empty queue was asked to empty itself");
+        assertEquals("platform_control_rejected", assertInstanceOf(
+                ReplicationInventory.Refused.class,
+                platform.inventory().flush("managed", ReplicationInventory.ANY_COUNT)).category(),
+                "a queue the platform will not empty from inside was reported as emptied");
     }
 
     @Test
@@ -116,6 +124,9 @@ final class DefaultReplicationInventoryTest {
                 platform.inventory().retry("flush", "head")).category(),
                 "an agent that keeps no queue holds no entry");
         assertEquals(List.of("retry:publish"), platform.controls);
+        assertEquals("platform_control_rejected", assertInstanceOf(
+                ReplicationInventory.Refused.class,
+                platform.inventory().retry("managed", "only")).category());
     }
 
     @Test
@@ -156,6 +167,9 @@ final class DefaultReplicationInventoryTest {
                     true, false, null));
             agents.put("reverse", agent("reverse", null, null, "durbo", true, false, true,
                     queue("reverse", false)));
+            agents.put("managed", agent("managed", "Managed", "/etc/managed", "durbo", false,
+                    false, true, managed(entry("only", ReplicationActionType.ACTIVATE,
+                            "/content/c", 0, 1))));
         }
 
         DefaultReplicationInventory inventory() {
@@ -185,6 +199,15 @@ final class DefaultReplicationInventoryTest {
                 case "getConfiguration" -> configuration;
                 case "getQueue" -> queue;
                 default -> throw new UnsupportedOperationException(method);
+            });
+        }
+
+        private ReplicationQueue managed(ReplicationQueue.Entry held) {
+            return proxy(ReplicationQueue.class, (method, arguments) -> {
+                if ("entries".equals(method)) {
+                    return List.of(held);
+                }
+                throw new UnsupportedOperationException(method);
             });
         }
 
