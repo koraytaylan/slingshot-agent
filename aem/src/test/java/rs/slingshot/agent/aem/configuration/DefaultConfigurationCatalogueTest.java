@@ -53,7 +53,7 @@ final class DefaultConfigurationCatalogueTest {
                 new ConfigurationCatalogue.Entry("com.acme.Factory~one", "com.acme.Factory", 2,
                         ConfigurationCatalogue.Binding.UNBOUND),
                 new ConfigurationCatalogue.Entry("com.acme.Service", ConfigurationCatalogue
-                        .NOT_FROM_A_FACTORY, 4, ConfigurationCatalogue.Binding
+                        .NOT_FROM_A_FACTORY, 5, ConfigurationCatalogue.Binding
                         .BOUND_TO_A_BUNDLE_LOCATION)), found);
         assertEquals("(service.pid=com.acme*)", platform.filters.getFirst());
         assertEquals("configuration_lookup_budget_exceeded", assertInstanceOf(
@@ -79,6 +79,9 @@ final class DefaultConfigurationCatalogueTest {
         assertEquals(new ConfigurationValue("integer", ConfigurationValue.Cardinality.SCALAR,
                 List.of("8080")), named.get("port").value());
         assertEquals(ValueDisclosure.Evidence.UNAVAILABLE, named.get("service.pid").evidence());
+        assertEquals(ValueDisclosure.Evidence.NON_PASSWORD, named.get("api.token").evidence());
+        assertEquals(List.of(), named.get("api.token").value().values(),
+                "a property named like a secret was read");
         assertEquals(ConfigurationCatalogue.Presence.ABSENT, assertInstanceOf(
                 ConfigurationCatalogue.Inspected.class, platform.catalogue().inspect("none"))
                 .present());
@@ -149,6 +152,14 @@ final class DefaultConfigurationCatalogueTest {
         assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
                 new ConfigurationValue("character", ConfigurationValue.Cardinality.SCALAR,
                         List.of("xy"))));
+        assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
+                new ConfigurationValue("double", ConfigurationValue.Cardinality.SCALAR,
+                        List.of("3FF0000000000000"))));
+        assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
+                new ConfigurationValue("float", ConfigurationValue.Cardinality.SCALAR,
+                        List.of("1.5"))));
+        assertEquals(new ConfigurationValue("double", ConfigurationValue.Cardinality.SCALAR,
+                List.of("3ff0000000000000")), PropertyValues.read(1.0d).orElseThrow());
         assertArrayEquals(new boolean[] {true}, (boolean[]) PropertyValues.written(
                 new ConfigurationValue("boolean", ConfigurationValue.Cardinality.PRIMITIVE_ARRAY,
                         List.of("true"))));
@@ -187,6 +198,7 @@ final class DefaultConfigurationCatalogueTest {
             service.put("port", 8080);
             service.put("secret", "hunter2");
             service.put("stray", "sk-live");
+            service.put("api.token", "tok-live");
             held.put("com.acme.Service", service);
             final Map<String, Object> factory = new LinkedHashMap<>();
             factory.put("service.pid", "com.acme.Factory~one");
@@ -253,7 +265,8 @@ final class DefaultConfigurationCatalogueTest {
         private static MetaTypeInformation information() {
             final Map<String, ObjectClassDefinition> definitions = Map.of(
                     "com.acme.Service", definition(attribute("port", AttributeDefinition.INTEGER),
-                            attribute("secret", AttributeDefinition.PASSWORD)),
+                            attribute("secret", AttributeDefinition.PASSWORD),
+                            attribute("api.token", AttributeDefinition.STRING)),
                     "com.acme.Factory", definition(attribute("name",
                             AttributeDefinition.STRING)));
             return proxy(MetaTypeInformation.class, (method, arguments) -> switch (method) {

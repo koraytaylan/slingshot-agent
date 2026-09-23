@@ -125,21 +125,13 @@ public final class DefaultConfigurationCatalogue implements ConfigurationCatalog
         final Map<String, AttributeDefinition> described = described(configuration);
         final List<Property> answered = new ArrayList<>();
         for (final Map.Entry<String, Object> property : propertiesOf(configuration).entrySet()) {
-            final String name = property.getKey();
-            final AttributeDefinition definition = described.get(name);
-            if (definition == null) {
-                answered.add(new Property(name, ValueDisclosure.Evidence.UNAVAILABLE, UNREAD));
-            } else if (definition.getType() == AttributeDefinition.PASSWORD) {
-                answered.add(new Property(name, ValueDisclosure.Evidence.PASSWORD, UNREAD));
-            } else {
-                final Optional<ConfigurationValue> value = PropertyValues.read(property.getValue());
-                if (value.isEmpty()) {
-                    return new Failed(VALUE_UNSUPPORTED, name + " holds a value of a type no"
-                            + " configuration command speaks");
-                }
-                answered.add(new Property(name, ValueDisclosure.Evidence.NON_PASSWORD,
-                        value.get()));
+            final Optional<Property> observed = observed(property.getKey(), property.getValue(),
+                    described);
+            if (observed.isEmpty()) {
+                return new Failed(VALUE_UNSUPPORTED, property.getKey() + " holds a value of a type"
+                        + " no configuration command speaks");
             }
+            answered.add(observed.get());
         }
         return new Inspected(Presence.PRESENT, answered);
     }
@@ -194,6 +186,32 @@ public final class DefaultConfigurationCatalogue implements ConfigurationCatalog
             return new Failed(LOOKUP_FAILED, "the configuration admin refused the removal: "
                     + failed.getMessage());
         }
+    }
+
+    /**
+     * One property as the evidence permits it to be answered.
+     *
+     * <p>The value is converted only for a property the meta type service describes as not a
+     * password and whose name does not read like a secret's; every other property is answered with
+     * a value that was never read.</p>
+     *
+     * @return the property, or nothing where a value that may be read has no type the commands
+     *     speak
+     */
+    private static Optional<Property> observed(String name, Object held,
+                                               Map<String, AttributeDefinition> described) {
+        final AttributeDefinition definition = described.get(name);
+        if (definition == null) {
+            return Optional.of(new Property(name, ValueDisclosure.Evidence.UNAVAILABLE, UNREAD));
+        }
+        if (definition.getType() == AttributeDefinition.PASSWORD) {
+            return Optional.of(new Property(name, ValueDisclosure.Evidence.PASSWORD, UNREAD));
+        }
+        if (ValueDisclosure.readsAsSensitive(name)) {
+            return Optional.of(new Property(name, ValueDisclosure.Evidence.NON_PASSWORD, UNREAD));
+        }
+        return PropertyValues.read(held).map(value -> new Property(name,
+                ValueDisclosure.Evidence.NON_PASSWORD, value));
     }
 
     private List<Configuration> listed(String filter) throws IOException, InvalidSyntaxException {

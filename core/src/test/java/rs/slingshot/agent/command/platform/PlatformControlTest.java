@@ -92,6 +92,37 @@ final class PlatformControlTest {
     }
 
     @Test
+    @DisplayName("a value under a name that reads like a secret's is withheld whatever the evidence")
+    void anameThatReadsLikeASecretIsWithheld() {
+        for (final String name : List.of("api.token", "Service-Password", "private_key",
+                "clientSecret", "...", "AccessKey")) {
+            assertTrue(ValueDisclosure.readsAsSensitive(name), name);
+            assertInstanceOf(ValueDisclosure.Redacted.class, ValueDisclosure.of(name,
+                    ValueDisclosure.Evidence.NON_PASSWORD, scalar("hunter2")), name);
+        }
+        for (final String name : List.of("port", "resource.resolver.mapping", "tokenizer\u00df")) {
+            assertInstanceOf(ValueDisclosure.Visible.class, ValueDisclosure.of("port",
+                    ValueDisclosure.Evidence.NON_PASSWORD, scalar("8080")), name);
+        }
+    }
+
+    @Test
+    @DisplayName("a boolean travels as a flag and every other type as text")
+    void abooleanTravelsAsAFlag() {
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.TRUE), new ConfigurationValue(
+                "boolean", ConfigurationValue.Cardinality.SCALAR, List.of("true")).document()
+                .member(ConfigurationValue.VALUE).orElseThrow());
+        assertEquals(new DocumentValue.Sequence(List.of(
+                        new DocumentValue.Flag(DocumentValue.Truth.FALSE))),
+                new ConfigurationValue("boolean", ConfigurationValue.Cardinality.PRIMITIVE_ARRAY,
+                        List.of("false")).document().member(ConfigurationValue.VALUES)
+                        .orElseThrow());
+        assertEquals(new DocumentValue.Text("3ff0000000000000"), new ConfigurationValue(
+                "double", ConfigurationValue.Cardinality.SCALAR, List.of("3ff0000000000000"))
+                .document().member(ConfigurationValue.VALUE).orElseThrow());
+    }
+
+    @Test
     @DisplayName("a withheld property carries no value member at all, rather than a masked one")
     void awithheldPropertyCarriesNoValueMember() {
         final DocumentValue.Mapping withheld = ValueDisclosure.documentOf(

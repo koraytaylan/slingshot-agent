@@ -134,12 +134,28 @@ public record ConfigurationValue(String type, Cardinality cardinality, List<Stri
         held.put(TYPE, new DocumentValue.Text(type));
         held.put(CARDINALITY, new DocumentValue.Text(cardinality.spelling()));
         if (cardinality.isSingle()) {
-            held.put(VALUE, new DocumentValue.Text(values.isEmpty() ? "" : values.getFirst()));
+            held.put(VALUE, item(values.isEmpty() ? "" : values.getFirst()));
             return new DocumentValue.Mapping(held);
         }
-        held.put(VALUES, new DocumentValue.Sequence(values.stream()
-                .map(value -> (DocumentValue) new DocumentValue.Text(value))
-                .toList()));
+        held.put(VALUES, new DocumentValue.Sequence(values.stream().map(this::item).toList()));
         return new DocumentValue.Mapping(held);
     }
+
+    /**
+     * One item as the client writes it: a boolean as a flag and everything else as text.
+     *
+     * <p>A number travels as text because the client spells each one exactly — an integer in its
+     * one minimal base-ten form, a floating value as the lowercase hexadecimal of its bits — and a
+     * number in a document has no exact spelling at all.</p>
+     */
+    private DocumentValue item(String value) {
+        if (BOOLEAN.equals(type)) {
+            return new DocumentValue.Flag(Boolean.parseBoolean(value) ? DocumentValue.Truth.TRUE
+                    : DocumentValue.Truth.FALSE);
+        }
+        return new DocumentValue.Text(value);
+    }
+
+    /** The type whose values travel as flags rather than as text. */
+    private static final String BOOLEAN = "boolean";
 }

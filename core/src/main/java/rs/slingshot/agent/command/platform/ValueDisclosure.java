@@ -150,6 +150,53 @@ public final class ValueDisclosure {
     }
 
     /**
+     * The fragments that make a property's name read like a secret's, whatever the evidence says.
+     *
+     * <p>The client's own list, compared the client's own way, so the two halves agree about which
+     * values are never read: a service author who declares a token as an ordinary string has still
+     * named it a token.</p>
+     */
+    public static final List<String> SENSITIVE_NAME_LITERALS = List.of("password", "passwd",
+            "secret", "token", "credential", "privatekey", "apikey", "accesskey");
+
+    /** The first character past ASCII, where the name rule stops looking. */
+    private static final int ASCII_LIMIT = 0x80;
+
+    /**
+     * Whether one property's name reads like a secret's.
+     *
+     * <p>Only ASCII letters and digits are kept, lowercased, so the rule is one a person naming a
+     * property can predict. A name with nothing ordinary left in it reads as a secret's: it is not
+     * a name this agent will read a value under.</p>
+     *
+     * @param name the property's own name
+     * @return whether it does
+     */
+    public static boolean readsAsSensitive(String name) {
+        // ASCII only, as the client folds it: a rule that depended on Unicode tables would be one
+        // the two halves could disagree about.
+        final String reduced = name.chars()
+                .filter(character -> character < ASCII_LIMIT && Character.isLetterOrDigit(character))
+                .map(Character::toLowerCase)
+                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                .toString();
+        return reduced.isEmpty() || SENSITIVE_NAME_LITERALS.stream().anyMatch(reduced::contains);
+    }
+
+    /**
+     * What to answer about one named property, which is redacted wherever its name reads like a
+     * secret's as well as wherever the evidence does not permit reading.
+     *
+     * @param name the property's own name
+     * @param evidence what the Meta Type Service said about it
+     * @param value what it holds, used only where both the name and the evidence permit it
+     * @return the observation
+     */
+    public static Observation of(String name, Evidence evidence, ConfigurationValue value) {
+        return readsAsSensitive(name) ? new Redacted() : of(evidence, value);
+    }
+
+    /**
      * One property as it appears in an answer.
      *
      * <p>A redacted property carries no value member at all rather than an empty one, a null one,

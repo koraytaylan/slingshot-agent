@@ -22,6 +22,15 @@ import rs.slingshot.agent.command.platform.ConfigurationValue;
  */
 final class PropertyValues {
 
+    /** How many hexadecimal digits a float's bits are spelled with. */
+    private static final int FLOAT_DIGITS = 8;
+
+    /** How many hexadecimal digits a double's bits are spelled with. */
+    private static final int DOUBLE_DIGITS = 16;
+
+    /** The radix a floating value's bits are spelled in. */
+    private static final int HEXADECIMAL = 16;
+
     /** The client's spelling of each boxed type a property may hold. */
     private static final Map<Class<?>, String> SPELLINGS = Map.of(String.class, "string",
             Boolean.class, "boolean", Character.class, "character", Byte.class, "byte",
@@ -37,8 +46,9 @@ final class PropertyValues {
             "short", Short::valueOf,
             "integer", Integer::valueOf,
             "long", Long::valueOf,
-            "float", Float::valueOf,
-            "double", Double::valueOf);
+            "float", text -> Float.intBitsToFloat((int) bits(text, FLOAT_DIGITS)),
+            "double", text -> Double.longBitsToDouble(bits(text, DOUBLE_DIGITS)));
+
 
     /** The primitive type each spelled type is held as in a primitive array. */
     private static final Map<String, Class<?>> PRIMITIVES = Map.of("boolean", boolean.class,
@@ -73,7 +83,7 @@ final class PropertyValues {
                     return Optional.empty();
                 }
                 type = spelled.get();
-                values.add(String.valueOf(element));
+                values.add(spelledValue(element));
             }
             return Optional.of(new ConfigurationValue(type,
                     ConfigurationValue.Cardinality.COLLECTION, values));
@@ -84,14 +94,14 @@ final class PropertyValues {
                     ? spelling(Array.get(Array.newInstance(component, 1), 0).getClass())
                     : spelling(component);
             final List<String> values = IntStream.range(0, Array.getLength(held))
-                    .mapToObj(index -> String.valueOf(Array.get(held, index)))
+                    .mapToObj(index -> spelledValue(Array.get(held, index)))
                     .toList();
             return spelled.map(type -> new ConfigurationValue(type, component.isPrimitive()
                     ? ConfigurationValue.Cardinality.PRIMITIVE_ARRAY
                     : ConfigurationValue.Cardinality.SCALAR_ARRAY, values));
         }
         return spelling(held.getClass()).map(type -> new ConfigurationValue(type,
-                ConfigurationValue.Cardinality.SCALAR, List.of(String.valueOf(held))));
+                ConfigurationValue.Cardinality.SCALAR, List.of(spelledValue(held))));
     }
 
     /**
@@ -124,6 +134,37 @@ final class PropertyValues {
         IntStream.range(0, parsed.size()).forEach(index -> Array.set(array, index,
                 parsed.get(index)));
         return array;
+    }
+
+    /**
+     * One value as the client spells it: a floating value as the lowercase hexadecimal of its
+     * exact bits, so no value changes in a round trip, and everything else as Java writes it.
+     */
+    private static String spelledValue(Object value) {
+        if (value instanceof final Float single) {
+            return String.format("%0" + FLOAT_DIGITS + "x", Float.floatToRawIntBits(single));
+        }
+        if (value instanceof final Double twice) {
+            return String.format("%0" + DOUBLE_DIGITS + "x", Double.doubleToRawLongBits(twice));
+        }
+        return String.valueOf(value);
+    }
+
+    /**
+     * A floating value's bits from the client's spelling of them.
+     *
+     * @param text the lowercase hexadecimal the client wrote
+     * @param digits how many digits the type's bits take
+     * @return the bits
+     * @throws IllegalArgumentException where the spelling is not exactly that
+     */
+    private static long bits(String text, int digits) {
+        if (text.length() != digits || !text.chars().allMatch(character ->
+                character >= '0' && character <= '9' || character >= 'a' && character <= 'f')) {
+            throw new IllegalArgumentException(text + " is not the " + digits
+                    + " lowercase hexadecimal digits of a floating value's bits");
+        }
+        return Long.parseUnsignedLong(text, HEXADECIMAL);
     }
 
     private static Optional<String> spelling(Class<?> type) {

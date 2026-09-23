@@ -67,7 +67,8 @@ public final class InspectConfigurationResult {
         final SequencedMap<String, DocumentValue> properties = new LinkedHashMap<>();
         inspected.properties().forEach(property -> properties.put(property.name(),
                 ValueDisclosure.documentOf(property.evidence(),
-                        ValueDisclosure.of(property.evidence(), property.value()))));
+                        ValueDisclosure.of(property.name(), property.evidence(),
+                                property.value()))));
         result.put(PROPERTIES, new DocumentValue.Mapping(properties));
         return new DocumentValue.Mapping(result);
     }
