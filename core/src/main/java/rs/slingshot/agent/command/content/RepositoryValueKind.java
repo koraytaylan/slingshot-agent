@@ -137,7 +137,8 @@ public enum RepositoryValueKind {
                     metadata.put(BYTE_LENGTH, new DocumentValue.Text(String.valueOf(length)));
                     yield new DocumentValue.Mapping(metadata);
                 }
-                case STRING, DECIMAL, DATE, NAME, PATH, REFERENCE, WEAKREFERENCE, URI ->
+                case DATE -> new DocumentValue.Text(instantOf(value.getDate().toInstant()));
+                case STRING, DECIMAL, NAME, PATH, REFERENCE, WEAKREFERENCE, URI ->
                         new DocumentValue.Text(value.getString());
             };
         } catch (final javax.jcr.ValueFormatException failure) {
@@ -147,6 +148,27 @@ public enum RepositoryValueKind {
 
     /** The member a binary value's length is carried in. */
     public static final String BYTE_LENGTH = "byte_length";
+
+    /**
+     * One instant in the one spelling the client's reader accepts for it.
+     *
+     * <p>Universal time with a {@code Z}, and milliseconds exactly when there are some: the
+     * repository keeps the offset a date was written with and always spells three fraction digits,
+     * and either would be a second spelling of an instant that already has one, which the client
+     * refuses rather than normalises.</p>
+     *
+     * @param instant the instant
+     * @return its canonical spelling
+     */
+    static String instantOf(java.time.Instant instant) {
+        final java.time.Instant whole = instant.truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        final String seconds = java.time.format.DateTimeFormatter.ofPattern(
+                        "uuuu-MM-dd'T'HH:mm:ss", java.util.Locale.ROOT)
+                .withZone(java.time.ZoneOffset.UTC).format(whole);
+        final int milliseconds = whole.get(java.time.temporal.ChronoField.MILLI_OF_SECOND);
+        return milliseconds == 0 ? seconds + "Z"
+                : seconds + "." + String.format(java.util.Locale.ROOT, "%03d", milliseconds) + "Z";
+    }
 
     /** How many hexadecimal digits one binary64 value is written with. */
     private static final int BINARY64_DIGITS = 16;

@@ -114,8 +114,10 @@ final class LoadContentCommandTest {
                     kind + " does not map back to itself from the repository's own code");
             assertTrue(!kind.spelling().isBlank(), kind + " is spelled as nothing");
             assertInstanceOf(DocumentValue.class,
-                    RepositoryValueKind.documentValueOf(
-                            kind, session().getValueFactory().createValue("1"), 0),
+                    RepositoryValueKind.documentValueOf(kind, kind == RepositoryValueKind.DATE
+                            ? session().getValueFactory().createValue("2026-01-01T00:00:00.000Z",
+                                    PropertyType.DATE)
+                            : session().getValueFactory().createValue("1"), 0),
                     kind + " renders no value at all");
         }
         assertEquals(TWELVE, RepositoryValueKind.values().length,
@@ -127,6 +129,20 @@ final class LoadContentCommandTest {
                 "an unsupported type is not named the way the repository names it");
         assertTrue(RepositoryValueKind.unsupportedName(UNKNOWN_CODE).contains("-"),
                 "a code the repository itself does not know is not reported at all");
+    }
+
+    @Test
+    @DisplayName("an instant is spelled in universal time, with milliseconds only when it has some")
+    void aninstantHasOneSpelling() throws RepositoryException {
+        assertEquals("2026-07-31T13:28:24Z", RepositoryValueKind.instantOf(
+                java.time.Instant.parse("2026-07-31T13:28:24.000Z")));
+        assertEquals("2026-07-31T13:28:24.050Z", RepositoryValueKind.instantOf(
+                java.time.Instant.parse("2026-07-31T15:28:24.050+02:00")));
+        assertEquals(new DocumentValue.Text("2020-12-01T10:06:06Z"),
+                RepositoryValueKind.documentValueOf(RepositoryValueKind.DATE,
+                        session().getValueFactory().createValue("2020-12-01T12:06:06.000+02:00",
+                                PropertyType.DATE), 0),
+                "a date the repository keeps with an offset was not spelled in universal time");
     }
 
     /** How many repository value types this build represents faithfully. */
@@ -224,6 +240,22 @@ final class LoadContentCommandTest {
                 "a walk past its budget answered with a subtree rather than refusing");
         assertEquals(LoadContentResult.BUDGET_EXCEEDED, refused.category());
     }
+
+    @Test
+    @DisplayName("a walk that runs past its time budget stops and says so, whatever its count")
+    void awalkPastItsTimeStops() throws RepositoryException {
+        final Node root = nodeAt("/content/slow");
+        root.addNode("one", "nt:unstructured");
+        session().save();
+        final LoadContentResult.Refused refused = assertInstanceOf(LoadContentResult.Refused.class,
+                LoadContentResult.of(root, 1, NODE_BOUND, ALREADY_SPENT),
+                "a walk past its time answered with a subtree rather than refusing");
+        assertEquals(LoadContentResult.BUDGET_EXCEEDED, refused.category());
+        assertTrue(refused.detail().contains("milliseconds"), refused.detail());
+    }
+
+    /** A time budget spent before the walk began, which the first node already exceeds. */
+    private static final long ALREADY_SPENT = -1;
 
     /** How many children one deliberately wide subtree has. */
     private static final int WIDE = 20;

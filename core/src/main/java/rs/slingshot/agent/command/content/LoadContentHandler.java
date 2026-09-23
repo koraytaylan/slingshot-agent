@@ -69,7 +69,7 @@ public final class LoadContentHandler implements CommandHandler {
         }
         try {
             return answered(LoadContentResult.of(node, command.depth(),
-                    context.discovery().limit()), command);
+                    context.discovery().limit(), context.time().limit()), command);
         } catch (final RepositoryException failure) {
             return whenTheRepositoryFails(failure, command.repositoryPath());
         }

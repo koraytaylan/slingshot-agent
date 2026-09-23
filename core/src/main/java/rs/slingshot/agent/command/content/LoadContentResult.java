@@ -217,11 +217,34 @@ public final class LoadContentResult {
      * @throws RepositoryException if the repository fails
      */
     public static Outcome of(Node node, long depth, long nodeBudget) throws RepositoryException {
-        final Walk walk = new Walk(nodeBudget);
+        return of(node, depth, nodeBudget, UNTIMED);
+    }
+
+    /**
+     * Renders one subtree to exactly the depth asked for, inside a time budget as well.
+     *
+     * <p>A node count alone does not bound how long a walk takes: a subtree of wide pages full of
+     * long properties reaches its time long before its count, and a walk that outlives its budget
+     * outlives the request its caller is waiting on - an answer nobody receives. So the walk stops
+     * at whichever budget it reaches first, and says which.</p>
+     *
+     * @param node the addressed node
+     * @param depth how many generations below it to include, where zero is the node alone
+     * @param nodeBudget how many nodes may be examined before the walk is abandoned
+     * @param timeBudgetMilliseconds how long the walk may take before it is abandoned
+     * @return the rendered subtree, or the one reason there is none
+     * @throws RepositoryException if the repository fails
+     */
+    public static Outcome of(Node node, long depth, long nodeBudget, long timeBudgetMilliseconds)
+            throws RepositoryException {
+        final Walk walk = new Walk(nodeBudget, timeBudgetMilliseconds);
         final Outcome rendered = walk.node(node, 0, depth);
         return rendered instanceof final Rendered held
                 ? new Rendered(held.document(), walk.read.get()) : rendered;
     }
+
+    /** The time budget of a walk nothing times, which no walk reaches. */
+    private static final long UNTIMED = Long.MAX_VALUE;
 
     /**
      * One child, and what the reader orders it by.
@@ -303,17 +326,25 @@ public final class LoadContentResult {
     private static final class Walk {
 
         private final long nodeBudget;
+        private final long timeBudgetMilliseconds;
+        private final long startedMilliseconds = System.currentTimeMillis();
         private final java.util.concurrent.atomic.AtomicLong read =
                 new java.util.concurrent.atomic.AtomicLong();
 
-        Walk(long nodeBudget) {
+        Walk(long nodeBudget, long timeBudgetMilliseconds) {
             this.nodeBudget = nodeBudget;
+            this.timeBudgetMilliseconds = timeBudgetMilliseconds;
         }
 
         Outcome node(Node node, long currentDepth, long depthLimit) throws RepositoryException {
             if (read.incrementAndGet() > nodeBudget) {
                 return new Refused(BUDGET_EXCEEDED, "this load examined more than the "
                         + nodeBudget + " nodes it is allowed, and stopped rather than going on");
+            }
+            if (System.currentTimeMillis() - startedMilliseconds > timeBudgetMilliseconds) {
+                return new Refused(BUDGET_EXCEEDED, "this load ran longer than the "
+                        + timeBudgetMilliseconds + " milliseconds it is allowed after examining "
+                        + read.get() + " nodes; ask for less depth or a narrower path");
             }
             final SequencedMap<String, DocumentValue> rendered = new LinkedHashMap<>();
             final Outcome properties = properties(node, rendered);
