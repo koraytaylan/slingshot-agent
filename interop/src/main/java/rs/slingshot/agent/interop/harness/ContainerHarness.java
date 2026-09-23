@@ -271,7 +271,12 @@ public final class ContainerHarness {
                     image + " is not held by this engine; run scripts/prepare_interop_images");
         }
         final String name = "slingshot-agent-interop-" + UUID.randomUUID();
+        // Logged to a file the engine owns rather than to the system journal: readiness is read
+        // from what a container wrote, and a journal is free to drop a burst of early lines under
+        // load - which is exactly when a store announces it is listening, and exactly the line
+        // this waits for. A file drops nothing, so a ready container is always seen to be ready.
         final List<String> command = new ArrayList<>(List.of(engine, "run", "--detach",
+                "--log-driver", FILE_LOG_DRIVER,
                 "--name", name, "--label", "harness=" + HARNESS_LABEL,
                 "--publish", "127.0.0.1::" + containerPort));
         if (attachment.isAttached()) {
@@ -530,6 +535,9 @@ public final class ContainerHarness {
             throw new UncheckedIOException(failure);
         }
     }
+
+    /** The engine's own file-backed log driver, which keeps every line a container writes. */
+    private static final String FILE_LOG_DRIVER = "k8s-file";
 
     /** How much of a container identifier is enough to recognise a capture file by. */
     private static final int IDENTIFIER_PREFIX_LENGTH = 12;
