@@ -2249,3 +2249,8 @@ reason = "The platform's own configuration admin, with the meta type service dec
 name = "ConfigurationAdminCatalogues"
 pattern = "accessor"
 reason = "The component the configuration commands reach the platform's configuration admin through. It holds only how to open a stateless view, and opens one for every run."
+
+[[type]]
+name = "TemplateContent"
+pattern = "stateless-policy"
+reason = "What a template gives a page or a fragment variation made from it: its initial content and the resource type it renders with, copied through the caller's own session in the same commit, leaving the repository's own bookkeeping for the repository to write."

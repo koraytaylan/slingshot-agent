@@ -21,6 +21,7 @@ import rs.slingshot.agent.command.mutation.ReferencePolicy;
 import rs.slingshot.agent.command.mutation.RepositoryReach;
 import rs.slingshot.agent.command.mutation.SingleCommit;
 import rs.slingshot.agent.command.page.CreatePageHandler;
+import rs.slingshot.agent.command.page.TemplateContent;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
@@ -346,6 +347,9 @@ public final class FragmentMutationHandler implements CommandHandler {
         return builtExperience(command, parent, session);
     }
 
+    /** How many nodes a template's initial content may hold before a fragment is refused. */
+    private static final long TEMPLATE_CONTENT_NODES = 10_000;
+
     private static MutationOutcome builtExperience(CreateExperienceFragmentCommand command,
                                                    Resource parent, ResourceResolver session) {
         try {
@@ -358,9 +362,22 @@ public final class FragmentMutationHandler implements CommandHandler {
             final Resource variation = session.create(fragment, command.variationName(), Map.of(
                     ListChildPagesHandler.TYPE_PROPERTY,
                     FragmentHandlers.EXPERIENCE_FRAGMENT_TYPE));
-            session.create(variation, ListChildPagesHandler.PAGE_CONTENT,
-                    contentOf(command.title(), Map.of(CreatePageHandler.TEMPLATE_PROPERTY,
-                            command.templatePath())));
+            // A variation is a page made from the fragment's template, and starts with that
+            // template's content and renders with its resource type, as a page made from it does.
+            final Resource template = session.getResource(command.templatePath());
+            final java.util.Optional<Resource> initial = java.util.Optional.ofNullable(template)
+                    .flatMap(TemplateContent::initialOf);
+            final Map<String, Object> carried = initial.map(TemplateContent::propertiesOf)
+                    .orElseGet(LinkedHashMap::new);
+            java.util.Optional.ofNullable(template).flatMap(TemplateContent::resourceTypeOf)
+                    .ifPresent(type -> carried.putIfAbsent(TemplateContent.RESOURCE_TYPE, type));
+            carried.put(CreatePageHandler.TEMPLATE_PROPERTY, command.templatePath());
+            final Resource content = session.create(variation, ListChildPagesHandler.PAGE_CONTENT,
+                    contentOf(command.title(), carried));
+            if (initial.isPresent()) {
+                TemplateContent.copyChildren(session, initial.get(), content,
+                        TEMPLATE_CONTENT_NODES);
+            }
             return sealed(session, CreateExperienceFragmentResult.documentOf(command.targetPath(),
                     command.variationPath()));
         } catch (final PersistenceException refused) {

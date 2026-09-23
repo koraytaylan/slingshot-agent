@@ -24,7 +24,7 @@ import org.apache.sling.api.resource.ResourceResolver;
  * stamps and mixins - is left for the repository to write for the new nodes rather than copied
  * from the template's.</p>
  */
-final class TemplateContent {
+public final class TemplateContent {
 
     /** Where an editable template keeps a new page's content. */
     private static final String INITIAL = "initial/jcr:content";
@@ -36,7 +36,7 @@ final class TemplateContent {
     private static final String STATIC = "jcr:content";
 
     /** The property a resource renders by. */
-    static final String RESOURCE_TYPE = "sling:resourceType";
+    public static final String RESOURCE_TYPE = "sling:resourceType";
 
     /** What the repository writes for itself on every node, and is never copied. */
     private static final Set<String> BOOKKEEPING = Set.of("jcr:primaryType", "jcr:mixinTypes",
@@ -52,7 +52,7 @@ final class TemplateContent {
      * @param template the template
      * @return its initial content resource
      */
-    static Optional<Resource> initialOf(Resource template) {
+    public static Optional<Resource> initialOf(Resource template) {
         return Optional.ofNullable(template.getChild(INITIAL))
                 .or(() -> Optional.ofNullable(template.getChild(STATIC)));
     }
@@ -63,7 +63,7 @@ final class TemplateContent {
      * @param template the template
      * @return the resource type
      */
-    static Optional<String> resourceTypeOf(Resource template) {
+    public static Optional<String> resourceTypeOf(Resource template) {
         return Optional.ofNullable(template.getChild(STRUCTURE))
                 .or(() -> initialOf(template))
                 .map(content -> content.getValueMap().get(RESOURCE_TYPE, String.class));
@@ -75,7 +75,7 @@ final class TemplateContent {
      * @param source the resource
      * @return the properties a copy of it is written with
      */
-    static Map<String, Object> propertiesOf(Resource source) {
+    public static Map<String, Object> propertiesOf(Resource source) {
         final Map<String, Object> copied = new LinkedHashMap<>();
         source.getValueMap().forEach((name, value) -> {
             if (!BOOKKEEPING.contains(name)) {
@@ -95,7 +95,7 @@ final class TemplateContent {
      * @return how many nodes it wrote
      * @throws PersistenceException where the repository refuses one
      */
-    static long copyChildren(ResourceResolver session, Resource source, Resource target,
+    public static long copyChildren(ResourceResolver session, Resource source, Resource target,
                              long budget) throws PersistenceException {
         long written = 0;
         for (final Resource child : source.getChildren()) {
