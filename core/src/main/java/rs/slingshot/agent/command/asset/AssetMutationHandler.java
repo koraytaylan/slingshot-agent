@@ -181,10 +181,14 @@ public final class AssetMutationHandler implements CommandHandler {
         session.create(content, "metadata", metadata);
         final Resource renditions = session.create(content, "renditions",
                 Map.of(ListChildPagesHandler.TYPE_PROPERTY, "nt:folder"));
-        session.create(renditions, "original", Map.of(
-                ListChildPagesHandler.TYPE_PROPERTY, "nt:file",
+        // The original is a file like any other: its bytes and their type live on the file's own
+        // resource node, which is the only place the repository will hold them.
+        final Resource original = session.create(renditions, "original", Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, "nt:file"));
+        session.create(original, ListChildPagesHandler.PAGE_CONTENT, Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, "nt:resource",
                 "jcr:mimeType", command.payload().mediaType(),
-                "jcr:data_length", command.payload().byteLength()));
+                "jcr:data", new java.io.ByteArrayInputStream(command.payload().content())));
     }
 
     private Answer metadata(DocumentValue.Mapping arguments, ResourceResolver resolver) {

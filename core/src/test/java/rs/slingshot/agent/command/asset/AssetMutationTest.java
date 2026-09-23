@@ -73,6 +73,24 @@ final class AssetMutationTest {
         assertEquals("image/png",
                 stored(LIBRARY + "/hero.png/" + AssetHandlers.METADATA_NODE, "dc:format"),
                 "the asset does not record what kind of file it is");
+        final String original = LIBRARY + "/hero.png/jcr:content/renditions/original";
+        assertEquals("nt:file", stored(original, ListChildPagesHandler.TYPE_PROPERTY));
+        assertEquals(java.util.Set.of(ListChildPagesHandler.TYPE_PROPERTY),
+                java.util.Objects.requireNonNull(sling.resourceResolver().getResource(original),
+                        "the original").getValueMap().keySet(),
+                "the original file carries properties a file node cannot hold");
+        assertEquals("nt:resource", stored(original + "/jcr:content",
+                ListChildPagesHandler.TYPE_PROPERTY));
+        assertEquals("image/png", stored(original + "/jcr:content", "jcr:mimeType"));
+        try (java.io.InputStream bytes = java.util.Objects.requireNonNull(
+                java.util.Objects.requireNonNull(sling.resourceResolver().getResource(
+                        original + "/jcr:content"), "the original's content").getValueMap()
+                        .get("jcr:data", java.io.InputStream.class), "the original's bytes")) {
+            assertEquals("a tiny image", new String(bytes.readAllBytes(), StandardCharsets.UTF_8),
+                    "the original's bytes were not stored");
+        } catch (final java.io.IOException unreadable) {
+            throw new java.io.UncheckedIOException(unreadable);
+        }
         assertTrue(!String.valueOf(made).contains("rendition_count"),
                 "the answer claims something about renditions, which the platform generates"
                         + " afterwards and this command cannot observe");
