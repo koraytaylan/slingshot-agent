@@ -156,9 +156,58 @@ public final class LoadContentResult {
      *
      * @param category the declared failure category
      * @param detail what was refused, naming the property and the type rather than the value
+     * @param document the refusal in the client's own closed shape for it
      */
-    public record Refused(String category, String detail) implements Outcome {
+    public record Refused(String category, String detail, DocumentValue.Mapping document)
+            implements Outcome {
     }
+
+    /** The budget a walk that examined too many nodes ran out of. */
+    public static final String RESOURCE_NODES = "resource_nodes";
+
+    /** The budget a walk that ran too long ran out of. */
+    public static final String TRAVERSAL_DURATION = "traversal_duration";
+
+    /** The role an unrepresentable property value stood in. */
+    public static final String PROPERTY_VALUE = "property_value";
+
+    /**
+     * A walk that ran out of one of its budgets, naming which and nothing else.
+     *
+     * @param budget which budget ran out
+     * @param detail what was observed
+     * @return the refusal
+     */
+    static Refused budgetExceeded(String budget, String detail) {
+        final SequencedMap<String, DocumentValue> document = new LinkedHashMap<>();
+        document.put(FAILURE, new DocumentValue.Text(BUDGET_EXCEEDED));
+        document.put(BUDGET, new DocumentValue.Text(budget));
+        return new Refused(BUDGET_EXCEEDED, detail, new DocumentValue.Mapping(document));
+    }
+
+    /**
+     * A value this build cannot represent, named by where it stood and in what role.
+     *
+     * @param path the resource it stood in
+     * @param detail what was observed
+     * @return the refusal
+     */
+    static Refused unsupported(String path, String detail) {
+        final SequencedMap<String, DocumentValue> document = new LinkedHashMap<>();
+        document.put(FAILURE, new DocumentValue.Text(UNSUPPORTED_VALUE));
+        document.put(PATH, new DocumentValue.Text(path));
+        document.put(VALUE_ROLE, new DocumentValue.Text(PROPERTY_VALUE));
+        return new Refused(UNSUPPORTED_VALUE, detail, new DocumentValue.Mapping(document));
+    }
+
+    /** The member a refusal names its category in. */
+    private static final String FAILURE = "failure";
+
+    /** The member a budget refusal names its budget in. */
+    private static final String BUDGET = "budget";
+
+    /** The member an unsupported value's role is named in. */
+    private static final String VALUE_ROLE = "value_role";
 
     /** The category an unsupported repository value is refused under. */
     public static final String UNSUPPORTED_VALUE = "unsupported_repository_value";
@@ -338,11 +387,11 @@ public final class LoadContentResult {
 
         Outcome node(Node node, long currentDepth, long depthLimit) throws RepositoryException {
             if (read.incrementAndGet() > nodeBudget) {
-                return new Refused(BUDGET_EXCEEDED, "this load examined more than the "
+                return budgetExceeded(RESOURCE_NODES, "this load examined more than the "
                         + nodeBudget + " nodes it is allowed, and stopped rather than going on");
             }
             if (System.currentTimeMillis() - startedMilliseconds > timeBudgetMilliseconds) {
-                return new Refused(BUDGET_EXCEEDED, "this load ran longer than the "
+                return budgetExceeded(TRAVERSAL_DURATION, "this load ran longer than the "
                         + timeBudgetMilliseconds + " milliseconds it is allowed after examining "
                         + read.get() + " nodes; ask for less depth or a narrower path");
             }
@@ -382,7 +431,7 @@ public final class LoadContentResult {
             final Optional<RepositoryValueKind> kind =
                     RepositoryValueKind.of(property.getType());
             if (kind.isEmpty()) {
-                return new Refused(UNSUPPORTED_VALUE, property.getName() + " at " + node.getPath()
+                return unsupported(node.getPath(), property.getName() + " at " + node.getPath()
                         + " is a " + RepositoryValueKind.unsupportedName(property.getType())
                         + ", which this build does not represent faithfully; it is refused rather"
                         + " than rendered as text nobody could write back");

@@ -98,7 +98,8 @@ public final class LoadContentHandler implements CommandHandler {
     private static Answer answered(LoadContentResult.Outcome rendered,
                                    LoadContentCommand command) {
         if (rendered instanceof final LoadContentResult.Refused refused) {
-            return new Failed(refused.category(), refused.detail());
+            return new Failed(refused.category(), refused.detail(),
+                    new Stated(refused.document()));
         }
         final LoadContentResult.Rendered held = (LoadContentResult.Rendered) rendered;
         if (!held.overflowed(inlineBound())) {

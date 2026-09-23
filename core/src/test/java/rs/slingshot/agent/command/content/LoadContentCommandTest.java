@@ -239,6 +239,11 @@ final class LoadContentCommandTest {
                 LoadContentResult.of(root, 1, WIDE / 2),
                 "a walk past its budget answered with a subtree rather than refusing");
         assertEquals(LoadContentResult.BUDGET_EXCEEDED, refused.category());
+        assertEquals(java.util.Map.of("failure", new DocumentValue.Text(
+                        LoadContentResult.BUDGET_EXCEEDED), "budget",
+                        new DocumentValue.Text(LoadContentResult.RESOURCE_NODES)),
+                refused.document().members(),
+                "a budget refusal is not the closed shape the client reads");
     }
 
     @Test
@@ -252,6 +257,21 @@ final class LoadContentCommandTest {
                 "a walk past its time answered with a subtree rather than refusing");
         assertEquals(LoadContentResult.BUDGET_EXCEEDED, refused.category());
         assertTrue(refused.detail().contains("milliseconds"), refused.detail());
+        assertEquals(new DocumentValue.Text(LoadContentResult.TRAVERSAL_DURATION),
+                refused.document().member("budget").orElseThrow(),
+                "a walk that ran too long did not say which budget it ran out of");
+    }
+
+    @Test
+    @DisplayName("an unrepresentable value is refused naming where it stood and in what role")
+    void anunsupportedValueNamesItsPlaceAndRole() {
+        final LoadContentResult.Refused refused = LoadContentResult.unsupported("/content/odd",
+                "odd is of a type this build does not represent");
+        assertEquals(LoadContentResult.UNSUPPORTED_VALUE, refused.category());
+        assertEquals(java.util.List.of("failure", "path", "value_role"),
+                java.util.List.copyOf(refused.document().members().keySet()));
+        assertEquals(new DocumentValue.Text(LoadContentResult.PROPERTY_VALUE),
+                refused.document().member("value_role").orElseThrow());
     }
 
     /** A time budget spent before the walk began, which the first node already exceeds. */
