@@ -52,10 +52,12 @@ final class PageTree {
     private final long timeLimitMilliseconds;
     private final long startedMilliseconds = System.currentTimeMillis();
     private final AtomicLong examined = new AtomicLong();
+    private final List<String> answered;
 
-    private PageTree(long budget, long timeLimitMilliseconds) {
+    private PageTree(long budget, long timeLimitMilliseconds, List<String> answered) {
         this.budget = budget;
         this.timeLimitMilliseconds = timeLimitMilliseconds;
+        this.answered = List.copyOf(answered);
     }
 
     /** How a walk ended. */
@@ -96,9 +98,29 @@ final class PageTree {
      */
     static Walk pagesUnder(ResourceResolver resolver, Resource anchor, long budget,
                            long timeLimitMilliseconds, Consumer<Resource> visitor) {
+        return pagesUnder(resolver, anchor, budget, timeLimitMilliseconds, List.of(), visitor);
+    }
+
+    /**
+     * Visits every page under an anchor except those beneath subtrees already answered for.
+     *
+     * <p>A subtree an index has answered for is not walked again: its pages are already known, and
+     * walking them would spend the budget the rest of the anchor needs.</p>
+     *
+     * @param resolver the caller's read-only resolver
+     * @param anchor the node the caller named
+     * @param budget how many nodes the walk may read
+     * @param timeLimitMilliseconds how long the walk may take
+     * @param answered the subtrees not to go into
+     * @param visitor what is done with each page
+     * @return whether every page outside the answered subtrees was visited
+     */
+    static Walk pagesUnder(ResourceResolver resolver, Resource anchor, long budget,
+                           long timeLimitMilliseconds, List<String> answered,
+                           Consumer<Resource> visitor) {
         final Optional<Resource> start = "/".equals(anchor.getPath())
                 ? Optional.ofNullable(resolver.getResource(CONTENT)) : Optional.of(anchor);
-        final PageTree tree = new PageTree(budget, timeLimitMilliseconds);
+        final PageTree tree = new PageTree(budget, timeLimitMilliseconds, answered);
         start.ifPresent(top -> tree.walk(top, visitor));
         return tree.within() ? Walk.FINISHED : Walk.EXHAUSTED;
     }
@@ -142,7 +164,7 @@ final class PageTree {
     /** Reads one child, and answers whether the walk goes into it. */
     private boolean opens(Resource child, Level level) {
         examined.incrementAndGet();
-        if (NOT_SITES.contains(child.getPath())) {
+        if (NOT_SITES.contains(child.getPath()) || answered.contains(child.getPath())) {
             return false;
         }
         return isPage(child) || level.opens() == Opens.FOLDERS_AND_PAGES

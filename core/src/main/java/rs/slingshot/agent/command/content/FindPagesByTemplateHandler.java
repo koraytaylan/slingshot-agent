@@ -90,9 +90,11 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
         }
         final PageTree.Walk walked;
         if (indexed instanceof final IndexedPageSearch.Found found) {
-            search.consider(root);
             found.pages().forEach(search::consider);
-            walked = PageTree.Walk.FINISHED;
+            // Whatever of the root no index serves is walked, and only that.
+            walked = found.covered().contains(command.rootPath()) ? PageTree.Walk.FINISHED
+                    : PageTree.pagesUnder(resolver, root, context.discovery().limit(),
+                            context.time().limit(), found.covered(), search::consider);
         } else {
             walked = PageTree.pagesUnder(resolver, root, context.discovery().limit(),
                     context.time().limit(), search::consider);

@@ -176,6 +176,7 @@ final class FindPagesByTemplateCommandTest {
     @DisplayName("where the page index answers, its pages are the answer and nothing is walked")
     void thepageIndexAnswersWhereItIsThere() {
         corpus();
+        sling.create().resource("/oak:index/cqPageLucene", Map.of("type", "lucene"));
         sling.create().resource("/oak:index/cqPageLucene/indexRules/cq:Page/properties/cqTemplate",
                 Map.of("name", IndexedPageSearch.TEMPLATE_PROPERTY, "propertyIndex", true));
         final DocumentValue.Mapping found = assertInstanceOf(CommandHandler.Produced.class,
