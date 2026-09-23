@@ -252,6 +252,22 @@ final class DownloadContentPackageCommandTest {
         assertEquals(DownloadContentPackageHandler.PATTERN_REJECTED,
                 DownloadContentPackageHandler.categoryFor(malformed.refusal()),
                 "a malformed pattern reaches a category this command's own row does not declare");
+        assertEquals(java.util.Optional.of(java.util.Map.of(
+                        "failure", new DocumentValue.Text("pattern_rejected"),
+                        "collection", new DocumentValue.Text("exclusion"),
+                        "expression_index", new DocumentValue.Whole(1))),
+                DownloadContentPackageHandler.rejectedPattern(argument(List.of("/content/site"),
+                        List.of("^/content"), List.of("/private", "(?P<named>x)")))
+                        .map(DocumentValue.Mapping::members),
+                "the refusal did not name the one pattern this platform will not compile");
+        assertEquals(java.util.Optional.of(new DocumentValue.Whole(0)),
+                DownloadContentPackageHandler.rejectedPattern(argument(List.of("/content/site"),
+                        List.of("^/content"), List.of()))
+                        .flatMap(document -> document.member("expression_index")),
+                "a refusal for another reason did not name the first filter there is");
+        assertEquals(java.util.Optional.empty(), DownloadContentPackageHandler.rejectedPattern(
+                argument(List.of("/content/site"), List.of(), List.of())),
+                "a request with no filter at all was given a filter to blame");
         assertTrue(DownloadContentPackageHandler.declaredCategories().containsAll(
                         java.util.Arrays.stream(DownloadContentPackageCommand.Refusal.values())
                                 .map(DownloadContentPackageHandler::categoryFor)

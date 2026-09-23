@@ -9,9 +9,11 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SequencedMap;
 import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -130,11 +132,83 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         final DownloadContentPackageCommand.Outcome asked =
                 DownloadContentPackageCommand.of(arguments, contract);
         if (asked instanceof final DownloadContentPackageCommand.Refused refused) {
-            return new Failed(categoryFor(refused.refusal()),
-                    refused.refusal() + ": " + refused.detail());
+            final String category = categoryFor(refused.refusal());
+            final String detail = refused.refusal() + ": " + refused.detail();
+            if (!PATTERN_REJECTED.equals(category)) {
+                return new Failed(category, detail);
+            }
+            final Optional<DocumentValue.Mapping> named = rejectedPattern(arguments);
+            return named.isPresent() ? new Failed(category, detail, new Stated(named.get()))
+                    : new Failed(category, detail);
         }
         return built(((DownloadContentPackageCommand.Held) asked).command(), resolver, context);
     }
+
+    /**
+     * The refusal naming which filter was rejected, where the request carries one to name.
+     *
+     * <p>The client reads a rejected pattern as the collection it stood in and its position there,
+     * and checks that position against its own request - so the refusal names the first pattern
+     * this platform's own expressions will not compile, which a client whose dialect accepted it
+     * cannot find out any other way. A request refused for another reason still has one filter to
+     * name: the first, in the first collection that holds any.</p>
+     *
+     * @param arguments the argument document the caller sent
+     * @return the refusal, or nothing where the request holds no filter at all
+     */
+    static Optional<DocumentValue.Mapping> rejectedPattern(DocumentValue.Mapping arguments) {
+        final List<Map.Entry<String, List<String>>> collections = List.of(
+                Map.entry(INCLUSION, texts(arguments,
+                        DownloadContentPackageCommand.INCLUSION_FILTERS)),
+                Map.entry(EXCLUSION, texts(arguments,
+                        DownloadContentPackageCommand.EXCLUSION_FILTERS)));
+        final Optional<DocumentValue.Mapping> uncompiled = collections.stream()
+                .flatMap(collection -> java.util.stream.IntStream
+                        .range(0, collection.getValue().size())
+                        .filter(index -> !compiles(collection.getValue().get(index)))
+                        .mapToObj(index -> patternRefusal(collection.getKey(), index)))
+                .findFirst();
+        if (uncompiled.isPresent()) {
+            return uncompiled;
+        }
+        return collections.stream()
+                .filter(collection -> !collection.getValue().isEmpty())
+                .findFirst()
+                .map(collection -> patternRefusal(collection.getKey(), 0));
+    }
+
+    private static List<String> texts(DocumentValue.Mapping arguments, String member) {
+        return arguments.member(member)
+                .filter(DocumentValue.Sequence.class::isInstance)
+                .map(held -> ((DocumentValue.Sequence) held).items().stream()
+                        .map(item -> item instanceof final DocumentValue.Text text
+                                ? text.value() : "")
+                        .toList())
+                .orElseGet(List::of);
+    }
+
+    private static boolean compiles(String pattern) {
+        try {
+            java.util.regex.Pattern.compile(pattern);
+            return true;
+        } catch (final java.util.regex.PatternSyntaxException malformed) {
+            return false;
+        }
+    }
+
+    private static DocumentValue.Mapping patternRefusal(String collection, long index) {
+        final SequencedMap<String, DocumentValue> refusal = new LinkedHashMap<>();
+        refusal.put("failure", new DocumentValue.Text(PATTERN_REJECTED));
+        refusal.put("collection", new DocumentValue.Text(collection));
+        refusal.put("expression_index", new DocumentValue.Whole(index));
+        return new DocumentValue.Mapping(refusal);
+    }
+
+    /** How the client names the inclusion filters. */
+    private static final String INCLUSION = "inclusion";
+
+    /** How the client names the exclusion filters. */
+    private static final String EXCLUSION = "exclusion";
 
     /**
      * Which declared category one argument refusal is reported under.

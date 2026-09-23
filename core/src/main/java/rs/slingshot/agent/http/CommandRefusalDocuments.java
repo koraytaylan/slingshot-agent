@@ -113,7 +113,7 @@ public final class CommandRefusalDocuments {
         return switch (category) {
             case "discovery_budget_exceeded" -> CANDIDATE_NODES;
             case "evaluation_budget_exceeded" -> "candidate_paths";
-            case "configuration_lookup_budget_exceeded" -> "lookup_duration";
+            case "configuration_lookup_budget_exceeded" -> "matching_configurations";
             case "configuration_value_budget_exceeded" -> "scalar_string_bytes";
             case "configuration_result_budget_exceeded" -> "property_count";
             default -> "";
