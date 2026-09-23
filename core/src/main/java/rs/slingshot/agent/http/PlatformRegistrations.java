@@ -6,8 +6,13 @@ package rs.slingshot.agent.http;
 import java.util.EnumSet;
 import java.util.List;
 import rs.slingshot.agent.command.CommandDispatch;
+import rs.slingshot.agent.command.framework.FrameworkHandler;
+import rs.slingshot.agent.command.framework.ListBundlesCommand;
+import rs.slingshot.agent.command.framework.ListComponentsCommand;
+import rs.slingshot.agent.command.framework.SetBundleStateCommand;
 import rs.slingshot.agent.command.job.JobCommands;
 import rs.slingshot.agent.command.job.JobHandler;
+import rs.slingshot.agent.command.platform.BundleInventory;
 import rs.slingshot.agent.command.platform.ControlCapability;
 import rs.slingshot.agent.command.platform.DefaultPrincipalDirectory;
 import rs.slingshot.agent.command.platform.JobInventory;
@@ -93,7 +98,24 @@ final class PlatformRegistrations {
                         admission))));
         seams.workflows().forEach(workflows ->
                 registered.addAll(workflows(contract, workflows, control)));
+        seams.bundles().forEach(inventory ->
+                registered.addAll(bundles(contract, inventory, control)));
         return List.copyOf(registered);
+    }
+
+    private static List<CommandDispatch.Registration> bundles(AgentContract contract,
+                                                             BundleInventory inventory,
+                                                             PlatformControl control) {
+        return List.of(
+                new CommandDispatch.Registration(ListBundlesCommand.WIRE_NAME,
+                        new FrameworkHandler(contract, FrameworkHandler.Kind.BUNDLES, inventory,
+                                control)),
+                new CommandDispatch.Registration(ListComponentsCommand.WIRE_NAME,
+                        new FrameworkHandler(contract, FrameworkHandler.Kind.COMPONENTS, inventory,
+                                control)),
+                new CommandDispatch.Registration(SetBundleStateCommand.WIRE_NAME,
+                        new FrameworkHandler(contract, FrameworkHandler.Kind.TRANSITION, inventory,
+                                control)));
     }
 
     private static List<CommandDispatch.Registration> workflows(AgentContract contract,

@@ -85,6 +85,7 @@ import rs.slingshot.agent.command.page.MovePageCommand;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.command.page.UpdatePageCommand;
 import rs.slingshot.agent.command.page.UpdatePageHandler;
+import rs.slingshot.agent.command.platform.BundleInventory;
 import rs.slingshot.agent.command.platform.ContentAdmission;
 import rs.slingshot.agent.command.platform.JobInventory;
 import rs.slingshot.agent.command.platform.WorkflowService;
@@ -228,6 +229,27 @@ public final class DefaultCommandRuntime implements CommandRuntime {
      */
     public void workflowsUnavailable(WorkflowService workflows) {
         seams.updateAndGet(held -> held.withWorkflows(java.util.List.of()));
+    }
+
+    /**
+     * Binds the bundle inventory the platform bundle provides.
+     *
+     * @param bundles what answers the three bundle and component commands
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL,
+            policyOption = ReferencePolicyOption.GREEDY, unbind = "bundlesUnavailable")
+    public void bundlesAvailable(BundleInventory bundles) {
+        seams.updateAndGet(held -> held.withBundles(java.util.List.of(bundles)));
+    }
+
+    /**
+     * Unbinds the bundle inventory, after which the bundle and component commands are not
+     * advertised.
+     *
+     * @param bundles the inventory going away
+     */
+    public void bundlesUnavailable(BundleInventory bundles) {
+        seams.updateAndGet(held -> held.withBundles(java.util.List.of()));
     }
 
     /** Revokes the runtime before the DS component is released. */

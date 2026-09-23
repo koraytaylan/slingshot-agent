@@ -185,3 +185,38 @@ range = "[0.0,1)"
 bundle = "aem"
 provided_by = ["aem-cloud-service", "aem-6-5-lts"]
 reason = "The seams the Sling-only bundle exports and this one implements — the only package it exports at all. An exported package is a promise, and this is the smallest one that makes the two-bundle split work: the interfaces state what a platform service does with none of the deciding that surrounds it, so the deciding stays where a public tier can prove it."
+
+[[package]]
+name = "org.osgi.framework"
+range = "[1.10,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The framework's own bundles, which the bundle listing reads and the bundle control starts and stops. Only the bundle-inventory adapter reaches it, and it refuses to touch the framework itself or the bundle answering."
+
+[[package]]
+name = "org.osgi.framework.dto"
+range = "[1.8,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The bundle a component description names, which is how the component listing says which bundle declares each component."
+
+[[package]]
+name = "org.osgi.framework.wiring"
+range = "[1.2,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The framework's wiring, through which a bundle refresh is asked for rather than performed by hand."
+
+[[package]]
+name = "org.osgi.service.component.runtime"
+range = "[1.5,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The component runtime, read for the component listing and never asked to enable or disable anything."
+
+[[package]]
+name = "org.osgi.service.component.runtime.dto"
+range = "[1.5,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The runtime's descriptions of components and their configurations, from which a component's state is read."
