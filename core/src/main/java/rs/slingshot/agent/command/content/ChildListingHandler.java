@@ -156,6 +156,9 @@ public final class ChildListingHandler implements CommandHandler {
         while (held.hasNext()) {
             final Resource child = held.next();
             final String childType = typeOf(child);
+            if (!isNode(child)) {
+                continue;
+            }
             if (EVERY_TYPE.equals(type) || type.equals(childType)) {
                 children.add(new ChildNodeListingResult.Child(child.getPath(), childType,
                         ListChildPagesHandler.titleOf(child)));
@@ -173,6 +176,20 @@ public final class ChildListingHandler implements CommandHandler {
     public static String whyNothingIsListed(String parent) {
         return parent + " is not a path this caller can read, which is the same answer as nothing"
                 + " being there";
+    }
+
+    /**
+     * Whether one resource is a repository node, which is whether it carries a primary type.
+     *
+     * <p>A resource provider can surface a synthetic resource that no node backs, as the root's
+     * children do. It has no primary type to report, and a listing of nodes is not a listing of it.
+     * </p>
+     *
+     * @param resource the child
+     * @return whether it is a node
+     */
+    private static boolean isNode(Resource resource) {
+        return resource.getValueMap().get(TYPE_PROPERTY, String.class) != null;
     }
 
     /**

@@ -115,6 +115,20 @@ final class ChildListingsCommandTest {
     }
 
     @Test
+    @DisplayName("a child with no primary type is not a node, so it is not listed")
+    void aChildWithNoPrimaryTypeIsNotListed() {
+        mixedAnchor();
+        final String synthetic = ANCHOR + "/d-synthetic";
+        sling.create().resource(synthetic, java.util.Map.of());
+        final DocumentValue.Mapping listed = produced(new ChildListingHandler(CONTRACT),
+                nodes(ANCHOR, window(0, 20)), readOnly());
+        assertEquals(List.of(FOLDER, UNTITLED_PAGE, TITLED_PAGE), paths(listed),
+                "a resource with no primary type was listed as a node");
+        assertTrue(types(listed).stream().noneMatch("null"::equals),
+                "an absent primary type was spelled as the text null");
+    }
+
+    @Test
     @DisplayName("a missing anchor and an examination overrun refuse with no matches")
     void amissingAnchorAndABudgetOverrunRefuseWithNoMatches() {
         mixedAnchor();
