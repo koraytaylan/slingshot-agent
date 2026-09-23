@@ -143,9 +143,29 @@ public final class ListAssetRenditionsHandler implements CommandHandler {
                 content == null ? rendition.getValueMap() : content.getValueMap();
         return new ListAssetRenditionsResult.Rendition(rendition.getName(),
                 values.get(MEDIA_TYPE_PROPERTY, ""),
-                values.get(SIZE_PROPERTY, 0L),
+                sizeOf(content == null ? rendition : content, values),
                 rendition.getPath());
     }
+
+    /**
+     * How large one rendition's bytes are, asked of the binary itself.
+     *
+     * <p>The length of the stored binary where the repository holds one, which is the only
+     * answer that cannot disagree with the bytes; a recorded size only where there is no binary to
+     * ask, as a store that is not a repository keeps it.</p>
+     */
+    private static long sizeOf(Resource content, org.apache.sling.api.resource.ValueMap values) {
+        final javax.jcr.Node node = content.adaptTo(javax.jcr.Node.class);
+        try {
+            return node != null && node.hasProperty(DATA_PROPERTY)
+                    ? node.getProperty(DATA_PROPERTY).getLength() : values.get(SIZE_PROPERTY, 0L);
+        } catch (final javax.jcr.RepositoryException unreadable) {
+            return values.get(SIZE_PROPERTY, 0L);
+        }
+    }
+
+    /** The property a rendition's bytes are held in. */
+    private static final String DATA_PROPERTY = "jcr:data";
 
     /**
      * The window's worth of renditions.

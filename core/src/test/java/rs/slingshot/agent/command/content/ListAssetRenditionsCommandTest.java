@@ -53,6 +53,27 @@ final class ListAssetRenditionsCommandTest {
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
 
+    private final SlingContext repository = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @Test
+    @DisplayName("a rendition's size is its stored binary's length, asked of the binary itself")
+    void arenditionsSizeIsItsBinarysLength() throws javax.jcr.RepositoryException {
+        final javax.jcr.Session session = java.util.Objects.requireNonNull(
+                repository.resourceResolver().adaptTo(javax.jcr.Session.class), "a session");
+        final javax.jcr.Node file = session.getRootNode().addNode("original", "nt:file");
+        final javax.jcr.Node content = file.addNode("jcr:content", "nt:resource");
+        content.setProperty("jcr:mimeType", "image/png");
+        content.setProperty("jcr:data", session.getValueFactory().createBinary(
+                new java.io.ByteArrayInputStream(new byte[] {1, 2, 3})));
+        session.save();
+        final ListAssetRenditionsResult.Rendition described = ListAssetRenditionsHandler.describe(
+                java.util.Objects.requireNonNull(repository.resourceResolver()
+                        .getResource("/original"), "the rendition"));
+        assertEquals(3, described.byteLength(),
+                "the size was not read from the bytes the repository holds");
+        assertEquals("image/png", described.mediaType());
+    }
+
     @Test
     @DisplayName("every rendition is listed with its size, and the original is one of them")
     void everyrenditionIsListedIncludingTheOriginal() {
@@ -75,6 +96,25 @@ final class ListAssetRenditionsCommandTest {
 
     /** How many renditions the asset carries. */
     private static final int THREE = 3;
+
+    @Test
+    @DisplayName("a malformed request and an asset with more renditions than may be examined refuse")
+    void malformedAndOverBudgetRequestsRefuse() {
+        asset();
+        assertEquals(ListAssetRenditionsHandler.ARGUMENT_REJECTED, assertInstanceOf(
+                CommandHandler.Failed.class, new ListAssetRenditionsHandler(CONTRACT).run(
+                        argumentWithout(ListAssetRenditionsCommand.ASSET_PATH), readOnly(),
+                        context()), "a request with no asset was answered").category());
+        final CallerContext narrow = new CallerContext(operation(),
+                new Budget(Budget.Kind.DISCOVERY, 1), Budget.time(CONTRACT),
+                new Budget(Budget.Kind.RESULT,
+                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
+                ProgressSink.under(CONTRACT));
+        assertEquals(ListAssetRenditionsHandler.DISCOVERY_BUDGET_EXCEEDED, assertInstanceOf(
+                CommandHandler.Failed.class, new ListAssetRenditionsHandler(CONTRACT).run(
+                        argument(ASSET, 100), readOnly(), narrow),
+                "three renditions were listed under a budget of one").category());
+    }
 
     @Test
     @DisplayName("no answer carries rendition bytes, and every path it carries is under the asset")
