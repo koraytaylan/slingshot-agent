@@ -226,17 +226,19 @@ public final class DownloadContentPackageHandler implements CommandHandler {
     private Answer built(DownloadContentPackageCommand command, ResourceResolver resolver,
                          CallerContext context) {
         final List<String> selected = new ArrayList<>();
+        final long started = System.currentTimeMillis();
         for (final String root : command.roots()) {
             final Resource held = resolver.getResource(root);
             if (held == null) {
                 return new Failed(ROOT_NOT_FOUND, root + " is not a path this caller can"
                         + " read, and a package cannot be built from a root that is not there");
             }
-            final Selection selection = select(held, command, context.discovery().limit(),
-                    selected.size());
+            final Selection selection = select(held, command, new Bounds(
+                    context.discovery().limit(), context.time().limit(), started), selected.size());
             if (selection.ending() == Ending.THE_BUDGET_RAN_OUT) {
                 return new Failed(EVALUATION_BUDGET_EXCEEDED, "this filter selects more than the "
-                        + context.discovery().limit() + " nodes that may be evaluated. It is"
+                        + context.discovery().limit() + " nodes that may be evaluated, or takes"
+                        + " longer than the " + context.time().limit() + " milliseconds it may. It is"
                         + " refused before anything is staged, because a build that cannot finish"
                         + " inside the execution budget would hold this caller's own request"
                         + " thread until something else gave up; narrowing the filter is the"
@@ -271,8 +273,22 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         THE_BUDGET_RAN_OUT
     }
 
+    /**
+     * How much one package's selection may examine, and since when.
+     *
+     * @param nodes how many nodes may be evaluated across every root
+     * @param milliseconds how long the selection may take
+     * @param started when it began
+     */
+    private record Bounds(long nodes, long milliseconds, long started) {
+
+        boolean spent(long evaluated) {
+            return evaluated > nodes || System.currentTimeMillis() - started > milliseconds;
+        }
+    }
+
     private static Selection select(Resource root, DownloadContentPackageCommand command,
-                                    long budget, long already) {
+                                    Bounds bounds, long already) {
         final List<String> found = new ArrayList<>();
         final java.util.Deque<Iterator<Resource>> pending = new java.util.ArrayDeque<>();
         Optional<Resource> resource = Optional.of(root);
@@ -280,17 +296,21 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         while (resource.isPresent()) {
             final Resource current = resource.orElseThrow();
             evaluated = evaluated + 1;
-            if (already + evaluated > budget) {
+            if (bounds.spent(already + evaluated)) {
                 return Selection.OVER_THE_BUDGET;
             }
             // An excluded path takes its whole subtree with it, so nothing beneath is visited. A
-            // path that is merely not included is still walked through: an inclusion's anchor may
-            // lie anywhere below it.
-            if (!command.excluded(current.getPath())) {
-                if (command.included(current.getPath())) {
-                    found.add(current.getPath());
+            // path that is merely not included is walked through only where an inclusion's anchor
+            // could still lie below it.
+            final String path = current.getPath();
+            if (!command.excluded(path)) {
+                final boolean included = command.included(path);
+                if (included) {
+                    found.add(path);
                 }
-                pending.push(current.listChildren());
+                if (included || command.worthDescending(path)) {
+                    pending.push(current.listChildren());
+                }
             }
             resource = next(pending);
         }

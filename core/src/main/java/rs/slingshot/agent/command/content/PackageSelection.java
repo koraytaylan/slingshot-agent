@@ -129,6 +129,56 @@ final class PackageSelection {
                         segments.subList(0, length))));
     }
 
+    /**
+     * Whether this expression could still match the path or something beneath it.
+     *
+     * <p>Read forwards: every position the tokens could stand at once the path's own segments are
+     * consumed. Where none is left, nothing below the path can match, and a walk looking for this
+     * expression's anchors has no reason to go further down.</p>
+     *
+     * @param path an absolute repository path
+     * @return whether it could
+     */
+    boolean reachesBelow(String path) {
+        java.util.Set<Integer> standing = closed(java.util.Set.of(0));
+        for (final String segment : segmentsOf(path)) {
+            final java.util.Set<Integer> next = standing.stream()
+                    .filter(position -> position < tokens.size())
+                    .flatMap(position -> advanced(tokens.get(position), segment, position))
+                    .collect(java.util.stream.Collectors.toSet());
+            standing = closed(next);
+            if (standing.isEmpty()) {
+                return false;
+            }
+        }
+        return !standing.isEmpty();
+    }
+
+    /** Where one token leaves a reader after it consumes one segment, if anywhere. */
+    private static java.util.stream.Stream<Integer> advanced(Token token, String segment,
+                                                             int position) {
+        return switch (token.kind()) {
+            case ANY -> java.util.stream.Stream.of(position);
+            case ONE -> java.util.stream.Stream.of(position + 1);
+            case LITERAL -> token.literal().equals(segment)
+                    ? java.util.stream.Stream.of(position + 1) : java.util.stream.Stream.empty();
+        };
+    }
+
+    /** Every position also reachable by letting an any-segments token match nothing. */
+    private java.util.Set<Integer> closed(java.util.Set<Integer> positions) {
+        final java.util.Set<Integer> closed = new java.util.HashSet<>(positions);
+        final java.util.Deque<Integer> pending = new java.util.ArrayDeque<>(positions);
+        while (!pending.isEmpty()) {
+            final int position = pending.pop();
+            if (position < tokens.size() && tokens.get(position).kind() == Kind.ANY
+                    && closed.add(position + 1)) {
+                pending.push(position + 1);
+            }
+        }
+        return closed;
+    }
+
     private boolean reached(boolean[][] reachable, int token, List<String> segments,
                             int segment) {
         final boolean more = segment < segments.size();

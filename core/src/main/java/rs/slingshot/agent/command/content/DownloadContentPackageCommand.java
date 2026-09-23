@@ -142,6 +142,21 @@ public record DownloadContentPackageCommand(String packageName, List<String> roo
                 || inclusionFilters.stream().anyMatch(expression -> anchored(expression, path));
     }
 
+    /**
+     * Whether a walk looking for inclusion anchors has any reason to go below one path.
+     *
+     * <p>Only where some inclusion could still match the path or something beneath it: a walk of a
+     * whole site for one section's anchors should read the way down to that section and nothing
+     * beside it.</p>
+     *
+     * @param path the path
+     * @return whether it does
+     */
+    public boolean worthDescending(String path) {
+        return inclusionFilters.isEmpty() || inclusionFilters.stream().anyMatch(expression ->
+                PackageSelection.of(expression).map(read -> read.reachesBelow(path)).orElse(false));
+    }
+
     private static boolean anchored(String expression, String path) {
         return PackageSelection.of(expression).map(read -> read.anchors(path)).orElse(false);
     }

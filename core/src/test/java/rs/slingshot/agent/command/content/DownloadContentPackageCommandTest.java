@@ -242,6 +242,12 @@ final class DownloadContentPackageCommandTest {
         assertTrue(literal.anchors("/content/a.b/child"), "an anchor did not select its subtree");
         assertFalse(literal.anchors("/content"), "a path above the anchor was selected");
         assertTrue(PackageSelection.of("/").orElseThrow().matches("/"));
+        final PackageSelection deep = PackageSelection.of("/content/*/en/(.*)").orElseThrow();
+        assertTrue(deep.reachesBelow("/content"));
+        assertTrue(deep.reachesBelow("/content/site"));
+        assertTrue(deep.reachesBelow("/content/site/en/page"));
+        assertFalse(deep.reachesBelow("/content/site/de"), "a walk would search a dead branch");
+        assertFalse(deep.reachesBelow("/apps"));
         for (final String refused : List.of("", "content", "/content//x", "/content/a*",
                 "/content/")) {
             assertTrue(PackageSelection.of(refused).isEmpty(), refused + " was accepted");
