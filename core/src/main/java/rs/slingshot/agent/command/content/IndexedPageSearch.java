@@ -32,7 +32,8 @@ import rs.slingshot.agent.command.DeclaredQuery;
  * <p>Every value in the statement is written so the query grammar cannot be left: the template is
  * a string with its quotes doubled, a subtree is a path refused where it holds a closing bracket,
  * and an index name is the definition's own node name, used only where it is made of letters,
- * digits, hyphens and underscores.</p>
+ * digits, hyphens and underscores, and written in brackets - without them the parser reads a
+ * versioned name such as {@code exampleIndex-custom-3} as ending at its first hyphen.</p>
  */
 final class IndexedPageSearch {
 
@@ -48,7 +49,7 @@ final class IndexedPageSearch {
     /** The statement's shape, with the subtree, the template and the index still to be written. */
     static final String STATEMENT = "SELECT [jcr:path] FROM [cq:Page] AS page"
             + " WHERE ISDESCENDANTNODE(page, [%s]) AND page.[jcr:content/cq:template] = '%s'"
-            + " OPTION(INDEX NAME %s)";
+            + " OPTION(INDEX NAME [%s])";
 
     /** The statement as the query coverage policy declares it. */
     static final DeclaredQuery DECLARED = new DeclaredQuery("find-pages-by-template", STATEMENT,

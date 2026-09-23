@@ -51,9 +51,9 @@ final class IndexedPageSearchTest {
         final List<String> run = resolver.issued.stream()
                 .filter(statement -> !statement.startsWith("EXPLAIN")).toList();
         assertEquals(2, run.size());
-        assertTrue(run.getFirst().endsWith(" OPTION(INDEX NAME otherIndex-custom-2)"),
+        assertTrue(run.getFirst().endsWith(" OPTION(INDEX NAME [otherIndex-custom-2])"),
                 run.getFirst());
-        assertTrue(run.getLast().endsWith(" OPTION(INDEX NAME exampleIndex-custom-3)"),
+        assertTrue(run.getLast().endsWith(" OPTION(INDEX NAME [exampleIndex-custom-3])"),
                 "an older version of the index, or an index that does not index the template,"
                         + " was named: " + run.getLast());
         assertTrue(run.getLast().contains("= '/conf/t'' OR ''x''=''x'"), run.getLast());
