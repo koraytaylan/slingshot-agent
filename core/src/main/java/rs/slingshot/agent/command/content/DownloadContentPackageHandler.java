@@ -26,6 +26,7 @@ import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.store.ArtifactSlot;
 import rs.slingshot.agent.wire.ResultDelivery;
 
 /**
@@ -55,7 +56,7 @@ import rs.slingshot.agent.wire.ResultDelivery;
 public final class DownloadContentPackageHandler implements CommandHandler {
 
     /** The slot a built package is published into. */
-    public static final String PACKAGE_SLOT = "result";
+    public static final String PACKAGE_SLOT = ArtifactSlot.CONTENT_PACKAGE_SLOT;
 
     /** The category a pattern this build will not accept is refused under. */
     public static final String PATTERN_REJECTED = "pattern_rejected";
