@@ -156,16 +156,25 @@ public final class DefaultCommandRuntime implements CommandRuntime {
     /** The directory inside this bundle's own data area each package build is given a room in. */
     private static final String STAGING = "staging";
 
+    /** The directory under the runtime's own temporary area used where there is no data area. */
+    private static final String TEMPORARY_STAGING = "slingshot-agent-staging";
+
     /**
      * Loads and activates every handler this bundle can answer, including the one that needs room
      * to work, which is given rooms inside this bundle's own data area.
+     *
+     * <p>A framework may keep no data area for a bundle, and a managed platform may not say why.
+     * The rooms then go under the runtime's own temporary area instead: each is still this
+     * command's alone, bounded by its row and given back however the run ends, so the only thing
+     * that changes is which directory holds them.</p>
      *
      * @param context this bundle's own context, through which its data area is reached
      */
     @Activate
     public void activated(BundleContext context) {
         final java.io.File area = context.getDataFile(STAGING);
-        activate(area == null ? java.util.List.of() : java.util.List.of(area.toPath()));
+        activate(java.util.List.of(area == null ? Path.of(System.getProperty("java.io.tmpdir",
+                "."), TEMPORARY_STAGING) : area.toPath()));
     }
 
     /**

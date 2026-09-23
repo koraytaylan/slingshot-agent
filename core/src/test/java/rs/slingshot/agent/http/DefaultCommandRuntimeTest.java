@@ -389,7 +389,7 @@ final class DefaultCommandRuntimeTest {
     }
 
     @Test
-    void thepackageBuildIsAdvertisedExactlyWhereTheBundleHasADataArea() throws java.io.IOException {
+    void thepackageBuildIsAdvertisedWhereverThereIsSomewhereToStage() throws java.io.IOException {
         final Path area = Files.createTempDirectory("slingshot-staging");
         try {
             final DefaultCommandRuntime runtime = new DefaultCommandRuntime();
@@ -399,9 +399,14 @@ final class DefaultCommandRuntimeTest {
             runtime.deactivate();
             final DefaultCommandRuntime without = new DefaultCommandRuntime();
             without.activated(context(null));
-            assertFalse(without.serves("download_content_package"),
-                    "a bundle with nowhere to stage advertised the package build");
-            assertTrue(without.serves("query_paths"));
+            assertTrue(without.serves("download_content_package"),
+                    "a framework keeping no data area left the package build unadvertised");
+            without.deactivate();
+            final DefaultCommandRuntime unstaged = new DefaultCommandRuntime();
+            unstaged.activate();
+            assertFalse(unstaged.serves("download_content_package"),
+                    "a runtime given nowhere to stage advertised the package build");
+            assertTrue(unstaged.serves("query_paths"));
         } finally {
             try (var walked = Files.walk(area)) {
                 walked.sorted(java.util.Comparator.reverseOrder()).map(Path::toFile)
