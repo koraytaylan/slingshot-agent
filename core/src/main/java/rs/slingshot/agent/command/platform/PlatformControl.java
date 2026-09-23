@@ -26,8 +26,13 @@ import java.util.Set;
  */
 public final class PlatformControl {
 
-    /** The category a control this deployment does not provide is refused under. */
-    public static final String NOT_PERMITTED = "deployment_does_not_permit";
+    /**
+     * The category a control this deployment does not provide is refused under.
+     *
+     * <p>The one every control command's row declares, so the client reads the refusal as what it
+     * is rather than as an answer it cannot place.</p>
+     */
+    public static final String NOT_PERMITTED = "platform_control_rejected";
 
     private final String deployment;
     private final Set<ControlCapability> provided;
