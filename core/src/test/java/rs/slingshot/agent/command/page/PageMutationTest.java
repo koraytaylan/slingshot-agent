@@ -143,17 +143,16 @@ final class PageMutationTest {
     }
 
     @Test
-    @DisplayName("a move that would rename the page changes nothing and says why")
+    @DisplayName("a rename where no repository session can perform it changes nothing and says why")
     void arenameIsRefusedWithNothingChanged() {
         page("/content/site/article", Map.of());
         sling.create().resource("/content/other", Map.of(
                 ListChildPagesHandler.TYPE_PROPERTY, ListChildPagesHandler.PAGE_TYPE));
         final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
                 move("/content/site/article", "/content/other/renamed", false),
-                "a move that renames the page was carried out, and the platform moves a page under"
-                        + " a new parent without renaming it");
+                "a move that renames the page was carried out through a resolver that keeps names");
         assertEquals(MovePageHandler.COMMIT_FAILED, refused.category());
-        assertTrue(refused.detail().contains("renames"), refused.detail());
+        assertTrue(refused.detail().contains("rename"), refused.detail());
         assertTrue(stored("/content/site/article", ListChildPagesHandler.TYPE_PROPERTY) != null,
                 "the page moved anyway, so a refusal left the repository changed");
     }

@@ -111,16 +111,6 @@ public final class MovePageHandler implements CommandHandler {
             return new MutationOutcome.Refused(DESTINATION_PARENT_NOT_FOUND, parent + " is not"
                     + " there, so there is nowhere to move this page to");
         }
-        // The platform moves a page under a new parent and keeps its own name; renaming it in the
-        // same step is a second operation this build does not make. Checked before anything is
-        // staged, because the alternative is a page that lands one address away from the one the
-        // caller asked for and an answer that says it went where they asked.
-        if (!nameOf(command.destinationPath()).equals(nameOf(command.sourcePath()))) {
-            return new MutationOutcome.Refused(COMMIT_FAILED, "this move renames the page as well"
-                    + " as moving it, from " + nameOf(command.sourcePath()) + " to "
-                    + nameOf(command.destinationPath()) + ", and this build moves a page under a"
-                    + " new parent without renaming it. Nothing was changed.");
-        }
         return adjusted(command, session, bound, context);
     }
 
@@ -143,7 +133,7 @@ public final class MovePageHandler implements CommandHandler {
                     + " links pointing at each address is a state nobody can reason about.");
         }
         try {
-            session.move(command.sourcePath(), parentOf(command.destinationPath()));
+            RepositoryReach.moveTo(session, command.sourcePath(), command.destinationPath());
             final long moved = RepositoryReach.repointed(pointing, command.sourcePath(),
                     command.destinationPath());
             session.commit();
@@ -155,14 +145,7 @@ public final class MovePageHandler implements CommandHandler {
         }
     }
 
-    private static String parentOf(String path) {
-        final int lastSlash = path.lastIndexOf('/');
-        return lastSlash <= 0 ? "/" : path.substring(0, lastSlash);
-    }
 
-    private static String nameOf(String path) {
-        return path.substring(path.lastIndexOf('/') + 1);
-    }
 
 
 

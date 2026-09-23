@@ -9,6 +9,7 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.sling.api.resource.ModifiableValueMap;
+import org.apache.sling.api.resource.PersistenceException;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 
@@ -174,6 +175,39 @@ public final class RepositoryReach {
      * receives. A search stopped by it is incomplete, and says so.</p>
      */
     static final long SEARCH_MILLISECONDS = 15_000;
+
+    /**
+     * Moves one resource to a new address, renaming it where the address's last name differs.
+     *
+     * <p>Through the repository's own session where the resolver has one, because that is the
+     * move that can rename in the same step; a resolver move keeps the old name, so without a
+     * session a rename is refused rather than performed as a move to the wrong address.</p>
+     *
+     * @param session the caller's own resolver
+     * @param source where it is
+     * @param destination where it goes, whole
+     * @throws PersistenceException where the repository refuses it
+     */
+    public static void moveTo(ResourceResolver session, String source, String destination)
+            throws PersistenceException {
+        final javax.jcr.Session repository = session.adaptTo(javax.jcr.Session.class);
+        if (repository != null) {
+            try {
+                repository.move(source, destination);
+                return;
+            } catch (final javax.jcr.RepositoryException refused) {
+                throw new PersistenceException(refused.getMessage(), refused);
+            }
+        }
+        final int sourceSlash = source.lastIndexOf('/');
+        final int destinationSlash = destination.lastIndexOf('/');
+        if (!source.substring(sourceSlash + 1).equals(destination.substring(destinationSlash + 1))) {
+            throw new PersistenceException("this repository offers no session to rename through,"
+                    + " so " + source + " cannot become " + destination + " in one step");
+        }
+        session.move(source, destinationSlash <= 0 ? "/" : destination.substring(0,
+                destinationSlash));
+    }
 
     /**
      * Points every gathered reference at a new address.

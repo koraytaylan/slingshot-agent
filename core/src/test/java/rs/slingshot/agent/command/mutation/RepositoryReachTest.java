@@ -25,6 +25,23 @@ final class RepositoryReachTest {
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
 
+    private final SlingContext repository = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @Test
+    void amoveRenamesThroughTheRepositorysOwnSession()
+            throws org.apache.sling.api.resource.PersistenceException {
+        repository.create().resource("/content/one/source", Map.of("title", "kept"));
+        repository.create().resource("/content/two", Map.of());
+        RepositoryReach.moveTo(repository.resourceResolver(), "/content/one/source",
+                "/content/two/renamed");
+        repository.resourceResolver().commit();
+        assertEquals("kept", java.util.Objects.requireNonNull(repository.resourceResolver()
+                        .getResource("/content/two/renamed"), "the moved resource")
+                .getValueMap().get("title", String.class), "the moved resource lost what it held");
+        assertEquals(null, repository.resourceResolver().getResource("/content/one/source"),
+                "the source is still there after a move");
+    }
+
     @Test
     void multivalueReferencesAreFound() {
         sling.create().resource("/content/target");

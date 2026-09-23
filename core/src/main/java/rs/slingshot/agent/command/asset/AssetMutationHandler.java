@@ -316,16 +316,11 @@ public final class AssetMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(AssetHandlers.DESTINATION_PARENT_NOT_FOUND,
                     parent + " is not there, so there is nowhere to move this asset to");
         }
-        if (!nameOf(command.destinationPath()).equals(nameOf(command.sourcePath()))) {
-            return new MutationOutcome.Refused(AssetHandlers.COMMIT_FAILED, "this move renames the"
-                    + " asset as well as moving it, and this build moves something under a new"
-                    + " parent without renaming it. Nothing was changed.");
-        }
-        return adjusted(command, session, bound, budget, parent);
+        return adjusted(command, session, bound, budget);
     }
 
     private static MutationOutcome adjusted(MoveRequest command, ResourceResolver session,
-                                            long bound, long budget, String parent) {
+                                            long bound, long budget) {
         final var discovered = command.adjustReferences() == MoveRequest.ReferenceAdjustment.FOLLOWED
                 ? RepositoryReach.references(session, command.sourcePath(), budget)
                 : new RepositoryReach.References(List.of(), RepositoryReach.Completeness.COMPLETE);
@@ -341,7 +336,7 @@ public final class AssetMutationHandler implements CommandHandler {
                             + " of them");
         }
         try {
-            session.move(command.sourcePath(), parent);
+            RepositoryReach.moveTo(session, command.sourcePath(), command.destinationPath());
         } catch (final PersistenceException refused) {
             return new MutationOutcome.Refused(AssetHandlers.COMMIT_FAILED,
                     "the repository refused this move: " + refused.getMessage());
@@ -385,9 +380,6 @@ public final class AssetMutationHandler implements CommandHandler {
         return lastSlash <= 0 ? "/" : path.substring(0, lastSlash);
     }
 
-    private static String nameOf(String path) {
-        return path.substring(path.lastIndexOf('/') + 1);
-    }
 
     @Override
     public List<String> categories() {
