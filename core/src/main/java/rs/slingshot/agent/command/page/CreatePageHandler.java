@@ -6,6 +6,7 @@ package rs.slingshot.agent.command.page;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.sling.api.resource.PersistenceException;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -21,10 +22,10 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * Makes one page, in one commit.
  *
- * <p>Built through the caller's own session rather than through the platform's page manager, and
- * that is a real difference worth stating: the page manager copies a template's initial content and
- * announces the page to whatever is listening, and neither happens here. What this makes is a page
- * node carrying its template and its title, which is what the answer claims and nothing more.</p>
+ * <p>Built through the caller's own session rather than through the platform's page manager. The
+ * template's initial content and the resource type its pages render with are copied into the new
+ * page in the same commit, which is what the page manager does too; what does not happen here is
+ * the page manager announcing the page to whatever is listening.</p>
  *
  * <p>The template is checked before anything is written, and a template that does not resolve is
  * told apart from one that resolves and is not a template. The first is usually a typo, which
@@ -166,7 +167,19 @@ public final class CreatePageHandler implements CommandHandler {
         try {
             final Resource page = session.create(parent, command.pageName(),
                     Map.of(ListChildPagesHandler.TYPE_PROPERTY, PAGE_TYPE));
-            session.create(page, ListChildPagesHandler.PAGE_CONTENT, content(command));
+            final Resource template = session.getResource(command.templatePath());
+            final Optional<Resource> initial = Optional.ofNullable(template)
+                    .flatMap(TemplateContent::initialOf);
+            final Map<String, Object> starting = initial.map(TemplateContent::propertiesOf)
+                    .orElseGet(LinkedHashMap::new);
+            Optional.ofNullable(template).flatMap(TemplateContent::resourceTypeOf).ifPresent(
+                    type -> starting.putIfAbsent(TemplateContent.RESOURCE_TYPE, type));
+            final Resource content = session.create(page, ListChildPagesHandler.PAGE_CONTENT,
+                    content(command, starting));
+            if (initial.isPresent()) {
+                TemplateContent.copyChildren(session, initial.get(), content,
+                        TEMPLATE_CONTENT_NODES);
+            }
             session.commit();
             return new MutationOutcome.Changed(CreatePageResult.documentOf(page.getPath()));
         } catch (final PersistenceException refused) {
@@ -177,14 +190,20 @@ public final class CreatePageHandler implements CommandHandler {
         }
     }
 
+    /** How many nodes a template's initial content may hold before a page is refused. */
+    private static final long TEMPLATE_CONTENT_NODES = 10_000;
+
     /**
-     * What a new page's content node holds: its type, its template, its title, and what was asked.
+     * What a new page's content node holds: what its template starts it with, the resource type
+     * it renders with, its type, its template, its title, and what was asked - later ones winning.
      *
      * @param command what was asked
+     * @param starting what the template starts a page with, which is empty where it keeps nothing
      * @return the properties to write
      */
-    private static Map<String, Object> content(CreatePageCommand command) {
-        final Map<String, Object> content = new LinkedHashMap<>();
+    private static Map<String, Object> content(CreatePageCommand command,
+                                               Map<String, Object> starting) {
+        final Map<String, Object> content = new LinkedHashMap<>(starting);
         content.put(ListChildPagesHandler.TYPE_PROPERTY, "cq:PageContent");
         content.put(TEMPLATE_PROPERTY, command.templatePath());
         content.put(ListChildPagesHandler.TITLE_PROPERTY, command.title());

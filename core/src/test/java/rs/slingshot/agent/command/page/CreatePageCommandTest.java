@@ -5,6 +5,7 @@ package rs.slingshot.agent.command.page;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -68,6 +69,33 @@ final class CreatePageCommandTest {
                         + " it has to guess what it is");
         assertEquals("An Article", stored("/content/site/article/jcr:content",
                 ListChildPagesHandler.TITLE_PROPERTY));
+    }
+
+    @Test
+    @DisplayName("a page made from an editable template starts with its content and renders")
+    void apageStartsWithItsTemplatesContent() {
+        corpus();
+        sling.create().resource(TEMPLATE + "/structure/jcr:content", Map.of(
+                "sling:resourceType", "site/components/page"));
+        sling.create().resource(TEMPLATE + "/initial/jcr:content", Map.of(
+                "jcr:uuid", "copied-from-nowhere", "theme", "light"));
+        sling.create().resource(TEMPLATE + "/initial/jcr:content/root", Map.of(
+                "sling:resourceType", "site/components/container"));
+        sling.create().resource(TEMPLATE + "/initial/jcr:content/root/title", Map.of(
+                "sling:resourceType", "site/components/title"));
+        assertInstanceOf(CommandHandler.Produced.class,
+                run(argument("/content/site", "article", "An Article", TEMPLATE)),
+                "the page was refused");
+        final String content = "/content/site/article/jcr:content";
+        assertEquals("site/components/page", stored(content, "sling:resourceType"),
+                "the page does not render with its template's resource type");
+        assertEquals("light", stored(content, "theme"));
+        assertEquals("site/components/title", stored(content + "/root/title",
+                        "sling:resourceType"),
+                "the template's initial components were not copied");
+        assertNull(stored(content, "jcr:uuid"),
+                "the repository's own bookkeeping was copied from the template");
+        assertEquals("An Article", stored(content, ListChildPagesHandler.TITLE_PROPERTY));
     }
 
     @Test
