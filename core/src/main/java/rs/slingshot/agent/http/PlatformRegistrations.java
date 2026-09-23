@@ -6,6 +6,10 @@ package rs.slingshot.agent.http;
 import java.util.EnumSet;
 import java.util.List;
 import rs.slingshot.agent.command.CommandDispatch;
+import rs.slingshot.agent.command.configuration.ConfigurationHandler;
+import rs.slingshot.agent.command.configuration.ConfigurationIdentifierCommand;
+import rs.slingshot.agent.command.configuration.FindConfigurationsCommand;
+import rs.slingshot.agent.command.configuration.UpdateConfigurationCommand;
 import rs.slingshot.agent.command.framework.FrameworkHandler;
 import rs.slingshot.agent.command.framework.ListBundlesCommand;
 import rs.slingshot.agent.command.framework.ListComponentsCommand;
@@ -13,13 +17,17 @@ import rs.slingshot.agent.command.framework.SetBundleStateCommand;
 import rs.slingshot.agent.command.job.JobCommands;
 import rs.slingshot.agent.command.job.JobHandler;
 import rs.slingshot.agent.command.platform.BundleInventory;
+import rs.slingshot.agent.command.platform.ConfigurationCatalogues;
 import rs.slingshot.agent.command.platform.ControlCapability;
 import rs.slingshot.agent.command.platform.DefaultPrincipalDirectory;
 import rs.slingshot.agent.command.platform.JobInventory;
 import rs.slingshot.agent.command.platform.PlatformControl;
+import rs.slingshot.agent.command.platform.ReplicationInventory;
 import rs.slingshot.agent.command.platform.WorkflowService;
 import rs.slingshot.agent.command.principal.PrincipalCommands;
 import rs.slingshot.agent.command.principal.PrincipalHandler;
+import rs.slingshot.agent.command.replication.AgentCommands;
+import rs.slingshot.agent.command.replication.AgentHandler;
 import rs.slingshot.agent.command.replication.ReplicateContentCommand;
 import rs.slingshot.agent.command.replication.ReplicateContentHandler;
 import rs.slingshot.agent.command.workflow.FindWorkflowInstancesCommand;
@@ -100,7 +108,57 @@ final class PlatformRegistrations {
                 registered.addAll(workflows(contract, workflows, control)));
         seams.bundles().forEach(inventory ->
                 registered.addAll(bundles(contract, inventory, control)));
+        seams.agents().forEach(inventory ->
+                registered.addAll(agents(contract, inventory, control)));
+        seams.configurations().forEach(catalogues ->
+                registered.addAll(configurations(contract, catalogues, control)));
         return List.copyOf(registered);
+    }
+
+    private static List<CommandDispatch.Registration> agents(AgentContract contract,
+                                                            ReplicationInventory inventory,
+                                                            PlatformControl control) {
+        return List.of(
+                agent(contract, AgentCommands.LIST_WIRE_NAME, AgentHandler.Kind.LISTING,
+                        inventory, control),
+                agent(contract, AgentCommands.INSPECT_AGENT_WIRE_NAME, AgentHandler.Kind.AGENT,
+                        inventory, control),
+                agent(contract, AgentCommands.INSPECT_QUEUE_WIRE_NAME, AgentHandler.Kind.QUEUE,
+                        inventory, control),
+                agent(contract, AgentCommands.FLUSH_WIRE_NAME, AgentHandler.Kind.FLUSH,
+                        inventory, control),
+                agent(contract, AgentCommands.RETRY_WIRE_NAME, AgentHandler.Kind.RETRY,
+                        inventory, control));
+    }
+
+    private static CommandDispatch.Registration agent(AgentContract contract, String wireName,
+                                                     AgentHandler.Kind kind,
+                                                     ReplicationInventory inventory,
+                                                     PlatformControl control) {
+        return new CommandDispatch.Registration(wireName, new AgentHandler(contract, kind,
+                inventory, control));
+    }
+
+    private static List<CommandDispatch.Registration> configurations(
+            AgentContract contract, ConfigurationCatalogues catalogues, PlatformControl control) {
+        return List.of(
+                configuration(contract, FindConfigurationsCommand.WIRE_NAME,
+                        ConfigurationHandler.Kind.SEARCH, catalogues, control),
+                configuration(contract, ConfigurationIdentifierCommand.INSPECT_WIRE_NAME,
+                        ConfigurationHandler.Kind.INSPECTION, catalogues, control),
+                configuration(contract, UpdateConfigurationCommand.WIRE_NAME,
+                        ConfigurationHandler.Kind.UPDATE, catalogues, control),
+                configuration(contract, ConfigurationIdentifierCommand.DELETE_WIRE_NAME,
+                        ConfigurationHandler.Kind.REMOVAL, catalogues, control));
+    }
+
+    private static CommandDispatch.Registration configuration(AgentContract contract,
+                                                             String wireName,
+                                                             ConfigurationHandler.Kind kind,
+                                                             ConfigurationCatalogues catalogues,
+                                                             PlatformControl control) {
+        return new CommandDispatch.Registration(wireName, new ConfigurationHandler(contract, kind,
+                catalogues, control));
     }
 
     private static List<CommandDispatch.Registration> bundles(AgentContract contract,

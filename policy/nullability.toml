@@ -69,3 +69,9 @@ source = "aem/src/main/java/rs/slingshot/agent/aem/job/DefaultJobInventory.java"
 method = "findJobs"
 argument = 1
 reason = "Sling's job manager searches every topic when the topic is absent. An empty topic is a topic nothing is posted under, so it would find nothing at all."
+
+[[external_absence]]
+source = "aem/src/main/java/rs/slingshot/agent/aem/configuration/DefaultConfigurationCatalogue.java"
+method = "getObjectClassDefinition"
+argument = 1
+reason = "The meta type service answers in its default locale when the locale is absent. Any locale named here would be one somebody chose, and the only thing read from the answer is whether a property is a password, which no locale changes."

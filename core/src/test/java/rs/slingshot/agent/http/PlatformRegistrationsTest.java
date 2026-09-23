@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
@@ -17,7 +18,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.CommandRegistry;
+import rs.slingshot.agent.command.platform.BundleInventory;
+import rs.slingshot.agent.command.platform.ConfigurationCatalogues;
+import rs.slingshot.agent.command.platform.ContentAdmission;
 import rs.slingshot.agent.command.platform.ControlCapability;
+import rs.slingshot.agent.command.platform.JobInventory;
+import rs.slingshot.agent.command.platform.ReplicationInventory;
+import rs.slingshot.agent.command.platform.WorkflowService;
 import rs.slingshot.agent.contract.AgentContract;
 
 /**
@@ -68,6 +75,43 @@ final class PlatformRegistrationsTest {
                 "a platform registration names a command the registry does not hold");
         assertEquals(registered.size(), Set.copyOf(registered).size(),
                 "a platform command is registered twice");
+    }
+
+    @Test
+    @DisplayName("every bound seam registers its commands, each a registry row, none twice")
+    void everyBoundSeamRegistersItsCommands() {
+        final PlatformSeams bound = PlatformSeams.NONE
+                .withJobs(List.of(seam(JobInventory.class)))
+                .withAdmissions(List.of(seam(ContentAdmission.class)))
+                .withWorkflows(List.of(seam(WorkflowService.class)))
+                .withBundles(List.of(seam(BundleInventory.class)))
+                .withAgents(List.of(seam(ReplicationInventory.class)))
+                .withConfigurations(List.of(seam(ConfigurationCatalogues.class)));
+        final List<String> registered = PlatformRegistrations.registrations(CONTRACT, bound)
+                .stream().map(CommandDispatch.Registration::wireName).toList();
+        assertEquals(EVERY_PLATFORM_COMMAND, registered.size(),
+                "a bound seam registered more or fewer commands than it answers");
+        assertEquals(registered.size(), Set.copyOf(registered).size(),
+                "a platform command is registered twice");
+        assertInstanceOf(CommandRegistry.Loaded.class, assertInstanceOf(
+                CommandRegistry.Loaded.class, CommandRegistry.read()).registry()
+                .active(registered), "a platform registration names a command the registry does"
+                + " not hold");
+    }
+
+    /**
+     * How many platform commands there are with every seam bound.
+     *
+     * <p>Eight user and group commands, four job commands, one replication, six workflow, three
+     * bundle and component, five replication agent and queue, and four configuration commands.</p>
+     */
+    private static final int EVERY_PLATFORM_COMMAND = 31;
+
+    private static <T> T seam(Class<T> type) {
+        return type.cast(Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] {type}, (proxy, method, arguments) -> {
+                    throw new UnsupportedOperationException(method.getName());
+                }));
     }
 
     private static Path repositoryRoot() {

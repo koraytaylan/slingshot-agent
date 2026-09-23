@@ -5,8 +5,10 @@ package rs.slingshot.agent.http;
 
 import java.util.List;
 import rs.slingshot.agent.command.platform.BundleInventory;
+import rs.slingshot.agent.command.platform.ConfigurationCatalogues;
 import rs.slingshot.agent.command.platform.ContentAdmission;
 import rs.slingshot.agent.command.platform.JobInventory;
+import rs.slingshot.agent.command.platform.ReplicationInventory;
 import rs.slingshot.agent.command.platform.WorkflowService;
 
 /**
@@ -20,14 +22,18 @@ import rs.slingshot.agent.command.platform.WorkflowService;
  * @param admissions what offers content to the replication service
  * @param workflows what answers the six workflow commands
  * @param bundles what answers the three bundle and component commands
+ * @param agents what answers the five replication agent and queue commands
+ * @param configurations what answers the four configuration commands
  */
 record PlatformSeams(List<JobInventory> jobs, List<ContentAdmission> admissions,
-                     List<WorkflowService> workflows, List<BundleInventory> bundles)
+                     List<WorkflowService> workflows, List<BundleInventory> bundles,
+                     List<ReplicationInventory> agents,
+                     List<ConfigurationCatalogues> configurations)
         implements java.io.Serializable {
 
     /** No adapter bound, which is what a Sling runtime without the platform bundle has. */
     static final PlatformSeams NONE = new PlatformSeams(List.of(), List.of(), List.of(),
-            List.of());
+            List.of(), List.of(), List.of());
 
     /** Holds the lists apart from whatever produced them. */
     PlatformSeams {
@@ -35,6 +41,8 @@ record PlatformSeams(List<JobInventory> jobs, List<ContentAdmission> admissions,
         admissions = List.copyOf(admissions);
         workflows = List.copyOf(workflows);
         bundles = List.copyOf(bundles);
+        agents = List.copyOf(agents);
+        configurations = List.copyOf(configurations);
     }
 
     /**
@@ -44,7 +52,8 @@ record PlatformSeams(List<JobInventory> jobs, List<ContentAdmission> admissions,
      * @return the seams
      */
     PlatformSeams withJobs(List<JobInventory> bound) {
-        return new PlatformSeams(bound, admissions, workflows, bundles);
+        return new PlatformSeams(bound, admissions, workflows, bundles, agents,
+                configurations);
     }
 
     /**
@@ -54,7 +63,7 @@ record PlatformSeams(List<JobInventory> jobs, List<ContentAdmission> admissions,
      * @return the seams
      */
     PlatformSeams withAdmissions(List<ContentAdmission> bound) {
-        return new PlatformSeams(jobs, bound, workflows, bundles);
+        return new PlatformSeams(jobs, bound, workflows, bundles, agents, configurations);
     }
 
     /**
@@ -64,7 +73,7 @@ record PlatformSeams(List<JobInventory> jobs, List<ContentAdmission> admissions,
      * @return the seams
      */
     PlatformSeams withWorkflows(List<WorkflowService> bound) {
-        return new PlatformSeams(jobs, admissions, bound, bundles);
+        return new PlatformSeams(jobs, admissions, bound, bundles, agents, configurations);
     }
 
     /**
@@ -74,6 +83,26 @@ record PlatformSeams(List<JobInventory> jobs, List<ContentAdmission> admissions,
      * @return the seams
      */
     PlatformSeams withBundles(List<BundleInventory> bound) {
-        return new PlatformSeams(jobs, admissions, workflows, bound);
+        return new PlatformSeams(jobs, admissions, workflows, bound, agents, configurations);
+    }
+
+    /**
+     * These seams with the replication agent inventory replaced.
+     *
+     * @param bound what is bound now, which is empty where it went away
+     * @return the seams
+     */
+    PlatformSeams withAgents(List<ReplicationInventory> bound) {
+        return new PlatformSeams(jobs, admissions, workflows, bundles, bound, configurations);
+    }
+
+    /**
+     * These seams with the configuration catalogues replaced.
+     *
+     * @param bound what is bound now, which is empty where it went away
+     * @return the seams
+     */
+    PlatformSeams withConfigurations(List<ConfigurationCatalogues> bound) {
+        return new PlatformSeams(jobs, admissions, workflows, bundles, agents, bound);
     }
 }

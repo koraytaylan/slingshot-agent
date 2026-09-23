@@ -220,3 +220,17 @@ range = "[1.5,2)"
 bundle = "aem"
 provided_by = ["aem-cloud-service", "aem-6-5-lts"]
 reason = "The runtime's descriptions of components and their configurations, from which a component's state is read."
+
+[[package]]
+name = "org.osgi.service.cm"
+range = "[1.6,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The configuration admin, which the configuration commands read and, where the deployment permits it, write. A value is converted only for a property the meta type service describes as not a password."
+
+[[package]]
+name = "org.osgi.service.metatype"
+range = "[1.4,2)"
+bundle = "aem"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "The meta type service, whose description of a property is the only evidence that lets its value be reported: a password, or a property nothing describes, is named and never read."

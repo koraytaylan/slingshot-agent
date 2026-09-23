@@ -2234,3 +2234,18 @@ reason = "The platform's own workflow engine, reached through the caller's own w
 name = "DefaultBundleInventory"
 pattern = "accessor"
 reason = "The framework's own bundles and the component runtime's own descriptions, read on every call rather than held. A transition is refused for the framework itself and for the bundle answering, since stopping either ends the request that asked, and its answer is the state the framework reports afterwards."
+
+[[type]]
+name = "DefaultReplicationInventory"
+pattern = "accessor"
+reason = "The platform's own replication agents, read through its agent manager on every call. No transport address, user or password is read, not even to decide the transport's kind, and a retry moves only the entry the queue tries next."
+
+[[type]]
+name = "DefaultConfigurationCatalogue"
+pattern = "accessor"
+reason = "The platform's own configuration admin, with the meta type service deciding which properties are secrets. A property described as a password, or not described at all, is never converted, so its value never reaches an answer."
+
+[[type]]
+name = "ConfigurationAdminCatalogues"
+pattern = "accessor"
+reason = "The component the configuration commands reach the platform's configuration admin through. It holds only how to open a stateless view, and opens one for every run."
