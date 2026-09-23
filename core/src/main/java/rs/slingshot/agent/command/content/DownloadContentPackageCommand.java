@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
@@ -98,27 +97,53 @@ public record DownloadContentPackageCommand(String packageName, List<String> roo
     /**
      * Whether one path belongs in this package.
      *
-     * <p>Under a root, matching an inclusion where any were named, and matching no exclusion. The
-     * exclusions are applied last on purpose: a caller writes "everything under here" and then
-     * carves pieces out of it, and an exclusion that could be overridden by an inclusion would make
-     * the order of two lists decide what a package contains.</p>
+     * <p>Under a root, beneath or at an inclusion's anchor where any were named, and beneath or at
+     * no exclusion's anchor. An expression selects the path it matches and everything below it,
+     * which is the client's own meaning. The exclusions win on purpose: a caller writes
+     * "everything under here" and then carves pieces out of it, and an exclusion that could be
+     * overridden by an inclusion would make the order of two lists decide what a package
+     * contains.</p>
      *
      * @param path the path
      * @return whether it belongs
      */
     public boolean contains(String path) {
-        if (roots.stream().noneMatch(root -> path.equals(root) || path.startsWith(root + "/"))) {
-            return false;
-        }
-        if (exclusionFilters.stream().anyMatch(pattern -> matches(pattern, path))) {
-            return false;
-        }
-        return inclusionFilters.isEmpty()
-                || inclusionFilters.stream().anyMatch(pattern -> matches(pattern, path));
+        return underARoot(path) && !excluded(path) && included(path);
     }
 
-    private static boolean matches(String pattern, String path) {
-        return Pattern.compile(pattern).matcher(path).find();
+    /**
+     * Whether one path lies in the union of this package's roots.
+     *
+     * @param path the path
+     * @return whether it does
+     */
+    public boolean underARoot(String path) {
+        return roots.stream().anyMatch(root -> path.equals(root) || path.startsWith(root + "/"));
+    }
+
+    /**
+     * Whether one path is removed by an exclusion, which removes its anchor and everything beneath.
+     *
+     * @param path the path
+     * @return whether it is
+     */
+    public boolean excluded(String path) {
+        return exclusionFilters.stream().anyMatch(expression -> anchored(expression, path));
+    }
+
+    /**
+     * Whether one path is admitted by an inclusion, or by its root where none was named.
+     *
+     * @param path the path
+     * @return whether it is
+     */
+    public boolean included(String path) {
+        return inclusionFilters.isEmpty()
+                || inclusionFilters.stream().anyMatch(expression -> anchored(expression, path));
+    }
+
+    private static boolean anchored(String expression, String path) {
+        return PackageSelection.of(expression).map(read -> read.anchors(path)).orElse(false);
     }
 
     /** Why an argument is not one this command takes. */
@@ -308,12 +333,10 @@ public record DownloadContentPackageCommand(String packageName, List<String> roo
 
     private static Filters compiled(String member, List<String> patterns) {
         for (final String pattern : patterns) {
-            try {
-                Pattern.compile(pattern);
-            } catch (final PatternSyntaxException malformed) {
-                return new Rejected(new Refused(Refusal.FILTER_NOT_A_PATTERN, member + " holds a"
-                        + " pattern that will not compile, which is a malformed question rather"
-                        + " than a filter that matches nothing: " + malformed.getDescription()));
+            if (PackageSelection.of(pattern).isEmpty()) {
+                return new Rejected(new Refused(Refusal.FILTER_NOT_A_PATTERN, member + " holds "
+                        + pattern + ", which is not a selection expression: one solidus, then"
+                        + " tokens separated by one, each a path segment, * or (.*)"));
             }
         }
         return new Compiled(patterns);

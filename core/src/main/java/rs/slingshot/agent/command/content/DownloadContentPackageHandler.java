@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.SequencedMap;
-import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.apache.sling.api.resource.Resource;
@@ -148,9 +147,9 @@ public final class DownloadContentPackageHandler implements CommandHandler {
      * The refusal naming which filter was rejected, where the request carries one to name.
      *
      * <p>The client reads a rejected pattern as the collection it stood in and its position there,
-     * and checks that position against its own request - so the refusal names the first pattern
-     * this platform's own expressions will not compile, which a client whose dialect accepted it
-     * cannot find out any other way. A request refused for another reason still has one filter to
+     * and checks that position against its own request - so the refusal names the first
+     * expression this build does not read as a selection, which is the one the caller has to
+     * change. A request refused for another reason still has one filter to
      * name: the first, in the first collection that holds any.</p>
      *
      * @param arguments the argument document the caller sent
@@ -188,12 +187,7 @@ public final class DownloadContentPackageHandler implements CommandHandler {
     }
 
     private static boolean compiles(String pattern) {
-        try {
-            java.util.regex.Pattern.compile(pattern);
-            return true;
-        } catch (final java.util.regex.PatternSyntaxException malformed) {
-            return false;
-        }
+        return PackageSelection.of(pattern).isPresent();
     }
 
     private static DocumentValue.Mapping patternRefusal(String collection, long index) {
@@ -282,17 +276,22 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         final List<String> found = new ArrayList<>();
         final java.util.Deque<Iterator<Resource>> pending = new java.util.ArrayDeque<>();
         Optional<Resource> resource = Optional.of(root);
+        long evaluated = 0;
         while (resource.isPresent()) {
             final Resource current = resource.orElseThrow();
-            if (already + found.size() >= budget) {
+            evaluated = evaluated + 1;
+            if (already + evaluated > budget) {
                 return Selection.OVER_THE_BUDGET;
             }
-            if (!command.contains(current.getPath())) {
-                return new Selection(Collections.unmodifiableList(found),
-                        Ending.NOTHING_LEFT_TO_SELECT);
+            // An excluded path takes its whole subtree with it, so nothing beneath is visited. A
+            // path that is merely not included is still walked through: an inclusion's anchor may
+            // lie anywhere below it.
+            if (!command.excluded(current.getPath())) {
+                if (command.included(current.getPath())) {
+                    found.add(current.getPath());
+                }
+                pending.push(current.listChildren());
             }
-            found.add(current.getPath());
-            pending.push(current.listChildren());
             resource = next(pending);
         }
         return new Selection(Collections.unmodifiableList(found), Ending.NOTHING_LEFT_TO_SELECT);
@@ -323,7 +322,7 @@ public final class DownloadContentPackageHandler implements CommandHandler {
             final String manifest = manifestOf(command, selected);
             final byte[] packageBytes;
             try {
-                packageBytes = packageBytes(manifest, resolver, selected);
+                packageBytes = packageBytes(command.packageName(), manifest, resolver, selected);
             } catch (final IOException invalidPackage) {
                 return new Failed(PACKAGE_FAILED, "the package archive could not be built: "
                         + invalidPackage.getMessage());
@@ -352,7 +351,7 @@ public final class DownloadContentPackageHandler implements CommandHandler {
      * @throws IOException if the archive cannot be written
      */
     static byte[] packageBytes(String manifest) throws IOException {
-        return packageBytes(manifest, archive -> { });
+        return packageBytes(UNNAMED, manifest, archive -> { });
     }
 
     /**
@@ -366,12 +365,42 @@ public final class DownloadContentPackageHandler implements CommandHandler {
      */
     static byte[] packageBytes(String manifest, ResourceResolver resolver, List<String> selected)
             throws IOException {
-        return packageBytes(manifest, archive -> {
+        return packageBytes(UNNAMED, manifest, resolver, selected);
+    }
+
+    /**
+     * Builds the deterministic archive of one named package, including each selected resource.
+     *
+     * @param name the package's own name, which its properties carry
+     * @param manifest the deterministic FileVault filter document
+     * @param resolver the caller's resolver used to read selected resources
+     * @param selected resource paths to include
+     * @return the archive bytes
+     * @throws IOException if the archive cannot be written or a resource cannot be read
+     */
+    static byte[] packageBytes(String name, String manifest, ResourceResolver resolver,
+                               List<String> selected) throws IOException {
+        return packageBytes(name, manifest, archive -> {
             for (final String path : selected.stream().sorted().toList()) {
                 writeContentEntry(archive, resolver, path);
             }
         });
     }
+
+    /** What ends each line of a package's properties, whatever platform built it. */
+    private static final String LINE = "\n";
+
+    /** The name a package built without one carries, which only a suite builds. */
+    private static final String UNNAMED = "package";
+
+    /** The group every package this command builds is filed under. */
+    static final String GROUP = "slingshot";
+
+    /** The version every package this command builds carries, since each one is a snapshot. */
+    static final String VERSION = "1.0.0";
+
+    /** Where a package's content lives inside its archive. */
+    static final String CONTENT_ROOT = "jcr_root";
 
     @FunctionalInterface
     private interface EntryWriter {
@@ -379,48 +408,75 @@ public final class DownloadContentPackageHandler implements CommandHandler {
         void write(ZipOutputStream archive) throws IOException;
     }
 
-    private static byte[] packageBytes(String manifest, EntryWriter entries)
+    private static byte[] packageBytes(String name, String manifest, EntryWriter entries)
             throws IOException {
         final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream archive = new ZipOutputStream(bytes)) {
             archive.putNextEntry(entry("META-INF/vault/filter.xml"));
             archive.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             archive.closeEntry();
+            archive.putNextEntry(entry("META-INF/vault/properties.xml"));
+            archive.write(propertiesOf(name).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            archive.closeEntry();
             entries.write(archive);
         }
         return bytes.toByteArray();
     }
 
+    /**
+     * The properties a package manager reads a package's identity from.
+     *
+     * <p>A name, a group and a version, and nothing that changes between two builds of the same
+     * content: no creation time and no builder, so identical content is identical bytes.</p>
+     *
+     * @param name the package's own name
+     * @return the properties document
+     */
+    static String propertiesOf(String name) {
+        return String.join(LINE, List.of(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>",
+                "<!DOCTYPE properties SYSTEM \"http://java.sun.com/dtd/properties.dtd\">",
+                "<properties>",
+                "<entry key=\"name\">" + escaped(name) + "</entry>",
+                "<entry key=\"group\">" + GROUP + "</entry>",
+                "<entry key=\"version\">" + VERSION + "</entry>",
+                "</properties>", ""));
+    }
+
     private static void writeContentEntry(ZipOutputStream archive, ResourceResolver resolver,
                                           String path) throws IOException {
-        final Optional<Resource> resource = Optional.ofNullable(resolver.getResource(path));
-        if (resource.isEmpty()) {
+        final Optional<javax.jcr.Node> node = Optional.ofNullable(resolver.getResource(path))
+                .map(resource -> resource.adaptTo(javax.jcr.Node.class));
+        if (node.isEmpty()) {
             return;
         }
-        final String name = path.substring(1) + "/.content.xml";
-        archive.putNextEntry(entry(name));
-        archive.write(contentXml(resource.orElseThrow())
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        archive.closeEntry();
+        final String directory = CONTENT_ROOT + PlatformNames.pathOf(path);
+        try {
+            final DocumentView.Written written = DocumentView.of(node.get());
+            archive.putNextEntry(entry(directory + "/.content.xml"));
+            archive.write(written.document().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            archive.closeEntry();
+            for (final Map.Entry<String, javax.jcr.Value> binary
+                    : written.binaries().entrySet()) {
+                archive.putNextEntry(entry(directory + "/" + binary.getKey()));
+                final javax.jcr.Binary held = binary.getValue().getBinary();
+                try (java.io.InputStream stream = held.getStream()) {
+                    stream.transferTo(archive);
+                } finally {
+                    held.dispose();
+                }
+                archive.closeEntry();
+            }
+        } catch (final javax.jcr.RepositoryException unreadable) {
+            throw new IOException(path + " could not be read: " + unreadable.getMessage(),
+                    unreadable);
+        }
     }
 
     private static ZipEntry entry(String name) {
         final ZipEntry entry = new ZipEntry(name);
         entry.setTime(0);
         return entry;
-    }
-
-    private static String contentXml(Resource resource) {
-        final Map<String, Object> sorted = new TreeMap<>(resource.getValueMap());
-        final StringBuilder xml = new StringBuilder(XML_BUFFER_SIZE);
-        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?><jcr:root "
-                + "xmlns:jcr=\"http://www.jcp.org/jcr/1.0\"");
-        sorted.forEach((name, value) -> {
-            if (value instanceof String text) {
-                xml.append(String.format(" %s=\"%s\"", name, escaped(text)));
-            }
-        });
-        return xml.append("/>").toString();
     }
 
     private static String escaped(String value) {
@@ -455,32 +511,63 @@ public final class DownloadContentPackageHandler implements CommandHandler {
      * @return the filter document
      */
     public static String manifestOf(DownloadContentPackageCommand command, List<String> selected) {
-        // Sized from the filter it is about to hold rather than left to grow: every root and every
-        // pattern contributes one element of its own text plus the markup around it, and the count
-        // is known before a character is written.
-        final StringBuilder filter = new StringBuilder(java.util.stream.Stream.of(command.roots(),
-                        command.inclusionFilters(), command.exclusionFilters())
-                .flatMap(List::stream)
-                .mapToInt(held -> held.length() + MARKUP_PER_ROOT)
-                .sum() + MARKUP_AROUND_THE_FILTER);
-        filter.append("<workspaceFilter version=\"1.0\">");
-        command.roots().forEach(root ->
-                filter.append("<filter root=\"").append(escaped(root)).append("\"/>"));
-        command.inclusionFilters().forEach(pattern ->
-                filter.append("<include pattern=\"").append(escaped(pattern)).append("\"/>"));
-        command.exclusionFilters().forEach(pattern ->
-                filter.append("<exclude pattern=\"").append(escaped(pattern)).append("\"/>"));
-        return filter.append("</workspaceFilter>").toString();
+        // Each part is an element whose one value has already been escaped, and the document is
+        // those parts in order, so nothing a caller wrote is ever read as markup.
+        final List<String> parts = new ArrayList<>();
+        parts.add("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<workspaceFilter version=\"1.0\">");
+        for (final String root : command.roots()) {
+            parts.add(element("filter", "root", root, OPEN));
+            final List<String> under = selected.stream()
+                    .filter(path -> path.equals(root) || path.startsWith(root + "/"))
+                    .toList();
+            if (under.isEmpty()) {
+                parts.add(element("include", "pattern", NEVER_MATCHES, CLOSED));
+            }
+            under.forEach(path -> parts.add(element("include", "pattern", exactly(path),
+                    CLOSED)));
+            parts.add("</filter>");
+        }
+        parts.add("</workspaceFilter>");
+        return String.join("", parts);
     }
 
-    /** How much markup one root's own element carries beside its path. */
-    private static final int MARKUP_PER_ROOT = 32;
+    /** An element that goes on to hold others. */
+    private static final String OPEN = ">";
 
-    /** How much markup the filter carries around its roots. */
-    private static final int MARKUP_AROUND_THE_FILTER = 64;
+    /** An element that holds nothing. */
+    private static final String CLOSED = "/>";
 
-    /** Initial capacity for the small content descriptor emitted into each package entry. */
-    private static final int XML_BUFFER_SIZE = 128;
+    /**
+     * One element with one attribute, whose value is escaped before it is written.
+     *
+     * @param name the element's name
+     * @param attribute the attribute's name
+     * @param value the attribute's value, as text rather than markup
+     * @param ending whether the element is open or closed
+     * @return the element
+     */
+    private static String element(String name, String attribute, String value, String ending) {
+        return "<" + name + " " + attribute + "=\"" + escaped(value) + "\"" + ending;
+    }
+
+    /**
+     * One path as the FileVault pattern that matches it and nothing else.
+     *
+     * <p>FileVault reads a filter pattern as a regular expression, so the path is quoted rather
+     * than written as it is: a dot or a bracket in a page name would otherwise be syntax. A literal
+     * end-of-quote inside the path is broken up, because it would close the quoted region early
+     * and turn the rest of the path into syntax after all.</p>
+     *
+     * @param path the path
+     * @return the pattern
+     */
+    static String exactly(String path) {
+        return "\\A\\Q" + path.replace("\\E", "\\E\\\\E\\Q") + "\\E\\z";
+    }
+
+    /** The pattern a root that selected nothing carries, so it installs nothing under it. */
+    static final String NEVER_MATCHES = "\\A(?!)\\z";
+
 
     /**
      * Everything this command can fail with, which is a property of the command rather than of a

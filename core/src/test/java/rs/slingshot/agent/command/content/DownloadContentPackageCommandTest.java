@@ -5,6 +5,7 @@ package rs.slingshot.agent.command.content;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -190,9 +191,16 @@ final class DownloadContentPackageCommandTest {
         try (ZipInputStream archive = new ZipInputStream(new ByteArrayInputStream(bytes))) {
             assertEquals("META-INF/vault/filter.xml", archive.getNextEntry().getName());
             archive.closeEntry();
-            assertEquals("content/package-test/.content.xml", archive.getNextEntry().getName());
-            assertTrue(new String(archive.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
-                    .contains("title=\"hello\""));
+            assertEquals("META-INF/vault/properties.xml", archive.getNextEntry().getName());
+            archive.closeEntry();
+            assertEquals("jcr_root/content/package-test/.content.xml",
+                    archive.getNextEntry().getName(),
+                    "content is not under the root FileVault reads it from");
+            final String document = new String(archive.readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(document.contains("title=\"hello\""), document);
+            assertTrue(document.contains("xmlns:jcr=\"http://www.jcp.org/jcr/1.0\""), document);
+            assertTrue(document.contains("jcr:primaryType=\""), document);
         }
     }
 
@@ -207,12 +215,88 @@ final class DownloadContentPackageCommandTest {
     @Test
     void manifestEscapesXmlAttributeValues() {
         final DownloadContentPackageCommand command = new DownloadContentPackageCommand(
-                "safe", List.of("/content/a&b"), List.of("/content/\"quoted\""),
-                List.of("/content/<private>"));
-        assertEquals("<workspaceFilter version=\"1.0\"><filter root=\"/content/a&amp;b\"/>"
-                + "<include pattern=\"/content/&quot;quoted&quot;\"/>"
-                + "<exclude pattern=\"/content/&lt;private&gt;\"/></workspaceFilter>",
-                DownloadContentPackageHandler.manifestOf(command, List.of()));
+                "safe", List.of("/content/a&b", "/content/empty"), List.of(), List.of());
+        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<workspaceFilter version=\"1.0\"><filter root=\"/content/a&amp;b\">"
+                + "<include pattern=\"\\A\\Q/content/a&amp;b/&quot;x\\E\\\\E\\Q&lt;y&gt;\\E\\z\"/>"
+                + "</filter><filter root=\"/content/empty\"><include pattern=\"\\A(?!)\\z\"/>"
+                + "</filter></workspaceFilter>",
+                DownloadContentPackageHandler.manifestOf(command,
+                        List.of("/content/a&b/\"x\\E<y>")),
+                "the filter does not name exactly the selected paths, quoted and escaped");
+    }
+
+    @Test
+    @DisplayName("a selection expression matches whole paths, one segment or any segments per token")
+    void aselectionMatchesWholePaths() {
+        final PackageSelection one = PackageSelection.of("/content/*/jcr:content").orElseThrow();
+        assertTrue(one.matches("/content/site/jcr:content"));
+        assertFalse(one.matches("/content/jcr:content"), "* matched no segment at all");
+        assertFalse(one.matches("/content/a/b/jcr:content"), "* matched two segments");
+        final PackageSelection any = PackageSelection.of("/content/site/(.*)").orElseThrow();
+        assertTrue(any.matches("/content/site"), "(.*) did not match zero segments");
+        assertTrue(any.matches("/content/site/a/b"));
+        assertFalse(any.matches("/content/sites"), "a literal matched a longer segment");
+        final PackageSelection literal = PackageSelection.of("/content/a.b").orElseThrow();
+        assertFalse(literal.matches("/content/axb"), "a dot was read as syntax");
+        assertTrue(literal.anchors("/content/a.b/child"), "an anchor did not select its subtree");
+        assertFalse(literal.anchors("/content"), "a path above the anchor was selected");
+        assertTrue(PackageSelection.of("/").orElseThrow().matches("/"));
+        for (final String refused : List.of("", "content", "/content//x", "/content/a*",
+                "/content/")) {
+            assertTrue(PackageSelection.of(refused).isEmpty(), refused + " was accepted");
+        }
+    }
+
+    @Test
+    @DisplayName("an inclusion below a root selects its anchor and subtree, and nothing beside it")
+    void aninclusionBelowARootSelectsItsSubtree() {
+        final DownloadContentPackageCommand command = assertInstanceOf(
+                DownloadContentPackageCommand.Held.class,
+                DownloadContentPackageCommand.of(argument(List.of("/content/site"),
+                        List.of("/content/site/en"), List.of("/content/site/en/private")),
+                        CONTRACT), "the filter was refused").command();
+        assertFalse(command.contains("/content/site"), "the root was selected though not included");
+        assertTrue(command.contains("/content/site/en"));
+        assertTrue(command.contains("/content/site/en/page"));
+        assertFalse(command.contains("/content/site/de"));
+        assertFalse(command.contains("/content/site/en/private/deep"));
+    }
+
+    @Test
+    @DisplayName("a node is written as a document FileVault reads back, typed and namespaced")
+    void anodeIsAReadableDocumentView() throws javax.jcr.RepositoryException {
+        final javax.jcr.Session session = java.util.Objects.requireNonNull(
+                sling.resourceResolver().adaptTo(javax.jcr.Session.class), "a JCR session");
+        final javax.jcr.Node node = session.getRootNode().addNode("docview", "nt:unstructured");
+        node.setProperty("flag", true);
+        node.setProperty("count", 3L);
+        node.setProperty("tags", new String[] {"a,b", "c"});
+        node.setProperty("brace", "{not a type}");
+        node.setProperty("data", session.getValueFactory().createBinary(
+                new ByteArrayInputStream(new byte[] {1, 2})));
+        session.save();
+        final DocumentView.Written written = DocumentView.of(node);
+        final String document = written.document();
+        assertTrue(document.contains("flag=\"{Boolean}true\""), document);
+        assertTrue(document.contains("count=\"{Long}3\""), document);
+        assertTrue(document.contains("tags=\"[a\\,b,c]\""), document);
+        assertTrue(document.contains("brace=\"\\{not a type}\""), document);
+        assertTrue(document.contains("data=\"{Binary}\""), document);
+        assertTrue(document.contains("jcr:primaryType=\"nt:unstructured\""), document);
+        assertTrue(document.contains("xmlns:nt="), "a namespace a value uses was not declared");
+        assertEquals(List.of("data.binary"), List.copyOf(written.binaries().keySet()));
+        assertEquals("a_x0020_b", DocumentView.encodedName("a b"));
+        assertEquals("_x0031_x", DocumentView.encodedName("1x"));
+    }
+
+    @Test
+    @DisplayName("a repository name is written as the file name FileVault reads it back from")
+    void anameIsWrittenAsFileVaultWritesIt() {
+        assertEquals("_jcr_content", PlatformNames.of("jcr:content"));
+        assertEquals("__private_x", PlatformNames.of("_private_x"));
+        assertEquals("a%3fb", PlatformNames.of("a?b"));
+        assertEquals("/content/site/_jcr_content", PlatformNames.pathOf("/content/site/jcr:content"));
     }
 
     @Test
@@ -221,7 +305,7 @@ final class DownloadContentPackageCommandTest {
         final DownloadContentPackageCommand command = assertInstanceOf(
                 DownloadContentPackageCommand.Held.class,
                 DownloadContentPackageCommand.of(argument(List.of("/content/site"), List.of(),
-                        List.of("^/content/site/private")), CONTRACT),
+                        List.of("/content/site/private")), CONTRACT),
                 "the filter was refused").command();
         assertTrue(command.contains("/content/site/public"),
                 "a path under an included root is not in the package");
@@ -257,12 +341,12 @@ final class DownloadContentPackageCommandTest {
                         "collection", new DocumentValue.Text("exclusion"),
                         "expression_index", new DocumentValue.Whole(1))),
                 DownloadContentPackageHandler.rejectedPattern(argument(List.of("/content/site"),
-                        List.of("^/content"), List.of("/private", "(?P<named>x)")))
+                        List.of("/content"), List.of("/private", "(?P<named>x)")))
                         .map(DocumentValue.Mapping::members),
                 "the refusal did not name the one pattern this platform will not compile");
         assertEquals(java.util.Optional.of(new DocumentValue.Whole(0)),
                 DownloadContentPackageHandler.rejectedPattern(argument(List.of("/content/site"),
-                        List.of("^/content"), List.of()))
+                        List.of("/content"), List.of()))
                         .flatMap(document -> document.member("expression_index")),
                 "a refusal for another reason did not name the first filter there is");
         assertEquals(java.util.Optional.empty(), DownloadContentPackageHandler.rejectedPattern(
