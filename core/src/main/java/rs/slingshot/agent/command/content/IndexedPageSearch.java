@@ -97,12 +97,18 @@ final class IndexedPageSearch {
         final String statement = String.format(java.util.Locale.ROOT, STATEMENT, root,
                 template.replace("'", "''"));
         try {
+            if (!covered(resolver)) {
+                return new Unindexed(INDEX + " is not here, or does not index "
+                        + TEMPLATE_PROPERTY + " on this deployment, so asking it would walk");
+            }
             final String plan = planOf(resolver, statement);
             if (DeclaredQuery.permitted(List.of(DECLARED), STATEMENT, plan)
                     instanceof final DeclaredQuery.Refused refused) {
                 return new Unindexed(refused.detail());
             }
-            if (!plan.contains(INDEX)) {
+            // A repository that explains nothing leaves the definition read above, and the option
+            // clause, as what holds the statement to the index; one that does explain must name it.
+            if (!plan.isEmpty() && !plan.contains(INDEX)) {
                 return new Unindexed("the plan is not answered from " + INDEX + ": " + plan);
             }
             final List<Resource> pages = new ArrayList<>();
@@ -120,6 +126,39 @@ final class IndexedPageSearch {
             return new Unindexed("the repository will not run this statement here: "
                     + unanswerable.getMessage());
         }
+    }
+
+    /** Where the index's rule for pages declares the properties it indexes. */
+    private static final String INDEXED_PROPERTIES =
+            "/oak:index/" + INDEX + "/indexRules/cq:Page/properties";
+
+    /** The property the statement filters on, as the index names it. */
+    static final String TEMPLATE_PROPERTY = "jcr:content/cq:template";
+
+    /**
+     * Whether the index on this deployment indexes the property the statement filters on.
+     *
+     * <p>Read from the index's own definition, because a deployment's index set is its operator's
+     * to change: the same index name holds different properties on different environments, and an
+     * option clause naming an index that cannot answer the filter makes the repository walk. Where
+     * the definition cannot be read at all, the index is taken not to cover it.</p>
+     *
+     * @param resolver the caller's own resolver
+     * @return whether it does
+     */
+    static boolean covered(ResourceResolver resolver) {
+        final Resource properties = resolver.getResource(INDEXED_PROPERTIES);
+        if (properties == null) {
+            return false;
+        }
+        for (final Resource property : properties.getChildren()) {
+            final org.apache.sling.api.resource.ValueMap values = property.getValueMap();
+            if (TEMPLATE_PROPERTY.equals(values.get("name", ""))
+                    && values.get("propertyIndex", false)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

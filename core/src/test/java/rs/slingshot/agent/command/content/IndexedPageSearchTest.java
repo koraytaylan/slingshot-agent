@@ -52,7 +52,7 @@ final class IndexedPageSearchTest {
     @DisplayName("a plan that walks, or is answered by another index, runs nothing")
     void anunindexedPlanRunsNothing() {
         for (final String plan : List.of("[cq:Page] as [page] /* traverse \"/content//*\" */",
-                "[cq:Page] as [page] /* property:cqTemplate */", "")) {
+                "[cq:Page] as [page] /* property:cqTemplate */")) {
             final Scripted resolver = new Scripted(plan, 1);
             assertInstanceOf(IndexedPageSearch.Unindexed.class, IndexedPageSearch.search(
                     resolver.proxy(), "/content/site", "/conf/t", BUDGET), plan);
@@ -80,16 +80,41 @@ final class IndexedPageSearchTest {
                 });
     }
 
+    @Test
+    @DisplayName("an index that does not index the template here is not asked at all")
+    void anuncoveringIndexIsNotAsked() {
+        final Scripted resolver = new Scripted(INDEXED, 1, "jcr:content/jcr:title");
+        assertInstanceOf(IndexedPageSearch.Unindexed.class, IndexedPageSearch.search(
+                resolver.proxy(), "/content/site", "/conf/t", BUDGET));
+        assertEquals(List.of(), resolver.issued, "a statement was issued to an index that walks");
+    }
+
     /** A resolver that explains every statement with one plan and answers with some pages. */
     private static final class Scripted {
 
         private final String plan;
         private final long answered;
+        private final String indexed;
         private final List<String> issued = new ArrayList<>();
 
         Scripted(String plan, long answered) {
+            this(plan, answered, IndexedPageSearch.TEMPLATE_PROPERTY);
+        }
+
+        Scripted(String plan, long answered, String indexed) {
             this.plan = plan;
             this.answered = answered;
+            this.indexed = indexed;
+        }
+
+        private Resource definition() {
+            final Resource property = (Resource) Proxy.newProxyInstance(
+                    Thread.currentThread().getContextClassLoader(), new Class<?>[] {Resource.class},
+                    (proxy, method, arguments) -> new org.apache.sling.api.wrappers.ValueMapDecorator(
+                            Map.<String, Object>of("name", indexed, "propertyIndex", true)));
+            return (Resource) Proxy.newProxyInstance(
+                    Thread.currentThread().getContextClassLoader(), new Class<?>[] {Resource.class},
+                    (proxy, method, arguments) -> List.of(property));
         }
 
         ResourceResolver proxy() {
@@ -99,6 +124,9 @@ final class IndexedPageSearchTest {
             return (ResourceResolver) Proxy.newProxyInstance(
                     Thread.currentThread().getContextClassLoader(),
                     new Class<?>[] {ResourceResolver.class}, (proxy, method, arguments) -> {
+                        if ("getResource".equals(method.getName())) {
+                            return definition();
+                        }
                         issued.add((String) arguments[0]);
                         return switch (method.getName()) {
                             case "queryResources" -> List.of(Map.<String, Object>of("plan", plan))

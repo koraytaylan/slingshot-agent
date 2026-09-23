@@ -40,7 +40,7 @@ reason = "The same index on the other supported row."
 name = "cqPageLucene"
 deployment = "aem-cloud-service"
 covers = ["jcr:primaryType", "jcr:content/cq:template", "jcr:content/jcr:title", "jcr:content/jcr:description"]
-reason = "Adobe's own page index, provided by the product. Finding pages by template or by phrase is answered from it, and a deployment that removed it would be answered by the run-time plan check rather than by this file."
+reason = "Adobe's own page index, provided by the product. Finding pages by template or by phrase is answered from it where it indexes those properties. An environment's copy is its operator's to change, and some do not index the template, so the template search reads the index's own definition before it names the index in its option clause, and walks within its budgets where the index cannot answer."
 
 [[index]]
 name = "cqPageLucene"
