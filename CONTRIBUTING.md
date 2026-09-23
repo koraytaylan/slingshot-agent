@@ -66,8 +66,9 @@ only two.
   with a planted value of every kind `policy/redaction-corpus.toml` names, and every body, header,
   log line and piece of a stream is scanned for all of them. (stage: public-interop-tier)
 - Nothing a caller supplies reaches a grammar: every attack shape `policy/injection-corpus.toml`
-  declares is driven through every caller-supplied member, and the build reaches no query engine at
-  all, because a product with no statement has none for a value to break out of.
+  declares is driven through every caller-supplied member. The one statement the product builds,
+  the page-by-template search, is a declared fixed shape that names its index in an option clause,
+  is explained before it runs, and holds caller values only as literals the grammar cannot leave.
   (stage: injection-audit)
 - Nothing is published that the registry would reject: every prerequisite
   `policy/central-prerequisites.toml` names is decided here, offline, against the built artifacts

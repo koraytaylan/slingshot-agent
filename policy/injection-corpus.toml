@@ -11,10 +11,13 @@
 # The set is closed. A shape somebody adds without driving it through anything is a category nobody
 # exercises; a member driven through nothing is a place nobody attacked. Both are refused.
 #
-# The strongest answer this product has to the first grammar is that it does not have one: nothing
-# here builds a query statement at all. Every search walks resources through the caller's own
-# resolver, so there is no statement for a value to break out of - and the audit beside this file is
-# what keeps that true rather than a thing that happened to be true when it was written.
+# The strongest answer this product has to the first grammar is to build as few statements as it
+# can. One search builds one: the page-by-template search, which a site too large to walk can only
+# answer from Adobe's own page index. Its statement is a fixed shape declared in the query coverage
+# policy, it names that index in its own option clause and is explained before it runs, and the two
+# values written into it are literals the grammar cannot leave - a string with its quotes doubled and
+# a path refused where it holds a closing bracket. Every other search walks resources through the
+# caller's own resolver, so there is no statement for a value to break out of.
 
 [corpus]
 reason = "Five grammars, and there is no sixth. Each names what it attacks rather than what it looks like, because the same three characters mean different things in a query, a path, and a node name."

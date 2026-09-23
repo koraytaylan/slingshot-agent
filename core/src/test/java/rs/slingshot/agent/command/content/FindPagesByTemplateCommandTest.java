@@ -172,6 +172,44 @@ final class FindPagesByTemplateCommandTest {
                 "the index this query relies on is not recorded on both supported deployments");
     }
 
+    @Test
+    @DisplayName("where the page index answers, its pages are the answer and nothing is walked")
+    void thepageIndexAnswersWhereItIsThere() {
+        corpus();
+        final DocumentValue.Mapping found = assertInstanceOf(CommandHandler.Produced.class,
+                new FindPagesByTemplateHandler(CONTRACT).run(argument("/content/site", TEMPLATE,
+                        100), indexed(), context()), "the indexed search was refused").result();
+        assertEquals(USING, matchesIn(found).size(),
+                "the index's answer was not re-checked, or a page it named was lost");
+        assertEquals(FindPagesByTemplateHandler.DISCOVERY_BUDGET_EXCEEDED,
+                assertInstanceOf(CommandHandler.Failed.class, new FindPagesByTemplateHandler(
+                        CONTRACT).run(argument("/content/site", TEMPLATE, 100), indexed(),
+                        narrowContext()), "more pages than the budget were answered").category());
+    }
+
+    /**
+     * The caller's resolver as an author with the page index sees it: every statement explained
+     * as answered by that index, and answered with every page under the site - including the ones
+     * using another template, which the search itself has to leave out.
+     */
+    private ResourceResolver indexed() {
+        return new org.apache.sling.api.wrappers.ResourceResolverWrapper(readOnly()) {
+            @Override
+            public java.util.Iterator<Map<String, Object>> queryResources(String query,
+                                                                         String language) {
+                return List.<Map<String, Object>>of(Map.of("plan",
+                        "[cq:Page] as [page] /* lucene:cqPageLucene */")).iterator();
+            }
+
+            @Override
+            public java.util.Iterator<org.apache.sling.api.resource.Resource> findResources(
+                    String query, String language) {
+                return java.util.Objects.requireNonNull(getResource("/content/site"),
+                        "the site").listChildren();
+            }
+        };
+    }
+
     private CommandHandler.Answer run(String root, String template) {
         return new FindPagesByTemplateHandler(CONTRACT).run(argument(root, template, 100),
                 readOnly(), context());

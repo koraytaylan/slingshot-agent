@@ -20,10 +20,12 @@ import java.util.Optional;
 /**
  * Whether a caller's value can reach a grammar, checked over parsed source rather than by grep.
  *
- * <p>The strongest answer this product has to query injection is that it has no query. Every search
- * walks resources through the caller's own resolver, so there is no statement for a value to break
- * out of — and this is what keeps that true rather than a thing that happened to be true when
- * somebody wrote it. The day a statement appears, it appears as a finding.</p>
+ * <p>The strongest answer this product has to query injection is to have as few queries as it can.
+ * Every search but one walks resources through the caller's own resolver, so there is no statement
+ * for a value to break out of; the one that cannot walk - a site too large for it - asks a declared
+ * index through a declared statement. This is what keeps that true rather than a thing that
+ * happened to be true when somebody wrote it: the day another statement appears, it appears as a
+ * finding.</p>
  *
  * <p>Parsed rather than matched, because the two things worth telling apart look identical to a
  * text search. A statement named in a comment is somebody explaining why there are none; a string
@@ -52,6 +54,19 @@ public final class InjectionAudit {
     private static final List<String> QUERY_ENGINES =
             List.of("createQuery", "getQueryManager", "findResources", "queryResources",
                     "PredicateGroup", "QueryBuilder");
+
+    /**
+     * The sources allowed to reach a query engine, each with one declared statement.
+     *
+     * <p>Two, and each is a fixed shape rather than a question a caller writes. The maintenance
+     * sweep orders the agent's own records and holds no caller value at all. The page index search
+     * is the one question a site too large to walk can only answer from an index: its statement is
+     * declared in the query coverage policy, names that index in its own option clause, is
+     * explained before it runs, and holds a caller's values only as literals the grammar cannot
+     * leave. Any other source that reaches an engine is still a finding.</p>
+     */
+    private static final List<String> DECLARED_STATEMENT_SITES =
+            List.of("MaintenanceSweep.java", "IndexedPageSearch.java");
 
     /** How a node is made, which is where an unescaped name would land. */
     private static final List<String> NAME_TAKING_CALLS = List.of("addNode", "createNode");
@@ -195,7 +210,7 @@ public final class InjectionAudit {
         final List<PolicyFinding> findings = new ArrayList<>();
         parsed(file).findAll(MethodCallExpr.class).forEach(call -> {
             if (QUERY_ENGINES.contains(call.getNameAsString())
-                    && !named.endsWith("MaintenanceSweep.java")) {
+                    && DECLARED_STATEMENT_SITES.stream().noneMatch(named::endsWith)) {
                 findings.add(PolicyFinding.inFile(named, A_QUERY_ENGINE_IS_REACHED,
                         call.getNameAsString() + " reaches a query engine, and nothing here has a"
                                 + " query for a caller's value to break out of"));

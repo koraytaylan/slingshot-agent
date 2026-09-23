@@ -79,8 +79,24 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
                     + " and somebody planning a migration would believe it.");
         }
         final Search search = new Search(command.templatePath());
-        final PageTree.Walk walked = PageTree.pagesUnder(resolver, root,
-                context.discovery().limit(), context.time().limit(), search::consider);
+        // Asked of Adobe's page index first, which answers a whole site at once. Where that index
+        // is not there to ask, the pages are walked instead, under the same two budgets.
+        final IndexedPageSearch.Outcome indexed = IndexedPageSearch.search(resolver,
+                command.rootPath(), command.templatePath(), context.discovery().limit());
+        if (indexed instanceof IndexedPageSearch.OverBudget) {
+            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "more pages use this template under "
+                    + command.rootPath() + " than the " + context.discovery().limit()
+                    + " this caller may examine; name a narrower root instead");
+        }
+        final PageTree.Walk walked;
+        if (indexed instanceof final IndexedPageSearch.Found found) {
+            search.consider(root);
+            found.pages().forEach(search::consider);
+            walked = PageTree.Walk.FINISHED;
+        } else {
+            walked = PageTree.pagesUnder(resolver, root, context.discovery().limit(),
+                    context.time().limit(), search::consider);
+        }
         if (walked == PageTree.Walk.EXHAUSTED) {
             return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search read more than the "
                     + context.discovery().limit() + " nodes or ran longer than the " + context.time().limit()
