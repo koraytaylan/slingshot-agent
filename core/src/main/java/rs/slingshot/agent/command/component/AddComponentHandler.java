@@ -120,10 +120,32 @@ public final class AddComponentHandler implements CommandHandler {
         return ordered(command, parent, parentPath, session);
     }
 
+    /**
+     * Whether a parent keeps its children in an order a component can be placed in.
+     *
+     * <p>Asked of the parent's own node type rather than of its name: a page's content resource is
+     * {@code cq:PageContent}, which orders its children as surely as an unstructured node does,
+     * and a check by name would refuse the most common place a component goes.</p>
+     *
+     * @param parent the parent
+     * @return whether it does
+     */
+    static boolean keepsOrder(Resource parent) {
+        final javax.jcr.Node node = parent.adaptTo(javax.jcr.Node.class);
+        if (node == null) {
+            return ORDERED_TYPE.equals(String.valueOf(parent.getValueMap()
+                    .get(ListChildPagesHandler.TYPE_PROPERTY, String.class)));
+        }
+        try {
+            return node.getPrimaryNodeType().hasOrderableChildNodes();
+        } catch (final javax.jcr.RepositoryException unreadable) {
+            return false;
+        }
+    }
+
     private static MutationOutcome ordered(AddComponentCommand command, Resource parent,
                                            String parentPath, ResourceResolver session) {
-        if (!ORDERED_TYPE.equals(String.valueOf(parent.getValueMap()
-                .get(ListChildPagesHandler.TYPE_PROPERTY, String.class)))) {
+        if (!keepsOrder(parent)) {
             return new MutationOutcome.Refused(PARENT_NOT_ORDERABLE, parentPath + " keeps its"
                     + " children in no particular order, so a component added to it would be"
                     + " somewhere this command cannot say and a reorder could not move it");

@@ -4,6 +4,7 @@
 package rs.slingshot.agent.command.component;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -87,6 +88,29 @@ final class ComponentMutationTest {
                         FindPagesUsingComponentsHandler.RESOURCE_TYPE_PROPERTY),
                 "the component does not record what it is, and one with no type renders as"
                         + " nothing");
+    }
+
+    @Test
+    @DisplayName("a parent keeps order by its node type, so page content is orderable")
+    void orderabilityIsTheNodeTypesOwn() throws javax.jcr.RepositoryException {
+        final javax.jcr.Session session = java.util.Objects.requireNonNull(
+                ordering.resourceResolver().adaptTo(javax.jcr.Session.class), "a JCR session");
+        final javax.jcr.nodetype.NodeTypeManager types =
+                session.getWorkspace().getNodeTypeManager();
+        final javax.jcr.nodetype.NodeTypeTemplate content = types.createNodeTypeTemplate();
+        content.setName("orderedContent");
+        content.setDeclaredSuperTypeNames(new String[] {"nt:unstructured"});
+        content.setOrderableChildNodes(true);
+        types.registerNodeType(content, false);
+        session.getRootNode().addNode("pagecontent", "orderedContent");
+        session.getRootNode().addNode("files", "nt:folder");
+        session.save();
+        assertTrue(AddComponentHandler.keepsOrder(java.util.Objects.requireNonNull(
+                        ordering.resourceResolver().getResource("/pagecontent"))),
+                "a content resource of an orderable type other than unstructured was refused");
+        assertFalse(AddComponentHandler.keepsOrder(java.util.Objects.requireNonNull(
+                        ordering.resourceResolver().getResource("/files"))),
+                "a folder was taken to keep its children in order");
     }
 
     @Test

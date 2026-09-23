@@ -202,8 +202,7 @@ public final class ComponentPathHandler implements CommandHandler {
             return new MutationOutcome.Refused(PARENT_NOT_ORDERABLE, command.componentPath()
                     + " has no parent to be ordered within");
         }
-        if (!AddComponentHandler.ORDERED_TYPE.equals(String.valueOf(parent.getValueMap()
-                .get(ListChildPagesHandler.TYPE_PROPERTY, String.class)))) {
+        if (!AddComponentHandler.keepsOrder(parent)) {
             return new MutationOutcome.Refused(PARENT_NOT_ORDERABLE, parent.getPath() + " keeps"
                     + " its children in no particular order, so there is no order to move this"
                     + " component within");
