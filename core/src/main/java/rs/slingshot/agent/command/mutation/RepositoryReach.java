@@ -125,7 +125,9 @@ public final class RepositoryReach {
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
         java.util.Optional<Resource> held = java.util.Optional.of(root);
         long examined = 0;
-        while (held.isPresent() && examined < budget) {
+        final long startedMilliseconds = System.currentTimeMillis();
+        while (held.isPresent() && examined < budget
+                && System.currentTimeMillis() - startedMilliseconds <= SEARCH_MILLISECONDS) {
             final Resource current = held.orElseThrow();
             examined = examined + 1;
             if (!current.getPath().equals(address) && !current.getPath().startsWith(address + "/")
@@ -146,6 +148,32 @@ public final class RepositoryReach {
         return new References(List.copyOf(found), pending.isEmpty() && held.isEmpty()
                 ? Completeness.COMPLETE : Completeness.INCOMPLETE);
     }
+
+    /**
+     * Whether anything may still point at an address, where a search that could not finish counts.
+     *
+     * <p>A search that ran out of nodes or time before it had looked everywhere cannot say that
+     * nothing does, and a caller who asked to be refused when something might is refused.</p>
+     *
+     * @param session the caller's own resolver
+     * @param address the address
+     * @param budget how many nodes the search may examine
+     * @return whether it may
+     */
+    public static boolean possiblyReferenced(ResourceResolver session, String address,
+                                             long budget) {
+        final References found = references(session, address, budget);
+        return !found.complete() || !found.found().isEmpty();
+    }
+
+    /**
+     * How long one search for references may take.
+     *
+     * <p>Well inside a command's own execution budget: the search walks content rather than asking
+     * an index, and a walk of a whole site that outlived the request would be an answer nobody
+     * receives. A search stopped by it is incomplete, and says so.</p>
+     */
+    static final long SEARCH_MILLISECONDS = 15_000;
 
     /**
      * Points every gathered reference at a new address.

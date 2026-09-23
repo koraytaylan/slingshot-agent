@@ -436,7 +436,9 @@ public final class FragmentMutationHandler implements CommandHandler {
         if (!UpdateExperienceFragmentCommand.TITLE_UNCHANGED.equals(command.title())) {
             values.put(ListChildPagesHandler.TITLE_PROPERTY, command.title());
         }
-        return sealed(session, FragmentResult.documentOf(command.variationPath()));
+        // The variation's content resource, which is what the update wrote to.
+        return sealed(session, FragmentResult.documentOf(command.variationPath()
+                + "/jcr:content"));
     }
 
     private Answer removal(DocumentValue.Mapping arguments, ResourceResolver resolver,
@@ -479,10 +481,10 @@ public final class FragmentMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(FragmentHandlers.DELETION_BUDGET_EXCEEDED,
                     "this fragment holds more than the " + bound + " nodes one delete may remove");
         }
-        final var references = RepositoryReach.references(session, command.fragmentPath(),
-                reach.budget());
+        // A caller who said to ignore references is not made to wait for a search of them.
         if (command.referencePolicy() == ReferencePolicy.REFUSE_WHEN_REFERENCED
-                && (!references.complete() || !references.found().isEmpty())) {
+                && RepositoryReach.possiblyReferenced(session, command.fragmentPath(),
+                        reach.budget())) {
             return new MutationOutcome.Refused(FragmentHandlers.FRAGMENT_IS_REFERENCED,
                     command.fragmentPath() + " is used somewhere, and this request asked to be"
                             + " refused when it is");

@@ -131,10 +131,15 @@ public final class UpdatePageHandler implements CommandHandler {
         return committed(command, session);
     }
 
+    /** The child a page's content lives in, which is what an update writes to. */
+    private static final String CONTENT_CHILD = "/jcr:content";
+
     private static MutationOutcome committed(UpdatePageCommand command, ResourceResolver session) {
         try {
             session.commit();
-            return new MutationOutcome.Changed(UpdatePageResult.documentOf(command.pagePath()));
+            // The content resource the update wrote to, which is the address the client correlates.
+            return new MutationOutcome.Changed(UpdatePageResult.documentOf(
+                    command.pagePath() + CONTENT_CHILD));
         } catch (final PersistenceException refused) {
             return new MutationOutcome.Refused(COMMIT_FAILED,
                     "the repository refused this update: " + refused.getMessage());

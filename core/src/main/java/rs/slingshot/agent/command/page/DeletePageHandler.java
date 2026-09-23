@@ -117,10 +117,10 @@ public final class DeletePageHandler implements CommandHandler {
     private static MutationOutcome referenced(DeletePageCommand command, Resource page,
                                               List<String> subtree, ResourceResolver session,
                                               CallerContext context) {
-        final var references = RepositoryReach.references(session, command.pagePath(),
-                context.discovery().limit());
+        // A caller who said to ignore references is not made to wait for a search of them.
         if (command.referencePolicy() == ReferencePolicy.REFUSE_WHEN_REFERENCED
-                && (!references.complete() || !references.found().isEmpty())) {
+                && RepositoryReach.possiblyReferenced(session, command.pagePath(),
+                        context.discovery().limit())) {
             return new MutationOutcome.Refused(TARGET_IS_REFERENCED, command.pagePath() + " is"
                     + " referenced, and this request asked to be refused when it is. Which"
                     + " references those are is its own command's question, under its own bound.");

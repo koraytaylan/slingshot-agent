@@ -230,7 +230,9 @@ public final class AssetMutationHandler implements CommandHandler {
                             + " whole change is refused rather than applied without it");
         }
         command.change().set().forEach((name, value) -> values.put(name, value.stored()));
-        return sealed(session, UpdateAssetMetadataResult.documentOf(command.assetPath()));
+        // The metadata resource the update wrote to, which is what the client correlates.
+        return sealed(session, UpdateAssetMetadataResult.documentOf(command.assetPath()
+                + "/jcr:content/metadata"));
     }
 
     private Answer removal(DocumentValue.Mapping arguments, ResourceResolver resolver,
@@ -263,9 +265,9 @@ public final class AssetMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(AssetHandlers.DELETION_BUDGET_EXCEEDED,
                     "this asset holds more than the " + bound + " nodes one delete may remove");
         }
-        final var references = RepositoryReach.references(session, command.assetPath(), budget);
+        // A caller who said to ignore references is not made to wait for a search of them.
         if (command.referencePolicy() == ReferencePolicy.REFUSE_WHEN_REFERENCED
-                && (!references.complete() || !references.found().isEmpty())) {
+                && RepositoryReach.possiblyReferenced(session, command.assetPath(), budget)) {
             return new MutationOutcome.Refused(AssetHandlers.ASSET_IS_REFERENCED,
                     command.assetPath() + " is referenced, and this request asked to be refused"
                             + " when it is");
