@@ -129,7 +129,7 @@ final class CommandRefusalDocumentsTest {
         if ("replicate_content".equals(wireName)) {
             return switch (category) {
                 case "source_not_found", "source_access_denied", "candidate_limit_exceeded",
-                        "traversal_budget_exceeded" -> List.of("path");
+                        "traversal_budget_exceeded" -> List.of("source_path");
                 default -> List.of("accepted_item_count", "current_path", "remaining_item_count");
             };
         }

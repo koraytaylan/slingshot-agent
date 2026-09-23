@@ -91,7 +91,7 @@ public final class CommandRefusalDocuments {
             default -> false;
         };
         if (preflight) {
-            refusal.put("path", new DocumentValue.Text(string(arguments, "path")));
+            refusal.put("source_path", new DocumentValue.Text(string(arguments, "path")));
             return new DocumentValue.Mapping(refusal);
         }
         refusal.put("accepted_item_count", new DocumentValue.Whole(0));
