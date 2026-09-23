@@ -43,7 +43,7 @@ final class DefaultReplicationInventoryTest {
                         ReplicationInventory.Switch.DISABLED, ReplicationInventory.Flow.MOVING, 0),
                 new ReplicationInventory.Agent("publish", "Publish", "/etc/publish",
                         ReplicationInventory.TransportKind.PUBLISH,
-                        ReplicationInventory.Switch.ENABLED, ReplicationInventory.Flow.BLOCKED, 2),
+                        ReplicationInventory.Switch.ENABLED, ReplicationInventory.Flow.BLOCKED, 3),
                 new ReplicationInventory.Agent("reverse", "reverse", "",
                         ReplicationInventory.TransportKind.REVERSE,
                         ReplicationInventory.Switch.ENABLED, ReplicationInventory.Flow.MOVING, 0),
@@ -67,7 +67,9 @@ final class DefaultReplicationInventoryTest {
                 new ReplicationInventory.Entry("head", ReplicationInventory.Action.ACTIVATE,
                         "/content/a", 3, "delivery_failed"),
                 new ReplicationInventory.Entry("tail", ReplicationInventory.Action.DELETE,
-                        "/content/b", 0, ReplicationInventory.NEVER_FAILED)), queue.entries());
+                        "/content/b", 0, ReplicationInventory.NEVER_FAILED),
+                new ReplicationInventory.Entry("probe", ReplicationInventory.Action.TEST, "/", 0,
+                        ReplicationInventory.NEVER_FAILED)), queue.entries());
         assertEquals(List.of(), assertInstanceOf(ReplicationInventory.Queue.class,
                 platform.inventory().queue("flush")).entries());
         for (final ReplicationInventory.Outcome refused : List.of(
@@ -87,8 +89,11 @@ final class DefaultReplicationInventoryTest {
                 ReplicationInventory.Refused.class,
                 platform.inventory().flush("publish", 1)).category());
         assertEquals(List.of(), platform.controls);
-        assertEquals(2, assertInstanceOf(ReplicationInventory.Flushed.class,
-                platform.inventory().flush("publish", 2)).removedEntryCount());
+        assertEquals(0, assertInstanceOf(ReplicationInventory.Flushed.class,
+                platform.inventory().flush("flush", 0)).removedEntryCount(),
+                "an agent that keeps no queue has nothing to flush");
+        assertEquals(3, assertInstanceOf(ReplicationInventory.Flushed.class,
+                platform.inventory().flush("publish", 3)).removedEntryCount());
         assertEquals(0, assertInstanceOf(ReplicationInventory.Flushed.class,
                 platform.inventory().flush("static", ReplicationInventory.ANY_COUNT))
                 .removedEntryCount());
@@ -107,6 +112,9 @@ final class DefaultReplicationInventoryTest {
                 platform.inventory().retry("publish", "tail")).resubmission());
         assertEquals("entry_not_found", assertInstanceOf(ReplicationInventory.Refused.class,
                 platform.inventory().retry("publish", "none")).category());
+        assertEquals("entry_not_found", assertInstanceOf(ReplicationInventory.Refused.class,
+                platform.inventory().retry("flush", "head")).category(),
+                "an agent that keeps no queue holds no entry");
         assertEquals(List.of("retry:publish"), platform.controls);
     }
 
@@ -142,7 +150,8 @@ final class DefaultReplicationInventoryTest {
             agents.put("publish", agent("publish", "Publish", "/etc/publish", "durbo", false,
                     false, true, queue("publish", true,
                             entry("head", ReplicationActionType.ACTIVATE, "/content/a", 0, 3),
-                            entry("tail", ReplicationActionType.DELETE, "/content/b", 1, 0))));
+                            entry("tail", ReplicationActionType.DELETE, "/content/b", 1, 0),
+                            entry("probe", ReplicationActionType.TEST, "", 2, 0))));
             agents.put("flush", agent("flush", "Dispatcher Flush", "/etc/flush", "flush", false,
                     true, false, null));
             agents.put("reverse", agent("reverse", null, null, "durbo", true, false, true,

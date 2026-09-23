@@ -5,6 +5,7 @@ package rs.slingshot.agent.aem.replication;
 
 import com.day.cq.replication.AgentConfig;
 import com.day.cq.replication.AgentManager;
+import com.day.cq.replication.ReplicationAction;
 import com.day.cq.replication.ReplicationActionType;
 import com.day.cq.replication.ReplicationQueue;
 import java.util.Comparator;
@@ -86,13 +87,15 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
             return unknown(agentIdentifier);
         }
         final ReplicationQueue queue = named.get().getQueue();
-        final long held = queue.entries().size();
+        final long held = entriesIn(queue).size();
         if (expectation != ANY_COUNT && expectation != held) {
             return new Refused(QUEUE_EXPECTATION_MISMATCH, agentIdentifier + " holds " + held
                     + " entries, not the " + expectation + " the caller expected, so nothing was"
                     + " removed");
         }
-        queue.clear();
+        if (queue != null) {
+            queue.clear();
+        }
         return new Flushed(held);
     }
 
@@ -103,7 +106,7 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
             return unknown(agentIdentifier);
         }
         final ReplicationQueue queue = named.get().getQueue();
-        final Optional<ReplicationQueue.Entry> entry = queue.entries().stream()
+        final Optional<ReplicationQueue.Entry> entry = entriesIn(queue).stream()
                 .filter(held -> entryIdentifier.equals(held.getId()))
                 .findFirst();
         if (entry.isEmpty()) {
@@ -134,7 +137,7 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
                 String.valueOf(Optional.ofNullable(configuration.getConfigPath()).orElse("")),
                 kindOf(agent, configuration),
                 agent.isEnabled() ? Switch.ENABLED : Switch.DISABLED, flowOf(queue),
-                queue == null ? 0 : queue.entries().size());
+                entriesIn(queue).size());
     }
 
     /**
@@ -164,24 +167,32 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
      * still there, which is what the platform's own deprecated flag reported.</p>
      */
     private static Flow flowOf(ReplicationQueue queue) {
-        if (queue == null) {
-            return Flow.MOVING;
-        }
-        return queue.entries().stream().findFirst()
+        return entriesIn(queue).stream().findFirst()
                 .filter(head -> head.getNumProcessed() > 0)
                 .map(head -> Flow.BLOCKED)
                 .orElse(Flow.MOVING);
     }
 
+    /** What a queue holds, where an agent that keeps no queue holds nothing. */
+    private static List<ReplicationQueue.Entry> entriesIn(ReplicationQueue queue) {
+        return queue == null ? List.of() : queue.entries();
+    }
+
     private static List<Entry> entriesOf(ReplicationQueue queue) {
-        if (queue == null) {
-            return List.of();
-        }
-        return queue.entries().stream()
+        return entriesIn(queue).stream()
                 .map(entry -> new Entry(entry.getId(), actionOf(entry.getAction().getType()),
-                        String.valueOf(entry.getAction().getPath()), entry.getNumProcessed(),
+                        pathOf(entry.getAction()), entry.getNumProcessed(),
                         entry.getNumProcessed() > 0 ? DELIVERY_FAILED : NEVER_FAILED))
                 .toList();
+    }
+
+    /**
+     * The content one entry is about, where an entry that carries none, such as a test, is about
+     * the root.
+     */
+    private static String pathOf(ReplicationAction action) {
+        final String path = action.getPath();
+        return path == null || path.isEmpty() ? "/" : path;
     }
 
     /**
