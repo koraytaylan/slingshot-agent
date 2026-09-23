@@ -198,10 +198,11 @@ final class ReadContentFragmentCommandTest {
     private void fragment() {
         sling.create().resource(FRAGMENT, Map.of(
                 ListChildPagesHandler.TYPE_PROPERTY, ReadContentFragmentHandler.FRAGMENT_TYPE));
-        sling.create().resource(FRAGMENT + "/jcr:content", Map.of(
-                ReadContentFragmentHandler.MODEL_PROPERTY, MODEL));
+        sling.create().resource(FRAGMENT + "/jcr:content", Map.of("contentFragment", true));
         sling.create().resource(FRAGMENT + "/" + ReadContentFragmentHandler.DATA_NODE, Map.of(
-                "title", "An Article", "wordCount", 1200L, "published", true));
+                ReadContentFragmentHandler.MODEL_PROPERTY, MODEL));
+        sling.create().resource(FRAGMENT + "/" + ReadContentFragmentHandler.DATA_NODE + "/master",
+                Map.of("title", "An Article", "wordCount", 1200L, "published", true));
         sling.create().resource(FRAGMENT + "/" + ReadContentFragmentHandler.DATA_NODE + "/german",
                 Map.of("title", "Ein Artikel", "wordCount", 1100L, "published", false));
     }

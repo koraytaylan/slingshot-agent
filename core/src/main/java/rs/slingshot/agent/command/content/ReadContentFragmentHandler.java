@@ -130,8 +130,14 @@ public final class ReadContentFragmentHandler implements CommandHandler {
      * @return the model's address, or empty where the fragment names none
      */
     public static String modelOf(Resource fragment) {
-        return java.util.Optional.ofNullable(fragment.getChild(CONTENT_NODE))
-                .map(content -> content.getValueMap().get(MODEL_PROPERTY, ""))
+        // The platform keeps a fragment's model on its data node; a fragment written by an older
+        // tool may keep it on the content node instead, and both name the same model.
+        return java.util.stream.Stream.of(DATA_NODE, CONTENT_NODE)
+                .map(fragment::getChild)
+                .filter(java.util.Objects::nonNull)
+                .map(held -> held.getValueMap().get(MODEL_PROPERTY, ""))
+                .filter(model -> !model.isEmpty())
+                .findFirst()
                 .orElse("");
     }
 
@@ -165,8 +171,12 @@ public final class ReadContentFragmentHandler implements CommandHandler {
      * @return the node holding it, or nothing where the fragment has no such variation
      */
     public static Resource variationOf(Resource data, String variation) {
-        return ReadContentFragmentCommand.MASTER_VARIATION.equals(variation)
-                ? data : data.getChild(variation);
+        // Every variation, master included, is a child of the data node on the platform. A master
+        // held on the data node itself is what an older writer left, and is read as the master
+        // only where no master child exists.
+        final Resource named = data.getChild(variation);
+        return named == null && ReadContentFragmentCommand.MASTER_VARIATION.equals(variation)
+                ? data : named;
     }
 
     /**
