@@ -8,9 +8,11 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.osgi.framework.BundleContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
@@ -22,6 +24,8 @@ import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.CommandRegistry;
 import rs.slingshot.agent.command.OverflowPublication;
+import rs.slingshot.agent.command.RegistryRow;
+import rs.slingshot.agent.command.StagingArea;
 import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.asset.CreateAssetCommand;
 import rs.slingshot.agent.command.asset.CreateAssetFolderCommand;
@@ -39,6 +43,8 @@ import rs.slingshot.agent.command.content.AuthoringCatalogHandler;
 import rs.slingshot.agent.command.content.ChildListingHandler;
 import rs.slingshot.agent.command.content.ComponentInstancesCommand;
 import rs.slingshot.agent.command.content.ContentCatalogHandler;
+import rs.slingshot.agent.command.content.DownloadContentPackageCommand;
+import rs.slingshot.agent.command.content.DownloadContentPackageHandler;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataCommand;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataHandler;
 import rs.slingshot.agent.command.content.FindAssetsReferencedByPageCommand;
@@ -86,8 +92,10 @@ import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.command.page.UpdatePageCommand;
 import rs.slingshot.agent.command.page.UpdatePageHandler;
 import rs.slingshot.agent.command.platform.BundleInventory;
+import rs.slingshot.agent.command.platform.ConfigurationCatalogues;
 import rs.slingshot.agent.command.platform.ContentAdmission;
 import rs.slingshot.agent.command.platform.JobInventory;
+import rs.slingshot.agent.command.platform.ReplicationInventory;
 import rs.slingshot.agent.command.platform.WorkflowService;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.execution.ExecutionOutcome;
@@ -145,9 +153,36 @@ public final class DefaultCommandRuntime implements CommandRuntime {
     public DefaultCommandRuntime() {
     }
 
-    /** Loads and activates the complete stateless handler subset available in this bundle. */
+    /** The directory inside this bundle's own data area each package build is given a room in. */
+    private static final String STAGING = "staging";
+
+    /**
+     * Loads and activates every handler this bundle can answer, including the one that needs room
+     * to work, which is given rooms inside this bundle's own data area.
+     *
+     * @param context this bundle's own context, through which its data area is reached
+     */
     @Activate
+    public void activated(BundleContext context) {
+        final java.io.File area = context.getDataFile(STAGING);
+        activate(area == null ? java.util.List.of() : java.util.List.of(area.toPath()));
+    }
+
+    /**
+     * Loads and activates the handlers that need no room to work, which is every handler but the
+     * package build: a runtime with no data area has nowhere to give one.
+     */
     public void activate() {
+        activate(java.util.List.of());
+    }
+
+    /**
+     * Loads and activates every handler that can run with the staging directories given.
+     *
+     * @param staging where package builds are given rooms, as a list of at most one that is empty
+     *     where there is nowhere
+     */
+    private void activate(java.util.List<Path> staging) {
         final AgentContract.Outcome loaded = AgentContract.load();
         if (!(loaded instanceof final AgentContract.Loaded present)) {
             return;
@@ -157,9 +192,10 @@ public final class DefaultCommandRuntime implements CommandRuntime {
             return;
         }
         final java.util.List<CommandDispatch.Registration> registrations =
-                java.util.stream.Stream.concat(registrations(present.contract()).stream(),
-                        PlatformRegistrations.registrations(present.contract(), seams.get())
-                                .stream()).toList();
+                java.util.stream.Stream.of(registrations(present.contract()),
+                        PlatformRegistrations.registrations(present.contract(), seams.get()),
+                        staged(present.contract(), embedded.registry(), staging))
+                        .flatMap(java.util.List::stream).toList();
         final CommandRegistry.Outcome active = embedded.registry().active(registrations.stream()
                 .map(CommandDispatch.Registration::wireName).toList());
         if (!(active instanceof final CommandRegistry.Loaded selected)) {
@@ -252,10 +288,81 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         seams.updateAndGet(held -> held.withBundles(java.util.List.of()));
     }
 
+    /**
+     * Binds the replication agent inventory the platform bundle provides.
+     *
+     * @param agents what answers the five replication agent and queue commands
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL,
+            policyOption = ReferencePolicyOption.GREEDY, unbind = "agentsUnavailable")
+    public void agentsAvailable(ReplicationInventory agents) {
+        seams.updateAndGet(held -> held.withAgents(java.util.List.of(agents)));
+    }
+
+    /**
+     * Unbinds the replication agent inventory, after which the agent commands are not advertised.
+     *
+     * @param agents the inventory going away
+     */
+    public void agentsUnavailable(ReplicationInventory agents) {
+        seams.updateAndGet(held -> held.withAgents(java.util.List.of()));
+    }
+
+    /**
+     * Binds the configuration catalogues the platform bundle provides.
+     *
+     * @param configurations what answers the four configuration commands
+     */
+    @Reference(cardinality = ReferenceCardinality.OPTIONAL,
+            policyOption = ReferencePolicyOption.GREEDY, unbind = "configurationsUnavailable")
+    public void configurationsAvailable(ConfigurationCatalogues configurations) {
+        seams.updateAndGet(held -> held.withConfigurations(java.util.List.of(configurations)));
+    }
+
+    /**
+     * Unbinds the configuration catalogues, after which the configuration commands are not
+     * advertised.
+     *
+     * @param configurations the catalogues going away
+     */
+    public void configurationsUnavailable(ConfigurationCatalogues configurations) {
+        seams.updateAndGet(held -> held.withConfigurations(java.util.List.of()));
+    }
+
     /** Revokes the runtime before the DS component is released. */
     @Deactivate
     public void deactivate() {
         state.set(Missing.INSTANCE);
+    }
+
+    /**
+     * The package build, where there is somewhere to give it room and its row declares how much.
+     *
+     * <p>Each run is given a room of its own, named so no two runs share one, and a room that
+     * cannot be opened is an empty answer the handler reports under its own declared category.</p>
+     */
+    private static java.util.List<CommandDispatch.Registration> staged(AgentContract contract,
+                                                                     CommandRegistry registry,
+                                                                     java.util.List<Path> staging) {
+        final Optional<RegistryRow> row = registry.rows().stream()
+                .filter(held -> DownloadContentPackageCommand.WIRE_NAME.equals(held.wireName()))
+                .findFirst();
+        if (staging.isEmpty() || row.isEmpty()) {
+            return java.util.List.of();
+        }
+        final Path under = staging.getFirst();
+        final RegistryRow declared = row.get();
+        return java.util.List.of(new CommandDispatch.Registration(
+                DownloadContentPackageCommand.WIRE_NAME, new DownloadContentPackageHandler(contract,
+                        () -> roomUnder(under, declared))));
+    }
+
+    private static Optional<StagingArea> roomUnder(Path under, RegistryRow row) {
+        try {
+            return StagingArea.forRow(under.resolve(java.util.UUID.randomUUID().toString()), row);
+        } catch (final java.io.UncheckedIOException unwritable) {
+            return Optional.empty();
+        }
     }
 
     private static java.util.List<CommandDispatch.Registration> registrations(AgentContract contract) {

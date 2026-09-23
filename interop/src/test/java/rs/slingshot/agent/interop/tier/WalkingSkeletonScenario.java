@@ -112,7 +112,7 @@ final class WalkingSkeletonScenario {
                 "list_child_pages", "list_component_definitions",
                 "list_components", "list_content_fragment_models", "list_content_fragments",
                 "list_experience_fragments", "list_page_templates", "list_resource_mappings",
-                "load_content_as_json",
+                "load_content_as_json", "download_content_package",
                 "map_resource_path", "query_paths", "read_content_fragment", "resolve_resource_path",
                 "add_component", "update_component", "delete_component", "reorder_component",
                 "create_asset_folder", "create_asset", "update_asset_metadata", "delete_asset", "move_asset",

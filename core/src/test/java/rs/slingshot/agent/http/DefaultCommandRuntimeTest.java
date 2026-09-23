@@ -348,11 +348,23 @@ final class DefaultCommandRuntimeTest {
                                 (proxy, method, arguments) -> {
                                     throw new UnsupportedOperationException(method.getName());
                                 });
+        final rs.slingshot.agent.command.platform.BundleInventory bundles =
+                unanswering(rs.slingshot.agent.command.platform.BundleInventory.class);
+        final rs.slingshot.agent.command.platform.ReplicationInventory agents =
+                unanswering(rs.slingshot.agent.command.platform.ReplicationInventory.class);
+        final rs.slingshot.agent.command.platform.ConfigurationCatalogues configurations =
+                unanswering(rs.slingshot.agent.command.platform.ConfigurationCatalogues.class);
         runtime.deactivate();
         runtime.jobsAvailable(inventory);
         runtime.admissionAvailable(admission);
         runtime.workflowsAvailable(workflows);
+        runtime.bundlesAvailable(bundles);
+        runtime.agentsAvailable(agents);
+        runtime.configurationsAvailable(configurations);
         runtime.activate();
+        assertTrue(runtime.serves("list_open_service_gateway_initiative_bundles"));
+        assertTrue(runtime.serves("flush_replication_queue"));
+        assertTrue(runtime.serves("inspect_open_service_gateway_initiative_configuration"));
         assertTrue(runtime.serves("start_workflow"));
         assertTrue(runtime.serves("set_workflow_instance_suspension"));
         assertTrue(runtime.serves("find_sling_jobs"));
@@ -362,12 +374,55 @@ final class DefaultCommandRuntimeTest {
         runtime.jobsUnavailable(inventory);
         runtime.admissionUnavailable(admission);
         runtime.workflowsUnavailable(workflows);
+        runtime.bundlesUnavailable(bundles);
+        runtime.agentsUnavailable(agents);
+        runtime.configurationsUnavailable(configurations);
         runtime.activate();
         assertFalse(runtime.serves("list_workflow_models"));
+        assertFalse(runtime.serves("list_open_service_gateway_initiative_components"));
+        assertFalse(runtime.serves("list_replication_agents"));
+        assertFalse(runtime.serves("find_open_service_gateway_initiative_configurations"));
         assertFalse(runtime.serves("find_sling_jobs"),
                 "a job command stayed advertised after its adapter went away");
         assertFalse(runtime.serves("replicate_content"));
         runtime.deactivate();
+    }
+
+    @Test
+    void thepackageBuildIsAdvertisedExactlyWhereTheBundleHasADataArea() throws java.io.IOException {
+        final Path area = Files.createTempDirectory("slingshot-staging");
+        try {
+            final DefaultCommandRuntime runtime = new DefaultCommandRuntime();
+            runtime.activated(context(area.resolve("staging").toFile()));
+            assertTrue(runtime.serves("download_content_package"),
+                    "a bundle with a data area did not advertise the package build");
+            runtime.deactivate();
+            final DefaultCommandRuntime without = new DefaultCommandRuntime();
+            without.activated(context(null));
+            assertFalse(without.serves("download_content_package"),
+                    "a bundle with nowhere to stage advertised the package build");
+            assertTrue(without.serves("query_paths"));
+        } finally {
+            try (var walked = Files.walk(area)) {
+                walked.sorted(java.util.Comparator.reverseOrder()).map(Path::toFile)
+                        .forEach(java.io.File::delete);
+            }
+        }
+    }
+
+    private static org.osgi.framework.BundleContext context(java.io.File data) {
+        return (org.osgi.framework.BundleContext) java.lang.reflect.Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] {org.osgi.framework.BundleContext.class},
+                (proxy, method, arguments) -> data);
+    }
+
+    private static <T> T unanswering(Class<T> seam) {
+        return seam.cast(java.lang.reflect.Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(), new Class<?>[] {seam},
+                (proxy, method, arguments) -> {
+                    throw new UnsupportedOperationException(method.getName());
+                }));
     }
 
     private static LogicalOperation operation() throws java.io.IOException {
