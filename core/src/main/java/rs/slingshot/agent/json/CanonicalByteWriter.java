@@ -5,7 +5,6 @@ package rs.slingshot.agent.json;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,10 +31,68 @@ public final class CanonicalByteWriter {
     /** The first scalar that needs no escape, so everything below it is a control. */
     private static final int FIRST_UNESCAPED = 0x20;
 
-    /** How wide a control's escape is written. */
-    private static final int SCALAR_DIGITS = 4;
+    /** The first scalar whose UTF-8 form is two bytes. */
+    private static final int UTF8_TWO_BYTES = 0x80;
+
+    /** The first scalar whose UTF-8 form is three bytes. */
+    private static final int UTF8_THREE_BYTES = 0x800;
+
+    /** The first scalar whose UTF-8 form is four bytes. */
+    private static final int UTF8_FOUR_BYTES = 0x10000;
+
+    /** The lead byte of a two-byte UTF-8 sequence. */
+    private static final int UTF8_TWO_BYTE_LEAD = 0xC0;
+
+    /** The lead byte of a three-byte UTF-8 sequence. */
+    private static final int UTF8_THREE_BYTE_LEAD = 0xE0;
+
+    /** The lead byte of a four-byte UTF-8 sequence. */
+    private static final int UTF8_FOUR_BYTE_LEAD = 0xF0;
+
+    /** How far a UTF-8 payload is shifted to reach the next byte. */
+    private static final int UTF8_BYTE_SHIFT = 6;
+
+    /** How far a three-byte scalar is shifted to reach its lead byte. */
+    private static final int UTF8_THREE_BYTE_SHIFT = 12;
+
+    /** How far a four-byte scalar is shifted to reach its lead byte. */
+    private static final int UTF8_FOUR_BYTE_SHIFT = 18;
+
+    /** The bits of a UTF-8 continuation byte that carry the scalar. */
+    private static final int UTF8_CONTINUATION_BITS = 0x3F;
+
+    /** The mark of a UTF-8 continuation byte. */
+    private static final int UTF8_CONTINUATION_MARK = 0x80;
+
+    /** The bits of one hexadecimal digit. */
+    private static final int HEXADECIMAL_DIGIT_BITS = 0xF;
+
+    /** Where the letters of a hexadecimal digit start, after the ten digits. */
+    private static final int HEXADECIMAL_LETTER_OFFSET = 10;
+
+    /** How far each successive hexadecimal digit of a control is shifted. */
+    private static final int HEXADECIMAL_DIGIT_SHIFT = 4;
+
+    /** The shift of the first hexadecimal digit of a four-digit control. */
+    private static final int HEXADECIMAL_FIRST_DIGIT_SHIFT = 12;
+
+    /** The shift of the second hexadecimal digit of a four-digit control. */
+    private static final int HEXADECIMAL_SECOND_DIGIT_SHIFT = 8;
 
     private CanonicalByteWriter() {
+    }
+
+    /** One member, with the bytes its name orders by, computed once. */
+    private static final class OrderedMember {
+
+        private final byte[] keyBytes;
+
+        private final Map.Entry<String, DocumentValue> entry;
+
+        private OrderedMember(Map.Entry<String, DocumentValue> entry) {
+            this.keyBytes = entry.getKey().getBytes(StandardCharsets.UTF_8);
+            this.entry = entry;
+        }
     }
 
     /** The result of writing: the bytes, or the one reason there are none. */
@@ -115,12 +172,15 @@ public final class CanonicalByteWriter {
     private static Optional<CanonicalRefusal> mapping(DocumentValue.Mapping mapping, String pointer,
                                                       ByteArrayOutputStream written) {
         written.write('{');
-        final List<Map.Entry<String, DocumentValue>> ordered = mapping.members().entrySet().stream()
-                .sorted(Comparator.comparing(entry -> entry.getKey()
-                        .getBytes(StandardCharsets.UTF_8), java.util.Arrays::compareUnsigned))
+        final List<OrderedMember> ordered = mapping.members().entrySet().stream()
+                .map(OrderedMember::new)
+                .sorted((left, right) -> java.util.Arrays.compareUnsigned(left.keyBytes,
+                        right.keyBytes))
                 .toList();
-        final Optional<CanonicalRefusal> refusal = ordered.stream()
-                .flatMap(entry -> member(entry, ordered.indexOf(entry), pointer, written).stream())
+        final Optional<CanonicalRefusal> refusal = java.util.stream.IntStream
+                .range(0, ordered.size())
+                .mapToObj(position -> member(ordered.get(position).entry, position, pointer, written))
+                .flatMap(Optional::stream)
                 .findFirst();
         written.write('}');
         return refusal;
@@ -174,52 +234,87 @@ public final class CanonicalByteWriter {
     private static Optional<CanonicalRefusal> text(String value, String pointer,
                                                    ByteArrayOutputStream written,
                                                    CanonicalRefusal.Failure failure) {
-        if (!wellFormed(value)) {
-            return Optional.of(new CanonicalRefusal(failure, pointer,
-                    "the value carries half of a character, which no byte sequence spells"));
-        }
         written.write('"');
-        escape(value, written);
+        final Optional<CanonicalRefusal> refusal = escape(value, pointer, written, failure);
+        if (refusal.isPresent()) {
+            return refusal;
+        }
         written.write('"');
         return Optional.empty();
     }
 
-    private static void escape(String value, ByteArrayOutputStream written) {
-        // By code point rather than by character: a character outside the basic plane is two
-        // halves in Java and one character in the bytes, and encoding each half on its own would
-        // write two replacements where the sender wrote one character.
-        int index = 0;
-        while (index < value.length()) {
+    // By code point rather than by character: a character outside the basic plane is two halves
+    // in Java and one character in the bytes, and encoding each half on its own would write two
+    // replacements where the sender wrote one character. A surrogate still standing alone is one
+    // that nothing paired: half of a character, which no byte sequence spells.
+    private static Optional<CanonicalRefusal> escape(String value, String pointer,
+                                                     ByteArrayOutputStream written,
+                                                     CanonicalRefusal.Failure failure) {
+        for (int index = 0; index < value.length(); ) {
             final int scalar = value.codePointAt(index);
-            written.writeBytes(escaped(scalar));
+            if (isHalfACharacter(scalar)) {
+                return Optional.of(new CanonicalRefusal(failure, pointer,
+                        "the value carries half of a character, which no byte sequence spells"));
+            }
+            writeScalar(scalar, written);
             index = index + Character.charCount(scalar);
         }
+        return Optional.empty();
     }
 
-    private static byte[] escaped(int scalar) {
+    private static void writeScalar(int scalar, ByteArrayOutputStream written) {
         if (scalar == '"') {
-            return "\\\"".getBytes(StandardCharsets.UTF_8);
+            written.write('\\');
+            written.write('"');
+            return;
         }
         if (scalar == '\\') {
-            return "\\\\".getBytes(StandardCharsets.UTF_8);
+            written.write('\\');
+            written.write('\\');
+            return;
         }
         if (scalar < FIRST_UNESCAPED) {
-            return control(scalar);
+            writeControl(scalar, written);
+            return;
         }
-        return new String(Character.toChars(scalar)).getBytes(StandardCharsets.UTF_8);
+        if (scalar < UTF8_TWO_BYTES) {
+            written.write(scalar);
+            return;
+        }
+        if (scalar < UTF8_THREE_BYTES) {
+            written.write(UTF8_TWO_BYTE_LEAD | (scalar >> UTF8_BYTE_SHIFT));
+            written.write(UTF8_CONTINUATION_MARK | (scalar & UTF8_CONTINUATION_BITS));
+            return;
+        }
+        if (scalar < UTF8_FOUR_BYTES) {
+            written.write(UTF8_THREE_BYTE_LEAD | (scalar >> UTF8_THREE_BYTE_SHIFT));
+            written.write(UTF8_CONTINUATION_MARK
+                    | ((scalar >> UTF8_BYTE_SHIFT) & UTF8_CONTINUATION_BITS));
+            written.write(UTF8_CONTINUATION_MARK | (scalar & UTF8_CONTINUATION_BITS));
+            return;
+        }
+        written.write(UTF8_FOUR_BYTE_LEAD | (scalar >> UTF8_FOUR_BYTE_SHIFT));
+        written.write(UTF8_CONTINUATION_MARK
+                | ((scalar >> UTF8_THREE_BYTE_SHIFT) & UTF8_CONTINUATION_BITS));
+        written.write(UTF8_CONTINUATION_MARK
+                | ((scalar >> UTF8_BYTE_SHIFT) & UTF8_CONTINUATION_BITS));
+        written.write(UTF8_CONTINUATION_MARK | (scalar & UTF8_CONTINUATION_BITS));
     }
 
-    private static byte[] control(int scalar) {
-        final String digits = Integer.toHexString(scalar);
-        return ("\\u" + "0".repeat(SCALAR_DIGITS - digits.length()) + digits)
-                .getBytes(StandardCharsets.UTF_8);
+    private static void writeControl(int scalar, ByteArrayOutputStream written) {
+        written.write('\\');
+        written.write('u');
+        written.write(hex(scalar >> HEXADECIMAL_FIRST_DIGIT_SHIFT));
+        written.write(hex(scalar >> HEXADECIMAL_SECOND_DIGIT_SHIFT));
+        written.write(hex(scalar >> HEXADECIMAL_DIGIT_SHIFT));
+        written.write(hex(scalar));
     }
 
-    private static boolean wellFormed(String value) {
-        // Reading by code point pairs the halves that belong together, so a surrogate still
-        // standing alone here is one that nothing paired: half of a character, which no byte
-        // sequence spells and no writer may emit.
-        return value.codePoints().noneMatch(CanonicalByteWriter::isHalfACharacter);
+    private static int hex(int nibble) {
+        final int value = nibble & HEXADECIMAL_DIGIT_BITS;
+        return value < HEXADECIMAL_LETTER_OFFSET
+                ? '0' + value
+                : 'a' + value - HEXADECIMAL_LETTER_OFFSET;
     }
 
     private static boolean isHalfACharacter(int scalar) {
