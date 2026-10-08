@@ -62,6 +62,8 @@ final class ClusterHandoverScenario {
 
     /** How long the nodes are given to agree, which a document store does on an interval. */
     private static final int SETTLE_MILLISECONDS = 5000;
+    private static final int SETTLE_STEPS = 10;
+    private static final int SEEN_WITHIN_MILLISECONDS = 60_000;
 
     /**
      * How many settles the surviving node is given to start serving again before that is the
@@ -161,9 +163,17 @@ final class ClusterHandoverScenario {
         assertTrue(requests.submit(nodes.first().address() + path,
                         List.of("jcr:primaryType", "nt:unstructured")).statusCode()
                 < BAD_REQUEST, "the first node would not write, so nothing here proves anything");
-        Thread.sleep(SETTLE_MILLISECONDS);
-        assertTrue(requests.readAsAuthenticatedUser(nodes.second().address() + path + ".json")
-                        .statusCode() < BAD_REQUEST,
+        // The second node learns of a write by background read, so it is given the whole window to
+        // see it rather than one fixed pause that a slow runner can overrun.
+        final long deadline = System.nanoTime()
+                + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(SEEN_WITHIN_MILLISECONDS);
+        boolean seen = false;
+        while (!seen && System.nanoTime() < deadline) {
+            Thread.sleep(SETTLE_MILLISECONDS / SETTLE_STEPS);
+            seen = requests.readAsAuthenticatedUser(nodes.second().address() + path + ".json")
+                    .statusCode() < BAD_REQUEST;
+        }
+        assertTrue(seen,
                 "the second node cannot see what the first wrote, so these are two stores and"
                         + " every handover property below would be about nothing");
     }
