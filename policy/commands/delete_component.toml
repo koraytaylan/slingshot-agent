@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["component_access_denied", "component_invalid", "component_not_found", "mutation_outcome_unknown", "repository_commit_failed"]
-argument_schema_digest = "33115bc45546e45990eff13128a7202e5b4248c6312f9dbf5494d7c1e866ad54"
-result_schema_digest = "59a5b6ec31a87a54cbf55729861575ddd8929ec9a04a50b1af3f14a2c3c28c5c"
-contract_limits_digest = "66be041fb0623ea682a53b61d20e19c458e25d2a2df209c9ca9edcc2a405278e"
+argument_schema_digest = "5c074bdfe3631660099ad3dd0f1664a97d2209678286b5c4bf0b887affe30f0c"
+result_schema_digest = "b4e8c7efa1770df6b6e65fb5add79fdc51171a928548df9365f8c068ffcd6b85"
+contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
 staging_bytes = 0
 execution = "immediate"

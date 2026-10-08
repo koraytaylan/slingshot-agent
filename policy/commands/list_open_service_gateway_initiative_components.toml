@@ -14,8 +14,8 @@ operation_key = "refused"
 
 result_bytes = 1048576
 failure_categories = ["component_inventory_failed", "continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded"]
-argument_schema_digest = "4b02e64a434aebb4f6a8dc1de8d93630d4b60abf1fbb0e40eaf6b56588bc3fd9"
-result_schema_digest = "5113bf36ee66af27507740025c90fb00d7ecc97d97db3605a6799f1a9ab458be"
-contract_limits_digest = "66be041fb0623ea682a53b61d20e19c458e25d2a2df209c9ca9edcc2a405278e"
+argument_schema_digest = "f129018759a020fdd38a4a13c7259852eefc2441697d79617a5abd91edb5f426"
+result_schema_digest = "3605eae6a8e9e21ccc6b1109f6e5ca95755630beb5c2a4c8915f7bb011270118"
+contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
 staging_bytes = 0
 execution = "immediate"

@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["deletion_budget_exceeded", "fragment_access_denied", "fragment_invalid", "fragment_is_referenced", "fragment_not_found", "mutation_outcome_unknown", "repository_commit_failed"]
-argument_schema_digest = "2ebe842bc384883d39a34b9302f46eb91da53c961490118694c8e274caa875af"
-result_schema_digest = "c8f325acc11c559fddea25e6a04bb4c4b8850460d46a97789ffc0035029f0f20"
-contract_limits_digest = "66be041fb0623ea682a53b61d20e19c458e25d2a2df209c9ca9edcc2a405278e"
+argument_schema_digest = "de9be71e0f2cc16244632f32f9cbef1d141afbe6115fbb0949d951999ab0684e"
+result_schema_digest = "652eecf3c60d5a0010a7daff9ec92b0febe76d9c83d3cc618265a3bd8aadb987"
+contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
 staging_bytes = 0
 execution = "immediate"

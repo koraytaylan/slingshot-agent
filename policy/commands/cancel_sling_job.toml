@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["job_not_cancellable", "job_not_found", "platform_control_outcome_unknown", "platform_control_rejected"]
-argument_schema_digest = "3abddb500577011df0a645fcaf65d5a6728b10d95fd4e5836c651bd4721a0ef8"
-result_schema_digest = "6451fb26bd531395a0b27737f4344fa8cb404704078a88983f9cd5cc401bc01e"
-contract_limits_digest = "66be041fb0623ea682a53b61d20e19c458e25d2a2df209c9ca9edcc2a405278e"
+argument_schema_digest = "800859a56d1c75365ab3ae52f2a5667643bf503fc9407f1279a8b0eb9e76b4b1"
+result_schema_digest = "f8087b4aa81779bf98c5ccd072ea88c279fc35fe25d31318360a014fcc5da97f"
+contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
 staging_bytes = 0
 execution = "immediate"
