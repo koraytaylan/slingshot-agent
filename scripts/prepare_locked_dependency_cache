@@ -59,6 +59,22 @@ resolve() {
 # fails on a runner and never on the machine the change was written on.
 resolve dependency:go-offline verify -DskipTests -Djacoco.skip=true
 
+# The container analyser resolves the platform feature models of the newest SDK the network offers,
+# not of the SDK this repository declares, so a cache prepared on a later day holds the wrong ones
+# and the offline gate then cannot find the declared SDK's. Fetching the declared SDK's feature
+# models by name makes the cache the declared set whatever the newest SDK happens to be.
+declared_sdk_version="$(awk '
+    /^\[\[artifact\]\]/ { name = ""; version = "" }
+    /^name = "aem-sdk-api"/ { name = "aem-sdk-api" }
+    /^version = / { gsub(/version = |"/, ""); version = $0 }
+    name == "aem-sdk-api" && version != "" { print version; exit }
+' "${POLICY_FILE}")"
+for feature_model in aem-author-sdk aem-publish-sdk; do
+    resolve dependency:get \
+        "-Dartifact=com.adobe.aem:aem-sdk-api:${declared_sdk_version}:slingosgifeature:${feature_model}" \
+        -Dtransitive=false
+done
+
 # Then the tests, over what the first pass made. They do run here, because a test framework resolves
 # its own provider at the moment it runs and a cache prepared without running them would be missing
 # exactly that.
