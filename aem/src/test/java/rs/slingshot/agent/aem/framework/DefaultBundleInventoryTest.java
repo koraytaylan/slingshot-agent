@@ -101,12 +101,12 @@ final class DefaultBundleInventoryTest {
         DefaultBundleInventory inventory() {
             final BundleContext context = (BundleContext) Proxy.newProxyInstance(
                     Thread.currentThread().getContextClassLoader(),
-                    new Class<?>[] {BundleContext.class}, (proxy, method, arguments) ->
-                            switch (method.getName()) {
-                                case "getBundles" -> bundles.toArray(Bundle[]::new);
-                                default -> throw new UnsupportedOperationException(
-                                        method.getName());
-                            });
+                    new Class<?>[] {BundleContext.class}, (proxy, method, arguments) -> {
+                        if (!"getBundles".equals(method.getName())) {
+                            throw new UnsupportedOperationException(method.getName());
+                        }
+                        return bundles.toArray(Bundle[]::new);
+                    });
             return new DefaultBundleInventory(context, runtime());
         }
 

@@ -109,7 +109,7 @@ final class NativeReferenceAliasTest {
             assertTrue(RepositoryReach.adjustmentsWithin(List.of(reference), SOURCE, adjusted));
             assertFalse(RepositoryReach.adjustmentsWithin(List.of(reference), SOURCE, adjusted - 1));
             final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
-                    move(fixture, caller));
+                    move(caller));
             assertEquals(new DocumentValue.Whole(adjusted),
                     produced.result().member("adjusted_reference_count").orElseThrow());
             assertEquals(1, caller.moves);
@@ -138,7 +138,7 @@ final class NativeReferenceAliasTest {
         sling.resourceResolver().commit();
         try (Caller caller = new Caller(sling.resourceResolver().clone(Map.of()))) {
             final CommandHandler.Failed failure = assertInstanceOf(CommandHandler.Failed.class,
-                    move(fixture, caller));
+                    move(caller));
             assertEquals(MovePageHandler.COMMIT_FAILED, failure.category());
             assertEquals(0, caller.moves);
             assertEquals(0, caller.commits);
@@ -276,7 +276,7 @@ final class NativeReferenceAliasTest {
         return session;
     }
 
-    private static CommandHandler.Answer move(Case fixture, ResourceResolver caller) {
+    private static CommandHandler.Answer move(ResourceResolver caller) {
         final var members = new LinkedHashMap<String, DocumentValue>();
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
