@@ -52,7 +52,7 @@ final class CommandContractIdentityTest {
     void aCompleteDocumentIsAnIdentity() {
         final CommandContractIdentity identity = held("complete.json");
         assertEquals("query_paths", identity.wireName());
-        assertEquals("1.0.0", identity.contractVersion());
+        assertEquals("0.0.0", identity.contractVersion());
         assertEquals(64, identity.limitsDigest().rendered().length());
         assertNotEquals(identity.argumentSchemaDigest().rendered(),
                 identity.resultSchemaDigest().rendered());

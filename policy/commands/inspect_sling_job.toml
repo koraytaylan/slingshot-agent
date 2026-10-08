@@ -14,8 +14,8 @@ operation_key = "refused"
 
 result_bytes = 262144
 failure_categories = ["job_inventory_failed", "job_not_found", "result_budget_exceeded"]
-argument_schema_digest = "9e5d0aa0ae7bb42bc1a678fbb388c15f89bce6a5d591425c47c071e48593b5ff"
-result_schema_digest = "548c5dd1daa5d4c011c2921d86b16e7fe1da528f4c942717e62c9953e15eeb00"
-contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
+argument_schema_digest = "3496f0b10c3947a35633f8fa117f466cf88cf460bba0a34299d3b502ac9eacda"
+result_schema_digest = "714688a321609c14fd0798cb73e5d7458798b5ce8293955e35ac4b3aa226774d"
+contract_limits_digest = "10a708a6b720a2b70ed150fb5c0bbf063ea8c235a4395cffe51d92d9c2193ecd"
 staging_bytes = 0
 execution = "immediate"

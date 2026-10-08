@@ -14,8 +14,8 @@ operation_key = "refused"
 
 result_bytes = 1048576
 failure_categories = ["configuration_lookup_ambiguous", "configuration_lookup_budget_exceeded", "configuration_lookup_failed", "configuration_lookup_mismatch", "configuration_result_budget_exceeded", "configuration_value_budget_exceeded", "configuration_value_malformed", "configuration_value_unsupported"]
-argument_schema_digest = "25cbb2d3514678cb114c76e99cdbdb6db150903a46e28ae6e2f22281df532aae"
-result_schema_digest = "9dda19ef7b6f9ab70e779eccf41298f773a05d2b20ba8ff124743a3474a8308b"
-contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
+argument_schema_digest = "bf199b9d81011a71e8ddedf11703d564044cd32f7561ce1b7dba24dcc69d0cdf"
+result_schema_digest = "e3b6918c2cdd471da84b8a64a994dbbd42ff3f64ab12dd920e837a7a09464b2e"
+contract_limits_digest = "10a708a6b720a2b70ed150fb5c0bbf063ea8c235a4395cffe51d92d9c2193ecd"
 staging_bytes = 0
 execution = "immediate"

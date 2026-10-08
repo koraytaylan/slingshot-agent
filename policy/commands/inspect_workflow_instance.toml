@@ -14,8 +14,8 @@ operation_key = "refused"
 
 result_bytes = 262144
 failure_categories = ["instance_access_denied", "instance_not_found", "result_budget_exceeded", "workflow_inventory_failed"]
-argument_schema_digest = "a7ef109f092bcbf6f1e8573952772cf65e46f69eaa4aa4e636cb2c82ddb8a5ed"
-result_schema_digest = "9338c3dd2ea7dd0af60d816a3408af4d112bddbd685311343834abb9ef197b9b"
-contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
+argument_schema_digest = "24343d9c85acddae54988b5691950c5a4019fecda1aac818b775182be76c07c9"
+result_schema_digest = "8747c4fbf661819799c75b2c56022d73e963d160a4051663ef3e7dce59055d67"
+contract_limits_digest = "10a708a6b720a2b70ed150fb5c0bbf063ea8c235a4395cffe51d92d9c2193ecd"
 staging_bytes = 0
 execution = "immediate"

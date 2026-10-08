@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["authorizable_access_denied", "authorizable_kind_mismatch", "group_not_found", "member_not_found", "membership_cycle_refused", "mutation_outcome_unknown", "repository_commit_failed"]
-argument_schema_digest = "7d5f015161cbf4462b7347488804d96ab4a102265691094b7480d8440634347c"
-result_schema_digest = "97ca687c4339afe60d8525eb35dd2c6378bd88a189e32bb3272e7914003cdc4f"
-contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
+argument_schema_digest = "933d927033915e62a68545f3f292e320d04ba32f8d252232d9877354a220aa86"
+result_schema_digest = "744754f1d2c20fc7aea24d9375f11286acea8a7fa325eb7acc2d57062d8c39e6"
+contract_limits_digest = "10a708a6b720a2b70ed150fb5c0bbf063ea8c235a4395cffe51d92d9c2193ecd"
 staging_bytes = 0
 execution = "immediate"

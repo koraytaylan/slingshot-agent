@@ -14,8 +14,8 @@ operation_key = "refused"
 
 result_bytes = 262144
 failure_categories = ["agent_access_denied", "agent_inventory_failed", "agent_not_found"]
-argument_schema_digest = "4751ae80d56e29e074463db487de54560de6fe94551823c1b8bcba42d0441208"
-result_schema_digest = "534aa5b5b47c9337c0e7116c60b6210bc1658577af6a841a0aa42a772eeb8a09"
-contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
+argument_schema_digest = "845a7d08ae117d88a682c926d80daf93d54d17c903c9fae9c1ff3008bc370207"
+result_schema_digest = "88cf42e258420317b6ef0a525dbc20f8ffda03da0bff133b628a392e169b1f1f"
+contract_limits_digest = "10a708a6b720a2b70ed150fb5c0bbf063ea8c235a4395cffe51d92d9c2193ecd"
 staging_bytes = 0
 execution = "immediate"
