@@ -16,7 +16,7 @@ import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * The five commands about the replication agents: three that read and two that act.
+ * The four commands about the replication agents: three that read and one that acts.
  *
  * <p>These are the commands somebody reaches for when a page has been published and is not there.
  * The three that read exist because that question has three separate answers — the agent is off,
@@ -31,7 +31,7 @@ import rs.slingshot.agent.json.DocumentValue;
  */
 public final class AgentHandler implements CommandHandler {
 
-    /** Which of the five this handler answers. */
+    /** Which of the four this handler answers. */
     public enum Kind {
         /** Lists the agents. */
         LISTING,
@@ -40,9 +40,7 @@ public final class AgentHandler implements CommandHandler {
         /** Reads one agent's queue. */
         QUEUE,
         /** Empties one. */
-        FLUSH,
-        /** Offers one stuck entry again. */
-        RETRY
+        FLUSH
     }
 
     private final AgentContract contract;
@@ -51,12 +49,12 @@ public final class AgentHandler implements CommandHandler {
     private final PlatformControl control;
 
     /**
-     * Holds one handler for one of the five.
+     * Holds one handler for one of the four.
      *
      * @param contract the authenticated contract
-     * @param kind which of the five commands this handler answers
+     * @param kind which of the four commands this handler answers
      * @param inventory what answers questions about the agents and acts on their queues
-     * @param control what this deployment permits, asked before either action proceeds
+     * @param control what this deployment permits, asked before the flush proceeds
      */
     public AgentHandler(AgentContract contract, Kind kind, ReplicationInventory inventory,
                         PlatformControl control) {
@@ -74,7 +72,6 @@ public final class AgentHandler implements CommandHandler {
             case AGENT -> inspected(arguments);
             case QUEUE -> queued(arguments, context);
             case FLUSH -> guarded(() -> flushed(arguments));
-            case RETRY -> guarded(() -> retried(arguments));
         };
     }
 
@@ -212,22 +209,6 @@ public final class AgentHandler implements CommandHandler {
                         ((ReplicationInventory.Flushed) emptied).removedEntryCount()));
     }
 
-    private Answer retried(DocumentValue.Mapping arguments) {
-        final AgentCommands.RetryOutcome asked = AgentCommands.retry(arguments, contract);
-        if (asked instanceof final AgentCommands.RetryRefused refused) {
-            return new Failed(retryCategoryFor(refused.refusal().refusal()),
-                    refused.refusal().refusal() + ": " + refused.refusal().detail());
-        }
-        final AgentCommands.Retry retry = (AgentCommands.Retry) asked;
-        final ReplicationInventory.Outcome offered =
-                inventory.retry(retry.agentIdentifier(), retry.entryIdentifier());
-        return offered instanceof final ReplicationInventory.Refused refused
-                ? new Failed(refused.category(), refused.detail())
-                : new Produced(AgentResults.retriedOf(retry.agentIdentifier(),
-                        retry.entryIdentifier(),
-                        ((ReplicationInventory.Resubmitted) offered).resubmission()));
-    }
-
     /**
      * Which declared category one flush refusal is reported under.
      *
@@ -237,24 +218,9 @@ public final class AgentHandler implements CommandHandler {
     public static String categoryFor(AgentCommands.Refusal refusal) {
         return switch (refusal) {
             case EXPECTATION_REJECTED -> AgentCommands.QUEUE_EXPECTATION_MISMATCH;
-            case NOT_A_DOCUMENT, MEMBER_ABSENT, ENTRY_ABSENT, MEMBER_UNKNOWN, IDENTIFIER_REJECTED,
+            case NOT_A_DOCUMENT, MEMBER_ABSENT, MEMBER_UNKNOWN, IDENTIFIER_REJECTED,
                     WINDOW_REFUSED -> AgentCommands.AGENT_NOT_FOUND;
         };
-    }
-
-    /**
-     * Which declared category one retry refusal is reported under.
-     *
-     * <p>A missing entry is its own category rather than the agent's, because the two send an
-     * operator to different places: one of them typed the wrong agent, and the other is looking at
-     * a queue whose entry has already gone.</p>
-     *
-     * @param refusal why the argument was refused
-     * @return the category the row declares for it
-     */
-    public static String retryCategoryFor(AgentCommands.Refusal refusal) {
-        return refusal == AgentCommands.Refusal.ENTRY_ABSENT
-                ? AgentCommands.ENTRY_NOT_FOUND : AgentCommands.AGENT_NOT_FOUND;
     }
 
     @Override
@@ -264,7 +230,6 @@ public final class AgentHandler implements CommandHandler {
             case AGENT -> AgentCommands.agentCategories();
             case QUEUE -> AgentCommands.queueCategories();
             case FLUSH -> AgentCommands.flushCategories();
-            case RETRY -> AgentCommands.retryCategories();
         };
     }
 }

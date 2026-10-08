@@ -26,8 +26,8 @@ import rs.slingshot.agent.command.platform.ReplicationInventory;
  *
  * <p>The agent manager, its agents and their queues are interfaces the platform implements, so
  * what is proved here is the translation: that no transport address is read, how an agent's kind
- * and state read in the client's words, that a flush with a wrong expectation removes nothing, and
- * that only the entry a queue tries next can be retried.</p>
+ * and state read in the client's words, and that a flush with a wrong expectation removes
+ * nothing.</p>
  */
 final class DefaultReplicationInventoryTest {
 
@@ -77,8 +77,7 @@ final class DefaultReplicationInventoryTest {
                 platform.inventory().queue("flush")).entries());
         for (final ReplicationInventory.Outcome refused : List.of(
                 platform.inventory().inspect("none"), platform.inventory().queue("none"),
-                platform.inventory().flush("none", ReplicationInventory.ANY_COUNT),
-                platform.inventory().retry("none", "head"))) {
+                platform.inventory().flush("none", ReplicationInventory.ANY_COUNT))) {
             assertEquals("agent_not_found", assertInstanceOf(ReplicationInventory.Refused.class,
                     refused).category());
         }
@@ -106,27 +105,6 @@ final class DefaultReplicationInventoryTest {
                 ReplicationInventory.Refused.class,
                 platform.inventory().flush("managed", ReplicationInventory.ANY_COUNT)).category(),
                 "a queue the platform will not empty from inside was reported as emptied");
-    }
-
-    @Test
-    @DisplayName("only the entry a queue tries next is retried, and an unknown one is not found")
-    void onlyTheHeadIsRetried() {
-        final Platform platform = new Platform();
-        assertEquals(ReplicationInventory.Resubmission.TAKEN, assertInstanceOf(
-                ReplicationInventory.Resubmitted.class,
-                platform.inventory().retry("publish", "head")).resubmission());
-        assertEquals(ReplicationInventory.Resubmission.DECLINED, assertInstanceOf(
-                ReplicationInventory.Resubmitted.class,
-                platform.inventory().retry("publish", "tail")).resubmission());
-        assertEquals("entry_not_found", assertInstanceOf(ReplicationInventory.Refused.class,
-                platform.inventory().retry("publish", "none")).category());
-        assertEquals("entry_not_found", assertInstanceOf(ReplicationInventory.Refused.class,
-                platform.inventory().retry("flush", "head")).category(),
-                "an agent that keeps no queue holds no entry");
-        assertEquals(List.of("retry:publish"), platform.controls);
-        assertEquals("platform_control_rejected", assertInstanceOf(
-                ReplicationInventory.Refused.class,
-                platform.inventory().retry("managed", "only")).category());
     }
 
     @Test
@@ -160,16 +138,16 @@ final class DefaultReplicationInventoryTest {
                     true, queue("static", false)));
             agents.put("publish", agent("publish", "Publish", "/etc/publish", "durbo", false,
                     false, true, queue("publish", true,
-                            entry("head", ReplicationActionType.ACTIVATE, "/content/a", 0, 3),
-                            entry("tail", ReplicationActionType.DELETE, "/content/b", 1, 0),
-                            entry("probe", ReplicationActionType.TEST, "", 2, 0))));
+                            entry("head", ReplicationActionType.ACTIVATE, "/content/a", 3),
+                            entry("tail", ReplicationActionType.DELETE, "/content/b", 0),
+                            entry("probe", ReplicationActionType.TEST, "", 0))));
             agents.put("flush", agent("flush", "Dispatcher Flush", "/etc/flush", "flush", false,
                     true, false, null));
             agents.put("reverse", agent("reverse", null, null, "durbo", true, false, true,
                     queue("reverse", false)));
             agents.put("managed", agent("managed", "Managed", "/etc/managed", "durbo", false,
                     false, true, managed(entry("only", ReplicationActionType.ACTIVATE,
-                            "/content/c", 0, 1))));
+                            "/content/c", 1))));
         }
 
         DefaultReplicationInventory inventory() {
@@ -222,22 +200,17 @@ final class DefaultReplicationInventoryTest {
                     entries.clear();
                     yield null;
                 }
-                case "forceRetry" -> {
-                    controls.add("retry:" + agent);
-                    yield null;
-                }
                 default -> throw new UnsupportedOperationException(method);
             });
         }
     }
 
     private static ReplicationQueue.Entry entry(String identifier, ReplicationActionType type,
-                                                String path, int position, int processed) {
+                                                String path, int processed) {
         final ReplicationAction action = new ReplicationAction(type, path);
         return proxy(ReplicationQueue.Entry.class, (method, arguments) -> switch (method) {
             case "getId" -> identifier;
             case "getAction" -> action;
-            case "getQueuePosition" -> position;
             case "getNumProcessed" -> processed;
             default -> throw new UnsupportedOperationException(method);
         });

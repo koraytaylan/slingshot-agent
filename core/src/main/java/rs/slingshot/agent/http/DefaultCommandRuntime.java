@@ -31,7 +31,6 @@ import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.asset.CreateAssetCommand;
 import rs.slingshot.agent.command.asset.CreateAssetFolderCommand;
 import rs.slingshot.agent.command.asset.DeleteAssetCommand;
-import rs.slingshot.agent.command.asset.MoveAssetCommand;
 import rs.slingshot.agent.command.asset.UpdateAssetMetadataCommand;
 import rs.slingshot.agent.command.component.AddComponentCommand;
 import rs.slingshot.agent.command.component.AddComponentHandler;
@@ -477,8 +476,6 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                         new AssetMutationHandler(contract, AssetMutationHandler.Kind.METADATA)),
                 new CommandDispatch.Registration(DeleteAssetCommand.WIRE_NAME,
                         new AssetMutationHandler(contract, AssetMutationHandler.Kind.REMOVAL)),
-                new CommandDispatch.Registration(MoveAssetCommand.WIRE_NAME,
-                        new AssetMutationHandler(contract, AssetMutationHandler.Kind.MOVE)),
                 new CommandDispatch.Registration(CreatePageCommand.WIRE_NAME,
                         new CreatePageHandler(contract)),
                 new CommandDispatch.Registration(DeletePageCommand.WIRE_NAME,

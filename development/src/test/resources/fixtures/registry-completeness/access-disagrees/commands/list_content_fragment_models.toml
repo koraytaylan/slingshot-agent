@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+#
+# Every value here is the client's own, from its published classification row.
+
+[command]
+wire_name = "list_content_fragment_models"
+contract_version = "0.0.0"
+access = "read"
+
+# Intrinsically idempotent: asking which models sit under an anchor twice is asking once, so a key
+# would decide nothing.
+operation_key = "refused"
+
+result_bytes = 1048576
+failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
+argument_schema_digest = "188bb7c75f8abf2756121692144317a9145d0a5faf301617d463265b303c799f"
+result_schema_digest = "8f68a35b71babb0bb7b23127f1a09951310749f9c7b61d0b56a75c4e70ecd690"
+contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
+staging_bytes = 0
+execution = "immediate"

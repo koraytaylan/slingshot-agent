@@ -117,7 +117,7 @@ entry allowance and separate title/comment bounds still apply.
 
 <!-- generated: command-table -->
 
-Commands: 72.
+Commands: 67.
 
 | Command | Access | Operation key | Result bytes | Fails with |
 |---|---|---|---|---|
@@ -136,7 +136,6 @@ Commands: 72.
 | `delete_component` | write | required | 16384 | `component_access_denied`, `component_invalid`, `component_not_found`, `mutation_outcome_unknown`, `repository_commit_failed` |
 | `delete_content_fragment` | write | required | 16384 | `deletion_budget_exceeded`, `fragment_access_denied`, `fragment_invalid`, `fragment_is_referenced`, `fragment_not_found`, `mutation_outcome_unknown`, `repository_commit_failed` |
 | `delete_experience_fragment` | write | required | 16384 | `deletion_budget_exceeded`, `fragment_access_denied`, `fragment_invalid`, `fragment_is_referenced`, `fragment_not_found`, `mutation_outcome_unknown`, `repository_commit_failed` |
-| `delete_open_service_gateway_initiative_configuration` | write | required | 16384 | `configuration_lookup_ambiguous`, `configuration_lookup_failed`, `configuration_lookup_mismatch`, `platform_control_outcome_unknown`, `platform_control_rejected` |
 | `delete_page` | write | required | 16384 | `deletion_budget_exceeded`, `mutation_outcome_unknown`, `repository_commit_failed`, `target_access_denied`, `target_is_referenced`, `target_not_a_page`, `target_not_found` |
 | `download_content_package` | read | required | 1048576 | `artifact_publication_failed`, `artifact_publication_outcome_unknown`, `evaluation_budget_exceeded`, `filevault_filter_unrepresentable`, `filevault_package_failed`, `filevault_profile_unsupported`, `pattern_rejected`, `repository_read_failed`, `root_access_denied`, `root_not_found`, `staging_cleanup_failed` |
 | `find_assets_by_metadata` | read | refused | 1048576 | `continuation_token_expired`, `continuation_token_integrity_invalid`, `continuation_token_malformed`, `continuation_token_wrong_query`, `continuation_token_wrong_target`, `discovery_budget_exceeded`, `root_access_denied`, `root_not_found` |
@@ -172,7 +171,6 @@ Commands: 72.
 | `list_workflow_models` | read | refused | 1048576 | `continuation_token_expired`, `continuation_token_integrity_invalid`, `continuation_token_malformed`, `continuation_token_wrong_query`, `continuation_token_wrong_target`, `discovery_budget_exceeded`, `workflow_inventory_failed` |
 | `load_content_as_json` | read | required | 1048576 | `access_denied`, `load_budget_exceeded`, `not_found`, `unsupported_repository_value` |
 | `map_resource_path` | read | refused | 262144 | `resolution_budget_exceeded`, `resolution_failed` |
-| `move_asset` | write | required | 16384 | `destination_already_exists`, `destination_inside_source`, `destination_parent_not_found`, `mutation_outcome_unknown`, `reference_adjustment_budget_exceeded`, `repository_commit_failed`, `source_access_denied`, `source_not_found` |
 | `move_page` | write | required | 16384 | `destination_already_exists`, `destination_inside_source`, `destination_parent_not_found`, `mutation_outcome_unknown`, `reference_adjustment_budget_exceeded`, `repository_commit_failed`, `source_access_denied`, `source_not_found` |
 | `query_paths` | read | refused | 1048576 | `continuation_token_expired`, `continuation_token_integrity_invalid`, `continuation_token_malformed`, `continuation_token_wrong_query`, `continuation_token_wrong_target`, `discovery_budget_exceeded`, `root_access_denied`, `root_not_found` |
 | `read_content_fragment` | read | refused | 262144 | `fragment_access_denied`, `fragment_invalid`, `fragment_not_found`, `result_budget_exceeded`, `variation_not_found` |
@@ -180,8 +178,6 @@ Commands: 72.
 | `reorder_component` | write | required | 16384 | `component_access_denied`, `component_not_found`, `mutation_outcome_unknown`, `parent_not_orderable`, `repository_commit_failed`, `sibling_not_found` |
 | `replicate_content` | write | required | 16384 | `admission_budget_exceeded`, `admission_outcome_unknown`, `admission_rejected`, `candidate_limit_exceeded`, `source_access_denied`, `source_not_found`, `traversal_budget_exceeded` |
 | `resolve_resource_path` | read | refused | 262144 | `request_address_rejected`, `resolution_budget_exceeded`, `resolution_failed` |
-| `retry_replication_queue_entry` | write | required | 16384 | `agent_access_denied`, `agent_not_found`, `entry_not_found`, `platform_control_outcome_unknown`, `platform_control_rejected` |
-| `set_open_service_gateway_initiative_bundle_state` | write | required | 16384 | `bundle_not_found`, `bundle_transition_refused`, `platform_control_outcome_unknown`, `platform_control_rejected` |
 | `set_user_disabled` | write | required | 16384 | `authorizable_access_denied`, `authorizable_kind_mismatch`, `authorizable_not_found`, `platform_control_outcome_unknown`, `platform_control_rejected` |
 | `set_workflow_instance_suspension` | write | required | 16384 | `instance_access_denied`, `instance_not_found`, `instance_not_suspendable`, `platform_control_outcome_unknown`, `platform_control_rejected` |
 | `start_workflow` | write | required | 16384 | `metadata_rejected`, `model_invalid`, `model_not_found`, `payload_access_denied`, `payload_not_found`, `platform_control_outcome_unknown`, `platform_control_rejected` |
@@ -190,7 +186,6 @@ Commands: 72.
 | `update_component` | write | required | 16384 | `component_access_denied`, `component_invalid`, `component_not_found`, `mutation_outcome_unknown`, `property_not_removable`, `property_rejected`, `repository_commit_failed` |
 | `update_content_fragment` | write | required | 16384 | `element_unknown`, `element_value_rejected`, `fragment_access_denied`, `fragment_invalid`, `fragment_not_found`, `mutation_outcome_unknown`, `repository_commit_failed`, `variation_not_found` |
 | `update_experience_fragment` | write | required | 16384 | `mutation_outcome_unknown`, `property_not_removable`, `property_rejected`, `repository_commit_failed`, `variation_access_denied`, `variation_invalid`, `variation_not_found` |
-| `update_open_service_gateway_initiative_configuration` | write | required | 16384 | `configuration_lookup_ambiguous`, `configuration_lookup_failed`, `configuration_lookup_mismatch`, `configuration_value_malformed`, `configuration_value_unsupported`, `platform_control_outcome_unknown`, `platform_control_rejected` |
 | `update_page` | write | required | 16384 | `mutation_outcome_unknown`, `page_access_denied`, `page_invalid`, `page_not_found`, `property_not_removable`, `property_rejected`, `repository_commit_failed` |
 | `update_user_profile` | write | required | 16384 | `authorizable_access_denied`, `authorizable_kind_mismatch`, `authorizable_not_found`, `mutation_outcome_unknown`, `property_not_removable`, `property_rejected`, `repository_commit_failed` |
 

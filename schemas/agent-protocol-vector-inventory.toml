@@ -230,11 +230,6 @@ schema = "schemas/agent-protocol/command/delete_asset-arguments.json"
 reason = "Which asset to remove, and what to do about the things pointing at it."
 
 [[kind]]
-name = "move-asset-argument"
-schema = "schemas/agent-protocol/command/move_asset-arguments.json"
-reason = "Which asset to move, where to, and whether its references come too."
-
-[[kind]]
 name = "create-content-fragment-argument"
 schema = "schemas/agent-protocol/command/create_content_fragment-arguments.json"
 reason = "Where a content fragment goes, which model declares it, and what its elements are."
@@ -272,14 +267,6 @@ reason = "Which configurations to list and which page of them."
 name = "inspect-configuration-argument"
 schema = "schemas/agent-protocol/command/inspect_open_service_gateway_initiative_configuration-arguments.json"
 reason = "One configuration to read."
-[[kind]]
-name = "update-configuration-argument"
-schema = "schemas/agent-protocol/command/update_open_service_gateway_initiative_configuration-arguments.json"
-reason = "Which configuration to change and what to set on it."
-[[kind]]
-name = "delete-configuration-argument"
-schema = "schemas/agent-protocol/command/delete_open_service_gateway_initiative_configuration-arguments.json"
-reason = "One configuration to remove."
 
 [[kind]]
 name = "list-bundles-argument"
@@ -289,10 +276,6 @@ reason = "Which bundles to list and which page of them."
 name = "list-components-argument"
 schema = "schemas/agent-protocol/command/list_open_service_gateway_initiative_components-arguments.json"
 reason = "Which components to list and which page of them."
-[[kind]]
-name = "set-bundle-state-argument"
-schema = "schemas/agent-protocol/command/set_open_service_gateway_initiative_bundle_state-arguments.json"
-reason = "Which bundle to act on and what to do to it."
 
 [[kind]]
 name = "list-workflow-models-argument"
@@ -385,7 +368,3 @@ reason = "One agent's queue and which page of it."
 name = "flush-replication-queue-argument"
 schema = "schemas/agent-protocol/command/flush_replication_queue-arguments.json"
 reason = "Which queue to empty and how much the caller expects to be in it."
-[[kind]]
-name = "retry-replication-queue-entry-argument"
-schema = "schemas/agent-protocol/command/retry_replication_queue_entry-arguments.json"
-reason = "Which stuck entry to offer to its queue again."

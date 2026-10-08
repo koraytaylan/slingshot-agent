@@ -14,18 +14,6 @@
 # operator wants from an environment they cannot change.
 
 [[control]]
-command = "update_open_service_gateway_initiative_configuration"
-capability = "configuration_change"
-reason = "Writing a configuration through the running platform. On a deployment that does not persist it the write is accepted, the answer says it worked, and it is gone by the next release."
-[[control]]
-command = "delete_open_service_gateway_initiative_configuration"
-capability = "configuration_change"
-reason = "Removing a configuration through the running platform, which the next deployment puts back — leaving an operator who watched it disappear believing it is gone."
-[[control]]
-command = "set_open_service_gateway_initiative_bundle_state"
-capability = "bundle_lifecycle"
-reason = "Starting, stopping or refreshing a bundle. Where the deployed image decides bundle state, this lasts until the next container replaces it, which is a change with a lifetime nobody can predict."
-[[control]]
 command = "start_workflow"
 capability = "workflow_control"
 reason = "Starting a workflow on a payload, which is work the platform will carry out afterwards whether or not anybody is watching."
@@ -73,7 +61,3 @@ reason = "Taking a membership away, which takes everything the group can do with
 command = "flush_replication_queue"
 capability = "replication_control"
 reason = "Emptying a replication queue, which discards work somebody expected to happen."
-[[control]]
-command = "retry_replication_queue_entry"
-capability = "replication_control"
-reason = "Offering a stuck entry to the queue again."

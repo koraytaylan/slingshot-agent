@@ -6,7 +6,7 @@
 # Every command that changes something outside itself declares exactly one of the categories below,
 # and that declaration is what says which cross-cutting proof owns it. Selecting by the declaration
 # rather than by a handler's package or a row's access is the whole point: a suite that took every
-# `write` row would demand a repository commit from a command that stops a bundle, and one that took
+# `write` row would demand a repository commit from a command that cancels a job, and one that took
 # a package would stop selecting the day somebody moved a class.
 #
 # A category here with no scenario claiming it is not a failure — the plan that adds the category

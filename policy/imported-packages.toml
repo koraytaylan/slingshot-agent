@@ -198,7 +198,7 @@ name = "org.osgi.framework"
 range = "[1.10,2)"
 bundle = "aem"
 provided_by = ["aem-cloud-service", "aem-6-5-lts"]
-reason = "The framework's own bundles, which the bundle listing reads and the bundle control starts and stops. Only the bundle-inventory adapter reaches it, and it refuses to touch the framework itself or the bundle answering."
+reason = "The framework's own bundles, which the bundle listing reads and nothing here starts, stops or refreshes."
 
 [[package]]
 name = "org.osgi.framework.dto"
@@ -206,13 +206,6 @@ range = "[1.8,2)"
 bundle = "aem"
 provided_by = ["aem-cloud-service", "aem-6-5-lts"]
 reason = "The bundle a component description names, which is how the component listing says which bundle declares each component."
-
-[[package]]
-name = "org.osgi.framework.wiring"
-range = "[1.2,2)"
-bundle = "aem"
-provided_by = ["aem-cloud-service", "aem-6-5-lts"]
-reason = "The framework's wiring, through which a bundle refresh is asked for rather than performed by hand."
 
 [[package]]
 name = "org.osgi.service.component.runtime"
@@ -233,7 +226,7 @@ name = "org.osgi.service.cm"
 range = "[1.6,2)"
 bundle = "aem"
 provided_by = ["aem-cloud-service", "aem-6-5-lts"]
-reason = "The configuration admin, which the configuration commands read and, where the deployment permits it, write. A value is converted only for a property the meta type service describes as not a password."
+reason = "The configuration admin, which the configuration commands read and never write. A value is converted only for a property the meta type service describes as not a password."
 
 [[package]]
 name = "org.osgi.service.metatype"

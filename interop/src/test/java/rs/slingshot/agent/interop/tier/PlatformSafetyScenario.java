@@ -24,9 +24,8 @@ import org.junit.jupiter.api.TestInstance;
 /**
  * What is true of every command that changes the platform, on a running instance.
  *
- * <p>Thirty commands reach past every guard the content plans relied on: none of what they touch is
- * protected by repository access control, and the most useful-looking half of it does not work at
- * all on the environment this agent is meant to run on. This proves what they have in common.</p>
+ * <p>These commands reach past every guard the content plans relied on: none of what they touch is
+ * protected by repository access control. This proves what they have in common.</p>
  *
  * <p>Every row is enumerated from the registry rather than from a list here, so the plan that adds
  * a thirty-first platform control is covered without editing this. Selection is by what a row
@@ -58,9 +57,6 @@ final class PlatformSafetyScenario {
 
     /** Where each command's capability is declared, which is what a deployment may refuse. */
     private static final String CAPABILITIES = "policy/control-capabilities.toml";
-
-    /** Where each deployment says what it does and does not provide. */
-    private static final String DEPLOYMENTS = "support/deployments.toml";
 
     private final TierRequests requests = TierRequests.open();
 
@@ -109,25 +105,6 @@ final class PlatformSafetyScenario {
         assertEquals(List.of(), ungated, "a command that changes the platform is gated by no"
                 + " capability, so it would run on the environment that discards the change and"
                 + " report that it worked");
-    }
-
-    @Test
-    @DisplayName("the deployment this agent is built for refuses the two controls it cannot keep")
-    void thebuiltForDeploymentRefusesWhatItCannotKeep() {
-        final String matrix = read(REPOSITORY.resolve(DEPLOYMENTS));
-        final int cloud = matrix.indexOf("id = \"aem-cloud-service\"");
-        final int next = matrix.indexOf("id = \"aem-6-5-lts\"");
-        assertTrue(cloud >= 0 && next > cloud, "the deployment matrix lost one of its two rows");
-        final String row = matrix.substring(cloud, next);
-        for (final String capability : List.of("configuration_change", "bundle_lifecycle")) {
-            final int at = row.indexOf("capability = \"" + capability + "\"");
-            assertTrue(at >= 0, capability + " is no longer declared by the built-for deployment");
-            assertTrue(row.indexOf("provided = false", at) >= 0
-                            && row.indexOf("provided = false", at) < at + 200,
-                    capability + " is now provided by a deployment whose configuration and bundle"
-                            + " lifecycle are decided by the deployed image — a change written"
-                            + " there is accepted, reported as done, and gone by the next release");
-        }
     }
 
     @Test

@@ -29,7 +29,7 @@ import org.junit.jupiter.api.TestInstance;
  * behaving unlike the first nineteen.</p>
  *
  * <p>Every row is selected by what it declares rather than by where its handler lives. A suite that
- * took every {@code write} row would demand a repository commit from a command that stops a bundle,
+ * took every {@code write} row would demand a repository commit from a command that cancels a job,
  * and one that took a package would stop selecting the day somebody moved a class. The declaration
  * is the one thing that says what kind of change a command makes, and it is the thing the client
  * reads too.</p>

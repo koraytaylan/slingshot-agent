@@ -4,16 +4,14 @@
 package rs.slingshot.agent.command.platform;
 
 import java.util.List;
-import java.util.SequencedMap;
 
 /**
- * What answers questions about the platform's configurations, and changes them.
+ * What answers questions about the platform's configurations.
  *
  * <p>A seam for the same reason the replication one is: what is on the other side of it is a
  * platform service, and everything worth arguing about is on this side. Which properties may be
- * reported is decided by {@link ValueDisclosure} here; what a deployment permits is decided by
- * {@link PlatformControl} here; how much one answer may carry is decided by the contract here. What
- * crosses is the reading and the writing.</p>
+ * reported is decided by {@link ValueDisclosure} here; how much one answer may carry is decided by
+ * the contract here. What crosses is the reading.</p>
  *
  * <p>Reading a property's value and deciding whether to report it are separate calls on purpose. An
  * implementation that returned values and left the deciding to the caller would have already read
@@ -59,8 +57,8 @@ public interface ConfigurationCatalogue {
     record Property(String name, ValueDisclosure.Evidence evidence, ConfigurationValue value) {
     }
 
-    /** What reading or changing a configuration produced. */
-    sealed interface Outcome permits Listed, Inspected, Changed, Failed {
+    /** What reading a configuration produced. */
+    sealed interface Outcome permits Listed, Inspected, Failed {
     }
 
     /**
@@ -106,23 +104,6 @@ public interface ConfigurationCatalogue {
     }
 
     /**
-     * A change the platform made.
-     *
-     * @param changedPropertyKeyCount how many property keys the change touched
-     * @param origin whether what was changed came from a factory
-     */
-    record Changed(long changedPropertyKeyCount, Origin origin) implements Outcome {
-    }
-
-    /** Whether a configuration came from a factory, which decides what removing it means. */
-    enum Origin {
-        /** It is a factory instance, so removing it removes that instance and nothing else. */
-        FACTORY_INSTANCE,
-        /** It is a singleton configuration. */
-        SINGLETON
-    }
-
-    /**
      * The platform would not, or could not.
      *
      * @param category the declared category this is reported under
@@ -147,28 +128,4 @@ public interface ConfigurationCatalogue {
      * @return its properties, or the reason there are none
      */
     Outcome inspect(String persistentIdentifier);
-
-    /**
-     * Writes a configuration, setting what is named and removing what is listed.
-     *
-     * <p>Named for what it does rather than with a verb the tooling reads as a mutator prefix. A
-     * seam whose methods are called {@code update} and {@code delete} is a seam every static
-     * analyser treats as a mutable object being handed around, and it is not one — it is a
-     * stateless view onto a platform service.</p>
-     *
-     * @param persistentIdentifier what the platform calls it
-     * @param assignments what to set, by property name
-     * @param removedPropertyKeys what to remove
-     * @return what changed, or the reason nothing did
-     */
-    Outcome apply(String persistentIdentifier, SequencedMap<String, ConfigurationValue> assignments,
-                   List<String> removedPropertyKeys);
-
-    /**
-     * Removes a configuration.
-     *
-     * @param persistentIdentifier what the platform calls it
-     * @return what was removed, or the reason nothing was
-     */
-    Outcome erase(String persistentIdentifier);
 }

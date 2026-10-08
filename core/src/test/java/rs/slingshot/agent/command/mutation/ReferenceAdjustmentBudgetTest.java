@@ -20,14 +20,12 @@ import org.apache.sling.api.wrappers.ResourceResolverWrapper;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -48,45 +46,38 @@ final class ReferenceAdjustmentBudgetTest {
     private static final String OTHER = "/content/synthetic-other/item";
     private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
 
-    private enum Target {
-        PAGE, ASSET
-    }
-
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void oneMultiplePropertyOnePastTheBoundRefusesBeforeMovement(Target target) {
-        plant(target);
+    @Test
+    void oneMultiplePropertyOnePastTheBoundRefusesBeforeMovement() {
+        plant();
         final String[] links = repeated(SOURCE, BOUND + 1);
         sling.create().resource(REFERENCES, Map.of("links", links));
 
-        refuse(target);
+        refuse();
 
         assertArrayEquals(links, required(REFERENCES).getValueMap().get("links", String[].class));
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void aScalarAlongsideAMultiplePropertyCountsTowardTheSameBound(Target target) {
-        plant(target);
+    @Test
+    void aScalarAlongsideAMultiplePropertyCountsTowardTheSameBound() {
+        plant();
         final String[] links = repeated(SOURCE, BOUND);
         sling.create().resource(REFERENCES, Map.of("links", links, "link", SOURCE));
 
-        refuse(target);
+        refuse();
 
         assertArrayEquals(links, required(REFERENCES).getValueMap().get("links", String[].class));
         assertEquals(SOURCE, required(REFERENCES).getValueMap().get("link"));
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void matchesAcrossPropertiesAndResourcesShareOneAdjustmentBudget(Target target) {
-        plant(target);
+    @Test
+    void matchesAcrossPropertiesAndResourcesShareOneAdjustmentBudget() {
+        plant();
         final String[] first = repeated(SOURCE, BOUND / 2);
         final String[] second = repeated(SOURCE, BOUND - first.length);
         sling.create().resource(REFERENCES, Map.of("first", first, "link", SOURCE));
         sling.create().resource(REFERENCES + "/child", Map.of("second", second));
 
-        refuse(target);
+        refuse();
 
         assertArrayEquals(first, required(REFERENCES).getValueMap().get("first", String[].class));
         assertEquals(SOURCE, required(REFERENCES).getValueMap().get("link"));
@@ -94,16 +85,15 @@ final class ReferenceAdjustmentBudgetTest {
                 .getValueMap().get("second", String[].class));
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void exactlyTheBoundMovesAndCountsOnlyMatchingArrayValues(Target target) {
-        plant(target);
+    @Test
+    void exactlyTheBoundMovesAndCountsOnlyMatchingArrayValues() {
+        plant();
         final String[] links = repeated(SOURCE, BOUND + 2);
         links[0] = OTHER;
         links[links.length - 1] = OTHER;
         sling.create().resource(REFERENCES, Map.of("links", links));
 
-        accept(target, true, BOUND);
+        accept(true, BOUND);
 
         final String[] expected = repeated(DESTINATION, BOUND + 2);
         expected[0] = OTHER;
@@ -111,16 +101,15 @@ final class ReferenceAdjustmentBudgetTest {
         assertArrayEquals(expected, required(REFERENCES).getValueMap().get("links", String[].class));
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void exactlyTheBoundAcrossPropertiesAndResourcesStillCommitsOnce(Target target) {
-        plant(target);
+    @Test
+    void exactlyTheBoundAcrossPropertiesAndResourcesStillCommitsOnce() {
+        plant();
         final int first = BOUND / 2;
         final int second = BOUND - first - 1;
         sling.create().resource(REFERENCES, Map.of("first", repeated(SOURCE, first), "link", SOURCE));
         sling.create().resource(REFERENCES + "/child", Map.of("second", repeated(SOURCE, second)));
 
-        accept(target, true, BOUND);
+        accept(true, BOUND);
 
         assertArrayEquals(repeated(DESTINATION, first), required(REFERENCES)
                 .getValueMap().get("first", String[].class));
@@ -129,22 +118,21 @@ final class ReferenceAdjustmentBudgetTest {
                 .getValueMap().get("second", String[].class));
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void explicitlyLeavingReferencesDoesNotApplyAnAdjustmentBudget(Target target) {
-        plant(target);
+    @Test
+    void explicitlyLeavingReferencesDoesNotApplyAnAdjustmentBudget() {
+        plant();
         final String[] links = repeated(SOURCE, BOUND + 1);
         sling.create().resource(REFERENCES, Map.of("links", links));
 
-        accept(target, false, 0);
+        accept(false, 0);
 
         assertArrayEquals(links, required(REFERENCES).getValueMap().get("links", String[].class));
     }
 
-    private void refuse(Target target) {
+    private void refuse() {
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver())) {
             final CommandHandler.Failed failure = assertInstanceOf(CommandHandler.Failed.class,
-                    move(target, caller, true));
+                    move(caller, true));
             assertEquals(MovePageHandler.ADJUSTMENT_BUDGET_EXCEEDED, failure.category());
             assertEquals(0, caller.moves.get());
             assertEquals(0, caller.commits.get());
@@ -153,10 +141,10 @@ final class ReferenceAdjustmentBudgetTest {
         }
     }
 
-    private void accept(Target target, boolean adjust, long count) {
+    private void accept(boolean adjust, long count) {
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver())) {
             final CommandHandler.Produced result = assertInstanceOf(CommandHandler.Produced.class,
-                    move(target, caller, adjust));
+                    move(caller, adjust));
             assertEquals(new DocumentValue.Whole(count), result.result()
                     .member("adjusted_reference_count").orElseThrow());
             assertEquals(1, caller.moves.get());
@@ -171,9 +159,8 @@ final class ReferenceAdjustmentBudgetTest {
                 "the synthetic fixture resource");
     }
 
-    private void plant(Target target) {
-        sling.create().resource(SOURCE, Map.of("jcr:primaryType", target == Target.PAGE
-                ? "cq:Page" : "dam:Asset"));
+    private void plant() {
+        sling.create().resource(SOURCE, Map.of("jcr:primaryType", "cq:Page"));
         sling.create().resource("/content/synthetic-budget-destination");
     }
 
@@ -183,14 +170,13 @@ final class ReferenceAdjustmentBudgetTest {
         return values;
     }
 
-    private static CommandHandler.Answer move(Target target, ResourceResolver caller, boolean adjust) {
+    private static CommandHandler.Answer move(ResourceResolver caller, boolean adjust) {
         final var members = new LinkedHashMap<String, DocumentValue>();
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
         members.put(MoveRequest.ADJUST_REFERENCES, new DocumentValue.Flag(adjust
                 ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
-        final CommandHandler handler = target == Target.PAGE ? new MovePageHandler(CONTRACT)
-                : new AssetMutationHandler(CONTRACT, AssetMutationHandler.Kind.MOVE);
+        final CommandHandler handler = new MovePageHandler(CONTRACT);
         final var operation = assertInstanceOf(AgentOperationIdentifier.Held.class,
                 AgentOperationIdentifier.of(
                         "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8",

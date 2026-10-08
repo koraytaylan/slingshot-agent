@@ -2,7 +2,7 @@
 // Copyright 2026 Koray Taylan Davgana
 
 /**
- * The commands that make, change, move and remove assets and the folders they live in.
+ * The commands that make, change and remove assets and the folders they live in.
  *
  * <p>Creating an asset is the only mutation with a payload, and it is the only one where the
  * request body is the thing rather than a description of it. The bytes are bounded by the contract,

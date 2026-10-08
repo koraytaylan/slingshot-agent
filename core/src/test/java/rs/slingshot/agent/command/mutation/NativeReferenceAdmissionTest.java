@@ -35,14 +35,12 @@ import org.apache.sling.api.wrappers.ResourceResolverWrapper;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -63,15 +61,10 @@ final class NativeReferenceAdmissionTest {
     private static final String PASSWORD = "synthetic-reference-password";
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
-    private enum Target {
-        PAGE, ASSET
-    }
-
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void aProtectedReferenceRefusesBeforeMovementAndEarlierAssignments(Target target)
+    @Test
+    void aProtectedReferenceRefusesBeforeMovementAndEarlierAssignments()
             throws RepositoryException, LoginException, ReflectiveOperationException {
-        plant(target);
+        plant();
         final var manager = session().getWorkspace().getNodeTypeManager();
         final NodeTypeTemplate type = manager.createNodeTypeTemplate();
         type.setName("syntheticProtectedReference");
@@ -93,17 +86,16 @@ final class NativeReferenceAdmissionTest {
 
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver().clone(Map.of()))) {
             assertNotNull(required(caller, REFERENCE).adaptTo(ModifiableValueMap.class));
-            refuse(target, caller);
+            refuse(caller);
         } finally {
             persistedUntouched();
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void aCallerDeniedReferenceRefusesBeforeMovementAndEarlierAssignments(Target target)
+    @Test
+    void aCallerDeniedReferenceRefusesBeforeMovementAndEarlierAssignments()
             throws RepositoryException, LoginException {
-        plant(target);
+        plant();
         sling.create().resource(REFERENCE, Map.of("link", SOURCE, "links", new String[]{SOURCE, SOURCE}));
         session().save();
         final Session limited = limited();
@@ -115,22 +107,21 @@ final class NativeReferenceAdmissionTest {
             assertTrue(limited.hasPermission("/content/synthetic-native-destination",
                     Session.ACTION_ADD_NODE));
             assertNotNull(required(caller, REFERENCE).adaptTo(ModifiableValueMap.class));
-            refuse(target, caller);
+            refuse(caller);
         } finally {
             limited.logout();
             persistedUntouched();
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void writableNativeReferencesStillMoveAndCommitOnce(Target target)
+    @Test
+    void writableNativeReferencesStillMoveAndCommitOnce()
             throws RepositoryException, LoginException {
-        plant(target);
+        plant();
         session().save();
 
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver().clone(Map.of()))) {
-            accept(target, caller, true, 3);
+            accept(caller, true, 3);
             assertEquals(DESTINATION, required(caller, EARLIER).getValueMap().get("link"));
             assertArrayEquals(new String[]{DESTINATION, DESTINATION}, required(caller, EARLIER)
                     .getValueMap().get("links", String[].class));
@@ -141,18 +132,17 @@ final class NativeReferenceAdmissionTest {
         assertEquals(DESTINATION, session().getNode(EARLIER).getProperty("link").getString());
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void explicitlyLeavingReferencesPreservesTheNativeCallerDenialOutsideTheMove(Target target)
+    @Test
+    void explicitlyLeavingReferencesPreservesTheNativeCallerDenialOutsideTheMove()
             throws RepositoryException, LoginException {
-        plant(target);
+        plant();
         sling.create().resource(REFERENCE, Map.of("link", SOURCE));
         session().save();
         final Session limited = limited();
 
         try (FixtureCaller caller = new FixtureCaller(callerResolver(limited))) {
             assertFalse(limited.hasPermission(REFERENCE + "/link", Session.ACTION_SET_PROPERTY));
-            accept(target, caller, false, 0);
+            accept(caller, false, 0);
         } finally {
             limited.logout();
         }
@@ -163,8 +153,8 @@ final class NativeReferenceAdmissionTest {
         assertEquals(SOURCE, session().getNode(EARLIER).getProperty("link").getString());
     }
 
-    private void refuse(Target target, FixtureCaller caller) throws RepositoryException {
-        final CommandHandler.Answer answer = assertDoesNotThrow(() -> move(target, caller, true),
+    private void refuse(FixtureCaller caller) throws RepositoryException {
+        final CommandHandler.Answer answer = assertDoesNotThrow(() -> move(caller, true),
                 "a known native reference refusal escaped the handler");
         final CommandHandler.Failed failure = assertInstanceOf(CommandHandler.Failed.class, answer);
         assertEquals(MovePageHandler.COMMIT_FAILED, failure.category());
@@ -176,8 +166,8 @@ final class NativeReferenceAdmissionTest {
         assertEquals(SOURCE, caller.nativeSession.getNode(EARLIER).getProperty("link").getString());
     }
 
-    private static void accept(Target target, FixtureCaller caller, boolean adjust, long count) {
-        final CommandHandler.Answer answer = move(target, caller, adjust);
+    private static void accept(FixtureCaller caller, boolean adjust, long count) {
+        final CommandHandler.Answer answer = move(caller, adjust);
         final CommandHandler.Produced result = assertInstanceOf(CommandHandler.Produced.class,
                 answer, "the native control answered " + answer);
         assertEquals(new DocumentValue.Whole(count), result.result()
@@ -194,9 +184,9 @@ final class NativeReferenceAdmissionTest {
         assertEquals(SOURCE, session().getNode(REFERENCE).getProperty("link").getString());
     }
 
-    private void plant(Target target) throws RepositoryException {
-        final String prefix = target == Target.PAGE ? "cq" : "dam";
-        final String name = target == Target.PAGE ? "cq:Page" : "dam:Asset";
+    private void plant() throws RepositoryException {
+        final String prefix = "cq";
+        final String name = "cq:Page";
         final var namespaces = session().getWorkspace().getNamespaceRegistry();
         if (!List.of(namespaces.getPrefixes()).contains(prefix)) {
             namespaces.registerNamespace(prefix, "https://synthetic.invalid/" + prefix);
@@ -246,14 +236,13 @@ final class NativeReferenceAdmissionTest {
         return Objects.requireNonNull(caller.getResource(path), "the native synthetic fixture resource");
     }
 
-    private static CommandHandler.Answer move(Target target, ResourceResolver caller, boolean adjust) {
+    private static CommandHandler.Answer move(ResourceResolver caller, boolean adjust) {
         final var members = new LinkedHashMap<String, DocumentValue>();
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
         members.put(MoveRequest.ADJUST_REFERENCES, new DocumentValue.Flag(adjust
                 ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
-        final CommandHandler handler = target == Target.PAGE ? new MovePageHandler(CONTRACT)
-                : new AssetMutationHandler(CONTRACT, AssetMutationHandler.Kind.MOVE);
+        final CommandHandler handler = new MovePageHandler(CONTRACT);
         final var operation = assertInstanceOf(AgentOperationIdentifier.Held.class,
                 AgentOperationIdentifier.of(
                         "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8",

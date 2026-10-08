@@ -14,10 +14,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
-import org.osgi.framework.BundleException;
 import org.osgi.framework.Version;
 import org.osgi.framework.dto.BundleDTO;
-import org.osgi.framework.wiring.FrameworkWiring;
 import org.osgi.service.component.runtime.ServiceComponentRuntime;
 import org.osgi.service.component.runtime.dto.ComponentConfigurationDTO;
 import org.osgi.service.component.runtime.dto.ComponentDescriptionDTO;
@@ -29,9 +27,8 @@ import rs.slingshot.agent.command.platform.ComponentState;
  * The bundle and component commands' adapter, driven over a framework the suite scripts.
  *
  * <p>The framework and the component runtime are interfaces the platform implements, so what is
- * proved here is the translation: which bundles and components a prefix and a state select, which
- * configuration a component takes, that a transition's answer is the state read back afterwards,
- * and that the framework itself and the bundle answering are never stopped from inside.</p>
+ * proved here is the translation: which bundles and components a prefix and a state select, and
+ * which configuration a component takes.</p>
  */
 final class DefaultBundleInventoryTest {
 
@@ -70,31 +67,6 @@ final class DefaultBundleInventoryTest {
     }
 
     @Test
-    @DisplayName("a transition reads the state back, and refuses the framework and an unknown name")
-    void atransitionReadsTheStateBack() {
-        final Framework framework = new Framework();
-        assertEquals(BundleState.RESOLVED, assertInstanceOf(BundleInventory.Transitioned.class,
-                framework.inventory().transition("com.acme.core",
-                        BundleInventory.Transition.STOP)).observed());
-        assertEquals(BundleState.ACTIVE, assertInstanceOf(BundleInventory.Transitioned.class,
-                framework.inventory().transition("com.acme.core",
-                        BundleInventory.Transition.START)).observed());
-        assertInstanceOf(BundleInventory.Transitioned.class, framework.inventory().transition(
-                "com.acme.core", BundleInventory.Transition.REFRESH));
-        assertEquals(List.of("stop:com.acme.core", "start:com.acme.core",
-                "refresh:com.acme.core"), framework.controls);
-        assertEquals("bundle_transition_refused", assertInstanceOf(BundleInventory.Refused.class,
-                framework.inventory().transition("system.bundle",
-                        BundleInventory.Transition.STOP)).category());
-        assertEquals("bundle_transition_refused", assertInstanceOf(BundleInventory.Refused.class,
-                framework.inventory().transition("com.acme.broken",
-                        BundleInventory.Transition.START)).category());
-        assertEquals("bundle_not_found", assertInstanceOf(BundleInventory.Refused.class,
-                framework.inventory().transition("com.none",
-                        BundleInventory.Transition.START)).category());
-    }
-
-    @Test
     @DisplayName("every framework and component runtime state reads as one of the client's")
     void everyStateReadsAsTheClients() {
         assertEquals(BundleState.ACTIVE, DefaultBundleInventory.stateOf(Bundle.ACTIVE));
@@ -112,8 +84,7 @@ final class DefaultBundleInventoryTest {
     /** A framework of four bundles and a component runtime of three components. */
     private static final class Framework {
 
-        private final List<String> controls = new ArrayList<>();
-        private final Map<String, int[]> states = new java.util.LinkedHashMap<>();
+        private final Map<String, Integer> states = new java.util.LinkedHashMap<>();
         private final List<Bundle> bundles = new ArrayList<>();
 
         Framework() {
@@ -121,10 +92,10 @@ final class DefaultBundleInventoryTest {
             bundles.add(bundle(1, "com.acme.core"));
             bundles.add(bundle(2, "com.acme.broken"));
             bundles.add(bundle(3, "rs.slingshot.agent.aem"));
-            states.put("system.bundle", new int[] {Bundle.ACTIVE});
-            states.put("com.acme.core", new int[] {Bundle.ACTIVE});
-            states.put("com.acme.broken", new int[] {Bundle.RESOLVED});
-            states.put("rs.slingshot.agent.aem", new int[] {Bundle.ACTIVE});
+            states.put("system.bundle", Bundle.ACTIVE);
+            states.put("com.acme.core", Bundle.ACTIVE);
+            states.put("com.acme.broken", Bundle.RESOLVED);
+            states.put("rs.slingshot.agent.aem", Bundle.ACTIVE);
         }
 
         DefaultBundleInventory inventory() {
@@ -133,8 +104,6 @@ final class DefaultBundleInventoryTest {
                     new Class<?>[] {BundleContext.class}, (proxy, method, arguments) ->
                             switch (method.getName()) {
                                 case "getBundles" -> bundles.toArray(Bundle[]::new);
-                                case "getBundle" -> arguments == null ? bundles.get(3)
-                                        : bundles.get(0);
                                 default -> throw new UnsupportedOperationException(
                                         method.getName());
                             });
@@ -142,40 +111,19 @@ final class DefaultBundleInventoryTest {
         }
 
         private Bundle bundle(long identifier, String name) {
-            final FrameworkWiring wiring = (FrameworkWiring) Proxy.newProxyInstance(
-                    Thread.currentThread().getContextClassLoader(),
-                    new Class<?>[] {FrameworkWiring.class}, (proxy, method, arguments) -> {
-                        final Bundle refreshed = ((List<?>) arguments[0]).stream()
-                                .map(Bundle.class::cast).findFirst().orElseThrow();
-                        controls.add("refresh:" + refreshed.getSymbolicName());
-                        return null;
-                    });
             return (Bundle) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
                     new Class<?>[] {Bundle.class}, (proxy, method, arguments) ->
                             switch (method.getName()) {
                                 case "getBundleId" -> identifier;
                                 case "getSymbolicName" -> name;
                                 case "getVersion" -> Version.parseVersion("1.0.0");
-                                case "getState" -> states.get(name)[0];
-                                case "start" -> controlled("start", name, Bundle.ACTIVE);
-                                case "stop" -> controlled("stop", name, Bundle.RESOLVED);
-                                case "adapt" -> wiring;
+                                case "getState" -> states.get(name);
                                 case "equals" -> System.identityHashCode(proxy)
                                         == System.identityHashCode(arguments[0]);
                                 case "hashCode" -> (int) identifier;
                                 default -> throw new UnsupportedOperationException(
                                         method.getName());
                             });
-        }
-
-        private Object controlled(String control, String name, int after)
-                throws BundleException {
-            if ("com.acme.broken".equals(name)) {
-                throw new BundleException("its requirement is missing");
-            }
-            controls.add(control + ":" + name);
-            states.get(name)[0] = after;
-            return null;
         }
 
         private ServiceComponentRuntime runtime() {

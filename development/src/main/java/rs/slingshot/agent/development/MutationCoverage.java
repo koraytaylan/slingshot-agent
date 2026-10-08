@@ -27,7 +27,7 @@ import java.util.stream.Stream;
  *
  * <p>Selection is by what a row <em>declares</em> rather than by where its handler lives or by its
  * access. A suite that took every {@code write} row would demand a repository commit from a command
- * that stops a bundle; one that took a package would stop selecting the day somebody moved a class.
+ * that cancels a job; one that took a package would stop selecting the day somebody moved a class.
  * What a row declares is the one thing that says what kind of change a command makes: a repository
  * mutation declares the repository's own unknown outcome, an admission declares the admission's,
  * and a platform control declares the platform's. Each is a different set of properties, so each

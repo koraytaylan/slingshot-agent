@@ -11,9 +11,8 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * Which page to move, where to, and whether the links that point at it come too.
  *
- * <p>Its members are its own and its reading is shared with the asset move, because moving a page
- * and moving an asset are the same question about different things. What differs is what each can
- * fail with, and that lives in the handlers and the rows rather than here.</p>
+ * <p>Its members and their reading are the move request's own. What a page move can fail with lives
+ * in the handler and the row rather than here.</p>
  */
 public final class MovePageCommand {
 

@@ -79,14 +79,14 @@ Nothing.
 
 ## What the platform commands can and cannot reach
 
-Thirty of the commands are about the state an author retains rather than the content it stores, and
-none of that is guarded by repository access control — so each of them is decided twice: by the
-group the caller is in, and by whether the deployment provides that control at all.
+Twenty-seven of the commands are about the state an author retains rather than the content it
+stores, and none of that is guarded by repository access control — so each of them is decided
+twice: by the group the caller is in, and by whether the deployment provides that control at all.
 
-On Adobe Experience Manager as a Cloud Service, configuration and bundle lifecycle are refused
-before the platform is touched, because a change written through a running platform that does not
-persist it is accepted, reported as done, and gone by the next deployment. Refusing is better than
-succeeding falsely.
+A control a deployment does not provide is refused before the platform is touched, because a
+change written through a running platform that does not persist it is accepted, reported as done,
+and gone by the next deployment. Refusing is better than succeeding falsely. No command changes a
+platform configuration or a bundle's state: the configuration and bundle commands only read.
 
 Beyond that: no configuration value in any listing, no job property value in any command, and no
 replication transport address anywhere — that last being a URL which very frequently carries the

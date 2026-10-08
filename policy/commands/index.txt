@@ -13,7 +13,6 @@ delete_authorizable.toml
 delete_component.toml
 delete_content_fragment.toml
 delete_experience_fragment.toml
-delete_open_service_gateway_initiative_configuration.toml
 delete_page.toml
 download_content_package.toml
 find_assets_by_metadata.toml
@@ -49,7 +48,6 @@ list_sling_job_queues.toml
 list_workflow_models.toml
 load_content_as_json.toml
 map_resource_path.toml
-move_asset.toml
 move_page.toml
 query_paths.toml
 read_content_fragment.toml
@@ -57,8 +55,6 @@ remove_group_member.toml
 reorder_component.toml
 replicate_content.toml
 resolve_resource_path.toml
-retry_replication_queue_entry.toml
-set_open_service_gateway_initiative_bundle_state.toml
 set_user_disabled.toml
 set_workflow_instance_suspension.toml
 start_workflow.toml
@@ -67,6 +63,5 @@ update_asset_metadata.toml
 update_component.toml
 update_content_fragment.toml
 update_experience_fragment.toml
-update_open_service_gateway_initiative_configuration.toml
 update_page.toml
 update_user_profile.toml

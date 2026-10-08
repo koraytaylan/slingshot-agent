@@ -6,10 +6,10 @@ package rs.slingshot.agent.command.platform;
 import java.util.List;
 
 /**
- * What answers questions about the framework's bundles and components, and changes their state.
+ * What answers questions about the framework's bundles and components.
  *
- * <p>One seam for three commands because they are three questions about one framework, and an
- * implementation that answered two of them from the framework and one from somewhere else would be
+ * <p>One seam for two commands because they are two questions about one framework, and an
+ * implementation that answered one of them from the framework and one from somewhere else would be
  * answering about two different instants.</p>
  */
 public interface BundleInventory {
@@ -41,8 +41,8 @@ public interface BundleInventory {
     /** What a listing says when a component takes no configuration of its own. */
     String TAKES_NO_SERVICE = "";
 
-    /** What one of the three produced. */
-    sealed interface Outcome permits Bundles, Components, Transitioned, Refused {
+    /** What one of the two produced. */
+    sealed interface Outcome permits Bundles, Components, Refused {
     }
 
     /**
@@ -72,70 +72,12 @@ public interface BundleInventory {
     }
 
     /**
-     * What state a bundle ended up in.
-     *
-     * <p>Reported rather than assumed. A bundle asked to start may end up resolved because one of
-     * its components would not activate, and a command that answered "started" because the request
-     * did not throw would be telling an operator the opposite of what they need to know.</p>
-     *
-     * @param observed what state it is in now
-     */
-    record Transitioned(BundleState observed) implements Outcome {
-    }
-
-    /**
      * The framework would not, or could not.
      *
      * @param category the declared category this is reported under
      * @param detail what it said
      */
     record Refused(String category, String detail) implements Outcome {
-    }
-
-    /** What to do to a bundle. */
-    enum Transition {
-        /** Start it. */
-        START("start"),
-        /** Stop it. */
-        STOP("stop"),
-        /** Refresh it, which restarts everything wired to it. */
-        REFRESH("refresh");
-
-        private final String spelling;
-
-        Transition(String spelling) {
-            this.spelling = spelling;
-        }
-
-        /**
-         * How the wire spells this transition.
-         *
-         * @return the spelling
-         */
-        public String spelling() {
-            return spelling;
-        }
-
-        /**
-         * The transition one spelling names.
-         *
-         * @param spelled what was written
-         * @return the transition, or nothing where nothing is spelled that way
-         */
-        public static java.util.Optional<Transition> named(String spelled) {
-            return java.util.Arrays.stream(values())
-                    .filter(transition -> transition.spelling.equals(spelled))
-                    .findFirst();
-        }
-
-        /**
-         * Every transition, spelled as the wire spells it.
-         *
-         * @return the spellings, in declaration order
-         */
-        public static List<String> spellings() {
-            return java.util.Arrays.stream(values()).map(Transition::spelling).toList();
-        }
     }
 
     /**
@@ -155,13 +97,4 @@ public interface BundleInventory {
      * @return what it found, or the reason there is nothing
      */
     Outcome components(String prefix, List<ComponentState> states);
-
-    /**
-     * Puts one bundle through a transition and reports where it ended up.
-     *
-     * @param symbolicName which bundle
-     * @param transition what to do to it
-     * @return the state it is in now, or the reason nothing happened
-     */
-    Outcome transition(String symbolicName, Transition transition);
 }

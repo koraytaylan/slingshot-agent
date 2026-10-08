@@ -160,7 +160,7 @@ public interface ReplicationInventory {
     String NEVER_FAILED = "";
 
     /** What one replication call produced. */
-    sealed interface Outcome permits Agents, Inspected, Queue, Flushed, Resubmitted, Refused {
+    sealed interface Outcome permits Agents, Inspected, Queue, Flushed, Refused {
     }
 
     /**
@@ -208,22 +208,6 @@ public interface ReplicationInventory {
     }
 
     /**
-     * An entry that was offered again.
-     *
-     * @param resubmission whether the platform took it
-     */
-    record Resubmitted(Resubmission resubmission) implements Outcome {
-    }
-
-    /** Whether the platform took an entry back into its queue. */
-    enum Resubmission {
-        /** It did, and the entry will be tried again. */
-        TAKEN,
-        /** It did not, and the entry is where it was. */
-        DECLINED
-    }
-
-    /**
      * The platform would not, or could not.
      *
      * @param category the declared category this is reported under
@@ -266,13 +250,4 @@ public interface ReplicationInventory {
 
     /** What the expectation says when the caller stated none. */
     long ANY_COUNT = -1;
-
-    /**
-     * Offers one stuck entry to its queue again.
-     *
-     * @param agentIdentifier which agent
-     * @param entryIdentifier which entry
-     * @return whether the platform took it, or the reason nothing happened
-     */
-    Outcome retry(String agentIdentifier, String entryIdentifier);
 }

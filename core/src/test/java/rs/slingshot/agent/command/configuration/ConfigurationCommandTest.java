@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedMap;
-import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.command.Budget;
@@ -25,8 +24,6 @@ import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.platform.ConfigurationCatalogue;
 import rs.slingshot.agent.command.platform.ConfigurationValue;
-import rs.slingshot.agent.command.platform.ControlCapability;
-import rs.slingshot.agent.command.platform.PlatformControl;
 import rs.slingshot.agent.command.platform.ValueDisclosure;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -34,12 +31,11 @@ import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * The four commands about the platform's own configuration.
+ * The two commands about the platform's own configuration.
  *
- * <p>What is proved here is the shape of the boundary. Reading works on a deployment that permits
- * no change at all, because an environment an operator cannot alter is exactly the one where
- * knowing what it says matters most. Writing is refused there before the argument is even read, so
- * the caller is told about where they are running rather than about a typo.</p>
+ * <p>What is proved here is the shape of the boundary. Both only read, and pass through no control
+ * gate, because an environment an operator cannot alter is exactly the one where knowing what it
+ * says matters most.</p>
  *
  * <p>And no listing carries a value. A search across a whole instance is the call whose output ends
  * up pasted into a ticket, so what it carries has to be safe to paste.</p>
@@ -50,49 +46,9 @@ final class ConfigurationCommandTest {
 
     private static final Path REPOSITORY = repositoryRoot();
 
-    private static final String IMMUTABLE = "aem-cloud-service";
-
     private static final String SERVICE = "rs.slingshot.Service";
 
     private static final String SECRET = "service.password";
-
-    @Test
-    @DisplayName("a deployment that keeps no configuration change refuses both writes, and neither read")
-    void animmutableDeploymentRefusesTheWritesAndNotTheReads() {
-        final Catalogue catalogue = new Catalogue();
-        final PlatformControl immutable = PlatformControl.of(IMMUTABLE, Set.of());
-        for (final ConfigurationHandler.Kind kind : List.of(ConfigurationHandler.Kind.UPDATE,
-                ConfigurationHandler.Kind.REMOVAL)) {
-            final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
-                    new ConfigurationHandler(CONTRACT, kind, () -> catalogue, immutable)
-                            .run(identifier(SERVICE), null, context()),
-                    kind + " was carried out on a deployment that does not keep it");
-            assertEquals(PlatformControl.NOT_PERMITTED, refused.category());
-            assertTrue(refused.detail().contains(IMMUTABLE),
-                    "the refusal does not say which deployment refused: " + refused.detail());
-        }
-        assertEquals(List.of(), catalogue.calls(),
-                "the platform was asked to do something on a deployment that does not keep it,"
-                        + " and a change that is accepted and then discarded is worse than none");
-        assertInstanceOf(CommandHandler.Produced.class,
-                new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.INSPECTION, () -> catalogue,
-                        immutable).run(identifier(SERVICE), null, context()),
-                "reading a configuration was refused on a deployment that cannot change one,"
-                        + " which is the deployment where reading matters most");
-    }
-
-    @Test
-    @DisplayName("a write is refused for where it is running before it is refused for how it is written")
-    void thedeploymentIsCheckedBeforeTheArgument() {
-        final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
-                new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.UPDATE,
-                        Catalogue::new, PlatformControl.of(IMMUTABLE, Set.of()))
-                        .run(new DocumentValue.Mapping(new LinkedHashMap<>()), null, context()),
-                "an argument with no identifier was read before the deployment was asked");
-        assertEquals(PlatformControl.NOT_PERMITTED, refused.category(),
-                "a caller on an environment that keeps no configuration change was told their"
-                        + " argument was wrong, which sends them to fix the wrong thing");
-    }
 
     @Test
     @DisplayName("a search answers how many properties each configuration has and never what they are")
@@ -178,111 +134,14 @@ final class ConfigurationCommandTest {
     }
 
     @Test
-    @DisplayName("an assignment carries its own type and cardinality, and one that does not is refused")
-    void anassignmentCarriesItsType() {
-        final SequencedMap<String, DocumentValue> bare = new LinkedHashMap<>();
-        bare.put("service.port", new DocumentValue.Text("8080"));
-        assertEquals(UpdateConfigurationCommand.Refusal.VALUE_REJECTED,
-                refusedUpdate(bare, List.of()).refusal(),
-                "a value with no type beside it was accepted, and 8080 written back as a string is"
-                        + " a configuration that no longer starts a listener");
-        final SequencedMap<String, DocumentValue> typed = new LinkedHashMap<>();
-        typed.put("service.port", value("integer", "scalar", List.of("9090")));
-        final UpdateConfigurationCommand held = assertInstanceOf(
-                UpdateConfigurationCommand.Held.class,
-                UpdateConfigurationCommand.of(update(typed, List.of()), CONTRACT),
-                "a typed assignment was refused").command();
-        assertEquals(new ConfigurationValue("integer",
-                        ConfigurationValue.Cardinality.SCALAR, List.of("9090")),
-                held.assignments().get("service.port"));
-        assertTrue(!held.isEmpty(), "a change naming an assignment was read as changing nothing");
-    }
-
-    @Test
-    @DisplayName("a property both set and removed is refused rather than resolved in an order nobody chose")
-    void aproperyBothSetAndRemovedIsRefused() {
-        final SequencedMap<String, DocumentValue> assignments = new LinkedHashMap<>();
-        assignments.put("service.port", value("integer", "scalar", List.of("9090")));
-        assertEquals(UpdateConfigurationCommand.Refusal.SET_AND_REMOVED,
-                refusedUpdate(assignments, List.of("service.port")).refusal(),
-                "set-then-remove and remove-then-set leave different configurations, and one of"
-                        + " the two orders was chosen silently");
-        assertEquals(ConfigurationHandlers.VALUE_MALFORMED,
-                ConfigurationHandler.categoryFor(
-                        UpdateConfigurationCommand.Refusal.SET_AND_REMOVED));
-    }
-
-    @Test
-    @DisplayName("a change touching nothing is read as touching nothing, and reaches the platform anyway")
-    void achangeNamingNothingIsStillAChange() {
-        final UpdateConfigurationCommand held = assertInstanceOf(
-                UpdateConfigurationCommand.Held.class,
-                UpdateConfigurationCommand.of(update(new LinkedHashMap<>(), List.of()), CONTRACT),
-                "a change naming nothing was refused").command();
-        assertTrue(held.isEmpty(),
-                "a change naming neither an assignment nor a removal was read as naming one");
-        assertEquals(List.of(), held.removedPropertyKeys());
-    }
-
-    @Test
-    @DisplayName("a removal says whether it took one instance of a factory or the configuration itself")
-    void aremovalSaysWhichKindItWas() {
-        final DocumentValue.Mapping gone = assertInstanceOf(CommandHandler.Produced.class,
-                run(ConfigurationHandler.Kind.REMOVAL, identifier(SERVICE)),
-                "the removal was refused").result();
-        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.FALSE),
-                gone.member(DeleteConfigurationResult.WAS_A_FACTORY_INSTANCE).orElseThrow(),
-                "the answer does not say whether one instance went or the whole configuration did,"
-                        + " and an operator who thought they were doing the first and did the"
-                        + " second has changed the behaviour of everything on the instance");
-        assertEquals(new DocumentValue.Text(SERVICE),
-                gone.member(DeleteConfigurationResult.PERSISTENT_IDENTIFIER).orElseThrow());
-    }
-
-    @Test
-    @DisplayName("a change the platform refuses is reported as the platform refusing it")
-    void achangeThePlatformRefusedIsReportedAsThat() {
-        final Catalogue refusing = new Catalogue(ConfigurationHandlers.CONTROL_REJECTED,
-                "the service would not accept it");
-        assertEquals(ConfigurationHandlers.CONTROL_REJECTED,
-                assertInstanceOf(CommandHandler.Failed.class,
-                        new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.UPDATE,
-                                () -> refusing, permissive()).run(update(new LinkedHashMap<>(),
-                                        List.of()), null, context()),
-                        "a change the platform refused was reported as having happened").category());
-    }
-
-    @Test
-    @DisplayName("a change that reaches the platform answers how many keys it touched")
-    void achangeAnswersHowManyKeysItTouched() {
-        final SequencedMap<String, DocumentValue> assignments = new LinkedHashMap<>();
-        assignments.put("service.port", value("integer", "scalar", List.of("9090")));
-        assignments.put("service.names", value("string", "collection", List.of("a", "b")));
-        final DocumentValue.Mapping changed = assertInstanceOf(CommandHandler.Produced.class,
-                new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.UPDATE,
-                        Catalogue::new, permissive())
-                        .run(update(assignments, List.of("service.legacy")), null, context()),
-                "the change was refused").result();
-        assertEquals(new DocumentValue.Whole(3),
-                changed.member(UpdateConfigurationResult.CHANGED_PROPERTY_KEY_COUNT).orElseThrow(),
-                "the answer does not say how many property keys the change touched");
-        assertEquals(new DocumentValue.Text(SERVICE),
-                changed.member(UpdateConfigurationResult.PERSISTENT_IDENTIFIER).orElseThrow());
-        assertTrue(!String.valueOf(changed).contains("9090"),
-                "the answer carries what the configuration now holds, which would mean reading"
-                        + " every value back through a command nobody would audit: " + changed);
-    }
-
-    @Test
     @DisplayName("a search that would examine more than the caller may is refused, not trimmed")
     void asearchPastTheBudgetIsRefused() {
         final Catalogue wide = new Catalogue(ConfigurationHandlers.LOOKUP_BUDGET_EXCEEDED,
                 "too many to enumerate");
         assertEquals(ConfigurationHandlers.LOOKUP_BUDGET_EXCEEDED,
                 assertInstanceOf(CommandHandler.Failed.class,
-                        new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.SEARCH, () -> wide,
-                                permissive()).run(new DocumentValue.Mapping(new LinkedHashMap<>()),
-                                null, context()),
+                        new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.SEARCH, () -> wide)
+                                .run(new DocumentValue.Mapping(new LinkedHashMap<>()), null, context()),
                         "a search the platform could not complete answered a shortened list, which"
                                 + " reads as the complete answer").category());
     }
@@ -313,40 +172,37 @@ final class ConfigurationCommandTest {
     }
 
     @Test
-    @DisplayName("an inspection and a removal the platform could not do are reported as it saying so")
-    void aplatformFailureReachesEveryCommand() {
+    @DisplayName("an inspection the platform could not do is reported as it saying so")
+    void aplatformFailureReachesTheInspection() {
         final Catalogue refusing = new Catalogue(ConfigurationHandlers.LOOKUP_FAILED,
                 "the service could not be asked");
-        for (final ConfigurationHandler.Kind kind : List.of(ConfigurationHandler.Kind.INSPECTION,
-                ConfigurationHandler.Kind.REMOVAL)) {
-            assertEquals(ConfigurationHandlers.LOOKUP_FAILED,
-                    assertInstanceOf(CommandHandler.Failed.class,
-                            new ConfigurationHandler(CONTRACT, kind, () -> refusing, permissive())
-                                    .run(identifier(SERVICE), null, context()),
-                            kind + " reported a platform that could not be asked as an answer")
-                            .category());
-        }
+        assertEquals(ConfigurationHandlers.LOOKUP_FAILED,
+                assertInstanceOf(CommandHandler.Failed.class,
+                        new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.INSPECTION,
+                                () -> refusing).run(identifier(SERVICE), null, context()),
+                        "an inspection reported a platform that could not be asked as an answer")
+                        .category());
     }
 
     @Test
-    @DisplayName("an argument neither read nor write takes is refused before the platform is asked")
+    @DisplayName("an argument the inspection does not take is refused before the platform is asked")
     void abadArgumentNeverReachesThePlatform() {
         final Catalogue catalogue = new Catalogue();
         final SequencedMap<String, DocumentValue> empty = new LinkedHashMap<>();
         assertEquals(ConfigurationHandlers.LOOKUP_FAILED,
                 assertInstanceOf(CommandHandler.Failed.class,
                         new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.INSPECTION,
-                                () -> catalogue, permissive())
+                                () -> catalogue)
                                 .run(new DocumentValue.Mapping(empty), null, context()),
                         "an argument naming no configuration reached the platform").category());
         final SequencedMap<String, DocumentValue> unknown = new LinkedHashMap<>();
-        unknown.put(UpdateConfigurationCommand.PERSISTENT_IDENTIFIER,
+        unknown.put(ConfigurationIdentifierCommand.PERSISTENT_IDENTIFIER,
                 new DocumentValue.Text(SERVICE));
         unknown.put("restart_after", new DocumentValue.Flag(DocumentValue.Truth.TRUE));
         assertEquals(ConfigurationHandlers.LOOKUP_FAILED,
                 assertInstanceOf(CommandHandler.Failed.class,
-                        new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.UPDATE,
-                                () -> catalogue, permissive())
+                        new ConfigurationHandler(CONTRACT, ConfigurationHandler.Kind.INSPECTION,
+                                () -> catalogue)
                                 .run(new DocumentValue.Mapping(unknown), null, context()),
                         "a member nobody declared was accepted").category());
         assertEquals(List.of(), catalogue.calls(),
@@ -354,26 +210,17 @@ final class ConfigurationCommandTest {
     }
 
     @Test
-    @DisplayName("all four rows are the client's own and every handler declares exactly them")
-    void allfourRowsAreTheClientsOwn() {
+    @DisplayName("both rows are the client's own and every handler declares exactly them")
+    void bothRowsAreTheClientsOwn() {
         for (final var pair : List.of(
                 Map.entry(FindConfigurationsCommand.WIRE_NAME,
                         ConfigurationHandlers.searchCategories()),
                 Map.entry(ConfigurationIdentifierCommand.INSPECT_WIRE_NAME,
-                        ConfigurationHandlers.inspectionCategories()),
-                Map.entry(UpdateConfigurationCommand.WIRE_NAME,
-                        ConfigurationHandlers.updateCategories()),
-                Map.entry(ConfigurationIdentifierCommand.DELETE_WIRE_NAME,
-                        ConfigurationHandlers.removalCategories()))) {
+                        ConfigurationHandlers.inspectionCategories()))) {
             assertEquals(row(pair.getKey()).failureCategories().stream().sorted().toList(),
                     pair.getValue().stream().sorted().toList(),
                     pair.getKey() + " and its handler disagree about what it can fail with");
         }
-        assertTrue(ConfigurationHandlers.updateCategories()
-                        .containsAll(java.util.Arrays.stream(
-                                        UpdateConfigurationCommand.Refusal.values())
-                                .map(ConfigurationHandler::categoryFor).toList()),
-                "a change refusal reaches a category this command's own row does not declare");
     }
 
     /** A catalogue that remembers what it was asked and answers from a fixed instance. */
@@ -424,70 +271,12 @@ final class ConfigurationCommandTest {
                             new ConfigurationValue("string",
                                     ConfigurationValue.Cardinality.SCALAR, List.of("hunter2")))));
         }
-
-        @Override
-        public Outcome apply(String persistentIdentifier,
-                              SequencedMap<String, ConfigurationValue> assignments,
-                              List<String> removedPropertyKeys) {
-            asked.add("update");
-            return refusal.isEmpty()
-                    ? new Changed(assignments.size() + removedPropertyKeys.size(),
-                            Origin.SINGLETON)
-                    : refusal.getFirst();
-        }
-
-        @Override
-        public Outcome erase(String persistentIdentifier) {
-            asked.add("delete");
-            return refusal.isEmpty() ? new Changed(0, Origin.SINGLETON) : refusal.getFirst();
-        }
     }
 
     private static CommandHandler.Answer run(ConfigurationHandler.Kind kind,
                                              DocumentValue.Mapping arguments) {
-        return new ConfigurationHandler(CONTRACT, kind, Catalogue::new, permissive())
+        return new ConfigurationHandler(CONTRACT, kind, Catalogue::new)
                 .run(arguments, null, context());
-    }
-
-    private static PlatformControl permissive() {
-        return PlatformControl.of("aem-6-5-lts", Set.of(ControlCapability.values()));
-    }
-
-    private static UpdateConfigurationCommand.Refused refusedUpdate(
-            SequencedMap<String, DocumentValue> assignments, List<String> removed) {
-        return assertInstanceOf(UpdateConfigurationCommand.Refused.class,
-                UpdateConfigurationCommand.of(update(assignments, removed), CONTRACT),
-                "an argument this command does not take was accepted");
-    }
-
-    private static DocumentValue.Mapping update(SequencedMap<String, DocumentValue> assignments,
-                                                List<String> removed) {
-        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
-        members.put(UpdateConfigurationCommand.PERSISTENT_IDENTIFIER,
-                new DocumentValue.Text(SERVICE));
-        if (!assignments.isEmpty()) {
-            members.put(UpdateConfigurationCommand.ASSIGNMENTS,
-                    new DocumentValue.Mapping(assignments));
-        }
-        if (!removed.isEmpty()) {
-            members.put(UpdateConfigurationCommand.REMOVED_PROPERTY_KEYS,
-                    new DocumentValue.Sequence(removed.stream()
-                            .map(name -> (DocumentValue) new DocumentValue.Text(name)).toList()));
-        }
-        return new DocumentValue.Mapping(members);
-    }
-
-    private static DocumentValue value(String type, String cardinality, List<String> values) {
-        final SequencedMap<String, DocumentValue> held = new LinkedHashMap<>();
-        held.put(ConfigurationValue.TYPE, new DocumentValue.Text(type));
-        held.put(ConfigurationValue.CARDINALITY, new DocumentValue.Text(cardinality));
-        if (values.size() == 1 && "scalar".equals(cardinality)) {
-            held.put(ConfigurationValue.VALUE, new DocumentValue.Text(values.getFirst()));
-            return new DocumentValue.Mapping(held);
-        }
-        held.put(ConfigurationValue.VALUES, new DocumentValue.Sequence(values.stream()
-                .map(item -> (DocumentValue) new DocumentValue.Text(item)).toList()));
-        return new DocumentValue.Mapping(held);
     }
 
     private static DocumentValue.Mapping identifier(String persistentIdentifier) {

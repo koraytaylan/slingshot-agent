@@ -32,8 +32,8 @@ final class PlatformControlTest {
         final PlatformControl immutable = PlatformControl.of(CLOUD,
                 Set.of(ControlCapability.WORKFLOW_CONTROL, ControlCapability.JOB_CONTROL));
         final PlatformControl.Refused refused = assertInstanceOf(PlatformControl.Refused.class,
-                immutable.permits(ControlCapability.CONFIGURATION_CHANGE),
-                "a configuration change was permitted on a deployment that does not keep one");
+                immutable.permits(ControlCapability.REPLICATION_CONTROL),
+                "a replication control was permitted on a deployment that does not provide one");
         assertEquals(PlatformControl.NOT_PERMITTED, refused.category());
         assertTrue(refused.detail().contains(CLOUD),
                 "the refusal does not say which deployment refused, so the operator learns no"
@@ -47,8 +47,8 @@ final class PlatformControlTest {
     @DisplayName("the gate answers the same for everybody, because it is not about who is asking")
     void thegateIsNotAboutWhoIsAsking() {
         final PlatformControl immutable = PlatformControl.of(CLOUD, Set.of());
-        assertEquals(immutable.permits(ControlCapability.BUNDLE_LIFECYCLE),
-                immutable.permits(ControlCapability.BUNDLE_LIFECYCLE),
+        assertEquals(immutable.permits(ControlCapability.JOB_CONTROL),
+                immutable.permits(ControlCapability.JOB_CONTROL),
                 "the same question answered twice gave two answers, and this gate has no input"
                         + " beyond the deployment and the capability — an administrator is refused"
                         + " exactly as firmly as everybody else");
@@ -177,7 +177,6 @@ final class PlatformControlTest {
         assertTrue(ConfigurationValue.Cardinality.SCALAR.isSingle()
                         && !ConfigurationValue.Cardinality.COLLECTION.isSingle(),
                 "the cardinality no longer decides how many values there are");
-        assertEquals(Optional.empty(), ConfigurationValue.Cardinality.named("several"));
     }
 
     @Test
@@ -222,11 +221,6 @@ final class PlatformControlTest {
         assertEquals(Optional.empty(), ValueDisclosure.Evidence.named("probably_fine"),
                 "a spelling nobody publishes was read as evidence, and the one that matters here"
                         + " would be read as permission to report a credential");
-        assertEquals(List.of("string", "boolean", "character", "byte", "short", "integer", "long",
-                        "float", "double"), ConfigurationValue.TYPES,
-                "the closed set of configuration types no longer matches the client's own");
-        assertEquals(ConfigurationValue.Cardinality.values().length,
-                ConfigurationValue.Cardinality.spellings().size());
     }
 
     @Test

@@ -36,7 +36,6 @@ import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -54,10 +53,6 @@ final class NativeReferenceAliasTest {
     private static final AgentContract CONTRACT = assertInstanceOf(AgentContract.Loaded.class,
             AgentContract.load()).contract();
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
-
-    private enum Target {
-        PAGE, ASSET
-    }
 
     private enum Mode {
         ALIAS_ONLY, WITH_ANCHOR
@@ -93,7 +88,7 @@ final class NativeReferenceAliasTest {
         }
     }
 
-    private record Case(Target target, Mode mode, Kind kind, Cardinality cardinality, Alias alias) {
+    private record Case(Mode mode, Kind kind, Cardinality cardinality, Alias alias) {
     }
 
     @ParameterizedTest
@@ -177,8 +172,8 @@ final class NativeReferenceAliasTest {
 
     private List<String> plant(Case fixture) throws RepositoryException, PersistenceException {
         final Session session = nativeSession(sling.resourceResolver());
-        final String prefix = fixture.target() == Target.PAGE ? "cq" : "dam";
-        final String name = fixture.target() == Target.PAGE ? "cq:Page" : "dam:Asset";
+        final String prefix = "cq";
+        final String name = "cq:Page";
         final var namespaces = session.getWorkspace().getNamespaceRegistry();
         if (!List.of(namespaces.getPrefixes()).contains(prefix)) {
             namespaces.registerNamespace(prefix, "https://synthetic.invalid/" + prefix);
@@ -286,8 +281,7 @@ final class NativeReferenceAliasTest {
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
         members.put(MoveRequest.ADJUST_REFERENCES, new DocumentValue.Flag(DocumentValue.Truth.TRUE));
-        final CommandHandler handler = fixture.target() == Target.PAGE ? new MovePageHandler(CONTRACT)
-                : new AssetMutationHandler(CONTRACT, AssetMutationHandler.Kind.MOVE);
+        final CommandHandler handler = new MovePageHandler(CONTRACT);
         final var operation = ((AgentOperationIdentifier.Held) AgentOperationIdentifier.of(
                 "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8", CONTRACT))
                 .identifier();
@@ -299,20 +293,16 @@ final class NativeReferenceAliasTest {
     }
 
     private static Stream<Case> cases() {
-        return Stream.of(Target.values()).flatMap(NativeReferenceAliasTest::cases);
+        return Stream.of(Mode.values()).flatMap(NativeReferenceAliasTest::cases);
     }
 
-    private static Stream<Case> cases(Target target) {
-        return Stream.of(Mode.values()).flatMap(mode -> cases(target, mode));
+    private static Stream<Case> cases(Mode mode) {
+        return Stream.of(Kind.values()).flatMap(kind -> cases(mode, kind));
     }
 
-    private static Stream<Case> cases(Target target, Mode mode) {
-        return Stream.of(Kind.values()).flatMap(kind -> cases(target, mode, kind));
-    }
-
-    private static Stream<Case> cases(Target target, Mode mode, Kind kind) {
+    private static Stream<Case> cases(Mode mode, Kind kind) {
         return Stream.of(Cardinality.values()).flatMap(cardinality -> Stream.of(Alias.values())
-                .map(alias -> new Case(target, mode, kind, cardinality, alias)));
+                .map(alias -> new Case(mode, kind, cardinality, alias)));
     }
 
     private static final class Caller extends ResourceResolverWrapper {

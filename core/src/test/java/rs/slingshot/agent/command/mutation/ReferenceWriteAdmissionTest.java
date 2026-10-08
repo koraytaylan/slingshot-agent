@@ -25,14 +25,12 @@ import org.apache.sling.api.wrappers.ResourceResolverWrapper;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -51,19 +49,14 @@ final class ReferenceWriteAdmissionTest {
     private static final String READABLE = "/content/synthetic-readable";
     private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
 
-    private enum Target {
-        PAGE, ASSET
-    }
-
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void aReadableReferenceWithoutAWritableMapRefusesBeforeTheMove(Target target) {
-        plant(target);
+    @Test
+    void aReadableReferenceWithoutAWritableMapRefusesBeforeTheMove() {
+        plant();
         sling.create().resource(READABLE, Map.of("link", SOURCE));
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver(), Set.of(READABLE))) {
 
             final CommandHandler.Failed failure = assertInstanceOf(CommandHandler.Failed.class,
-                    move(target, caller, true));
+                    move(caller, true));
 
             assertEquals(MovePageHandler.COMMIT_FAILED, failure.category());
             untouched(caller);
@@ -71,16 +64,15 @@ final class ReferenceWriteAdmissionTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void aLateUnwritableReferenceLeavesEarlierWritableReferencesAndTheSourceUntouched(Target target) {
-        plant(target);
+    @Test
+    void aLateUnwritableReferenceLeavesEarlierWritableReferencesAndTheSourceUntouched() {
+        plant();
         sling.create().resource(WRITABLE, Map.of("link", SOURCE, "links", new String[]{SOURCE, SOURCE}));
         sling.create().resource(READABLE, Map.of("link", SOURCE));
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver(), Set.of(READABLE))) {
 
             final CommandHandler.Failed failure = assertInstanceOf(CommandHandler.Failed.class,
-                    move(target, caller, true));
+                    move(caller, true));
 
             assertEquals(MovePageHandler.COMMIT_FAILED, failure.category());
             untouched(caller);
@@ -90,14 +82,13 @@ final class ReferenceWriteAdmissionTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void leavingReferencesKeepsTheirReadOnlyProviderOutsideTheRequestedMutation(Target target) {
-        plant(target);
+    @Test
+    void leavingReferencesKeepsTheirReadOnlyProviderOutsideTheRequestedMutation() {
+        plant();
         sling.create().resource(READABLE, Map.of("link", SOURCE));
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver(), Set.of(READABLE))) {
 
-            assertInstanceOf(CommandHandler.Produced.class, move(target, caller, false));
+            assertInstanceOf(CommandHandler.Produced.class, move(caller, false));
 
             assertEquals(1, caller.moves.get());
             assertEquals(1, caller.commits.get());
@@ -107,15 +98,14 @@ final class ReferenceWriteAdmissionTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void completeWritableReferencesStillMoveAndRepointInOneCommit(Target target) {
-        plant(target);
+    @Test
+    void completeWritableReferencesStillMoveAndRepointInOneCommit() {
+        plant();
         sling.create().resource(WRITABLE, Map.of("link", SOURCE, "links", new String[]{SOURCE, SOURCE}));
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver(), Set.of())) {
 
             final CommandHandler.Produced result = assertInstanceOf(CommandHandler.Produced.class,
-                    move(target, caller, true));
+                    move(caller, true));
 
             assertEquals(new DocumentValue.Whole(3), result.result()
                     .member("adjusted_reference_count").orElseThrow());
@@ -133,9 +123,8 @@ final class ReferenceWriteAdmissionTest {
                 "the synthetic fixture resource");
     }
 
-    private void plant(Target target) {
-        sling.create().resource(SOURCE, Map.of("jcr:primaryType", target == Target.PAGE
-                ? "cq:Page" : "dam:Asset", "synthetic-marker", "retained"));
+    private void plant() {
+        sling.create().resource(SOURCE, Map.of("jcr:primaryType", "cq:Page", "synthetic-marker", "retained"));
         sling.create().resource("/content/synthetic-destination");
     }
 
@@ -146,14 +135,13 @@ final class ReferenceWriteAdmissionTest {
         assertNull(sling.resourceResolver().getResource(DESTINATION));
     }
 
-    private static CommandHandler.Answer move(Target target, ResourceResolver caller, boolean adjust) {
+    private static CommandHandler.Answer move(ResourceResolver caller, boolean adjust) {
         final var members = new LinkedHashMap<String, DocumentValue>();
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
         members.put(MoveRequest.ADJUST_REFERENCES, new DocumentValue.Flag(adjust
                 ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
-        final CommandHandler handler = target == Target.PAGE ? new MovePageHandler(CONTRACT)
-                : new AssetMutationHandler(CONTRACT, AssetMutationHandler.Kind.MOVE);
+        final CommandHandler handler = new MovePageHandler(CONTRACT);
         final var operation = assertInstanceOf(AgentOperationIdentifier.Held.class,
                 AgentOperationIdentifier.of(
                         "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8",

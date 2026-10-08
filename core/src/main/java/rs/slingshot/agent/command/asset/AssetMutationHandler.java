@@ -15,7 +15,6 @@ import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.content.ListChildPagesHandler;
 import rs.slingshot.agent.command.mutation.DeletedResourceResult;
-import rs.slingshot.agent.command.mutation.MoveRequest;
 import rs.slingshot.agent.command.mutation.MutationAnswer;
 import rs.slingshot.agent.command.mutation.MutationOutcome;
 import rs.slingshot.agent.command.mutation.ReferencePolicy;
@@ -27,12 +26,12 @@ import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * The five commands that change a digital asset library, each one commit or none.
+ * The four commands that change a digital asset library, each one commit or none.
  *
- * <p>One handler for five because what they share is everything that matters: each is held to one
+ * <p>One handler for four because what they share is everything that matters: each is held to one
  * commit, each is refused before anything is written where it cannot proceed, and each answers with
- * the address it acted on. Which of the five it is comes from the kind the handler was built for
- * rather than from an argument, so the five keep separate registry rows, failure sets and
+ * the address it acted on. Which of the four it is comes from the kind the handler was built for
+ * rather than from an argument, so the four keep separate registry rows, failure sets and
  * bounds.</p>
  *
  * <p>Nothing here generates a rendition. The platform's own workflow does that afterwards, and the
@@ -41,7 +40,7 @@ import rs.slingshot.agent.json.DocumentValue;
  */
 public final class AssetMutationHandler implements CommandHandler {
 
-    /** Which of the five this handler answers. */
+    /** Which of the four this handler answers. */
     public enum Kind {
         /** Makes a folder. */
         FOLDER,
@@ -50,19 +49,17 @@ public final class AssetMutationHandler implements CommandHandler {
         /** Changes what is known about one. */
         METADATA,
         /** Removes one. */
-        REMOVAL,
-        /** Moves one. */
-        MOVE
+        REMOVAL
     }
 
     private final AgentContract contract;
     private final Kind kind;
 
     /**
-     * Holds one handler for one of the five.
+     * Holds one handler for one of the four.
      *
      * @param contract the authenticated contract
-     * @param kind which of the five commands this handler answers
+     * @param kind which of the four commands this handler answers
      */
     public AssetMutationHandler(AgentContract contract, Kind kind) {
         this.contract = contract;
@@ -77,7 +74,6 @@ public final class AssetMutationHandler implements CommandHandler {
             case CREATION -> creation(arguments, resolver);
             case METADATA -> metadata(arguments, resolver);
             case REMOVAL -> removal(arguments, resolver, context);
-            case MOVE -> move(arguments, resolver, context);
         };
     }
 
@@ -312,77 +308,6 @@ public final class AssetMutationHandler implements CommandHandler {
                 DeletedResourceResult.documentOf(command.assetPath(), subtree.size()));
     }
 
-    private Answer move(DocumentValue.Mapping arguments, ResourceResolver resolver,
-                        CallerContext context) {
-        final MoveRequest.Outcome asked = MoveAssetCommand.of(arguments, contract);
-        if (asked instanceof final MoveRequest.Refused refused) {
-            return new Failed(
-                    refused.refusal() == MoveRequest.Refusal.DESTINATION_INSIDE_SOURCE
-                            ? AssetHandlers.DESTINATION_INSIDE_SOURCE
-                            : AssetHandlers.SOURCE_NOT_FOUND,
-                    refused.refusal() + ": " + refused.detail());
-        }
-        return committed(resolver, session -> moved(((MoveRequest.Held) asked).command(), session,
-                contract.value(ContractLimit.MAXIMUM_ADJUSTED_REFERENCES),
-                context.discovery().limit()));
-    }
-
-    private static MutationOutcome moved(MoveRequest command, ResourceResolver session,
-                                         long bound, long budget) {
-        if (session.getResource(command.sourcePath()) == null) {
-            return new MutationOutcome.Refused(AssetHandlers.SOURCE_NOT_FOUND,
-                    command.sourcePath() + " is not there, so there is nothing to move");
-        }
-        if (session.getResource(command.destinationPath()) != null) {
-            return new MutationOutcome.Refused(AssetHandlers.DESTINATION_ALREADY_EXISTS,
-                    command.destinationPath() + " is already taken");
-        }
-        final String parent = parentOf(command.destinationPath());
-        if (session.getResource(parent) == null) {
-            return new MutationOutcome.Refused(AssetHandlers.DESTINATION_PARENT_NOT_FOUND,
-                    parent + " is not there, so there is nowhere to move this asset to");
-        }
-        return adjusted(command, session, bound, budget);
-    }
-
-    private static MutationOutcome adjusted(MoveRequest command, ResourceResolver session,
-                                            long bound, long budget) {
-        final var discovered = command.adjustReferences() == MoveRequest.ReferenceAdjustment.FOLLOWED
-                ? RepositoryReach.references(session, command.sourcePath(), budget)
-                : new RepositoryReach.References(List.of(), RepositoryReach.Completeness.COMPLETE);
-        if (!discovered.complete()) {
-            return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
-                    "reference discovery exceeded the visibility budget and the move was refused");
-        }
-        final List<Resource> pointing = discovered.found();
-        if (pointing.size() > bound) {
-            return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
-                    pointing.size() + " references is more than the " + bound + " one move may"
-                            + " adjust, and it is refused before the move rather than after some"
-                            + " of them");
-        }
-        final long repointed;
-        try {
-            if (!RepositoryReach.adjustmentsWithin(pointing, command.sourcePath(), bound)) {
-                return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
-                        "matching reference values exceed the " + bound
-                                + " one move may adjust, so the move was refused before any change");
-            }
-            RepositoryReach.requireAdjustable(pointing, command.sourcePath(), command.destinationPath());
-            RepositoryReach.moveTo(session, command.sourcePath(), command.destinationPath());
-            repointed = RepositoryReach.repointed(pointing, command.sourcePath(),
-                    command.destinationPath(), bound);
-        } catch (final RepositoryReach.ReferenceAdjustmentBudgetExceeded exceeded) {
-            return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
-                    exceeded.getMessage());
-        } catch (final PersistenceException refused) {
-            return new MutationOutcome.Refused(AssetHandlers.COMMIT_FAILED,
-                    "the repository refused this move: " + refused.getMessage());
-        }
-        return sealed(session, MoveAssetResult.documentOf(command.sourcePath(),
-                command.destinationPath(), repointed));
-    }
-
     private static MutationOutcome written(ResourceResolver session, Resource parent, String name,
                                            Map<String, Object> properties,
                                            DocumentValue.Mapping result) {
@@ -411,11 +336,6 @@ public final class AssetMutationHandler implements CommandHandler {
                 SingleCommit.OUTCOME_UNKNOWN);
     }
 
-    private static String parentOf(String path) {
-        final int lastSlash = path.lastIndexOf('/');
-        return lastSlash <= 0 ? "/" : path.substring(0, lastSlash);
-    }
-
 
     @Override
     public List<String> categories() {
@@ -424,7 +344,6 @@ public final class AssetMutationHandler implements CommandHandler {
             case CREATION -> AssetHandlers.creationCategories();
             case METADATA -> AssetHandlers.metadataCategories();
             case REMOVAL -> AssetHandlers.removalCategories();
-            case MOVE -> AssetHandlers.moveCategories();
         };
     }
 }

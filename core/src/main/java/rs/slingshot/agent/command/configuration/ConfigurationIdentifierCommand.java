@@ -12,11 +12,7 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * One configuration, named.
  *
- * <p>Shared by the command that reads a configuration and the one that removes it, because the
- * argument is the same argument: an identifier and nothing else. The two stay separate everywhere
- * it matters — their own rows, their own failure sets, and one of them passing through the control
- * gate while the other does not — and share the one place where writing it twice would only give
- * two chances to spell the member differently.</p>
+ * <p>The argument of the command that reads one configuration: an identifier and nothing else.</p>
  *
  * @param persistentIdentifier what the platform calls the configuration
  */
@@ -25,10 +21,6 @@ public record ConfigurationIdentifierCommand(String persistentIdentifier) {
     /** The wire name of the command that reads one configuration. */
     public static final String INSPECT_WIRE_NAME =
             "inspect_open_service_gateway_initiative_configuration";
-
-    /** The wire name of the command that removes one. */
-    public static final String DELETE_WIRE_NAME =
-            "delete_open_service_gateway_initiative_configuration";
 
     /** The member the identifier is carried in. */
     public static final String PERSISTENT_IDENTIFIER = "persistent_identifier";
@@ -39,11 +31,11 @@ public record ConfigurationIdentifierCommand(String persistentIdentifier) {
     /** The member a caller has to send, which is the only one there is. */
     public static final List<String> REQUIRED = MEMBERS;
 
-    /** Why an argument is not one these commands take. */
+    /** Why an argument is not one this command takes. */
     public enum Refusal {
         /** The argument is not an object. */
         NOT_A_DOCUMENT,
-        /** The identifier is absent, and neither command chooses a configuration for a caller. */
+        /** The identifier is absent, and this command chooses no configuration for a caller. */
         MEMBER_ABSENT,
         /** A member nobody declared is present. */
         MEMBER_UNKNOWN,
@@ -56,7 +48,7 @@ public record ConfigurationIdentifierCommand(String persistentIdentifier) {
     }
 
     /**
-     * An argument these commands take.
+     * An argument this command takes.
      *
      * @param command what was asked
      */
@@ -64,9 +56,9 @@ public record ConfigurationIdentifierCommand(String persistentIdentifier) {
     }
 
     /**
-     * One they do not.
+     * One it does not.
      *
-     * @param refusal why they do not
+     * @param refusal why it does not
      * @param detail what was seen
      */
     public record Refused(Refusal refusal, String detail) implements Outcome {

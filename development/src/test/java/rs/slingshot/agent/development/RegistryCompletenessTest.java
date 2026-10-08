@@ -60,7 +60,7 @@ final class RegistryCompletenessTest {
         assertRule(against("extra-row"), RegistryCompleteness.UNPUBLISHED,
                 "the client publishes nothing by that name");
         assertRule(against("extra-row"), RegistryCompleteness.WRONG_COUNT,
-                "both halves of this protocol have 72");
+                "both halves of this protocol have 67");
     }
 
     @Test

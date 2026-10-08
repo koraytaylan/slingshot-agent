@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["authorizable_access_denied", "authorizable_kind_mismatch", "authorizable_not_found", "platform_control_outcome_unknown", "platform_control_rejected"]
-argument_schema_digest = "6ca69b1d3e1707b0b6ae09b2323a135ed578fd67ede9e88660a8b8d64e0438af"
-result_schema_digest = "1549ec5c6e553266fc68c86ef2e8f7b0fd7a1c9d41a4a71269e190c5e9a1c7f7"
-contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+argument_schema_digest = "577af3f2b403d87ae121d5c29b6b0439f4947889673a56ea15c4a125ea13f1b4"
+result_schema_digest = "1976e7dd019752d098214d181703836bbb30830e26a4d83004aa924355ab8574"
+contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
 staging_bytes = 0
 execution = "immediate"

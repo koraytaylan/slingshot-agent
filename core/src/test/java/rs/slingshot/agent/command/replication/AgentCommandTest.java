@@ -32,7 +32,7 @@ import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * The five commands about the replication agents.
+ * The four commands about the replication agents.
  *
  * <p>These are what somebody reaches for when a page has been published and is not there. The rule
  * under test throughout is that no transport address appears anywhere: an agent's transport is a
@@ -144,20 +144,16 @@ final class AgentCommandTest {
     }
 
     @Test
-    @DisplayName("a deployment without replication control refuses the two actions, not the reads")
+    @DisplayName("a deployment without replication control refuses the flush, not the reads")
     void thereadsSurviveADeploymentThatPermitsNoAction() {
         final Inventory inventory = new Inventory();
         final PlatformControl refusing = PlatformControl.of("aem-cloud-service", Set.of());
-        for (final var pair : List.of(
-                Map.entry(AgentHandler.Kind.FLUSH, flush(AGENT, 41)),
-                Map.entry(AgentHandler.Kind.RETRY, retry(AGENT, ENTRY)))) {
-            assertEquals(PlatformControl.NOT_PERMITTED,
-                    assertInstanceOf(CommandHandler.Failed.class,
-                            new AgentHandler(CONTRACT, pair.getKey(), inventory, refusing)
-                                    .run(pair.getValue(), null, context()),
-                            pair.getKey() + " was carried out on a deployment that does not permit"
-                                    + " it").category());
-        }
+        assertEquals(PlatformControl.NOT_PERMITTED,
+                assertInstanceOf(CommandHandler.Failed.class,
+                        new AgentHandler(CONTRACT, AgentHandler.Kind.FLUSH, inventory, refusing)
+                                .run(flush(AGENT, 41), null, context()),
+                        "the flush was carried out on a deployment that does not permit it")
+                        .category());
         assertEquals(List.of(), inventory.calls(),
                 "the platform was asked to act on a queue on a deployment that does not permit it");
         assertInstanceOf(CommandHandler.Produced.class,
@@ -169,42 +165,7 @@ final class AgentCommandTest {
     }
 
     @Test
-    @DisplayName("a missing entry is told apart from a missing agent, because the fixes differ")
-    void amissingEntryIsItsOwnRefusal() {
-        assertEquals(AgentCommands.Refusal.ENTRY_ABSENT,
-                assertInstanceOf(AgentCommands.RetryRefused.class,
-                        AgentCommands.retry(identifier(AGENT), CONTRACT),
-                        "a retry naming no entry was accepted").refusal().refusal());
-        assertEquals(AgentCommands.ENTRY_NOT_FOUND,
-                AgentHandler.retryCategoryFor(AgentCommands.Refusal.ENTRY_ABSENT),
-                "a missing entry and a missing agent were reported the same way, and one of them"
-                        + " typed the wrong agent while the other is looking at a queue whose"
-                        + " entry has already gone");
-        assertEquals(AgentCommands.AGENT_NOT_FOUND,
-                AgentHandler.retryCategoryFor(AgentCommands.Refusal.IDENTIFIER_REJECTED));
-        assertEquals(AgentCommands.Refusal.MEMBER_ABSENT,
-                assertInstanceOf(AgentCommands.RetryRefused.class,
-                        AgentCommands.retry(new DocumentValue.Mapping(new LinkedHashMap<>()),
-                                CONTRACT), "a retry naming no agent was accepted")
-                        .refusal().refusal());
-    }
-
-    @Test
-    @DisplayName("a retry says whether the platform took the entry back")
-    void aretrySaysWhetherItWasTaken() {
-        final DocumentValue.Mapping offered = assertInstanceOf(CommandHandler.Produced.class,
-                run(AgentHandler.Kind.RETRY, retry(AGENT, ENTRY)),
-                "the retry was refused").result();
-        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.TRUE),
-                offered.member(AgentResults.RESUBMITTED).orElseThrow(),
-                "the answer does not say whether the platform took the entry, so a caller cannot"
-                        + " tell an offer that landed from one that was quietly dropped");
-        assertEquals(new DocumentValue.Text(ENTRY),
-                offered.member(AgentResults.ENTRY_IDENTIFIER).orElseThrow());
-    }
-
-    @Test
-    @DisplayName("a platform that could not be asked is reported as it saying so, in all five")
+    @DisplayName("a platform that could not be asked is reported as it saying so, in all four")
     void aplatformFailureReachesEveryCommand() {
         final Inventory refusing = new Inventory();
         refusing.refuse(AgentCommands.AGENT_ACCESS_DENIED, "this caller may not reach it");
@@ -218,7 +179,7 @@ final class AgentCommandTest {
     }
 
     @Test
-    @DisplayName("an argument none of the five takes is refused before the platform is asked")
+    @DisplayName("an argument none of the four takes is refused before the platform is asked")
     void abadArgumentNeverReachesThePlatform() {
         final Inventory inventory = new Inventory();
         final SequencedMap<String, DocumentValue> unknown = new LinkedHashMap<>();
@@ -276,14 +237,13 @@ final class AgentCommandTest {
     }
 
     @Test
-    @DisplayName("all five rows are the client's own and every handler declares exactly them")
-    void allfiveRowsAreTheClientsOwn() {
+    @DisplayName("all four rows are the client's own and every handler declares exactly them")
+    void allfourRowsAreTheClientsOwn() {
         for (final var pair : List.of(
                 Map.entry(AgentCommands.LIST_WIRE_NAME, AgentCommands.listingCategories()),
                 Map.entry(AgentCommands.INSPECT_AGENT_WIRE_NAME, AgentCommands.agentCategories()),
                 Map.entry(AgentCommands.INSPECT_QUEUE_WIRE_NAME, AgentCommands.queueCategories()),
-                Map.entry(AgentCommands.FLUSH_WIRE_NAME, AgentCommands.flushCategories()),
-                Map.entry(AgentCommands.RETRY_WIRE_NAME, AgentCommands.retryCategories()))) {
+                Map.entry(AgentCommands.FLUSH_WIRE_NAME, AgentCommands.flushCategories()))) {
             assertEquals(row(pair.getKey()).failureCategories().stream().sorted().toList(),
                     pair.getValue().stream().sorted().toList(),
                     pair.getKey() + " and its handler disagree about what it can fail with");
@@ -306,8 +266,7 @@ final class AgentCommandTest {
                         new DocumentValue.Mapping(new LinkedHashMap<>())),
                 Map.entry(AgentHandler.Kind.AGENT, identifier(AGENT)),
                 Map.entry(AgentHandler.Kind.QUEUE, identifier(AGENT)),
-                Map.entry(AgentHandler.Kind.FLUSH, flush(AGENT, 41)),
-                Map.entry(AgentHandler.Kind.RETRY, retry(AGENT, ENTRY)));
+                Map.entry(AgentHandler.Kind.FLUSH, flush(AGENT, 41)));
     }
 
     /** An inventory that remembers what it was asked and answers from a fixed instance. */
@@ -360,11 +319,6 @@ final class AgentCommandTest {
         public Outcome flush(String agentIdentifier, long expectation) {
             return held("flush", new Flushed(41));
         }
-
-        @Override
-        public Outcome retry(String agentIdentifier, String entryIdentifier) {
-            return held("retry", new Resubmitted(Resubmission.TAKEN));
-        }
     }
 
     private static CommandHandler.Answer run(AgentHandler.Kind kind,
@@ -387,13 +341,6 @@ final class AgentCommandTest {
         final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
         members.put(AgentCommands.AGENT_IDENTIFIER, new DocumentValue.Text(agentIdentifier));
         members.put(AgentCommands.EXPECTED_ENTRY_COUNT, new DocumentValue.Whole(expected));
-        return new DocumentValue.Mapping(members);
-    }
-
-    private static DocumentValue.Mapping retry(String agentIdentifier, String entryIdentifier) {
-        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
-        members.put(AgentCommands.AGENT_IDENTIFIER, new DocumentValue.Text(agentIdentifier));
-        members.put(AgentCommands.ENTRY_IDENTIFIER, new DocumentValue.Text(entryIdentifier));
         return new DocumentValue.Mapping(members);
     }
 

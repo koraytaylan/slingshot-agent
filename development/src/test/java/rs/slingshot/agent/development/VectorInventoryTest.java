@@ -27,7 +27,7 @@ final class VectorInventoryTest {
             REPOSITORY.resolve("development/src/test/resources/fixtures/vector-inventory");
 
     /** How many document kinds this build declares: twelve protocol documents and fourteen commands. */
-    private static final int SEVENTYSIX_KINDS = 82;
+    private static final int SEVENTYSIX_KINDS = 77;
 
     @Test
     @DisplayName("every document kind has a vector this build accepts and one it refuses")

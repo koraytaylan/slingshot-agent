@@ -10,7 +10,7 @@ import rs.slingshot.agent.command.platform.BundleInventory;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * What the three framework commands answer.
+ * What the two framework commands answer.
  *
  * <p>Nothing here carries a configuration value, a service property, or anything else a bundle
  * holds. What a bundle is called, which version it is, and what state it is in are facts about the
@@ -49,9 +49,6 @@ public final class FrameworkResults {
     /** The member the configuration a component takes is carried in, where it takes one. */
     public static final String SERVICE_PERSISTENT_IDENTIFIER = "service_persistent_identifier";
 
-    /** The member the state a bundle ended up in is carried in. */
-    public static final String OBSERVED_STATE = "observed_state";
-
     /** Every member a bundle listing has. */
     public static final List<String> BUNDLE_MEMBERS = List.of(BUNDLE_IDENTIFIER, MATCHES,
             NEXT_CONTINUATION_TOKEN, STATE, SYMBOLIC_NAME, VERSION);
@@ -59,9 +56,6 @@ public final class FrameworkResults {
     /** Every member a component listing has. */
     public static final List<String> COMPONENT_MEMBERS = List.of(BUNDLE_SYMBOLIC_NAME, MATCHES,
             NAME, NEXT_CONTINUATION_TOKEN, SERVICE_PERSISTENT_IDENTIFIER, STATE);
-
-    /** Every member a transition's answer has. */
-    public static final List<String> TRANSITION_MEMBERS = List.of(OBSERVED_STATE, SYMBOLIC_NAME);
 
     /** What the token member says when this is the last page. */
     public static final String NO_MORE_PAGES = "";
@@ -94,22 +88,6 @@ public final class FrameworkResults {
                 .sorted(java.util.Comparator.comparing(
                         BundleInventory.ComponentEntry::name))
                 .map(FrameworkResults::componentOf).toList(), nextContinuationToken);
-    }
-
-    /**
-     * The result one transition produces.
-     *
-     * @param symbolicName which bundle it was
-     * @param observed what state it is in now, which is reported rather than assumed
-     * @return the result document
-     */
-    public static DocumentValue.Mapping transitionOf(String symbolicName,
-                                                     rs.slingshot.agent.command.platform.BundleState
-                                                             observed) {
-        final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
-        result.put(SYMBOLIC_NAME, new DocumentValue.Text(symbolicName));
-        result.put(OBSERVED_STATE, new DocumentValue.Text(observed.spelling()));
-        return new DocumentValue.Mapping(result);
     }
 
     private static DocumentValue.Mapping paged(List<DocumentValue> matches,

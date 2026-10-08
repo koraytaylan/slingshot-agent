@@ -8,20 +8,14 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The kinds of platform control there are, and there is no seventh.
+ * The kinds of platform control there are, and there is no fifth.
  *
  * <p>Grouped by what a deployment either provides or does not, rather than one capability per
- * command. A deployment that keeps its configuration immutable keeps all of it immutable; there is
- * no environment where updating a configuration works and deleting one does not. Splitting them
- * would give an operator six places to get the same answer wrong.</p>
+ * command. A deployment that lets an account be made lets it be changed and removed too; there is
+ * no environment where creating a user works and deleting one does not. Splitting them would give
+ * an operator eight places to get the same answer wrong.</p>
  */
 public enum ControlCapability {
-
-    /** Changing or removing a platform configuration. */
-    CONFIGURATION_CHANGE("configuration_change"),
-
-    /** Starting or stopping a bundle. */
-    BUNDLE_LIFECYCLE("bundle_lifecycle"),
 
     /** Starting, ending, or suspending a workflow instance. */
     WORKFLOW_CONTROL("workflow_control"),

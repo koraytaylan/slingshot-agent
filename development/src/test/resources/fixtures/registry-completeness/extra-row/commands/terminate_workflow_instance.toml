@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["instance_access_denied", "instance_not_found", "instance_not_terminable", "platform_control_outcome_unknown", "platform_control_rejected"]
-argument_schema_digest = "6feda6ee8d8856f82c122f381c94a040d73bc19ab808f64df736794b55e26aac"
-result_schema_digest = "15d46982a2013dcf3855c52ebee9317c1b70ac9d3452b86726e458361dc5d556"
-contract_limits_digest = "c1d75299a29c1f4ab3495e5fff3f04bf483475573582d2976cfdf018fe46c255"
+argument_schema_digest = "529d38fb4893f7e78bc22ecfb4c957b880c8f34c45544cdd66aca5c120832f9b"
+result_schema_digest = "d875d5c6da0dc1801ddf7f8ad29834ab069bdecd95606820a9d9ebdae8445b8a"
+contract_limits_digest = "5b76d21b81c0379e9d9e30426c5aff7939321b9466af183753091af19939d222"
 staging_bytes = 0
 execution = "immediate"

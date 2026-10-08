@@ -10,7 +10,7 @@ import rs.slingshot.agent.command.platform.ReplicationInventory;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * What the five replication agent commands answer.
+ * What the four replication agent commands answer.
  *
  * <p>No transport address appears in any of them, and there is no member one could travel in. An
  * agent's transport is a URL, and a URL to a publish instance very frequently carries the
@@ -81,9 +81,6 @@ public final class AgentResults {
     /** The member the count of removed entries is carried in. */
     public static final String REMOVED_ENTRY_COUNT = "removed_entry_count";
 
-    /** The member saying whether the platform took an entry again. */
-    public static final String RESUBMITTED = "resubmitted";
-
     /** Every member an agent listing has. */
     public static final List<String> LISTING_MEMBERS = List.of(AGENT_IDENTIFIER, ENABLED, MATCHES,
             NEXT_CONTINUATION_TOKEN, QUEUE_BLOCKED, QUEUED_ENTRY_COUNT, REPOSITORY_PATH, TITLE,
@@ -102,10 +99,6 @@ public final class AgentResults {
     /** Every member a flush's answer has. */
     public static final List<String> FLUSH_MEMBERS =
             List.of(AGENT_IDENTIFIER, REMOVED_ENTRY_COUNT);
-
-    /** Every member a retry's answer has. */
-    public static final List<String> RETRY_MEMBERS =
-            List.of(AGENT_IDENTIFIER, ENTRY_IDENTIFIER, RESUBMITTED);
 
     /** What the token member says when this is the last page. */
     public static final String NO_MORE_PAGES = "";
@@ -181,24 +174,6 @@ public final class AgentResults {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(AGENT_IDENTIFIER, new DocumentValue.Text(agentIdentifier));
         result.put(REMOVED_ENTRY_COUNT, new DocumentValue.Whole(removedEntryCount));
-        return new DocumentValue.Mapping(result);
-    }
-
-    /**
-     * The result one retry produces.
-     *
-     * @param agentIdentifier which agent it was
-     * @param entryIdentifier which entry it was
-     * @param resubmission whether the platform took it
-     * @return the result document
-     */
-    public static DocumentValue.Mapping retriedOf(String agentIdentifier, String entryIdentifier,
-                                                  ReplicationInventory.Resubmission resubmission) {
-        final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
-        result.put(AGENT_IDENTIFIER, new DocumentValue.Text(agentIdentifier));
-        result.put(ENTRY_IDENTIFIER, new DocumentValue.Text(entryIdentifier));
-        result.put(RESUBMITTED, flag(resubmission == ReplicationInventory.Resubmission.TAKEN
-                ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
         return new DocumentValue.Mapping(result);
     }
 

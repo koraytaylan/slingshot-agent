@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.SequencedMap;
-import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.command.Budget;
@@ -26,15 +25,13 @@ import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.platform.BundleInventory;
 import rs.slingshot.agent.command.platform.BundleState;
 import rs.slingshot.agent.command.platform.ComponentState;
-import rs.slingshot.agent.command.platform.ControlCapability;
-import rs.slingshot.agent.command.platform.PlatformControl;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * The three commands about the framework this agent runs inside.
+ * The two commands about the framework this agent runs inside.
  *
  * <p>What is proved here is the gap between the two listings. A bundle can be active while the
  * component inside it never activated, and every answer this build gives has to keep those apart —
@@ -46,8 +43,6 @@ final class FrameworkCommandTest {
     private static final AgentContract CONTRACT = contract();
 
     private static final Path REPOSITORY = repositoryRoot();
-
-    private static final String IMMUTABLE = "aem-cloud-service";
 
     private static final String BUNDLE = "rs.slingshot.agent.core";
 
@@ -152,86 +147,13 @@ final class FrameworkCommandTest {
     }
 
     @Test
-    @DisplayName("a deployment whose bundle state comes from its image refuses the transition")
-    void animmutableDeploymentRefusesTheTransition() {
-        final Inventory inventory = new Inventory();
-        final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
-                new FrameworkHandler(CONTRACT, FrameworkHandler.Kind.TRANSITION, inventory,
-                        PlatformControl.of(IMMUTABLE, Set.of()))
-                        .run(transition(BUNDLE, "stop"), null, context()),
-                "a bundle was stopped on a deployment whose bundle state comes from its image");
-        assertEquals(PlatformControl.NOT_PERMITTED, refused.category());
-        assertEquals(List.of(), inventory.calls(),
-                "the framework was asked to stop a bundle on a deployment where that lasts until"
-                        + " the next container replaces it");
-        assertInstanceOf(CommandHandler.Produced.class,
-                new FrameworkHandler(CONTRACT, FrameworkHandler.Kind.BUNDLES, inventory,
-                        PlatformControl.of(IMMUTABLE, Set.of()))
-                        .run(new DocumentValue.Mapping(new LinkedHashMap<>()), null, context()),
-                "listing bundles was refused on a deployment that will not let one be stopped,"
-                        + " and a deployment that will not let a bundle be stopped still knows"
-                        + " perfectly well which ones are running");
-    }
-
-    @Test
-    @DisplayName("a transition reports where the bundle ended up rather than where it was asked to go")
-    void atransitionReportsWhereItEndedUp() {
-        final DocumentValue.Mapping moved = assertInstanceOf(CommandHandler.Produced.class,
-                run(FrameworkHandler.Kind.TRANSITION, transition(BUNDLE, "start")),
-                "the transition was refused").result();
-        assertEquals(new DocumentValue.Text("resolved"),
-                moved.member(FrameworkResults.OBSERVED_STATE).orElseThrow(),
-                "a bundle asked to start and left resolved was reported as started, and that is"
-                        + " precisely the case an operator needs told: one of its components would"
-                        + " not activate");
-        assertEquals(new DocumentValue.Text(BUNDLE),
-                moved.member(FrameworkResults.SYMBOLIC_NAME).orElseThrow());
-    }
-
-    @Test
-    @DisplayName("refreshing is named rather than something starting quietly does")
-    void refreshingIsItsOwnTransition() {
-        assertEquals(List.of("start", "stop", "refresh"),
-                BundleInventory.Transition.spellings(),
-                "the set of transitions changed, and refreshing restarts everything wired to a"
-                        + " bundle — on an author instance that can be most of them");
-        assertEquals(SetBundleStateCommand.Refusal.TRANSITION_REJECTED,
-                assertInstanceOf(SetBundleStateCommand.Refused.class,
-                        SetBundleStateCommand.of(transition(BUNDLE, "restart"), CONTRACT),
-                        "a transition nobody publishes was accepted").refusal());
-        assertEquals(SetBundleStateCommand.Refusal.MEMBER_ABSENT,
-                assertInstanceOf(SetBundleStateCommand.Refused.class,
-                        SetBundleStateCommand.of(new DocumentValue.Mapping(new LinkedHashMap<>()),
-                                CONTRACT), "an argument naming neither was accepted").refusal());
-        assertEquals(SetBundleStateCommand.Refusal.NOT_A_DOCUMENT,
-                assertInstanceOf(SetBundleStateCommand.Refused.class,
-                        SetBundleStateCommand.of(new DocumentValue.Text(BUNDLE), CONTRACT),
-                        "text was accepted as an argument").refusal());
-    }
-
-    @Test
-    @DisplayName("the framework refusing a transition is told apart from the deployment refusing it")
-    void thetwoRefusalsAreDistinct() {
-        final Inventory refusing = new Inventory();
-        refusing.refuse(FrameworkHandler.TRANSITION_REFUSED, "a dependency is missing");
-        assertEquals(FrameworkHandler.TRANSITION_REFUSED,
-                assertInstanceOf(CommandHandler.Failed.class,
-                        new FrameworkHandler(CONTRACT, FrameworkHandler.Kind.TRANSITION, refusing,
-                                permissive()).run(transition(BUNDLE, "start"), null, context()),
-                        "a transition the framework would not make was reported as done")
-                        .category(),
-                "the deployment refusing the control and the framework refusing this bundle were"
-                        + " reported the same way, and they send an operator to different places");
-    }
-
-    @Test
     @DisplayName("a listing past the caller's own budget is refused rather than shortened")
     void alistingPastTheBudgetIsRefused() {
         final CallerContext narrow = contextWith(new Budget(Budget.Kind.DISCOVERY, 1));
         assertEquals(FrameworkHandler.DISCOVERY_BUDGET_EXCEEDED,
                 assertInstanceOf(CommandHandler.Failed.class,
                         new FrameworkHandler(CONTRACT, FrameworkHandler.Kind.BUNDLES,
-                                new Inventory(), permissive())
+                                new Inventory())
                                 .run(new DocumentValue.Mapping(new LinkedHashMap<>()), null,
                                         narrow),
                         "a listing past the caller's budget answered a shortened list, which reads"
@@ -243,23 +165,33 @@ final class FrameworkCommandTest {
     }
 
     @Test
-    @DisplayName("all three rows are the client's own and every handler declares exactly them")
-    void allthreeRowsAreTheClientsOwn() {
+    @DisplayName("a framework that could not be asked is reported as that, in both listings")
+    void anunaskableFrameworkIsReportedAsThat() {
+        final Inventory refusing = new Inventory();
+        refusing.refuse(FrameworkHandler.BUNDLE_INVENTORY_FAILED, "the framework could not be asked");
+        for (final FrameworkHandler.Kind kind : FrameworkHandler.Kind.values()) {
+            assertEquals(FrameworkHandler.BUNDLE_INVENTORY_FAILED,
+                    assertInstanceOf(CommandHandler.Failed.class,
+                            new FrameworkHandler(CONTRACT, kind, refusing)
+                                    .run(new DocumentValue.Mapping(new LinkedHashMap<>()), null,
+                                            context()),
+                            kind + " answered a framework that could not be asked as an empty"
+                                    + " list").category());
+        }
+    }
+
+    @Test
+    @DisplayName("both rows are the client's own and every handler declares exactly them")
+    void bothRowsAreTheClientsOwn() {
         for (final var pair : List.of(
                 Map.entry(ListBundlesCommand.WIRE_NAME, FrameworkHandler.listingCategories(
                         FrameworkHandler.BUNDLE_INVENTORY_FAILED)),
                 Map.entry(ListComponentsCommand.WIRE_NAME, FrameworkHandler.listingCategories(
-                        FrameworkHandler.COMPONENT_INVENTORY_FAILED)),
-                Map.entry(SetBundleStateCommand.WIRE_NAME,
-                        FrameworkHandler.transitionCategories()))) {
+                        FrameworkHandler.COMPONENT_INVENTORY_FAILED)))) {
             assertEquals(row(pair.getKey()).failureCategories().stream().sorted().toList(),
                     pair.getValue().stream().sorted().toList(),
                     pair.getKey() + " and its handler disagree about what it can fail with");
         }
-        assertEquals(RegistryRow.OperationKey.REQUIRED,
-                row(SetBundleStateCommand.WIRE_NAME).operationKey(),
-                "stopping a bundle twice is not stopping it once, and this row no longer requires"
-                        + " a key");
         assertEquals(RegistryRow.OperationKey.REFUSED,
                 row(ListBundlesCommand.WIRE_NAME).operationKey());
     }
@@ -267,20 +199,14 @@ final class FrameworkCommandTest {
     /** An inventory that remembers what it was asked and answers from a fixed framework. */
     private static final class Inventory implements BundleInventory {
 
-        private final List<String> asked = new java.util.ArrayList<>();
         private final List<Refused> refusal = new java.util.ArrayList<>();
 
         void refuse(String category, String detail) {
             refusal.add(new Refused(category, detail));
         }
 
-        List<String> calls() {
-            return List.copyOf(asked);
-        }
-
         @Override
         public Outcome bundles(String prefix, List<BundleState> states) {
-            asked.add("bundles");
             return refusal.isEmpty()
                     ? new Bundles(List.of(
                             new BundleEntry(1, BUNDLE, "0.0.0", BundleState.ACTIVE),
@@ -291,37 +217,18 @@ final class FrameworkCommandTest {
 
         @Override
         public Outcome components(String prefix, List<ComponentState> states) {
-            asked.add("components");
             return refusal.isEmpty()
                     ? new Components(List.of(
                             new ComponentEntry("rs.slingshot.agent.Servlet", BUNDLE,
                                     TAKES_NO_SERVICE, ComponentState.UNSATISFIED)))
                     : refusal.getFirst();
         }
-
-        @Override
-        public Outcome transition(String symbolicName, Transition transition) {
-            asked.add("transition");
-            return refusal.isEmpty()
-                    ? new Transitioned(BundleState.RESOLVED) : refusal.getFirst();
-        }
     }
 
     private static CommandHandler.Answer run(FrameworkHandler.Kind kind,
                                              DocumentValue.Mapping arguments) {
-        return new FrameworkHandler(CONTRACT, kind, new Inventory(), permissive())
+        return new FrameworkHandler(CONTRACT, kind, new Inventory())
                 .run(arguments, null, context());
-    }
-
-    private static PlatformControl permissive() {
-        return PlatformControl.of("aem-6-5-lts", Set.of(ControlCapability.values()));
-    }
-
-    private static DocumentValue.Mapping transition(String symbolicName, String transition) {
-        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
-        members.put(SetBundleStateCommand.SYMBOLIC_NAME, new DocumentValue.Text(symbolicName));
-        members.put(SetBundleStateCommand.TRANSITION, new DocumentValue.Text(transition));
-        return new DocumentValue.Mapping(members);
     }
 
     private static CallerContext context() {

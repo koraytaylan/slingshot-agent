@@ -12,11 +12,10 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * Which thing to move, where to, and whether the links that point at it come too.
  *
- * <p>Read once for the two commands that move something, because moving a page and moving an asset
- * are the same question asked about different things: the same three members, the same bounds, and
- * the same refusal for a destination inside the source. Two readers would be two chances for that
- * last one — the mistake with the worst aftermath — to come to mean something slightly different.
- * </p>
+ * <p>Read here rather than in the page move itself, because the three members, their bounds, and
+ * the refusal for a destination inside the source are the question any move asks, and the last one
+ * — the mistake with the worst aftermath — is the one that must never come to mean something
+ * slightly different.</p>
  *
  * <p>Moving is where links break. Whether they are followed is the caller's to say and has no
  * default, because both answers are right somewhere: something moving inside a site wants its links

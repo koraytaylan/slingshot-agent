@@ -32,7 +32,7 @@ final class ControlCapabilityCoverageTest {
                 ControlCapabilityCoverage.Sources.of(REPOSITORY)).render());
         assertTrue(ControlCapabilityCoverage.declaredCapabilities(
                         REPOSITORY.resolve(ControlCapabilityCoverage.CAPABILITY_SOURCE)).size()
-                        >= 6,
+                        >= 4,
                 "the closed set of controls lost members, and this check reads it from the source"
                         + " rather than restating it precisely so that cannot happen quietly");
     }
@@ -42,10 +42,10 @@ final class ControlCapabilityCoverageTest {
     void thecontrolsComeFromTheSource() {
         final List<String> declared = ControlCapabilityCoverage.declaredCapabilities(
                 REPOSITORY.resolve(ControlCapabilityCoverage.CAPABILITY_SOURCE));
-        assertTrue(declared.contains("configuration_change")
-                        && declared.contains("bundle_lifecycle"),
-                "the two controls a Cloud Service environment does not provide are no longer in the"
-                        + " set, and those are the whole reason this boundary exists: " + declared);
+        assertTrue(declared.contains("replication_control")
+                        && declared.contains("principal_administration"),
+                "the controls the replication and principal commands pass through are no longer in"
+                        + " the set, and this check reads them from the enumeration: " + declared);
         assertEquals(List.of(), ControlCapabilityCoverage.declaredCapabilities(
                         FIXTURES.resolve("nothing.java")),
                 "a source that is not there was read as declaring controls");

@@ -36,7 +36,6 @@ import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -55,10 +54,6 @@ final class LateReferenceConstraintTest {
     private static final String UNRELATED = "/content/synthetic-late-constraint-unrelated";
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
-    private enum Target {
-        PAGE, ASSET
-    }
-
     private enum Kind {
         STRING(javax.jcr.PropertyType.STRING), PATH(javax.jcr.PropertyType.PATH),
         URI(javax.jcr.PropertyType.URI);
@@ -70,14 +65,14 @@ final class LateReferenceConstraintTest {
         }
     }
 
-    private record Case(Target target, boolean mixin, boolean multiple, Kind kind) {
+    private record Case(boolean mixin, boolean multiple, Kind kind) {
     }
 
     private static Stream<Case> cases() {
-        return Stream.of(Target.values()).flatMap(target -> Stream.of(false, true)
+        return Stream.of(false, true)
                 .flatMap(mixin -> Stream.of(false, true)
                         .flatMap(multiple -> Stream.of(Kind.values())
-                                .map(kind -> new Case(target, mixin, multiple, kind)))));
+                                .map(kind -> new Case(mixin, multiple, kind))));
     }
 
 
@@ -85,7 +80,7 @@ final class LateReferenceConstraintTest {
     @MethodSource("cases")
     void newlyVisibleDeniedReplacementRefusesBeforeAssignmentAndCommit(Case fixture)
             throws RepositoryException, LoginException, ReflectiveOperationException {
-        plant(fixture.target());
+        plant();
         prepareDefinition(fixture, false);
         try (ResourceResolver writerOwner = sling.resourceResolver().clone(Map.of())) {
             final Session writer = nativeSession(writerOwner);
@@ -94,7 +89,7 @@ final class LateReferenceConstraintTest {
                 assertNotSame(writer, caller.nativeSession);
                 assertFalse(caller.nativeSession.hasPendingChanges());
                 final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
-                        move(fixture.target(), caller, true));
+                        move(caller, true));
                 assertEquals(MovePageHandler.COMMIT_FAILED, refused.category());
                 assertEquals(1, caller.moves.get());
                 assertEquals(1, caller.foreignCommits.get());
@@ -109,7 +104,7 @@ final class LateReferenceConstraintTest {
     @MethodSource("cases")
     void newlyVisibleAllowedReplacementPreservesOtherValuesAndNativeKind(Case fixture)
             throws RepositoryException, LoginException, ReflectiveOperationException {
-        plant(fixture.target());
+        plant();
         prepareDefinition(fixture, true);
         try (ResourceResolver writerOwner = sling.resourceResolver().clone(Map.of())) {
             final Session writer = nativeSession(writerOwner);
@@ -117,7 +112,7 @@ final class LateReferenceConstraintTest {
                     writer, fixture)) {
                 assertNotSame(writer, caller.nativeSession);
                 final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
-                        move(fixture.target(), caller, true));
+                        move(caller, true));
                 assertEquals(new DocumentValue.Whole(fixture.multiple() ? 3 : 2),
                         produced.result().member("adjusted_reference_count").orElseThrow());
                 assertEquals(1, caller.moves.get());
@@ -200,9 +195,9 @@ final class LateReferenceConstraintTest {
         return session;
     }
 
-    private void plant(Target target) throws RepositoryException {
-        final String prefix = target == Target.PAGE ? "cq" : "dam";
-        final String name = target == Target.PAGE ? "cq:Page" : "dam:Asset";
+    private void plant() throws RepositoryException {
+        final String prefix = "cq";
+        final String name = "cq:Page";
         final var namespaces = session().getWorkspace().getNamespaceRegistry();
         if (!List.of(namespaces.getPrefixes()).contains(prefix)) {
             namespaces.registerNamespace(prefix, "https://synthetic.invalid/" + prefix);
@@ -223,14 +218,13 @@ final class LateReferenceConstraintTest {
         return Objects.requireNonNull(sling.resourceResolver().adaptTo(Session.class));
     }
 
-    private static CommandHandler.Answer move(Target target, ResourceResolver caller, boolean adjust) {
+    private static CommandHandler.Answer move(ResourceResolver caller, boolean adjust) {
         final var members = new LinkedHashMap<String, DocumentValue>();
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
         members.put(MoveRequest.ADJUST_REFERENCES, new DocumentValue.Flag(adjust
                 ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
-        final CommandHandler handler = target == Target.PAGE ? new MovePageHandler(CONTRACT)
-                : new AssetMutationHandler(CONTRACT, AssetMutationHandler.Kind.MOVE);
+        final CommandHandler handler = new MovePageHandler(CONTRACT);
         final var operation = assertInstanceOf(AgentOperationIdentifier.Held.class,
                 AgentOperationIdentifier.of(
                         "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8",

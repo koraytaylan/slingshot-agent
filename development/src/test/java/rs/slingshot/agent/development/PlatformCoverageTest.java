@@ -32,11 +32,11 @@ final class PlatformCoverageTest {
                 .render());
         final List<String> controls = PlatformCoverage.controlsIn(
                 REPOSITORY.resolve(PlatformCoverage.REGISTRY_DIRECTORY));
-        assertTrue(controls.size() >= 10,
+        assertTrue(controls.size() >= 6,
                 "the registry declares fewer platform controls than this plan built, so this check"
                         + " is passing over an empty set rather than proving one: " + controls);
         assertTrue(controls.contains("cancel_sling_job")
-                        && controls.contains("update_open_service_gateway_initiative_configuration"),
+                        && controls.contains("flush_replication_queue"),
                 "a command this plan built as a platform control no longer declares itself one");
     }
 

@@ -5,14 +5,10 @@ package rs.slingshot.agent.aem.framework;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Supplier;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
-import org.osgi.framework.BundleException;
-import org.osgi.framework.wiring.FrameworkWiring;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -27,28 +23,16 @@ import rs.slingshot.agent.command.platform.ComponentState;
  * The framework's own bundles and the component runtime's own components.
  *
  * <p>Read from the framework at the moment of asking, and never held: a bundle listing is the
- * framework's answer now. A transition reaches here only after the deployment's control gate has
- * permitted it, and its answer is the state the framework reports afterwards rather than the state
- * that was asked for.</p>
+ * framework's answer now.</p>
  */
 @Component(service = BundleInventory.class)
 public final class DefaultBundleInventory implements BundleInventory {
-
-    private static final String NOT_FOUND = "bundle_not_found";
-    private static final String TRANSITION_REFUSED = "bundle_transition_refused";
-
-    /** The framework's own number for itself, which no command stops or refreshes. */
-    private static final long SYSTEM_BUNDLE = 0;
 
     /** The configuration policy under which a component takes no configuration at all. */
     private static final String IGNORED_CONFIGURATION = "ignore";
 
     /** Reads every bundle the framework holds, afresh on each call. */
     private final Supplier<Bundle[]> installed;
-    /** The bundle answering, which no command stops or refreshes. */
-    private final long answering;
-    /** Reaches the framework's wiring, through which a refresh is asked for. */
-    private final Supplier<FrameworkWiring> wiring;
     private final ServiceComponentRuntime components;
 
     /**
@@ -61,8 +45,6 @@ public final class DefaultBundleInventory implements BundleInventory {
     public DefaultBundleInventory(BundleContext context,
                                   @Reference ServiceComponentRuntime components) {
         this.installed = context::getBundles;
-        this.answering = context.getBundle().getBundleId();
-        this.wiring = () -> context.getBundle(SYSTEM_BUNDLE).adapt(FrameworkWiring.class);
         this.components = components;
     }
 
@@ -92,33 +74,6 @@ public final class DefaultBundleInventory implements BundleInventory {
             }
         }
         return new Components(found);
-    }
-
-    @Override
-    public Outcome transition(String symbolicName, Transition transition) {
-        final Optional<Bundle> named = Arrays.stream(installed.get())
-                .filter(bundle -> symbolicName.equals(bundle.getSymbolicName()))
-                .max(Comparator.comparing(Bundle::getVersion));
-        if (named.isEmpty()) {
-            return new Refused(NOT_FOUND, symbolicName + " names no bundle the framework holds");
-        }
-        final Bundle bundle = named.get();
-        if (bundle.getBundleId() == SYSTEM_BUNDLE || bundle.getBundleId() == answering) {
-            return new Refused(TRANSITION_REFUSED, symbolicName + " is the framework itself or the"
-                    + " bundle answering this command, and neither is stopped or refreshed from"
-                    + " inside: doing so ends the request that asked");
-        }
-        try {
-            switch (transition) {
-                case START -> bundle.start();
-                case STOP -> bundle.stop();
-                default -> wiring.get().refreshBundles(List.of(bundle));
-            }
-        } catch (final BundleException | IllegalStateException | SecurityException refused) {
-            return new Refused(TRANSITION_REFUSED, "the framework refused to " + transition.spelling()
-                    + " " + symbolicName + ": " + refused.getMessage());
-        }
-        return new Transitioned(stateOf(bundle.getState()));
     }
 
     private static String serviceOf(ComponentDescriptionDTO description) {

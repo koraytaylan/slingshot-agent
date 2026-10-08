@@ -185,7 +185,7 @@ final class CommandRefusalDocumentsTest {
             case "update_page", "delete_page" -> List.of("page_path");
             case "update_component", "delete_component", "reorder_component" ->
                     List.of("component_path");
-            case "move_asset", "move_page" -> List.of("source_path", "destination_path");
+            case "move_page" -> List.of("source_path", "destination_path");
             case "list_group_members" -> List.of("group_identifier");
             case "add_group_member", "remove_group_member" ->
                     List.of("group_identifier", "member_identifier");
@@ -193,21 +193,14 @@ final class CommandRefusalDocumentsTest {
             case "inspect_replication_agent", "inspect_replication_queue" ->
                     List.of("agent_identifier");
             case "flush_replication_queue" -> List.of("agent_identifier");
-            case "retry_replication_queue_entry" ->
-                    List.of("agent_identifier", "entry_identifier");
             case "inspect_sling_job", "cancel_sling_job" -> List.of("job_identifier");
             case "inspect_workflow_instance", "set_workflow_instance_suspension" ->
                     List.of("instance_identifier");
             case "terminate_workflow_instance" -> List.of("instance_identifier");
             case "start_workflow" -> List.of("model_identifier");
-            case "set_open_service_gateway_initiative_bundle_state" -> List.of("symbolic_name");
             case "delete_authorizable", "set_user_disabled", "update_user_profile" ->
                     List.of("authorizable_identifier");
             case "create_group", "create_user" -> List.of("authorizable_identifier");
-            case "update_open_service_gateway_initiative_configuration" ->
-                    List.of("persistent_identifier");
-            case "delete_open_service_gateway_initiative_configuration" ->
-                    List.of("persistent_identifier");
             case "create_asset", "create_asset_folder", "create_content_fragment" ->
                     List.of("target_path");
             case "create_experience_fragment", "create_page" -> List.of("target_path");

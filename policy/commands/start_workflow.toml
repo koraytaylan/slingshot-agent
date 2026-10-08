@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["metadata_rejected", "model_invalid", "model_not_found", "payload_access_denied", "payload_not_found", "platform_control_outcome_unknown", "platform_control_rejected"]
-argument_schema_digest = "3726a5e9a3e4df52a90a26a680211ba5974a8530e1dc58a73d31c7861ed5b35d"
-result_schema_digest = "7436bc261a0f3e90c5d0b04060592a051dcc4add4c93577930478feea18b9772"
-contract_limits_digest = "fe98b915cb84f787a5c54f8fab2e1408e108524e2765e96c9877cd236451da78"
+argument_schema_digest = "7f10b7dfdc633db3831e794d2b902a3e9c316a8ae9777ca2b2fc7b2c99b18666"
+result_schema_digest = "d404250ca2296e2052d8e5c01b1b8eb6e41973838ffd196aebafb7e5d5424da0"
+contract_limits_digest = "66be041fb0623ea682a53b61d20e19c458e25d2a2df209c9ca9edcc2a405278e"
 staging_bytes = 0
 execution = "immediate"

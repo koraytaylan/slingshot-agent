@@ -33,15 +33,14 @@ import org.apache.sling.api.wrappers.ResourceResolverWrapper;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -60,33 +59,29 @@ final class NativeReferenceStateTest {
     private static final String REFERENCE = "/content/synthetic-state-reference/item";
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
-    private enum Target {
-        PAGE, ASSET
-    }
-
     private enum State {
         CHECKED_IN, LOCKED
     }
 
-    private record Case(Target target, State state, boolean inherited) {
+    private record Case(State state, boolean inherited) {
     }
 
     private static Stream<Case> refusedCases() {
-        return Stream.of(Target.values()).flatMap(target -> Stream.of(State.values())
+        return Stream.of(State.values())
                 .flatMap(state -> Stream.of(false, true)
-                        .map(inherited -> new Case(target, state, inherited))));
+                        .map(inherited -> new Case(state, inherited)));
     }
 
     private static Stream<Case> directCases() {
-        return Stream.of(Target.values()).flatMap(target -> Stream.of(State.values())
-                .map(state -> new Case(target, state, false)));
+        return Stream.of(State.values())
+                .map(state -> new Case(state, false));
     }
 
     @ParameterizedTest
     @MethodSource("refusedCases")
     void unavailableNativeStateRefusesBeforeMovementAndEarlierAssignments(Case fixture)
             throws RepositoryException {
-        plant(fixture.target());
+        plant();
         sling.create().resource(REFERENCE, Map.of("link", SOURCE));
         session().save();
         final Node referenceNode = session().getNode(REFERENCE);
@@ -107,7 +102,7 @@ final class NativeReferenceStateTest {
                     assertFalse(reference.getSession().getWorkspace().getLockManager()
                             .getLock(REFERENCE).isLockOwningSession());
                 }
-                refuse(fixture.target(), caller);
+                refuse(caller);
             }
         }, this::persistedUntouched);
     }
@@ -116,7 +111,7 @@ final class NativeReferenceStateTest {
     @MethodSource("directCases")
     void callerWritableNativeStateStillMovesAndCommitsOnce(Case fixture)
             throws RepositoryException, LoginException {
-        plant(fixture.target());
+        plant();
         sling.create().resource(REFERENCE, Map.of("link", SOURCE));
         session().save();
         final Node node = session().getNode(REFERENCE);
@@ -131,7 +126,7 @@ final class NativeReferenceStateTest {
                 assertTrue(caller.nativeSession.getWorkspace().getLockManager()
                         .getLock(REFERENCE).isLockOwningSession());
             }
-            accept(fixture.target(), caller, true, 4);
+            accept(caller, true, 4);
             assertArrayEquals(new String[]{DESTINATION, DESTINATION}, required(caller, EARLIER)
                     .getValueMap().get("links", String[].class));
         }
@@ -146,12 +141,12 @@ final class NativeReferenceStateTest {
     @MethodSource("directCases")
     void explicitlyLeavingReferencesKeepsUnavailableStateOutsideTheMove(Case fixture)
             throws RepositoryException, LoginException {
-        plant(fixture.target());
+        plant();
         sling.create().resource(REFERENCE, Map.of("link", SOURCE));
         session().save();
         constrain(session().getNode(REFERENCE), fixture.state());
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver().clone(Map.of()))) {
-            accept(fixture.target(), caller, false, 0);
+            accept(caller, false, 0);
         }
         session().refresh(false);
         assertFalse(session().nodeExists(SOURCE));
@@ -173,11 +168,10 @@ final class NativeReferenceStateTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void anIgnorePropertyOnCheckedInContentStillMovesAndCommitsOnce(Target target)
+    @Test
+    void anIgnorePropertyOnCheckedInContentStillMovesAndCommitsOnce()
             throws RepositoryException, LoginException, ReflectiveOperationException {
-        plant(target);
+        plant();
         final var manager = session().getWorkspace().getNodeTypeManager();
         final NodeTypeTemplate type = manager.createNodeTypeTemplate();
         type.setName("syntheticIgnoredReference");
@@ -202,7 +196,7 @@ final class NativeReferenceStateTest {
             assertFalse(reference.isCheckedOut());
             assertEquals(javax.jcr.version.OnParentVersionAction.IGNORE,
                     reference.getProperty("link").getDefinition().getOnParentVersion());
-            accept(target, caller, true, 4);
+            accept(caller, true, 4);
         }
         session().refresh(false);
         assertFalse(session().nodeExists(SOURCE));
@@ -210,8 +204,8 @@ final class NativeReferenceStateTest {
         assertEquals(DESTINATION, session().getNode(REFERENCE).getProperty("link").getString());
     }
 
-    private void refuse(Target target, FixtureCaller caller) throws RepositoryException {
-        final CommandHandler.Answer answer = assertDoesNotThrow(() -> move(target, caller, true),
+    private void refuse(FixtureCaller caller) throws RepositoryException {
+        final CommandHandler.Answer answer = assertDoesNotThrow(() -> move(caller, true),
                 "a known native reference refusal escaped the handler");
         final CommandHandler.Failed failure = assertInstanceOf(CommandHandler.Failed.class, answer);
         assertEquals(MovePageHandler.COMMIT_FAILED, failure.category());
@@ -223,8 +217,8 @@ final class NativeReferenceStateTest {
         assertEquals(SOURCE, caller.nativeSession.getNode(EARLIER).getProperty("link").getString());
     }
 
-    private static void accept(Target target, FixtureCaller caller, boolean adjust, long count) {
-        final CommandHandler.Answer answer = move(target, caller, adjust);
+    private static void accept(FixtureCaller caller, boolean adjust, long count) {
+        final CommandHandler.Answer answer = move(caller, adjust);
         final CommandHandler.Produced result = assertInstanceOf(CommandHandler.Produced.class,
                 answer, "the native control answered " + answer);
         assertEquals(new DocumentValue.Whole(count), result.result()
@@ -241,9 +235,9 @@ final class NativeReferenceStateTest {
                 () -> assertEquals(SOURCE, session().getNode(REFERENCE).getProperty("link").getString()));
     }
 
-    private void plant(Target target) throws RepositoryException {
-        final String prefix = target == Target.PAGE ? "cq" : "dam";
-        final String name = target == Target.PAGE ? "cq:Page" : "dam:Asset";
+    private void plant() throws RepositoryException {
+        final String prefix = "cq";
+        final String name = "cq:Page";
         final var namespaces = session().getWorkspace().getNamespaceRegistry();
         if (!List.of(namespaces.getPrefixes()).contains(prefix)) {
             namespaces.registerNamespace(prefix, "https://synthetic.invalid/" + prefix);
@@ -268,14 +262,13 @@ final class NativeReferenceStateTest {
         return Objects.requireNonNull(caller.getResource(path), "the native synthetic fixture resource");
     }
 
-    private static CommandHandler.Answer move(Target target, ResourceResolver caller, boolean adjust) {
+    private static CommandHandler.Answer move(ResourceResolver caller, boolean adjust) {
         final var members = new LinkedHashMap<String, DocumentValue>();
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
         members.put(MoveRequest.ADJUST_REFERENCES, new DocumentValue.Flag(adjust
                 ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
-        final CommandHandler handler = target == Target.PAGE ? new MovePageHandler(CONTRACT)
-                : new AssetMutationHandler(CONTRACT, AssetMutationHandler.Kind.MOVE);
+        final CommandHandler handler = new MovePageHandler(CONTRACT);
         final var operation = assertInstanceOf(AgentOperationIdentifier.Held.class,
                 AgentOperationIdentifier.of(
                         "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8",

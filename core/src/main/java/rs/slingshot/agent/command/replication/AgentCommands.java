@@ -14,9 +14,9 @@ import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * What the five replication agent commands take, and what they report under.
+ * What the four replication agent commands take, and what they report under.
  *
- * <p>An agent identifier is the same identifier in all five, so it is read once. The one command
+ * <p>An agent identifier is the same identifier in all four, so it is read once. The one command
  * with a member of its own is the flush, and that member is the whole reason it is safe to
  * offer.</p>
  */
@@ -37,14 +37,8 @@ public final class AgentCommands {
     /** The wire name of the command that empties one. */
     public static final String FLUSH_WIRE_NAME = "flush_replication_queue";
 
-    /** The wire name of the command that offers one stuck entry again. */
-    public static final String RETRY_WIRE_NAME = "retry_replication_queue_entry";
-
     /** The member an agent's identifier is carried in. */
     public static final String AGENT_IDENTIFIER = "agent_identifier";
-
-    /** The member an entry's identifier is carried in. */
-    public static final String ENTRY_IDENTIFIER = "entry_identifier";
 
     /** The member the count a caller believes is in a queue is carried in. */
     public static final String EXPECTED_ENTRY_COUNT = "expected_entry_count";
@@ -63,9 +57,6 @@ public final class AgentCommands {
     public static final List<String> FLUSH_MEMBERS =
             List.of(AGENT_IDENTIFIER, EXPECTED_ENTRY_COUNT);
 
-    /** Every member the retry takes. */
-    public static final List<String> RETRY_MEMBERS = List.of(AGENT_IDENTIFIER, ENTRY_IDENTIFIER);
-
     /** The category an agent inventory this side could not ask is reported under. */
     public static final String AGENT_INVENTORY_FAILED = "agent_inventory_failed";
 
@@ -77,9 +68,6 @@ public final class AgentCommands {
 
     /** The category an agent the caller may not reach is refused under. */
     public static final String AGENT_ACCESS_DENIED = "agent_access_denied";
-
-    /** The category an entry nothing is called is refused under. */
-    public static final String ENTRY_NOT_FOUND = "entry_not_found";
 
     /** The category a queue holding something other than what was expected is refused under. */
     public static final String QUEUE_EXPECTATION_MISMATCH = "queue_expectation_mismatch";
@@ -102,8 +90,6 @@ public final class AgentCommands {
         NOT_A_DOCUMENT,
         /** A member this command needs is absent. */
         MEMBER_ABSENT,
-        /** The entry this command acts on is absent, which is its own refusal. */
-        ENTRY_ABSENT,
         /** A member nobody declared is present. */
         MEMBER_UNKNOWN,
         /** An identifier is empty, or longer than one may be. */
@@ -167,27 +153,6 @@ public final class AgentCommands {
      * @param refusal why it does not
      */
     public record FlushRefused(Refused refusal) implements FlushOutcome {
-    }
-
-    /** What reading a retry argument produced. */
-    public sealed interface RetryOutcome permits Retry, RetryRefused {
-    }
-
-    /**
-     * A retry this command takes.
-     *
-     * @param agentIdentifier which agent
-     * @param entryIdentifier which entry
-     */
-    public record Retry(String agentIdentifier, String entryIdentifier) implements RetryOutcome {
-    }
-
-    /**
-     * One it does not.
-     *
-     * @param refusal why it does not
-     */
-    public record RetryRefused(Refused refusal) implements RetryOutcome {
     }
 
     /**
@@ -255,33 +220,6 @@ public final class AgentCommands {
                     + " the " + bound + " one holds. Leave it out to empty whatever is there."));
         }
         return new Flush(identifierIn(mapping), count.value());
-    }
-
-    /**
-     * Reads a retry's argument.
-     *
-     * @param arguments the argument document
-     * @param contract the authenticated contract, which bounds both identifiers
-     * @return the retry, or the one reason there is none
-     */
-    public static RetryOutcome retry(DocumentValue arguments, AgentContract contract) {
-        final Optional<Refused> shape = shapeOf(arguments, RETRY_MEMBERS, contract);
-        if (shape.isPresent()) {
-            return new RetryRefused(shape.orElseThrow());
-        }
-        final DocumentValue.Mapping mapping = held(arguments);
-        final long bound =
-                contract.value(ContractLimit.MAXIMUM_REPLICATION_QUEUE_ENTRY_IDENTIFIER_BYTES);
-        if (mapping.member(ENTRY_IDENTIFIER).isEmpty()) {
-            return new RetryRefused(new Refused(Refusal.ENTRY_ABSENT,
-                    ENTRY_IDENTIFIER + " is required; this command chooses no entry"));
-        }
-        final Optional<String> entry = identifier(mapping, ENTRY_IDENTIFIER, bound);
-        return entry.isEmpty()
-                ? new RetryRefused(new Refused(Refusal.ENTRY_ABSENT, ENTRY_IDENTIFIER + " is what"
-                        + " the platform calls one queue entry: not empty, and within the " + bound
-                        + " an identifier may be"))
-                : new Retry(identifierIn(mapping), entry.orElseThrow());
     }
 
     /**
@@ -385,15 +323,5 @@ public final class AgentCommands {
     public static List<String> flushCategories() {
         return List.of(AGENT_ACCESS_DENIED, AGENT_NOT_FOUND, QUEUE_EXPECTATION_MISMATCH,
                 CONTROL_REJECTED, SingleCommit.PLATFORM_CONTROL_OUTCOME_UNKNOWN);
-    }
-
-    /**
-     * Everything one retry can fail with.
-     *
-     * @return the categories
-     */
-    public static List<String> retryCategories() {
-        return List.of(AGENT_ACCESS_DENIED, AGENT_NOT_FOUND, ENTRY_NOT_FOUND, CONTROL_REJECTED,
-                SingleCommit.PLATFORM_CONTROL_OUTCOME_UNKNOWN);
     }
 }

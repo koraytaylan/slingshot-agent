@@ -14,8 +14,8 @@ operation_key = "refused"
 
 result_bytes = 1048576
 failure_categories = ["continuation_token_expired", "continuation_token_integrity_invalid", "continuation_token_malformed", "continuation_token_wrong_query", "continuation_token_wrong_target", "discovery_budget_exceeded", "root_access_denied", "root_not_found"]
-argument_schema_digest = "5c7c6ecab4188a54b9d94481af4ba8f8599d46b7b1fb3573fdf0e8d6b5365e08"
-result_schema_digest = "46c08648d8ac609eb32813a930036621c90110259b9bb5e3afb6b781ef8ca21a"
-contract_limits_digest = "fe98b915cb84f787a5c54f8fab2e1408e108524e2765e96c9877cd236451da78"
+argument_schema_digest = "e1eae8b06c217b8b17f550f17af699e1c183fac42c2a8975dfb2d61abfc580bc"
+result_schema_digest = "f13804dabee1699a3a44fee037ab0232525b9ccb463e3bc69086223c1344a0cf"
+contract_limits_digest = "66be041fb0623ea682a53b61d20e19c458e25d2a2df209c9ca9edcc2a405278e"
 staging_bytes = 0
 execution = "immediate"

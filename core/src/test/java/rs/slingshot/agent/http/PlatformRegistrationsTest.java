@@ -102,10 +102,10 @@ final class PlatformRegistrationsTest {
     /**
      * How many platform commands there are with every seam bound.
      *
-     * <p>Eight user and group commands, four job commands, one replication, six workflow, three
-     * bundle and component, five replication agent and queue, and four configuration commands.</p>
+     * <p>Eight user and group commands, four job commands, one replication, six workflow, two
+     * bundle and component, four replication agent and queue, and two configuration commands.</p>
      */
-    private static final int EVERY_PLATFORM_COMMAND = 31;
+    private static final int EVERY_PLATFORM_COMMAND = 27;
 
     private static <T> T seam(Class<T> type) {
         return type.cast(Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),

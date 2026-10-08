@@ -40,14 +40,13 @@ import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.json.DocumentValue;
 
-/** Native value constraints admit the complete replacement before a page or asset moves. */
+/** Native value constraints admit the complete replacement before a page moves. */
 @ExtendWith(SlingContextExtension.class)
 final class NativeReferenceConstraintTest {
 
@@ -60,10 +59,6 @@ final class NativeReferenceConstraintTest {
     private static final String UNRELATED = "/content/synthetic-constraint-unrelated";
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
-    private enum Target {
-        PAGE, ASSET
-    }
-
     private enum Kind {
         STRING(javax.jcr.PropertyType.STRING), PATH(javax.jcr.PropertyType.PATH),
         URI(javax.jcr.PropertyType.URI);
@@ -75,27 +70,27 @@ final class NativeReferenceConstraintTest {
         }
     }
 
-    private record Case(Target target, boolean mixin, boolean multiple, Kind kind) {
+    private record Case(boolean mixin, boolean multiple, Kind kind) {
     }
 
     private static Stream<Case> cases() {
-        return Stream.of(Target.values()).flatMap(target -> Stream.of(false, true)
+        return Stream.of(false, true)
                 .flatMap(mixin -> Stream.of(false, true)
                         .flatMap(multiple -> Stream.of(Kind.values())
-                                .map(kind -> new Case(target, mixin, multiple, kind)))));
+                                .map(kind -> new Case(mixin, multiple, kind))));
     }
 
     @ParameterizedTest
     @MethodSource("cases")
     void rejectedReplacementRefusesBeforeMovementAndEarlierAssignments(Case fixture)
             throws RepositoryException, ReflectiveOperationException {
-        plant(fixture.target());
+        plant();
         plantConstraint(fixture, false, true);
         assertAll(() -> {
             try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver().clone(Map.of()))) {
                 final Node node = nativeReference(caller, fixture);
                 assertFalse(allowsReplacement(node, fixture));
-                refuse(fixture.target(), caller);
+                refuse(caller);
             }
         }, this::persistedUntouched);
     }
@@ -104,11 +99,11 @@ final class NativeReferenceConstraintTest {
     @MethodSource("cases")
     void permittedReplacementMovesAndCommitsOncePreservingOtherArrayValues(Case fixture)
             throws RepositoryException, LoginException, ReflectiveOperationException {
-        plant(fixture.target());
+        plant();
         plantConstraint(fixture, true, true);
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver().clone(Map.of()))) {
             assertTrue(allowsReplacement(nativeReference(caller, fixture), fixture));
-            accept(fixture.target(), caller, true, fixture.multiple() ? 5 : 4);
+            accept(caller, true, fixture.multiple() ? 5 : 4);
         }
         persistedMoved(fixture, true, true);
     }
@@ -117,11 +112,11 @@ final class NativeReferenceConstraintTest {
     @MethodSource("cases")
     void explicitlyLeavingReferencesDoesNotApplyValueConstraintsToTheMove(Case fixture)
             throws RepositoryException, LoginException, ReflectiveOperationException {
-        plant(fixture.target());
+        plant();
         plantConstraint(fixture, false, true);
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver().clone(Map.of()))) {
             assertFalse(allowsReplacement(nativeReference(caller, fixture), fixture));
-            accept(fixture.target(), caller, false, 0);
+            accept(caller, false, 0);
         }
         persistedMoved(fixture, false, true);
     }
@@ -130,11 +125,11 @@ final class NativeReferenceConstraintTest {
     @MethodSource("cases")
     void nonmatchingConstrainedPropertyRemainsUntouchedWhileOtherReferencesMove(Case fixture)
             throws RepositoryException, LoginException, ReflectiveOperationException {
-        plant(fixture.target());
+        plant();
         plantConstraint(fixture, false, false);
         try (FixtureCaller caller = new FixtureCaller(sling.resourceResolver().clone(Map.of()))) {
             assertFalse(allowsReplacement(nativeReference(caller, fixture), fixture));
-            accept(fixture.target(), caller, true, 3);
+            accept(caller, true, 3);
         }
         persistedMoved(fixture, true, false);
     }
@@ -219,8 +214,8 @@ final class NativeReferenceConstraintTest {
         }
     }
 
-    private void refuse(Target target, FixtureCaller caller) throws RepositoryException {
-        final CommandHandler.Answer answer = assertDoesNotThrow(() -> move(target, caller, true),
+    private void refuse(FixtureCaller caller) throws RepositoryException {
+        final CommandHandler.Answer answer = assertDoesNotThrow(() -> move(caller, true),
                 "a known native reference refusal escaped the handler");
         final CommandHandler.Failed failure = assertInstanceOf(CommandHandler.Failed.class, answer);
         assertEquals(MovePageHandler.COMMIT_FAILED, failure.category());
@@ -232,8 +227,8 @@ final class NativeReferenceConstraintTest {
         assertEquals(SOURCE, caller.nativeSession.getNode(EARLIER).getProperty("link").getString());
     }
 
-    private static void accept(Target target, FixtureCaller caller, boolean adjust, long count) {
-        final CommandHandler.Answer answer = move(target, caller, adjust);
+    private static void accept(FixtureCaller caller, boolean adjust, long count) {
+        final CommandHandler.Answer answer = move(caller, adjust);
         final CommandHandler.Produced result = assertInstanceOf(CommandHandler.Produced.class,
                 answer, "the native control answered " + answer);
         assertEquals(new DocumentValue.Whole(count), result.result()
@@ -254,9 +249,9 @@ final class NativeReferenceConstraintTest {
                 });
     }
 
-    private void plant(Target target) throws RepositoryException {
-        final String prefix = target == Target.PAGE ? "cq" : "dam";
-        final String name = target == Target.PAGE ? "cq:Page" : "dam:Asset";
+    private void plant() throws RepositoryException {
+        final String prefix = "cq";
+        final String name = "cq:Page";
         final var namespaces = session().getWorkspace().getNamespaceRegistry();
         if (!List.of(namespaces.getPrefixes()).contains(prefix)) {
             namespaces.registerNamespace(prefix, "https://synthetic.invalid/" + prefix);
@@ -281,14 +276,13 @@ final class NativeReferenceConstraintTest {
         return Objects.requireNonNull(caller.getResource(path), "the native synthetic fixture resource");
     }
 
-    private static CommandHandler.Answer move(Target target, ResourceResolver caller, boolean adjust) {
+    private static CommandHandler.Answer move(ResourceResolver caller, boolean adjust) {
         final var members = new LinkedHashMap<String, DocumentValue>();
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
         members.put(MoveRequest.ADJUST_REFERENCES, new DocumentValue.Flag(adjust
                 ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
-        final CommandHandler handler = target == Target.PAGE ? new MovePageHandler(CONTRACT)
-                : new AssetMutationHandler(CONTRACT, AssetMutationHandler.Kind.MOVE);
+        final CommandHandler handler = new MovePageHandler(CONTRACT);
         final var operation = assertInstanceOf(AgentOperationIdentifier.Held.class,
                 AgentOperationIdentifier.of(
                         "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8",

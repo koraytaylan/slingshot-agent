@@ -6,9 +6,9 @@ package rs.slingshot.agent.command.asset;
 import java.util.List;
 
 /**
- * The categories the five asset commands report under.
+ * The categories the four asset commands report under.
  *
- * <p>Gathered here because the five share most of them and because each one's set is its registry
+ * <p>Gathered here because the four share most of them and because each one's set is its registry
  * row's, read back by that command's own suite. A category spelled one way in a handler and another
  * in a row is a caller told about a failure the other half has never heard of.</p>
  */
@@ -68,24 +68,6 @@ public final class AssetHandlers {
     /** The category a subtree larger than the contract allows is refused under. */
     public static final String DELETION_BUDGET_EXCEEDED = "deletion_budget_exceeded";
 
-    /** The category a move with more references than may be adjusted is refused under. */
-    public static final String ADJUSTMENT_BUDGET_EXCEEDED = "reference_adjustment_budget_exceeded";
-
-    /** The category a source nothing is at is refused under. */
-    public static final String SOURCE_NOT_FOUND = "source_not_found";
-
-    /** The category a source the caller may not move is refused under. */
-    public static final String SOURCE_ACCESS_DENIED = "source_access_denied";
-
-    /** The category a destination whose parent is not there is refused under. */
-    public static final String DESTINATION_PARENT_NOT_FOUND = "destination_parent_not_found";
-
-    /** The category a destination something is already at is refused under. */
-    public static final String DESTINATION_ALREADY_EXISTS = "destination_already_exists";
-
-    /** The category a destination inside the source is refused under. */
-    public static final String DESTINATION_INSIDE_SOURCE = "destination_inside_source";
-
     /** The category a commit the repository refused is reported under. */
     public static final String COMMIT_FAILED = "repository_commit_failed";
 
@@ -131,16 +113,5 @@ public final class AssetHandlers {
         return List.of(ASSET_NOT_FOUND, ASSET_ACCESS_DENIED, ASSET_INVALID, ASSET_IS_REFERENCED,
                 DELETION_BUDGET_EXCEEDED, COMMIT_FAILED,
                 rs.slingshot.agent.command.mutation.SingleCommit.OUTCOME_UNKNOWN);
-    }
-
-    /**
-     * Everything one move can fail with.
-     *
-     * @return the categories
-     */
-    public static List<String> moveCategories() {
-        return List.of(SOURCE_NOT_FOUND, SOURCE_ACCESS_DENIED, DESTINATION_PARENT_NOT_FOUND,
-                DESTINATION_ALREADY_EXISTS, DESTINATION_INSIDE_SOURCE, ADJUSTMENT_BUDGET_EXCEEDED,
-                COMMIT_FAILED, rs.slingshot.agent.command.mutation.SingleCommit.OUTCOME_UNKNOWN);
     }
 }

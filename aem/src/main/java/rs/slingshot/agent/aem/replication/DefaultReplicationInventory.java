@@ -17,20 +17,17 @@ import org.osgi.service.component.annotations.Reference;
 import rs.slingshot.agent.command.platform.ReplicationInventory;
 
 /**
- * The platform's own replication agents, answering the five agent and queue commands.
+ * The platform's own replication agents, answering the four agent and queue commands.
  *
  * <p>An agent's transport address, user and password are never read here, not even to decide
- * what kind of transport it is: the kind is read from what the agent says it does. A flush and a
- * retry reach here only after the deployment's control gate has permitted them.</p>
+ * what kind of transport it is: the kind is read from what the agent says it does. A flush reaches
+ * here only after the deployment's control gate has permitted it.</p>
  */
 @Component(service = ReplicationInventory.class)
 public final class DefaultReplicationInventory implements ReplicationInventory {
 
     /** What an identifier naming no agent is reported as. */
     private static final String AGENT_NOT_FOUND = "agent_not_found";
-
-    /** What an identifier naming no entry in the agent's queue is reported as. */
-    private static final String ENTRY_NOT_FOUND = "entry_not_found";
 
     /** What a flush whose caller believed a different count is reported as. */
     private static final String QUEUE_EXPECTATION_MISMATCH = "queue_expectation_mismatch";
@@ -43,9 +40,6 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
 
     /** The serialization a static agent writes with, which is how it says it is one. */
     private static final String STATIC_SERIALIZATION = "static";
-
-    /** The position of the entry a queue tries next, which is the only one a retry can move. */
-    private static final int HEAD = 0;
 
     private final AgentManager agents;
 
@@ -105,32 +99,6 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
                     + " does not let be emptied from inside; its own distribution console does");
         }
         return new Flushed(held);
-    }
-
-    @Override
-    public Outcome retry(String agentIdentifier, String entryIdentifier) {
-        final Optional<com.day.cq.replication.Agent> named = named(agentIdentifier);
-        if (named.isEmpty()) {
-            return unknown(agentIdentifier);
-        }
-        final ReplicationQueue queue = named.get().getQueue();
-        final Optional<ReplicationQueue.Entry> entry = entriesIn(queue).stream()
-                .filter(held -> entryIdentifier.equals(held.getId()))
-                .findFirst();
-        if (entry.isEmpty()) {
-            return new Refused(ENTRY_NOT_FOUND, entryIdentifier + " names no entry waiting in "
-                    + agentIdentifier + "'s queue");
-        }
-        if (entry.get().getQueuePosition() != HEAD) {
-            return new Resubmitted(Resubmission.DECLINED);
-        }
-        try {
-            queue.forceRetry();
-        } catch (final UnsupportedOperationException | IllegalStateException refused) {
-            return new Refused(CONTROL_REJECTED, agentIdentifier + "'s queue is one this platform"
-                    + " does not let be retried from inside; its own distribution console does");
-        }
-        return new Resubmitted(Resubmission.TAKEN);
     }
 
     private Optional<com.day.cq.replication.Agent> named(String agentIdentifier) {

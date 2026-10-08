@@ -40,9 +40,9 @@ import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * The five commands that change a digital asset library.
+ * The four commands that change a digital asset library.
  *
- * <p>What is proved together is what the five share: that a payload is checked whole before
+ * <p>What is proved together is what the four share: that a payload is checked whole before
  * anything is written, that a refusal leaves the library exactly as it was, and that nothing here
  * claims a rendition that does not exist.</p>
  */
@@ -224,30 +224,7 @@ final class AssetMutationTest {
     }
 
     @Test
-    @DisplayName("a move reports both addresses and repoints what pointed at the asset")
-    void amoveTakesItsReferencesWithIt() {
-        library();
-        sling.create().resource("/content/dam/other", Map.of(
-                ListChildPagesHandler.TYPE_PROPERTY, AssetHandlers.FOLDER_TYPE));
-        assertInstanceOf(CommandHandler.Produced.class,
-                create("hero.png", "image/png", "a tiny image"), "the asset was refused");
-        sling.create().resource("/content/site/article/jcr:content",
-                Map.of("fileReference", LIBRARY + "/hero.png"));
-        final DocumentValue.Mapping moved = assertInstanceOf(CommandHandler.Produced.class,
-                move(LIBRARY + "/hero.png", "/content/dam/other/hero.png", true),
-                "the move was refused").result();
-        assertEquals(new DocumentValue.Text("/content/dam/other/hero.png"),
-                moved.member(MoveAssetResult.DESTINATION_PATH).orElseThrow());
-        assertEquals(new DocumentValue.Whole(1),
-                moved.member(MoveAssetResult.ADJUSTED_REFERENCE_COUNT).orElseThrow(),
-                "the reference pointing at the asset was not counted");
-        assertEquals("/content/dam/other/hero.png",
-                stored("/content/site/article/jcr:content", "fileReference"),
-                "a reference counted as adjusted still points at the old address");
-    }
-
-    @Test
-    @DisplayName("each of the five refuses what is not there, and a commit refusal changes nothing")
+    @DisplayName("each of the four refuses what is not there, and a commit refusal changes nothing")
     void eachrefusesWhatIsNotThere() {
         assertEquals(AssetHandlers.PARENT_NOT_FOUND,
                 assertInstanceOf(CommandHandler.Failed.class, folder("campaign", ""),
@@ -260,10 +237,6 @@ final class AssetMutationTest {
                 assertInstanceOf(CommandHandler.Failed.class,
                         delete(LIBRARY + "/nothing", "ignore_references"),
                         "an asset that is not there was removed").category());
-        assertEquals(AssetHandlers.SOURCE_NOT_FOUND,
-                assertInstanceOf(CommandHandler.Failed.class,
-                        move(LIBRARY + "/nothing", "/content/dam/other/nothing", false),
-                        "an asset that is not there was moved").category());
         library();
         assertEquals(AssetHandlers.COMMIT_FAILED,
                 assertInstanceOf(CommandHandler.Failed.class,
@@ -293,32 +266,6 @@ final class AssetMutationTest {
     }
 
     @Test
-    @DisplayName("a move onto a taken address, or one whose parent is missing, is refused")
-    void amoveNeedsSomewhereToLand() {
-        library();
-        sling.create().resource("/content/dam/other", Map.of(
-                ListChildPagesHandler.TYPE_PROPERTY, AssetHandlers.FOLDER_TYPE));
-        assertInstanceOf(CommandHandler.Produced.class,
-                create("hero.png", "image/png", "a tiny image"), "the asset was refused");
-        sling.create().resource("/content/dam/other/hero.png", Map.of(
-                ListChildPagesHandler.TYPE_PROPERTY, AssetHandlers.ASSET_TYPE));
-        assertEquals(AssetHandlers.DESTINATION_ALREADY_EXISTS,
-                assertInstanceOf(CommandHandler.Failed.class,
-                        move(LIBRARY + "/hero.png", "/content/dam/other/hero.png", false),
-                        "an asset was moved onto one that was already there").category());
-        assertEquals(AssetHandlers.DESTINATION_PARENT_NOT_FOUND,
-                assertInstanceOf(CommandHandler.Failed.class,
-                        move(LIBRARY + "/hero.png", "/content/dam/nowhere/hero.png", false),
-                        "an asset was moved somewhere whose parent is not there").category());
-        assertEquals(AssetHandlers.COMMIT_FAILED,
-                assertInstanceOf(CommandHandler.Failed.class,
-                        move(LIBRARY + "/hero.png", "/content/dam/other/renamed.png", false),
-                        "a move that renames the asset was carried out").category(),
-                "renaming is a second operation this build does not make, and it is refused with"
-                        + " nothing changed rather than landing the asset one address away");
-    }
-
-    @Test
     @DisplayName("a metadata change refuses a property the repository will not let go of")
     void animmovablePropertyStopsAMetadataChange() {
         library();
@@ -339,16 +286,15 @@ final class AssetMutationTest {
     }
 
     @Test
-    @DisplayName("a deletion budget refuses with nothing removed, and an adjustment budget before the move")
-    void thetwoBudgetsRefuseBeforeAnythingHappens() {
+    @DisplayName("a deletion budget refuses with nothing removed")
+    void thedeletionBudgetRefusesBeforeAnythingHappens() {
         library();
         assertInstanceOf(CommandHandler.Produced.class,
                 create("hero.png", "image/png", "a tiny image"), "the asset was refused");
-        // The budgets are the contract's rather than the caller's, and both refuse before the
+        // The budget is the contract's rather than the caller's, and it refuses before the
         // change: a subtree counted afterwards is a subtree already gone.
-        assertTrue(CONTRACT.value(ContractLimit.MAXIMUM_DELETED_NODES) > 0
-                        && CONTRACT.value(ContractLimit.MAXIMUM_ADJUSTED_REFERENCES) > 0,
-                "the contract states no bound on how much one delete removes or one move adjusts");
+        assertTrue(CONTRACT.value(ContractLimit.MAXIMUM_DELETED_NODES) > 0,
+                "the contract states no bound on how much one delete removes");
         assertInstanceOf(CommandHandler.Produced.class,
                 delete(LIBRARY + "/hero.png", "ignore_references"),
                 "an asset well inside the deletion budget was refused");
@@ -369,13 +315,11 @@ final class AssetMutationTest {
     }
 
     @Test
-    @DisplayName("every one of the five reports a session that will not write as the commit failing")
+    @DisplayName("every one of the four reports a session that will not write as the commit failing")
     void asessionThatWillNotWriteIsTheCommitFailing() {
         library();
         assertInstanceOf(CommandHandler.Produced.class,
                 create("hero.png", "image/png", "a tiny image"), "the asset was refused");
-        sling.create().resource("/content/dam/other", Map.of(
-                ListChildPagesHandler.TYPE_PROPERTY, AssetHandlers.FOLDER_TYPE));
         final SequencedMap<String, DocumentValue> written = new LinkedHashMap<>();
         written.put("dc:title", single("A hero image"));
         for (final var attempt : List.of(
@@ -383,9 +327,7 @@ final class AssetMutationTest {
                 Map.entry(AssetMutationHandler.Kind.METADATA,
                         metadataArgument(LIBRARY + "/hero.png", written)),
                 Map.entry(AssetMutationHandler.Kind.REMOVAL,
-                        deleteArgument(LIBRARY + "/hero.png", "ignore_references")),
-                Map.entry(AssetMutationHandler.Kind.MOVE,
-                        moveArgument(LIBRARY + "/hero.png", "/content/dam/other/hero.png")))) {
+                        deleteArgument(LIBRARY + "/hero.png", "ignore_references")))) {
             final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
                     new AssetMutationHandler(CONTRACT, attempt.getKey()).run(attempt.getValue(),
                             ReadOnlyResolver.around(sling.resourceResolver()), context()),
@@ -411,15 +353,14 @@ final class AssetMutationTest {
     }
 
     @Test
-    @DisplayName("all five rows are the client's own and every handler declares exactly them")
-    void allfiveRowsAreTheClientsOwn() {
+    @DisplayName("all four rows are the client's own and every handler declares exactly them")
+    void allfourRowsAreTheClientsOwn() {
         for (final var pair : List.of(
                 Map.entry(CreateAssetFolderCommand.WIRE_NAME, AssetHandlers.folderCategories()),
                 Map.entry(CreateAssetCommand.WIRE_NAME, AssetHandlers.creationCategories()),
                 Map.entry(UpdateAssetMetadataCommand.WIRE_NAME,
                         AssetHandlers.metadataCategories()),
-                Map.entry(DeleteAssetCommand.WIRE_NAME, AssetHandlers.removalCategories()),
-                Map.entry(MoveAssetCommand.WIRE_NAME, AssetHandlers.moveCategories()))) {
+                Map.entry(DeleteAssetCommand.WIRE_NAME, AssetHandlers.removalCategories()))) {
             assertEquals(row(pair.getKey()).failureCategories().stream().sorted().toList(),
                     pair.getValue().stream().sorted().toList(),
                     pair.getKey() + " and its handler disagree about what it can fail with");
@@ -468,17 +409,6 @@ final class AssetMutationTest {
         return new DocumentValue.Mapping(members);
     }
 
-    private static DocumentValue.Mapping moveArgument(String source, String destination) {
-        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
-        members.put(rs.slingshot.agent.command.mutation.MoveRequest.SOURCE_PATH,
-                new DocumentValue.Text(source));
-        members.put(rs.slingshot.agent.command.mutation.MoveRequest.DESTINATION_PATH,
-                new DocumentValue.Text(destination));
-        members.put(rs.slingshot.agent.command.mutation.MoveRequest.ADJUST_REFERENCES,
-                new DocumentValue.Flag(DocumentValue.Truth.FALSE));
-        return new DocumentValue.Mapping(members);
-    }
-
     private CommandHandler.Answer folder(String name, String title) {
         return run(AssetMutationHandler.Kind.FOLDER, folderArgument(name, title));
     }
@@ -516,18 +446,6 @@ final class AssetMutationTest {
         members.put(rs.slingshot.agent.command.mutation.ReferencePolicy.ARGUMENT_MEMBER,
                 new DocumentValue.Text(policy));
         return run(AssetMutationHandler.Kind.REMOVAL, new DocumentValue.Mapping(members));
-    }
-
-    private CommandHandler.Answer move(String source, String destination, boolean adjust) {
-        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
-        members.put(rs.slingshot.agent.command.mutation.MoveRequest.SOURCE_PATH,
-                new DocumentValue.Text(source));
-        members.put(rs.slingshot.agent.command.mutation.MoveRequest.DESTINATION_PATH,
-                new DocumentValue.Text(destination));
-        members.put(rs.slingshot.agent.command.mutation.MoveRequest.ADJUST_REFERENCES,
-                new DocumentValue.Flag(adjust
-                        ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE));
-        return run(AssetMutationHandler.Kind.MOVE, new DocumentValue.Mapping(members));
     }
 
     private CommandHandler.Answer run(AssetMutationHandler.Kind kind,

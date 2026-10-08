@@ -3,10 +3,8 @@
 
 package rs.slingshot.agent.command.platform;
 
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
 import java.util.SequencedMap;
 import rs.slingshot.agent.json.DocumentValue;
 
@@ -41,13 +39,6 @@ public record ConfigurationValue(String type, Cardinality cardinality, List<Stri
     /** The member several values are carried in. */
     public static final String VALUES = "values";
 
-    /** Every member one value document has, and there is no fifth. */
-    public static final List<String> MEMBERS = List.of(CARDINALITY, TYPE, VALUE, VALUES);
-
-    /** The types a configuration property may have, which the client publishes as a closed set. */
-    public static final List<String> TYPES = List.of("string", "boolean", "character", "byte",
-            "short", "integer", "long", "float", "double");
-
     /** Whether a property holds one value or several, and if several, how they are held. */
     public enum Cardinality {
         /** One value. */
@@ -81,27 +72,6 @@ public record ConfigurationValue(String type, Cardinality cardinality, List<Stri
          */
         public boolean isSingle() {
             return this == SCALAR;
-        }
-
-        /**
-         * The cardinality one spelling names.
-         *
-         * @param spelled what was written
-         * @return the cardinality, or nothing where nothing is spelled that way
-         */
-        public static Optional<Cardinality> named(String spelled) {
-            return Arrays.stream(values())
-                    .filter(held -> held.spelling.equals(spelled))
-                    .findFirst();
-        }
-
-        /**
-         * Every cardinality, spelled as the wire spells it.
-         *
-         * @return the spellings, in declaration order
-         */
-        public static List<String> spellings() {
-            return Arrays.stream(values()).map(Cardinality::spelling).toList();
         }
     }
 

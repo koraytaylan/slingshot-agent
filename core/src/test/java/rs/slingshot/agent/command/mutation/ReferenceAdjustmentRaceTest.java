@@ -29,14 +29,12 @@ import org.apache.sling.api.wrappers.ResourceResolverWrapper;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.asset.AssetMutationHandler;
 import rs.slingshot.agent.command.page.MovePageHandler;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
@@ -56,22 +54,17 @@ final class ReferenceAdjustmentRaceTest {
     private static final String REFERENCE = "/content/synthetic-race-reference";
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
 
-    private enum Target {
-        PAGE, ASSET
-    }
-
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void anArrayAppearingAfterAdmissionCannotCommitMoreThanTheOriginalBound(Target target)
+    @Test
+    void anArrayAppearingAfterAdmissionCannotCommitMoreThanTheOriginalBound()
             throws RepositoryException, org.apache.sling.api.resource.LoginException {
-        plant(target);
+        plant();
         assertEquals(100000, BOUND);
         try (var writerOwner = sling.resourceResolver().clone(Map.of())) {
             final Session writer = nativeSession(writerOwner);
             assertAll(() -> {
                 try (var caller = new RaceCaller(sling.resourceResolver().clone(Map.of()),
                         writer, BOUND + 1)) {
-                    final var failure = assertInstanceOf(CommandHandler.Failed.class, move(target, caller));
+                    final var failure = assertInstanceOf(CommandHandler.Failed.class, move(caller));
                     assertEquals(MovePageHandler.ADJUSTMENT_BUDGET_EXCEEDED, failure.category());
                     assertEquals(1, caller.moves.get(), "the interleaving occurs at the native move");
                     assertEquals(1, caller.foreignCommits.get());
@@ -81,15 +74,14 @@ final class ReferenceAdjustmentRaceTest {
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(Target.class)
-    void anArrayAppearingAfterAdmissionMayStillCommitExactlyTheOriginalBound(Target target)
+    @Test
+    void anArrayAppearingAfterAdmissionMayStillCommitExactlyTheOriginalBound()
             throws RepositoryException, org.apache.sling.api.resource.LoginException {
-        plant(target);
+        plant();
         try (var writerOwner = sling.resourceResolver().clone(Map.of())) {
             final Session writer = nativeSession(writerOwner);
             try (var caller = new RaceCaller(sling.resourceResolver().clone(Map.of()), writer, BOUND - 1)) {
-                final var answer = assertInstanceOf(CommandHandler.Produced.class, move(target, caller));
+                final var answer = assertInstanceOf(CommandHandler.Produced.class, move(caller));
                 assertEquals(new DocumentValue.Whole(BOUND), answer.result()
                         .member("adjusted_reference_count").orElseThrow());
                 assertEquals(1, caller.moves.get());
@@ -119,10 +111,10 @@ final class ReferenceAdjustmentRaceTest {
         }), "persisted array values do not describe the one accepted outcome");
     }
 
-    private void plant(Target target) throws RepositoryException {
+    private void plant() throws RepositoryException {
         final Session session = nativeSession(sling.resourceResolver());
-        final String prefix = target == Target.PAGE ? "cq" : "dam";
-        final String name = target == Target.PAGE ? "cq:Page" : "dam:Asset";
+        final String prefix = "cq";
+        final String name = "cq:Page";
         final var namespaces = session.getWorkspace().getNamespaceRegistry();
         if (!List.of(namespaces.getPrefixes()).contains(prefix)) {
             namespaces.registerNamespace(prefix, "https://synthetic.invalid/" + prefix);
@@ -147,13 +139,12 @@ final class ReferenceAdjustmentRaceTest {
         return session;
     }
 
-    private static CommandHandler.Answer move(Target target, ResourceResolver caller) {
+    private static CommandHandler.Answer move(ResourceResolver caller) {
         final var members = new LinkedHashMap<String, DocumentValue>();
         members.put(MoveRequest.SOURCE_PATH, new DocumentValue.Text(SOURCE));
         members.put(MoveRequest.DESTINATION_PATH, new DocumentValue.Text(DESTINATION));
         members.put(MoveRequest.ADJUST_REFERENCES, new DocumentValue.Flag(DocumentValue.Truth.TRUE));
-        final CommandHandler handler = target == Target.PAGE ? new MovePageHandler(CONTRACT)
-                : new AssetMutationHandler(CONTRACT, AssetMutationHandler.Kind.MOVE);
+        final CommandHandler handler = new MovePageHandler(CONTRACT);
         final var operation = assertInstanceOf(AgentOperationIdentifier.Held.class,
                 AgentOperationIdentifier.of(
                         "4ccf24ff283335286ae2d809ae6aff5d994b5cfcb5c9f8e260a32777254de2f8",

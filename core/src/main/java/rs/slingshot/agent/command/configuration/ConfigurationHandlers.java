@@ -5,12 +5,11 @@ package rs.slingshot.agent.command.configuration;
 
 import java.util.ArrayList;
 import java.util.List;
-import rs.slingshot.agent.command.mutation.SingleCommit;
 
 /**
- * The categories the four configuration commands report under.
+ * The categories the two configuration commands report under.
  *
- * <p>Gathered here because the four share most of them, and because a category spelled one way in a
+ * <p>Gathered here because the two share most of them, and because a category spelled one way in a
  * handler and another in a registry row is a caller told about a failure the other half has never
  * heard of.</p>
  */
@@ -33,9 +32,6 @@ public final class ConfigurationHandlers {
 
     /** The category a search that would examine more resources than allowed is refused under. */
     public static final String DISCOVERY_BUDGET_EXCEEDED = "discovery_budget_exceeded";
-
-    /** The category the platform refusing a control is reported under. */
-    public static final String CONTROL_REJECTED = "platform_control_rejected";
 
     /** The category a value this contract will not read or write is refused under. */
     public static final String VALUE_MALFORMED = "configuration_value_malformed";
@@ -81,26 +77,5 @@ public final class ConfigurationHandlers {
     public static List<String> inspectionCategories() {
         return List.of(LOOKUP_FAILED, LOOKUP_MISMATCH, LOOKUP_AMBIGUOUS, LOOKUP_BUDGET_EXCEEDED,
                 VALUE_MALFORMED, VALUE_UNSUPPORTED, VALUE_BUDGET_EXCEEDED, RESULT_BUDGET_EXCEEDED);
-    }
-
-    /**
-     * Everything one configuration change can fail with.
-     *
-     * @return the categories
-     */
-    public static List<String> updateCategories() {
-        return List.of(LOOKUP_FAILED, LOOKUP_MISMATCH, LOOKUP_AMBIGUOUS, VALUE_MALFORMED,
-                VALUE_UNSUPPORTED, CONTROL_REJECTED,
-                SingleCommit.PLATFORM_CONTROL_OUTCOME_UNKNOWN);
-    }
-
-    /**
-     * Everything one configuration removal can fail with.
-     *
-     * @return the categories
-     */
-    public static List<String> removalCategories() {
-        return List.of(LOOKUP_FAILED, LOOKUP_MISMATCH, LOOKUP_AMBIGUOUS, CONTROL_REJECTED,
-                SingleCommit.PLATFORM_CONTROL_OUTCOME_UNKNOWN);
     }
 }

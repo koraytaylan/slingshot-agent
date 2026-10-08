@@ -49,7 +49,7 @@ final class CommandRegistryTest {
     void embeddedRowsLoadWithoutTheRepositoryFilesystem() {
         final CommandRegistry.Loaded loaded = assertInstanceOf(CommandRegistry.Loaded.class,
                 CommandRegistry.read());
-        assertEquals(72, loaded.registry().rows().size(),
+        assertEquals(67, loaded.registry().rows().size(),
                 "the embedded index did not expose every committed immediate command row");
         assertTrue(loaded.registry().row("query_paths").isPresent());
     }

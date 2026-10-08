@@ -14,9 +14,9 @@ import java.util.Set;
  * <p>This is the second of two separate questions, and keeping them separate is the point. Whether
  * <em>this caller</em> may do something is decided by the group they are in, and it is decided the
  * same way for every command in this product. Whether <em>this deployment</em> permits it at all is
- * decided here, and it has nothing to do with who is asking: on an environment whose configuration
- * is immutable, nobody can change a configuration, and the administrator is refused exactly as
- * firmly as everybody else.</p>
+ * decided here, and it has nothing to do with who is asking: on a deployment that does not provide
+ * a control, nobody can use it, and the administrator is refused exactly as firmly as everybody
+ * else.</p>
  *
  * <p>Refusing is the whole feature. A change written through a running platform that does not
  * persist it is worse than a refusal, because the platform accepts it, the answer says it worked,

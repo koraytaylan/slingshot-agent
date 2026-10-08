@@ -1083,7 +1083,7 @@ reason = "The subtree counted before anything is removed, so a subtree past the 
 [[type]]
 name = "MovePageCommand"
 pattern = "stateless-policy"
-reason = "Its members are its own and its reading is shared with the asset move, because moving a page and moving an asset are the same question about different things. A destination inside the source is refused there, once, being the mistake with the most confusing aftermath."
+reason = "Its members and their reading are the move request's own, and what a page move can fail with lives in its handler and its row. A destination inside the source is refused there, once, being the mistake with the most confusing aftermath."
 
 [[type]]
 name = "MovePageResult"
@@ -1131,11 +1131,6 @@ pattern = "value-object"
 reason = "Which asset to remove and what to do about the things pointing at it, with more force than for a page: an asset is referenced from places its owner has never seen."
 
 [[type]]
-name = "MoveAssetCommand"
-pattern = "stateless-policy"
-reason = "Its members are its own and its reading is shared with the page move, because moving a page and moving an asset are the same question about different things."
-
-[[type]]
 name = "CreateAssetFolderResult"
 pattern = "stateless-policy"
 reason = "Where the folder actually went."
@@ -1151,24 +1146,19 @@ pattern = "stateless-policy"
 reason = "Which asset's metadata was changed."
 
 [[type]]
-name = "MoveAssetResult"
-pattern = "stateless-policy"
-reason = "Where it went, where it came from, and how many references moved with it — the count being what tells somebody whether they have just changed one page or four hundred."
-
-[[type]]
 name = "AssetHandlers"
 pattern = "stateless-policy"
-reason = "The categories the five asset commands report under, gathered once because a category spelled one way in a handler and another in a row is a caller told about a failure the other half has never heard of."
+reason = "The categories the four asset commands report under, gathered once because a category spelled one way in a handler and another in a row is a caller told about a failure the other half has never heard of."
 
 [[type]]
 name = "AssetMutationHandler"
 pattern = "accessor"
-reason = "One handler for five commands, because what they share is everything that matters: each held to one commit, each refused before anything is written, each answering with the address it acted on. Which of the five it is comes from the kind it was built for rather than from an argument."
+reason = "One handler for four commands, because what they share is everything that matters: each held to one commit, each refused before anything is written, each answering with the address it acted on. Which of the four it is comes from the kind it was built for rather than from an argument."
 
 [[type]]
 name = "MoveRequest"
 pattern = "value-object"
-reason = "Which thing to move, where to, and whether its links come — read once for the two commands that move something, so the refusal for a destination inside the source cannot come to mean two different things."
+reason = "Which thing to move, where to, and whether its links come — read in one place, so the refusal for a destination inside the source cannot come to mean two different things."
 
 [[type]]
 name = "RepositoryReach"
@@ -1658,17 +1648,17 @@ reason = "The one place this build talks to Adobe's replication service, and the
 [[type]]
 name = "MutationCoverage"
 pattern = "stateless-policy"
-reason = "Selection is by what a registry row declares rather than by where its handler lives or what its access says. A suite that took every write row would demand a repository commit from a command that stops a bundle; one that took a package would stop selecting the day somebody moved a class. Which categories exist and which suite claims each are both read from committed files rather than written here, so the plan that adds a fourth kind of change adds two rows and no code - and an unclaimed row and a doubly-claimed row are two distinct findings, because a command proved by neither is exactly what happens when two suites each assume the other had it."
+reason = "Selection is by what a registry row declares rather than by where its handler lives or what its access says. A suite that took every write row would demand a repository commit from a command that cancels a job; one that took a package would stop selecting the day somebody moved a class. Which categories exist and which suite claims each are both read from committed files rather than written here, so the plan that adds a fourth kind of change adds two rows and no code - and an unclaimed row and a doubly-claimed row are two distinct findings, because a command proved by neither is exactly what happens when two suites each assume the other had it."
 
 [[type]]
 name = "ControlCapability"
 pattern = "enumeration"
-reason = "Grouped by what a deployment either provides or does not, rather than one capability per command. A deployment that keeps its configuration immutable keeps all of it immutable; there is no environment where updating a configuration works and deleting one does not, and splitting them would give an operator six places to get the same answer wrong."
+reason = "Grouped by what a deployment either provides or does not, rather than one capability per command. A deployment that lets an account be made lets it be changed and removed too; there is no environment where creating a user works and deleting one does not, and splitting them would give an operator eight places to get the same answer wrong."
 
 [[type]]
 name = "PlatformControl"
 pattern = "accessor"
-reason = "The second of two separate questions. Whether this caller may do something is decided by the group they are in, the same way for every command in this product; whether this deployment permits it at all has nothing to do with who is asking, and on an environment whose configuration is immutable the administrator is refused exactly as firmly as everybody else. Refusing is the whole feature: a change written through a running platform that does not persist it is worse than a refusal, because the platform accepts it, the answer says it worked, and it is gone by the next release - by which point the operator has built three things on believing it. The refusal names the deployment, so the answer says where rather than only no."
+reason = "The second of two separate questions. Whether this caller may do something is decided by the group they are in, the same way for every command in this product; whether this deployment permits it at all has nothing to do with who is asking, and on a deployment that does not provide a control the administrator is refused exactly as firmly as everybody else. Refusing is the whole feature: a change written through a running platform that does not persist it is worse than a refusal, because the platform accepts it, the answer says it worked, and it is gone by the next release - by which point the operator has built three things on believing it. The refusal names the deployment, so the answer says where rather than only no."
 
 [[type]]
 name = "ValueDisclosure"
@@ -1708,7 +1698,7 @@ reason = "A seam for the same reason the replication one is: what is on the othe
 [[type]]
 name = "ConfigurationHandlers"
 pattern = "stateless-policy"
-reason = "The categories the four share, gathered where they can be compared against the client's published set in one place rather than four. A category spelled one way in a handler and another in a registry row is a caller told about a failure the other half has never heard of."
+reason = "The categories the two share, gathered where they can be compared against the client's published set in one place rather than two. A category spelled one way in a handler and another in a registry row is a caller told about a failure the other half has never heard of."
 
 [[type]]
 name = "FindConfigurationsCommand"
@@ -1723,7 +1713,7 @@ reason = "A count of property keys rather than the keys, and certainly not the v
 [[type]]
 name = "ConfigurationIdentifierCommand"
 pattern = "value-object"
-reason = "One reader for the command that reads a configuration and the one that removes it, because the argument is the same argument. The two stay separate everywhere it matters - their own rows, their own failure sets, and one passing through the control gate while the other does not - and share the one place where writing it twice would give two chances to spell the member differently."
+reason = "The argument of the command that reads one configuration: an identifier and nothing else, with its own bound and its own refusals."
 
 [[type]]
 name = "InspectConfigurationResult"
@@ -1731,24 +1721,9 @@ pattern = "stateless-policy"
 reason = "Absence is an answer rather than a failure: a configuration that is not there means the service is running on its defaults, and an operator chasing behaviour they cannot explain very often finds the configuration they were told about was never applied. Every property carries the evidence, including the ones whose value is present, because somebody comparing two environments needs to know a value was reported because the platform described it as safe rather than because nobody checked."
 
 [[type]]
-name = "UpdateConfigurationCommand"
-pattern = "value-object"
-reason = "Two lists, so a property in neither is left exactly as it was: a configuration is written by a deployment, an installer and an operator at once, and a caller who sent a partial view and had the rest treated as removals would silently undo whatever the last of those did. Every assignment carries its own type and cardinality because neither is recoverable from the values, and getting either wrong produces a configuration that reads back fine and fails at the next restart - the failure and the cause hours apart."
-
-[[type]]
-name = "UpdateConfigurationResult"
-pattern = "stateless-policy"
-reason = "A count rather than the resulting configuration, and not out of laziness: answering with what the configuration now says would mean reading every value back, passwords included, through a command nobody would think to look at when auditing what discloses secrets."
-
-[[type]]
-name = "DeleteConfigurationResult"
-pattern = "stateless-policy"
-reason = "Whether what went was one instance of a factory or the configuration itself, because the distinction changes what just happened. Removing a factory instance leaves the others; removing a singleton returns that service to its defaults entirely, and an operator who thought they were doing the first has changed the behaviour of everything on the instance."
-
-[[type]]
 name = "ConfigurationHandler"
 pattern = "accessor"
-reason = "The control gate is asked before the argument is read on the two that write, deliberately: a caller on an environment that does not keep configuration changes should be told that, not told their assignments were malformed - the refusal they need is about where they are running, and telling them about a typo first sends them to fix the wrong thing. The two that read pass through no gate at all, because an environment whose configuration is immutable still answers questions about it and that is most of what an operator wants there."
+reason = "Both commands read, and neither passes through a control gate, because an environment whose configuration is immutable still answers questions about it and that is most of what an operator wants there."
 
 [[type]]
 name = "BundleState"
@@ -1763,7 +1738,7 @@ reason = "The one worth knowing is unsatisfied: the component is enabled, its bu
 [[type]]
 name = "BundleInventory"
 pattern = "strategy"
-reason = "One seam for three commands because they are three questions about one framework, and an implementation that answered two of them from the framework and one from somewhere else would be answering about two different instants. What a bundle ended up in is reported rather than assumed: a bundle asked to start may end up resolved because one of its components would not activate, and a command that answered started because the request did not throw would be telling an operator the opposite of what they need."
+reason = "One seam for two commands because they are two questions about one framework, and an implementation that answered one of them from the framework and one from somewhere else would be answering about two different instants."
 
 [[type]]
 name = "ListBundlesCommand"
@@ -1776,11 +1751,6 @@ pattern = "value-object"
 reason = "The same two filters over the states a component has rather than the ones a bundle has. Those two sets look similar and are not the same question, so a bundle's state asked of a component is refused rather than matching nothing - a caller who misspelled one would otherwise receive an empty list and believe it."
 
 [[type]]
-name = "SetBundleStateCommand"
-pattern = "value-object"
-reason = "A transition rather than a target state: asking for active would be asking this side to work out how to get there and keep trying, while asking to start is one action with one answer. Refreshing is in the same set and is the dangerous one - it restarts every bundle wired to this one, which on an author instance can be most of them - so it is named explicitly rather than being something start quietly does."
-
-[[type]]
 name = "FrameworkResults"
 pattern = "stateless-policy"
 reason = "Nothing here carries a configuration value, a service property, or anything else a bundle holds. What a bundle is called, which version it is and what state it is in are facts about the deployment; what it has been configured with is a different question with its own command and its own disclosure rule, and merging the two would route around that rule."
@@ -1788,7 +1758,7 @@ reason = "Nothing here carries a configuration value, a service property, or any
 [[type]]
 name = "FrameworkHandler"
 pattern = "accessor"
-reason = "The listings pass through no gate: reading what is installed and what activated is the first thing anybody does on an instance they did not build, and a deployment that will not let a bundle be stopped still knows perfectly well which ones are running. The control passes through the gate before its argument is read, so a caller on a deployment whose bundle state comes from the deployed image is told that rather than told their transition was misspelled."
+reason = "The listings pass through no gate: reading what is installed and what activated is the first thing anybody does on an instance they did not build, and a deployment whose bundle state comes from the deployed image still knows perfectly well which ones are running."
 
 [[type]]
 name = "WorkflowService"
@@ -1883,7 +1853,7 @@ reason = "A transport address never crosses this seam. An agent's transport is a
 [[type]]
 name = "AgentCommands"
 pattern = "stateless-policy"
-reason = "An agent identifier is the same identifier in all five, so it is read once. The one command with a member of its own is the flush, and that member is the whole reason it is safe to offer: a queue that filled up between reading it and emptying it would otherwise lose work the caller never saw."
+reason = "An agent identifier is the same identifier in all four, so it is read once. The one command with a member of its own is the flush, and that member is the whole reason it is safe to offer: a queue that filled up between reading it and emptying it would otherwise lose work the caller never saw."
 
 [[type]]
 name = "AgentResults"
@@ -2238,12 +2208,12 @@ reason = "The platform's own workflow engine, reached through the caller's own w
 [[type]]
 name = "DefaultBundleInventory"
 pattern = "accessor"
-reason = "The framework's own bundles and the component runtime's own descriptions, read on every call rather than held. A transition is refused for the framework itself and for the bundle answering, since stopping either ends the request that asked, and its answer is the state the framework reports afterwards."
+reason = "The framework's own bundles and the component runtime's own descriptions, read on every call rather than held."
 
 [[type]]
 name = "DefaultReplicationInventory"
 pattern = "accessor"
-reason = "The platform's own replication agents, read through its agent manager on every call. No transport address, user or password is read, not even to decide the transport's kind, and a retry moves only the entry the queue tries next."
+reason = "The platform's own replication agents, read through its agent manager on every call. No transport address, user or password is read, not even to decide the transport's kind."
 
 [[type]]
 name = "DefaultConfigurationCatalogue"

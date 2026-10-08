@@ -3,21 +3,16 @@
 
 package rs.slingshot.agent.aem.configuration;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
-import java.util.Dictionary;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.SequencedMap;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.osgi.framework.Bundle;
@@ -94,89 +89,35 @@ final class DefaultConfigurationCatalogueTest {
     }
 
     @Test
-    @DisplayName("a change sets and removes what it names, and a removal names its origin")
-    void achangeSetsAndRemoves() {
-        final Platform platform = new Platform();
-        final SequencedMap<String, ConfigurationValue> assignments = new LinkedHashMap<>();
-        assignments.put("port", new ConfigurationValue("integer",
-                ConfigurationValue.Cardinality.SCALAR, List.of("9090")));
-        final ConfigurationCatalogue.Changed changed = assertInstanceOf(
-                ConfigurationCatalogue.Changed.class, platform.catalogue().apply(
-                        "com.acme.Service", assignments, List.of("stray")));
-        assertEquals(2, changed.changedPropertyKeyCount());
-        assertEquals(ConfigurationCatalogue.Origin.SINGLETON, changed.origin());
-        assertEquals(9090, platform.service.get("port"));
-        assertFalse(platform.service.containsKey("stray"), "a removed property was kept");
-        assignments.put("port", new ConfigurationValue("integer",
-                ConfigurationValue.Cardinality.SCALAR, List.of("eighty")));
-        assertEquals("configuration_value_malformed", assertInstanceOf(
-                ConfigurationCatalogue.Failed.class, platform.catalogue().apply(
-                        "com.acme.Service", assignments, List.of())).category());
-        assertEquals(ConfigurationCatalogue.Origin.FACTORY_INSTANCE, assertInstanceOf(
-                ConfigurationCatalogue.Changed.class, platform.catalogue().erase(
-                        "com.acme.Factory~one")).origin());
-        assertEquals("configuration_lookup_mismatch", assertInstanceOf(
-                ConfigurationCatalogue.Failed.class, platform.catalogue().erase("none"))
-                .category());
-        assertEquals(List.of("update:com.acme.Service", "delete:com.acme.Factory~one"),
-                platform.controls);
-    }
-
-    @Test
-    @DisplayName("every type and cardinality survives the round trip")
-    void everyValueSurvivesTheRoundTrip() {
-        for (final Object held : List.of("text", true, 'c', (byte) 1, (short) 2, 3, 4L, 5.5f,
-                6.5d, new int[] {1, 2}, new char[] {'x'}, new String[] {"a", "b"},
-                new Long[] {7L}, List.of(1.5d, 2.5d), List.of())) {
-            final ConfigurationValue read = PropertyValues.read(held).orElseThrow();
-            final Object written = PropertyValues.written(read);
-            if (held.getClass().isArray()) {
-                assertEquals(held.getClass(), written.getClass());
-                assertEquals(PropertyValues.read(written), Optional.of(read));
-            } else {
-                assertEquals(held, written, String.valueOf(held));
-            }
-        }
+    @DisplayName("every type and cardinality reads in the client's words")
+    void everyValueReadsInTheClientsWords() {
+        assertEquals(new ConfigurationValue("integer", ConfigurationValue.Cardinality.SCALAR,
+                List.of("3")), PropertyValues.read(3).orElseThrow());
+        assertEquals(new ConfigurationValue("integer",
+                ConfigurationValue.Cardinality.PRIMITIVE_ARRAY, List.of("1", "2")),
+                PropertyValues.read(new int[] {1, 2}).orElseThrow());
+        assertEquals(new ConfigurationValue("string", ConfigurationValue.Cardinality.SCALAR_ARRAY,
+                List.of("a", "b")), PropertyValues.read(new String[] {"a", "b"}).orElseThrow());
+        assertEquals(new ConfigurationValue("double", ConfigurationValue.Cardinality.COLLECTION,
+                List.of("3ff8000000000000")), PropertyValues.read(List.of(1.5d)).orElseThrow());
+        assertEquals(new ConfigurationValue("string", ConfigurationValue.Cardinality.COLLECTION,
+                List.of()), PropertyValues.read(List.of()).orElseThrow());
+        assertEquals(new ConfigurationValue("float", ConfigurationValue.Cardinality.SCALAR,
+                List.of("40b00000")), PropertyValues.read(5.5f).orElseThrow());
+        assertEquals(new ConfigurationValue("double", ConfigurationValue.Cardinality.SCALAR,
+                List.of("3ff0000000000000")), PropertyValues.read(1.0d).orElseThrow());
         assertEquals(Optional.empty(), PropertyValues.read(new Object()));
         assertEquals(Optional.empty(), PropertyValues.read(new Object[] {}));
         assertEquals(Optional.empty(), PropertyValues.read(List.of(new Object())));
-        assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
-                new ConfigurationValue("date", ConfigurationValue.Cardinality.SCALAR,
-                        List.of("x"))));
-        assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
-                new ConfigurationValue("string", ConfigurationValue.Cardinality.PRIMITIVE_ARRAY,
-                        List.of("x"))));
-        assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
-                new ConfigurationValue("boolean", ConfigurationValue.Cardinality.SCALAR,
-                        List.of("yes"))));
-        assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
-                new ConfigurationValue("character", ConfigurationValue.Cardinality.SCALAR,
-                        List.of("xy"))));
-        assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
-                new ConfigurationValue("double", ConfigurationValue.Cardinality.SCALAR,
-                        List.of("3FF0000000000000"))));
-        assertThrows(IllegalArgumentException.class, () -> PropertyValues.written(
-                new ConfigurationValue("float", ConfigurationValue.Cardinality.SCALAR,
-                        List.of("1.5"))));
-        assertEquals(new ConfigurationValue("double", ConfigurationValue.Cardinality.SCALAR,
-                List.of("3ff0000000000000")), PropertyValues.read(1.0d).orElseThrow());
-        assertArrayEquals(new boolean[] {true}, (boolean[]) PropertyValues.written(
-                new ConfigurationValue("boolean", ConfigurationValue.Cardinality.PRIMITIVE_ARRAY,
-                        List.of("true"))));
     }
 
     @Test
-    @DisplayName("an identifier the configuration admin holds twice is ambiguous and nothing is done")
+    @DisplayName("an identifier the configuration admin holds twice is ambiguous")
     void anidentifierHeldTwiceIsAmbiguous() {
         final Platform platform = new Platform();
-        for (final ConfigurationCatalogue.Outcome refused : List.of(
-                platform.catalogue().inspect(TWICE),
-                platform.catalogue().apply(TWICE, new LinkedHashMap<>(), List.of()),
-                platform.catalogue().erase(TWICE))) {
-            assertEquals("configuration_lookup_ambiguous", assertInstanceOf(
-                    ConfigurationCatalogue.Failed.class, refused).category());
-        }
-        assertEquals(List.of(), platform.controls);
+        assertEquals("configuration_lookup_ambiguous", assertInstanceOf(
+                ConfigurationCatalogue.Failed.class, platform.catalogue().inspect(TWICE))
+                .category());
     }
 
     /** An identifier the scripted configuration admin holds twice. */
@@ -189,11 +130,10 @@ final class DefaultConfigurationCatalogueTest {
     private static final class Platform {
 
         private final List<String> filters = new ArrayList<>();
-        private final List<String> controls = new ArrayList<>();
         private final Map<String, Map<String, Object>> held = new LinkedHashMap<>();
-        private final Map<String, Object> service = new LinkedHashMap<>();
 
         Platform() {
+            final Map<String, Object> service = new LinkedHashMap<>();
             service.put("service.pid", "com.acme.Service");
             service.put("port", 8080);
             service.put("secret", "hunter2");
@@ -243,21 +183,6 @@ final class DefaultConfigurationCatalogueTest {
                 case "getBundleLocation" -> factory ? null : "launchpad:acme";
                 case "getProperties" -> FrameworkUtil.asDictionary(new LinkedHashMap<>(
                         held.get(pid)));
-                case "update" -> {
-                    controls.add("update:" + pid);
-                    final Map<String, Object> kept = new LinkedHashMap<>();
-                    FrameworkUtil.asMap((Dictionary<?, ?>) arguments[0]).forEach((key, value) ->
-                            kept.put((String) key, value));
-                    held.put(pid, kept);
-                    service.clear();
-                    service.putAll(kept);
-                    yield null;
-                }
-                case "delete" -> {
-                    controls.add("delete:" + pid);
-                    held.remove(pid);
-                    yield null;
-                }
                 default -> throw new IOException(method);
             });
         }

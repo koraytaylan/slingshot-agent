@@ -24,7 +24,7 @@ final class ExposureSurfaceTest {
     private static final Path REPOSITORY = RepositoryTree.locate();
 
     /** How many commands the client's own table publishes, which this registry matches. */
-    private static final int PUBLISHED_COMMANDS = 72;
+    private static final int PUBLISHED_COMMANDS = 67;
 
     /** How many kinds the corpus declares, which is a closed set. */
     private static final int CORPUS_KINDS = 8;

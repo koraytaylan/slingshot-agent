@@ -9,11 +9,9 @@ import rs.slingshot.agent.command.CommandDispatch;
 import rs.slingshot.agent.command.configuration.ConfigurationHandler;
 import rs.slingshot.agent.command.configuration.ConfigurationIdentifierCommand;
 import rs.slingshot.agent.command.configuration.FindConfigurationsCommand;
-import rs.slingshot.agent.command.configuration.UpdateConfigurationCommand;
 import rs.slingshot.agent.command.framework.FrameworkHandler;
 import rs.slingshot.agent.command.framework.ListBundlesCommand;
 import rs.slingshot.agent.command.framework.ListComponentsCommand;
-import rs.slingshot.agent.command.framework.SetBundleStateCommand;
 import rs.slingshot.agent.command.job.JobCommands;
 import rs.slingshot.agent.command.job.JobHandler;
 import rs.slingshot.agent.command.platform.BundleInventory;
@@ -63,10 +61,6 @@ final class PlatformRegistrations {
     /**
      * What the deployment this build is made for provides.
      *
-     * <p>Configuration changes and bundle lifecycle are absent on purpose: that deployment does not
-     * keep either, so a change written through the running platform would be accepted, reported as
-     * done, and gone by the next release. Refusing it is the feature.</p>
-     *
      * @return the gate every control command asks before it proceeds
      */
     static PlatformControl deploymentControl() {
@@ -106,12 +100,11 @@ final class PlatformRegistrations {
                         admission))));
         seams.workflows().forEach(workflows ->
                 registered.addAll(workflows(contract, workflows, control)));
-        seams.bundles().forEach(inventory ->
-                registered.addAll(bundles(contract, inventory, control)));
+        seams.bundles().forEach(inventory -> registered.addAll(bundles(contract, inventory)));
         seams.agents().forEach(inventory ->
                 registered.addAll(agents(contract, inventory, control)));
         seams.configurations().forEach(catalogues ->
-                registered.addAll(configurations(contract, catalogues, control)));
+                registered.addAll(configurations(contract, catalogues)));
         return List.copyOf(registered);
     }
 
@@ -126,8 +119,6 @@ final class PlatformRegistrations {
                 agent(contract, AgentCommands.INSPECT_QUEUE_WIRE_NAME, AgentHandler.Kind.QUEUE,
                         inventory, control),
                 agent(contract, AgentCommands.FLUSH_WIRE_NAME, AgentHandler.Kind.FLUSH,
-                        inventory, control),
-                agent(contract, AgentCommands.RETRY_WIRE_NAME, AgentHandler.Kind.RETRY,
                         inventory, control));
     }
 
@@ -140,40 +131,30 @@ final class PlatformRegistrations {
     }
 
     private static List<CommandDispatch.Registration> configurations(
-            AgentContract contract, ConfigurationCatalogues catalogues, PlatformControl control) {
+            AgentContract contract, ConfigurationCatalogues catalogues) {
         return List.of(
                 configuration(contract, FindConfigurationsCommand.WIRE_NAME,
-                        ConfigurationHandler.Kind.SEARCH, catalogues, control),
+                        ConfigurationHandler.Kind.SEARCH, catalogues),
                 configuration(contract, ConfigurationIdentifierCommand.INSPECT_WIRE_NAME,
-                        ConfigurationHandler.Kind.INSPECTION, catalogues, control),
-                configuration(contract, UpdateConfigurationCommand.WIRE_NAME,
-                        ConfigurationHandler.Kind.UPDATE, catalogues, control),
-                configuration(contract, ConfigurationIdentifierCommand.DELETE_WIRE_NAME,
-                        ConfigurationHandler.Kind.REMOVAL, catalogues, control));
+                        ConfigurationHandler.Kind.INSPECTION, catalogues));
     }
 
     private static CommandDispatch.Registration configuration(AgentContract contract,
                                                              String wireName,
                                                              ConfigurationHandler.Kind kind,
-                                                             ConfigurationCatalogues catalogues,
-                                                             PlatformControl control) {
+                                                             ConfigurationCatalogues catalogues) {
         return new CommandDispatch.Registration(wireName, new ConfigurationHandler(contract, kind,
-                catalogues, control));
+                catalogues));
     }
 
     private static List<CommandDispatch.Registration> bundles(AgentContract contract,
-                                                             BundleInventory inventory,
-                                                             PlatformControl control) {
+                                                             BundleInventory inventory) {
         return List.of(
                 new CommandDispatch.Registration(ListBundlesCommand.WIRE_NAME,
-                        new FrameworkHandler(contract, FrameworkHandler.Kind.BUNDLES, inventory,
-                                control)),
+                        new FrameworkHandler(contract, FrameworkHandler.Kind.BUNDLES, inventory)),
                 new CommandDispatch.Registration(ListComponentsCommand.WIRE_NAME,
-                        new FrameworkHandler(contract, FrameworkHandler.Kind.COMPONENTS, inventory,
-                                control)),
-                new CommandDispatch.Registration(SetBundleStateCommand.WIRE_NAME,
-                        new FrameworkHandler(contract, FrameworkHandler.Kind.TRANSITION, inventory,
-                                control)));
+                        new FrameworkHandler(contract, FrameworkHandler.Kind.COMPONENTS,
+                                inventory)));
     }
 
     private static List<CommandDispatch.Registration> workflows(AgentContract contract,

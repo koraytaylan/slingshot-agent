@@ -11,7 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.SequencedMap;
 import java.util.function.Supplier;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.FrameworkUtil;
@@ -27,12 +26,11 @@ import rs.slingshot.agent.command.platform.ConfigurationValue;
 import rs.slingshot.agent.command.platform.ValueDisclosure;
 
 /**
- * The platform's own configuration admin, answering the four configuration commands.
+ * The platform's own configuration admin, answering the two configuration commands.
  *
  * <p>Which property is a secret is the Meta Type Service's answer, asked of the bundle that
  * describes the configuration, and a property it does not describe is treated as one: its value
- * is never converted, and the answer carries only its name and that evidence. The two changes
- * reach here only after the deployment's control gate has permitted them.</p>
+ * is never converted, and the answer carries only its name and that evidence.</p>
  */
 public final class DefaultConfigurationCatalogue implements ConfigurationCatalogue {
 
@@ -42,23 +40,14 @@ public final class DefaultConfigurationCatalogue implements ConfigurationCatalog
     /** What a search that would examine more than it may is reported as. */
     private static final String LOOKUP_BUDGET_EXCEEDED = "configuration_lookup_budget_exceeded";
 
-    /** What an identifier naming no configuration is reported as when asked to change it. */
-    private static final String LOOKUP_MISMATCH = "configuration_lookup_mismatch";
-
     /** What an identifier the configuration admin holds twice is reported as. */
     private static final String LOOKUP_AMBIGUOUS = "configuration_lookup_ambiguous";
-
-    /** What a value that does not read as its type is reported as. */
-    private static final String VALUE_MALFORMED = "configuration_value_malformed";
 
     /** What a property holding a type no configuration command speaks is reported as. */
     private static final String VALUE_UNSUPPORTED = "configuration_value_unsupported";
 
     /** The property the configuration admin keeps a configuration's identifier in. */
     private static final String PID = "service.pid";
-
-    /** The location that binds a new configuration to no bundle in particular. */
-    private static final String ANY_LOCATION = "?";
 
     /** What a property whose value is not read carries, which is never reported. */
     private static final ConfigurationValue UNREAD = new ConfigurationValue("string",
@@ -134,58 +123,6 @@ public final class DefaultConfigurationCatalogue implements ConfigurationCatalog
             answered.add(observed.get());
         }
         return new Inspected(Presence.PRESENT, answered);
-    }
-
-    @Override
-    public Outcome apply(String persistentIdentifier,
-                         SequencedMap<String, ConfigurationValue> assignments,
-                         List<String> removedPropertyKeys) {
-        final Map<String, Object> written = new LinkedHashMap<>();
-        try {
-            for (final Map.Entry<String, ConfigurationValue> assignment : assignments.entrySet()) {
-                written.put(assignment.getKey(), PropertyValues.written(assignment.getValue()));
-            }
-        } catch (final IllegalArgumentException malformed) {
-            return new Failed(VALUE_MALFORMED, malformed.getMessage());
-        }
-        try {
-            final Optional<Configuration> held = one(persistentIdentifier);
-            final Configuration configuration = held.isPresent() ? held.get()
-                    : admin.getConfiguration(persistentIdentifier, ANY_LOCATION);
-            final Map<String, Object> properties = propertiesOf(configuration);
-            properties.putAll(written);
-            removedPropertyKeys.forEach(properties::remove);
-            configuration.update(FrameworkUtil.asDictionary(properties));
-            return new Changed(written.size() + removedPropertyKeys.size(),
-                    originOf(configuration));
-        } catch (final Ambiguous ambiguous) {
-            return ambiguous.failed();
-        } catch (final IOException | InvalidSyntaxException | IllegalStateException
-                       | SecurityException failed) {
-            return new Failed(LOOKUP_FAILED, "the configuration admin refused the change: "
-                    + failed.getMessage());
-        }
-    }
-
-    @Override
-    public Outcome erase(String persistentIdentifier) {
-        try {
-            final Optional<Configuration> held = one(persistentIdentifier);
-            if (held.isEmpty()) {
-                return new Failed(LOOKUP_MISMATCH, persistentIdentifier + " names no"
-                        + " configuration the configuration admin holds");
-            }
-            final Origin origin = originOf(held.get());
-            final long keys = propertiesOf(held.get()).size();
-            held.get().delete();
-            return new Changed(keys, origin);
-        } catch (final Ambiguous ambiguous) {
-            return ambiguous.failed();
-        } catch (final IOException | InvalidSyntaxException | IllegalStateException
-                       | SecurityException failed) {
-            return new Failed(LOOKUP_FAILED, "the configuration admin refused the removal: "
-                    + failed.getMessage());
-        }
     }
 
     /**
@@ -271,10 +208,6 @@ public final class DefaultConfigurationCatalogue implements ConfigurationCatalog
         return Optional.ofNullable(configuration.getProperties())
                 .<Map<String, Object>>map(held -> new LinkedHashMap<>(FrameworkUtil.asMap(held)))
                 .orElseGet(LinkedHashMap::new);
-    }
-
-    private static Origin originOf(Configuration configuration) {
-        return configuration.getFactoryPid() == null ? Origin.SINGLETON : Origin.FACTORY_INSTANCE;
     }
 
     /**

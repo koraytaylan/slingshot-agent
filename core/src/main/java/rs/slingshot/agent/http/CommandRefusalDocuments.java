@@ -218,9 +218,7 @@ public final class CommandRefusalDocuments {
         JOB("job_identifier"),
         /** One workflow instance or model. */
         WORKFLOW("instance_identifier"),
-        /** One configuration persistent identifier. */
-        CONFIGURATION("persistent_identifier"),
-        /** A read whose subject is an address, an authority, or a symbolic name. */
+        /** A read whose subject is an address or an authority. */
         SUBJECT("subject"),
         /** A creation whose refusal names the address the command computed. */
         CREATION("target_path"),
@@ -255,22 +253,19 @@ public final class CommandRefusalDocuments {
             case "read_content_fragment", "update_content_fragment" -> Family.FRAGMENT;
             case "delete_content_fragment", "delete_experience_fragment" -> Family.FRAGMENT;
             case "update_experience_fragment" -> Family.VARIATION;
-            case "move_asset", "move_page" -> Family.MOVE;
+            case "move_page" -> Family.MOVE;
             case "add_group_member", "remove_group_member" -> Family.MEMBERSHIP;
             case "list_group_members" -> Family.GROUP;
             case "delete_authorizable", "set_user_disabled", "update_user_profile" ->
                     Family.AUTHORIZABLE;
             case "create_group", "create_user" -> Family.AUTHORIZABLE;
             case "inspect_replication_agent", "inspect_replication_queue" -> Family.AGENT;
-            case "flush_replication_queue", "retry_replication_queue_entry" -> Family.AGENT;
+            case "flush_replication_queue" -> Family.AGENT;
             case "inspect_sling_job", "cancel_sling_job" -> Family.JOB;
             case "inspect_workflow_instance", "set_workflow_instance_suspension" -> Family.WORKFLOW;
             case "terminate_workflow_instance", "start_workflow" -> Family.WORKFLOW;
-            case "update_open_service_gateway_initiative_configuration" -> Family.CONFIGURATION;
-            case "delete_open_service_gateway_initiative_configuration" -> Family.CONFIGURATION;
             case "load_content_as_json", "resolve_resource_path", "map_resource_path" ->
                     Family.SUBJECT;
-            case "set_open_service_gateway_initiative_bundle_state" -> Family.SUBJECT;
             case "create_asset", "create_asset_folder", "create_content_fragment" -> Family.CREATION;
             case "create_experience_fragment", "create_page", "add_component" -> Family.CREATION;
             default -> Family.NONE;
@@ -290,7 +285,7 @@ public final class CommandRefusalDocuments {
         final Family family = familyOf(wireName);
         return switch (family) {
             case ROOTED_DISCOVERY, PAGE, COMPONENT, ASSET, FRAGMENT, VARIATION,
-                    AUTHORIZABLE, CONFIGURATION ->
+                    AUTHORIZABLE ->
                     java.util.List.of(text(arguments, family.member(), family.member()));
             case MOVE -> java.util.List.of(
                     text(arguments, "source_path", "source_path"),
@@ -299,7 +294,7 @@ public final class CommandRefusalDocuments {
                     text(arguments, "group_identifier", "group_identifier"),
                     text(arguments, "member_identifier", "member_identifier"));
             case GROUP -> java.util.List.of(text(arguments, "group_identifier", "group_identifier"));
-            case AGENT -> agentCorrelations(wireName, arguments);
+            case AGENT -> java.util.List.of(text(arguments, "agent_identifier", "agent_identifier"));
             case JOB -> java.util.List.of(text(arguments, "job_identifier", "job_identifier"));
             case WORKFLOW -> workflowCorrelations(wireName, arguments);
             case SUBJECT -> readCorrelations(wireName, arguments);
@@ -323,17 +318,6 @@ public final class CommandRefusalDocuments {
         };
     }
 
-    /** One replication agent's record, which a retry pairs with its own entry. */
-    private static java.util.List<Correlation> agentCorrelations(
-            String wireName, DocumentValue.Mapping arguments) {
-        if ("retry_replication_queue_entry".equals(wireName)) {
-            return java.util.List.of(
-                    text(arguments, "agent_identifier", "agent_identifier"),
-                    text(arguments, "entry_identifier", "entry_identifier"));
-        }
-        return java.util.List.of(text(arguments, "agent_identifier", "agent_identifier"));
-    }
-
     /** One workflow record, whose start names the model rather than an instance. */
     private static java.util.List<Correlation> workflowCorrelations(
             String wireName, DocumentValue.Mapping arguments) {
@@ -343,16 +327,14 @@ public final class CommandRefusalDocuments {
         return java.util.List.of(text(arguments, "instance_identifier", "instance_identifier"));
     }
 
-    /** A read whose subject is an address, an authority, or a symbolic name. */
+    /** A read whose subject is an address or an authority. */
     private static java.util.List<Correlation> readCorrelations(
             String wireName, DocumentValue.Mapping arguments) {
         return switch (wireName) {
             case "load_content_as_json" -> java.util.List.of(text(arguments, "path", "path"));
             case "resolve_resource_path" ->
                     java.util.List.of(text(arguments, "request_address", "subject"));
-            case "map_resource_path" ->
-                    java.util.List.of(text(arguments, "repository_path", "subject"));
-            default -> java.util.List.of(text(arguments, "symbolic_name", "symbolic_name"));
+            default -> java.util.List.of(text(arguments, "repository_path", "subject"));
         };
     }
 

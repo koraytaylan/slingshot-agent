@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.command.asset.CreateAssetCommand;
 import rs.slingshot.agent.command.asset.CreateAssetFolderCommand;
 import rs.slingshot.agent.command.asset.DeleteAssetCommand;
-import rs.slingshot.agent.command.asset.MoveAssetCommand;
 import rs.slingshot.agent.command.asset.UpdateAssetMetadataCommand;
 import rs.slingshot.agent.command.component.AddComponentCommand;
 import rs.slingshot.agent.command.component.ComponentPathCommand;
@@ -26,7 +25,6 @@ import rs.slingshot.agent.command.component.ReorderComponentCommand;
 import rs.slingshot.agent.command.component.UpdateComponentCommand;
 import rs.slingshot.agent.command.configuration.ConfigurationIdentifierCommand;
 import rs.slingshot.agent.command.configuration.FindConfigurationsCommand;
-import rs.slingshot.agent.command.configuration.UpdateConfigurationCommand;
 import rs.slingshot.agent.command.content.ComponentInstancesCommand;
 import rs.slingshot.agent.command.content.DownloadContentPackageCommand;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataCommand;
@@ -54,7 +52,6 @@ import rs.slingshot.agent.command.fragment.UpdateContentFragmentCommand;
 import rs.slingshot.agent.command.fragment.UpdateExperienceFragmentCommand;
 import rs.slingshot.agent.command.framework.ListBundlesCommand;
 import rs.slingshot.agent.command.framework.ListComponentsCommand;
-import rs.slingshot.agent.command.framework.SetBundleStateCommand;
 import rs.slingshot.agent.command.job.JobCommands;
 import rs.slingshot.agent.command.mutation.MoveRequest;
 import rs.slingshot.agent.command.page.CreatePageCommand;
@@ -108,7 +105,7 @@ final class ProtocolVectorTest {
     private static final EventStoreGeneration SERVING = JobEventTest.generation(1);
 
     /** How many document kinds carry vectors: twelve protocol documents and fourteen commands. */
-    private static final int SEVENTYSIX_KINDS = 82;
+    private static final int SEVENTYSIX_KINDS = 77;
 
     @Test
     @DisplayName("every vector is accepted or refused exactly as it declares")
@@ -261,8 +258,6 @@ final class ProtocolVectorTest {
                             instanceof UpdateAssetMetadataCommand.Held;
             case "delete-asset-argument" -> DeleteAssetCommand.of(document, CONTRACT)
                     instanceof DeleteAssetCommand.Held;
-            case "move-asset-argument" -> MoveAssetCommand.of(document, CONTRACT)
-                    instanceof MoveRequest.Held;
             case "add-component-argument" ->
                     AddComponentCommand.of(document, CONTRACT)
                             instanceof AddComponentCommand.Held;
@@ -326,18 +321,13 @@ final class ProtocolVectorTest {
             case "find-configurations-argument" ->
                     FindConfigurationsCommand.of(document, CONTRACT)
                             instanceof FindConfigurationsCommand.Held;
-            case "inspect-configuration-argument", "delete-configuration-argument" ->
+            case "inspect-configuration-argument" ->
                     ConfigurationIdentifierCommand.of(document, CONTRACT)
                             instanceof ConfigurationIdentifierCommand.Held;
-            case "update-configuration-argument" ->
-                    UpdateConfigurationCommand.of(document, CONTRACT)
-                            instanceof UpdateConfigurationCommand.Held;
             case "list-bundles-argument" -> ListBundlesCommand.of(document, CONTRACT)
                     instanceof ListBundlesCommand.Held;
             case "list-components-argument" -> ListComponentsCommand.of(document, CONTRACT)
                     instanceof ListComponentsCommand.Held;
-            case "set-bundle-state-argument" -> SetBundleStateCommand.of(document, CONTRACT)
-                    instanceof SetBundleStateCommand.Held;
             case "list-workflow-models-argument" ->
                     ListWorkflowModelsCommand.of(document, CONTRACT)
                             instanceof ListWorkflowModelsCommand.Held;
@@ -383,8 +373,6 @@ final class ProtocolVectorTest {
                     AgentCommands.QUEUE_MEMBERS, CONTRACT) instanceof AgentCommands.Windowed;
             case "flush-replication-queue-argument" -> AgentCommands.flush(document, CONTRACT)
                     instanceof AgentCommands.Flush;
-            case "retry-replication-queue-entry-argument" ->
-                    AgentCommands.retry(document, CONTRACT) instanceof AgentCommands.Retry;
             default -> throw new IllegalStateException("no model reads a " + kind);
         };
     }
