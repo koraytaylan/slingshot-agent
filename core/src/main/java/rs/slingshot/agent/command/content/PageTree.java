@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
+import rs.slingshot.agent.stream.ElapsedTime;
 
 /**
  * The pages under one anchor, reached without opening anything that cannot hold one.
@@ -50,7 +51,7 @@ final class PageTree {
 
     private final long budget;
     private final long timeLimitMilliseconds;
-    private final long startedMilliseconds = System.currentTimeMillis();
+    private final ElapsedTime elapsed = ElapsedTime.start();
     private final AtomicLong examined = new AtomicLong();
     private final List<String> answered;
 
@@ -128,7 +129,7 @@ final class PageTree {
     /** Whether the walk is still inside both its node budget and its time limit. */
     private boolean within() {
         return examined.get() <= budget
-                && System.currentTimeMillis() - startedMilliseconds <= timeLimitMilliseconds;
+                && elapsed.milliseconds() <= timeLimitMilliseconds;
     }
 
     private void walk(Resource top, Consumer<Resource> visitor) {

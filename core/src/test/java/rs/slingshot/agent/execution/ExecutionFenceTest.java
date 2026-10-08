@@ -17,6 +17,7 @@ import javax.jcr.Session;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,15 @@ final class ExecutionFenceTest {
             CONTRACT.value(ContractLimit.WORKER_EXECUTION_LEASE_MILLISECONDS);
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    private final java.util.List<org.apache.sling.api.resource.ResourceResolver> opened =
+            new java.util.ArrayList<>();
+
+    @AfterEach
+    void closePeerResolvers() {
+        opened.forEach(org.apache.sling.api.resource.ResourceResolver::close);
+    }
+
 
     @Test
     void acquisitionCannotCreateOwnerlessAuthority() throws RepositoryException {
@@ -414,16 +424,21 @@ final class ExecutionFenceTest {
 
     private Session another() {
         try {
-            final org.apache.sling.api.resource.ResourceResolverFactory factory =
-                    java.util.Objects.requireNonNull(sling.getService(
-                            org.apache.sling.api.resource.ResourceResolverFactory.class),
-                            "the context holds no resolver factory");
-            return java.util.Objects.requireNonNull(
-                    factory.getResourceResolver(java.util.Map.of()).adaptTo(Session.class),
+            opened.add(anotherResolver());
+            return java.util.Objects.requireNonNull(opened.getLast().adaptTo(Session.class),
                     "the second resolver has no session");
         } catch (final org.apache.sling.api.resource.LoginException refused) {
             throw new IllegalStateException("a second session could not be opened", refused);
         }
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver anotherResolver()
+            throws org.apache.sling.api.resource.LoginException {
+        final org.apache.sling.api.resource.ResourceResolverFactory factory =
+                java.util.Objects.requireNonNull(sling.getService(
+                        org.apache.sling.api.resource.ResourceResolverFactory.class),
+                        "the context holds no resolver factory");
+        return factory.getResourceResolver(java.util.Map.of());
     }
 
     private static AgentContract contract() {

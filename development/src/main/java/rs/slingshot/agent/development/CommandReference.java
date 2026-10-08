@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.SequencedMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -77,9 +78,13 @@ public final class CommandReference {
      */
     public static String render(Path registry) {
         final List<String> lines = new ArrayList<>();
+        final SequencedMap<String, RegistryCompleteness.Row> commands =
+                RegistryCompleteness.rowsIn(registry);
+        lines.add("Commands: " + commands.size() + ".");
+        lines.add("");
         lines.add("| Command | Access | Operation key | Result bytes | Fails with |");
         lines.add("|---|---|---|---|---|");
-        RegistryCompleteness.rowsIn(registry).forEach((command, row) -> lines.add(
+        commands.forEach((command, row) -> lines.add(
                 "| `" + command + "` | " + row.access() + " | " + row.operationKey() + " | "
                         + row.resultBytes() + " | " + categoriesOf(registry, command) + " |"));
         return String.join("\n", lines);
@@ -151,7 +156,8 @@ public final class CommandReference {
 
     private static List<PolicyFinding> findings(Path registry, String region) {
         final List<PolicyFinding> findings = new ArrayList<>();
-        final List<String> rendered = List.of(render(registry).split("\n"));
+        final List<String> rendered = render(registry).lines()
+                .filter(line -> !line.isEmpty()).toList();
         final List<String> committed = Stream.of(region.split("\n"))
                 .map(String::strip)
                 .filter(line -> !line.isEmpty())

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Copyright 2026 Koray Taylan Davgana
+# Focused feedback; the complete release gate is scripts/quality.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPOSITORY_ROOT
+readonly EXIT_USAGE=2
+if [[ $# -ne 1 ]]; then
+    printf 'usage: scripts/check_layer core|aem|policy\n' >&2
+    exit "${EXIT_USAGE}"
+fi
+goals=(test)
+case "$1" in
+    core|aem) layer=$1 ;;
+    policy) layer=development; goals=(test-compile surefire:test) ;;
+    *) printf 'unknown layer: %s\n' "$1" >&2; exit "${EXIT_USAGE}" ;;
+esac
+
+printf 'Focused layer check: %s. Full release evidence requires scripts/quality.\n' "${layer}"
+exec "${REPOSITORY_ROOT}/mvnw" --offline --batch-mode --no-transfer-progress \
+    -Dmaven.repo.local="${REPOSITORY_ROOT}/.dependency-cache" \
+    -f "${REPOSITORY_ROOT}/pom.xml" \
+    "${goals[@]}" -pl "${layer}" -am

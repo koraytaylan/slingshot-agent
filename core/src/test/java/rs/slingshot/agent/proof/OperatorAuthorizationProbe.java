@@ -108,7 +108,8 @@ public final class OperatorAuthorizationProbe extends SlingAllMethodsServlet
                 return;
             }
             configuration.update(FrameworkUtil.asDictionary(Map.of("permitted.groups",
-                    "empty".equals(action) ? new String[0] : new String[] { action })));
+                    "empty".equals(action) ? new String[0] : new String[] { action },
+                    "org.apache.sling.installer.configuration.persist", false)));
         } finally {
             context.ungetService(reference);
         }

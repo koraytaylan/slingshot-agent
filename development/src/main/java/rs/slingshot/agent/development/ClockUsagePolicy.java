@@ -3,6 +3,10 @@
 
 package rs.slingshot.agent.development;
 
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.ast.expr.BinaryExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -129,6 +133,7 @@ public final class ClockUsagePolicy {
         final boolean product = PRODUCT_SOURCES.stream().anyMatch(path::startsWith);
         final boolean inTheSeam = path.contains(seam);
         final List<PolicyFinding> findings = new ArrayList<>();
+        findings.addAll(wallClockSubtractions(named, RepositoryTree.text(file)));
         String declaring = "";
         for (final String line : withoutComments(RepositoryTree.text(file)).split("\n", -1)) {
             if (isDeclaration(line)) {
@@ -146,6 +151,21 @@ public final class ClockUsagePolicy {
             }
         }
         return findings;
+    }
+
+    /** Direct subtraction of a wall-clock read is independent of identifier spelling. */
+    private List<PolicyFinding> wallClockSubtractions(String named, String source) {
+        final JavaParser parser = new JavaParser(new ParserConfiguration()
+                .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21));
+        return parser.parse(source).getResult().stream()
+                .flatMap(unit -> unit.findAll(BinaryExpr.class).stream())
+                .filter(expression -> expression.getOperator() == BinaryExpr.Operator.MINUS)
+                .filter(expression -> expression.findAll(MethodCallExpr.class).stream()
+                        .anyMatch(call -> (call.getScope().map(Object::toString).orElse("")
+                                + "." + call.getNameAsString()).equals(wallClock)))
+                .map(expression -> PolicyFinding.inFile(named, DURATION_ON_A_WALL_CLOCK,
+                        expression.toString()))
+                .toList();
     }
 
     /**

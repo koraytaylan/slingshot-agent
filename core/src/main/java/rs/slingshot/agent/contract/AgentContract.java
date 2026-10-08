@@ -17,6 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.SequencedSet;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * The one typed accessor for every bound this agent is held to.
@@ -69,6 +71,25 @@ public final class AgentContract {
 
     private static final String ASSIGNMENT = "=";
 
+    /** Only a successful immutable embedded contract is shared within this defining bundle. */
+    private static final AtomicReference<EmbeddedState> EMBEDDED =
+            new AtomicReference<>(MissingEmbedded.INSTANCE);
+
+    private static final ReentrantLock EMBEDDED_LOCK = new ReentrantLock();
+
+    private sealed interface EmbeddedState permits MissingEmbedded, LoadedEmbedded {
+    }
+
+    private enum MissingEmbedded implements EmbeddedState {
+        INSTANCE
+    }
+
+    /** A complete authenticated contract; refusals and caller-provided bytes are never held here.
+     * @param loaded the successful embedded load
+     */
+    private record LoadedEmbedded(Loaded loaded) implements EmbeddedState {
+    }
+
     private final Map<ContractLimit, Long> values;
 
     private AgentContract(Map<ContractLimit, Long> values) {
@@ -115,11 +136,39 @@ public final class AgentContract {
     }
 
     /**
-     * Loads the contract embedded in this bundle.
+     * Loads the contract embedded in this bundle, reusing a successful authenticated load.
+     *
+     * <p>The defining bundle owns the immutable value. Failed loads are retried, and caller-supplied
+     * bytes still pass through {@link #load(byte[], String)} independently on every invocation.</p>
      *
      * @return the contract, or the one reason it was refused
      */
     public static Outcome load() {
+        final EmbeddedState state = EMBEDDED.get();
+        if (state instanceof final LoadedEmbedded held) {
+            return held.loaded();
+        }
+        EMBEDDED_LOCK.lock();
+        try {
+            return loadedEmbedded();
+        } finally {
+            EMBEDDED_LOCK.unlock();
+        }
+    }
+
+    private static Outcome loadedEmbedded() {
+        final EmbeddedState state = EMBEDDED.get();
+        if (state instanceof final LoadedEmbedded held) {
+            return held.loaded();
+        }
+        final Outcome outcome = readEmbedded();
+        if (outcome instanceof final Loaded loaded) {
+            EMBEDDED.set(new LoadedEmbedded(loaded));
+        }
+        return outcome;
+    }
+
+    private static Outcome readEmbedded() {
         final Optional<byte[]> document = resource(CONTRACT_RESOURCE);
         final Optional<byte[]> digest = resource(DIGEST_RESOURCE);
         if (document.isEmpty() || digest.isEmpty()) {

@@ -23,19 +23,14 @@ command = "scripts/verify_interop_images"
 reason = "The public tier runs on an image pinned by digest. Verifying it before anything runs means the tier's result is about the product rather than about which tag the registry answered with today."
 
 [[stage]]
-name = "formatting"
-command = "mvn checkstyle:check -pl core,aem,development,interop"
-reason = "Whitespace, indentation, import order, and line length, decided before anything else so a diff never carries a formatting change nobody asked for."
+name = "gate-report-verification"
+command = "python3 -m unittest discover -s support -p quality_reports_test.py"
+reason = "The report reader rejects absent, ambiguous, malformed, empty, skipped and failed suites."
 
 [[stage]]
-name = "compilation"
-command = "mvn compile -pl core,aem,development,interop"
-reason = "The four modules that carry Java. A content package is assembled rather than compiled, and asking for one before the reactor has produced it is how a gate that never ran with a clean cache passes. Every warning is an error, everywhere. A warning that survives a build is one nobody will read."
-
-[[stage]]
-name = "static-analysis"
-command = "mvn compile pmd:check spotbugs:check -pl core,aem,development,interop"
-reason = "The source-pattern and bug-pattern analysers, each failing at its first finding, so a later scan has nothing left to report."
+name = "reactor-verification"
+command = "mvn verify"
+reason = "One full reactor lifecycle compiles every module, runs every test and coverage floor, and performs formatting, static analysis, package validation and public Sling scenarios. Earlier modules produce the artifacts the development checks inspect. A nonzero runner status stops the gate before report aggregation."
 
 [[stage]]
 name = "source-policy"
@@ -73,13 +68,8 @@ command = "decided AdobePracticePolicyTest"
 reason = "The handful of practices that decide whether this survives the next platform upgrade."
 
 [[stage]]
-name = "tests-and-coverage-floor"
-command = "mvn verify"
-reason = "Every test in the reactor with the coverage floor enforced per module and per class, so a feature that arrived with no scenario fails rather than lowering an average."
-
-[[stage]]
 name = "package-analysis"
-command = "mvn verify -pl all -am -DskipTests -Djacoco.skip=true"
+command = "decided PackageAnalysisTest"
 reason = "Adobe's own container analyser and the FileVault validators, run here rather than in somebody else's pipeline."
 
 [[stage]]
@@ -125,7 +115,7 @@ reason = "Every deployment says what it does and does not permit, with a reason 
 [[stage]]
 name = "registry-completeness"
 command = "decided RegistryCompletenessTest"
-reason = "This registry and the client's published table are the same sixty-four rows, field for field. A command one side holds and the other does not is a refused submission in production, and this is the cheapest possible place to find it. Compared field by field rather than row by row because the fixes differ: a disagreeing access class is a permission decision, a disagreeing key requirement is a resend with a second effect, and a disagreeing result bound is an answer one half will refuse."
+reason = "This registry and the client's published table are the same command rows, field for field. A command one side holds and the other does not is a refused submission in production, and this is the cheapest possible place to find it. Compared field by field rather than row by row because the fixes differ: a disagreeing access class is a permission decision, a disagreeing key requirement is a resend with a second effect, and a disagreeing result bound is an answer one half will refuse."
 
 [[stage]]
 name = "command-reference"
@@ -229,7 +219,7 @@ reason = "One script, one stylesheet, and no package manager anywhere. A front-e
 
 [[stage]]
 name = "public-interop-tier"
-command = "mvn verify -pl interop -am -DskipTests -Djacoco.skip=true"
+command = "public_tier_passed"
 reason = "The tier that installs the container package into a real Sling runtime and asks it questions. It needs nothing licensed and runs on any machine."
 
 # The tiers this gate does not run, and the exact command that runs each. A passing gate is not a

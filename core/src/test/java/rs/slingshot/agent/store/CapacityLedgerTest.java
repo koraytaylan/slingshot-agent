@@ -425,6 +425,79 @@ final class CapacityLedgerTest {
                 name + " was refused").caller();
     }
 
+    @Test
+    void warmPreparationUsesOneFreshSnapshotPerQuantity() throws RepositoryException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("warm-preparation");
+        for (final AccountedQuantity quantity : AccountedQuantity.values()) {
+            CapacityLedger.prepare(session, quantity, caller);
+        }
+        final AtomicInteger refreshes = new AtomicInteger();
+        final Session measured = preparationRefreshes(session, refreshes);
+        for (final AccountedQuantity quantity : AccountedQuantity.values()) {
+            CapacityLedger.prepare(measured, quantity, caller);
+            assertTrue(session.nodeExists(CapacityLedger.totalPath(quantity).path()));
+            assertTrue(session.nodeExists(CapacityLedger.callerPath(quantity, caller).path()));
+        }
+        assertEquals(AccountedQuantity.values().length, refreshes.get());
+        assertFalse(session.hasPendingChanges());
+    }
+
+    @Test
+    void warmPreparationDiscardsPendingChangesBeforeTrustingCounters()
+            throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("fresh-preparation");
+        CapacityLedger.prepare(session, SMALL, caller);
+        try (ResourceResolver resolver = anotherResolver()) {
+            final Session competing = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            take(competing, caller, 1);
+        }
+        session.getNode(CapacityLedger.totalPath(SMALL).path()).remove();
+        final AtomicInteger refreshes = new AtomicInteger();
+        CapacityLedger.prepare(preparationRefreshes(session, refreshes), SMALL, caller);
+        assertEquals(1, refreshes.get());
+        assertFalse(session.hasPendingChanges());
+        assertEquals(1, CapacityLedger.held(session, SMALL, CONTRACT));
+        assertEquals(1, CapacityLedger.heldBy(session, SMALL, caller, CONTRACT));
+    }
+
+    @Test
+    void missingCallerCounterStillUsesFreshConflictRetries()
+            throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final StatePath.Caller caller = caller("missing-preparation");
+        CapacityLedger.prepare(session, SMALL, caller);
+        session.getNode(CapacityLedger.callerPath(SMALL, caller).path()).remove();
+        session.save();
+        try (ResourceResolver resolver = anotherResolver()) {
+            final Session competing = Objects.requireNonNull(resolver.adaptTo(Session.class));
+            CapacityLedger.prepare(SaveInterleaving.before(session, () -> {
+                final javax.jcr.Node parent = competing.getNode(StatePath.caller(caller).path());
+                CompareAndSet.stamp(parent);
+                parent.addNode("unrelated", "nt:unstructured");
+                competing.save();
+            }), SMALL, caller);
+        }
+        assertEquals(0, CapacityLedger.held(session, SMALL, CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(session, SMALL, caller, CONTRACT));
+        assertFalse(session.hasPendingChanges());
+    }
+
+    private static Session preparationRefreshes(Session session, AtomicInteger refreshes) {
+        return (Session) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
+                new Class<?>[] {Session.class}, (proxy, method, arguments) -> {
+                    if ("refresh".equals(method.getName()) && Boolean.FALSE.equals(arguments[0])) {
+                        refreshes.incrementAndGet();
+                    }
+                    try {
+                        return method.invoke(session, arguments);
+                    } catch (final InvocationTargetException failed) {
+                        throw failed.getCause();
+                    }
+                });
+    }
+
     private Session prepared() throws RepositoryException {
         final Session session = java.util.Objects.requireNonNull(
                 sling.resourceResolver().adaptTo(Session.class),

@@ -21,6 +21,7 @@ import rs.slingshot.agent.command.mutation.MutationOutcome;
 import rs.slingshot.agent.command.mutation.ReferencePolicy;
 import rs.slingshot.agent.command.mutation.RepositoryReach;
 import rs.slingshot.agent.command.mutation.SingleCommit;
+import rs.slingshot.agent.command.mutation.StoredProperties;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
@@ -148,10 +149,19 @@ public final class AssetMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(AssetHandlers.TARGET_ALREADY_EXISTS,
                     command.targetPath() + " is already there, and this command replaces nothing");
         }
+        final StoredProperties.Outcome properties = StoredProperties.of(command.metadata(), session);
+        if (properties instanceof final StoredProperties.Refused refused) {
+            return new MutationOutcome.Refused(AssetHandlers.PAYLOAD_REJECTED, refused.detail());
+        }
         try {
             final Resource asset = session.create(parent, command.name(), Map.of(
                     ListChildPagesHandler.TYPE_PROPERTY, AssetHandlers.ASSET_TYPE));
-            stored(session, asset, command);
+            final Optional<StoredProperties.Refused> refusal = stored(session, asset, command,
+                    (StoredProperties.Held) properties);
+            if (refusal.isPresent()) {
+                return new MutationOutcome.Refused(AssetHandlers.PAYLOAD_REJECTED,
+                        refusal.orElseThrow().detail());
+            }
             session.commit();
             return new MutationOutcome.Changed(CreateAssetResult.documentOf(asset.getPath(),
                     command.payload().byteLength()));
@@ -167,18 +177,24 @@ public final class AssetMutationHandler implements CommandHandler {
      * @param session the caller's own session
      * @param asset the asset's own node
      * @param command what was asked
+     * @param assignments the completely converted metadata assignments
+     * @return a typed-assignment refusal before a commit, or empty after staging the asset
      * @throws PersistenceException if the repository refuses any of it
      */
-    private static void stored(ResourceResolver session, Resource asset,
-                               CreateAssetCommand command) throws PersistenceException {
+    private static Optional<StoredProperties.Refused> stored(ResourceResolver session, Resource asset,
+                               CreateAssetCommand command, StoredProperties.Held assignments)
+            throws PersistenceException {
         final Resource content = session.create(asset, ListChildPagesHandler.PAGE_CONTENT,
                 Map.of(ListChildPagesHandler.TYPE_PROPERTY, "dam:AssetContent"));
         final Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put(ListChildPagesHandler.TYPE_PROPERTY, "nt:unstructured");
         metadata.put("dc:format", command.payload().mediaType());
         metadata.put("dam:size", command.payload().byteLength());
-        command.metadata().set().forEach((name, value) -> metadata.put(name, value.stored()));
-        session.create(content, "metadata", metadata);
+        final Resource metadataResource = session.create(content, "metadata", metadata);
+        final Optional<StoredProperties.Refused> refusal = assignments.writeTo(metadataResource);
+        if (refusal.isPresent()) {
+            return refusal;
+        }
         final Resource renditions = session.create(content, "renditions",
                 Map.of(ListChildPagesHandler.TYPE_PROPERTY, "nt:folder"));
         // The original is a file like any other: its bytes and their type live on the file's own
@@ -189,6 +205,7 @@ public final class AssetMutationHandler implements CommandHandler {
                 ListChildPagesHandler.TYPE_PROPERTY, "nt:resource",
                 "jcr:mimeType", command.payload().mediaType(),
                 "jcr:data", new java.io.ByteArrayInputStream(command.payload().content())));
+        return Optional.empty();
     }
 
     private Answer metadata(DocumentValue.Mapping arguments, ResourceResolver resolver) {
@@ -227,13 +244,22 @@ public final class AssetMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(AssetHandlers.ASSET_ACCESS_DENIED,
                     command.assetPath() + " is not an asset this caller may change");
         }
+        final StoredProperties.Outcome properties = StoredProperties.of(command.change(), session);
+        if (properties instanceof final StoredProperties.Refused refused) {
+            return new MutationOutcome.Refused(AssetHandlers.PROPERTY_REJECTED, refused.detail());
+        }
         final Optional<String> immovable = command.change().immovableIn(values);
         if (immovable.isPresent()) {
             return new MutationOutcome.Refused(AssetHandlers.PROPERTY_NOT_REMOVABLE,
                     immovable.get() + " is a property this repository will not let go of, and the"
                             + " whole change is refused rather than applied without it");
         }
-        command.change().set().forEach((name, value) -> values.put(name, value.stored()));
+        final Optional<StoredProperties.Refused> refusal =
+                ((StoredProperties.Held) properties).writeTo(metadata);
+        if (refusal.isPresent()) {
+            return new MutationOutcome.Refused(AssetHandlers.PROPERTY_REJECTED,
+                    refusal.orElseThrow().detail());
+        }
         // The metadata resource the update wrote to, which is what the client correlates.
         return sealed(session, UpdateAssetMetadataResult.documentOf(command.assetPath()
                 + "/jcr:content/metadata"));
@@ -335,14 +361,24 @@ public final class AssetMutationHandler implements CommandHandler {
                             + " adjust, and it is refused before the move rather than after some"
                             + " of them");
         }
+        final long repointed;
         try {
+            if (!RepositoryReach.adjustmentsWithin(pointing, command.sourcePath(), bound)) {
+                return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
+                        "matching reference values exceed the " + bound
+                                + " one move may adjust, so the move was refused before any change");
+            }
+            RepositoryReach.requireAdjustable(pointing, command.sourcePath(), command.destinationPath());
             RepositoryReach.moveTo(session, command.sourcePath(), command.destinationPath());
+            repointed = RepositoryReach.repointed(pointing, command.sourcePath(),
+                    command.destinationPath(), bound);
+        } catch (final RepositoryReach.ReferenceAdjustmentBudgetExceeded exceeded) {
+            return new MutationOutcome.Refused(AssetHandlers.ADJUSTMENT_BUDGET_EXCEEDED,
+                    exceeded.getMessage());
         } catch (final PersistenceException refused) {
             return new MutationOutcome.Refused(AssetHandlers.COMMIT_FAILED,
                     "the repository refused this move: " + refused.getMessage());
         }
-        final long repointed = RepositoryReach.repointed(pointing, command.sourcePath(),
-                command.destinationPath());
         return sealed(session, MoveAssetResult.documentOf(command.sourcePath(),
                 command.destinationPath(), repointed));
     }

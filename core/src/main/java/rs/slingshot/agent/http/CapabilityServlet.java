@@ -9,6 +9,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 import javax.servlet.Servlet;
 import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.SlingHttpServletResponse;
@@ -51,6 +52,9 @@ public final class CapabilityServlet extends AgentServlet {
     /** The route this servlet answers, by the name the committed table gives it. */
     public static final String ROUTE_NAME = "capabilities";
 
+    /** The standard response header carrying only fixed public duration metrics. */
+    public static final String SERVER_TIMING = "Server-Timing";
+
     /** Where this build's canonical-byte contract and its digest are embedded. */
     public static final String CANONICAL_CONTRACT_RESOURCE =
             "/rs/slingshot/agent/contract/command-canonical-json-1.json";
@@ -66,6 +70,31 @@ public final class CapabilityServlet extends AgentServlet {
     /** The active runtime and its identities, empty until a runtime is bound. */
     private final AtomicReference<Binding> binding = new AtomicReference<>(Binding.EMPTY);
 
+    /** Authenticated immutable metadata, scoped to this bundle's defining classloader. */
+    private static final AtomicReference<MetadataState> METADATA =
+            new AtomicReference<>(MissingMetadata.INSTANCE);
+
+    /** Serializes the first authentication without locking any lifecycle observation. */
+    private static final ReentrantLock METADATA_LOCK = new ReentrantLock();
+
+    /** Whether this bundle has authenticated all of its immutable discovery metadata. */
+    private sealed interface MetadataState permits MissingMetadata, LoadedMetadata {
+    }
+
+    /** No successful authentication has been published. */
+    private enum MissingMetadata implements MetadataState {
+        INSTANCE
+    }
+
+    /** Immutable resource values; lifecycle observations and runtime bindings are never held here.
+     * @param contract authenticated document bounds
+     * @param canonical authenticated canonical-byte contract digest
+     * @param transport validated embedded transport digest
+     */
+    private record LoadedMetadata(AgentContract contract, DigestValue canonical, DigestValue transport)
+            implements MetadataState {
+    }
+
     /** An atomic runtime-to-identities publication.
      * @param runtime supplying runtime instance
      * @param commands identities supplied by that runtime
@@ -80,11 +109,11 @@ public final class CapabilityServlet extends AgentServlet {
     }
 
     /**
-     * Holds a servlet with nothing in it.
+     * Holds a servlet with no bound runtime.
      *
      * <p>A declarative-services component is a singleton the container hands to every caller at
-     * once, so this one holds no state at all: everything it answers with, it reads from the
-     * committed contract and the committed route table at the moment it is asked.</p>
+     * once. Immutable contract metadata is authenticated once per bundle classloader; command
+     * bindings, generation and readiness are observed for every answer.</p>
      */
     public CapabilityServlet() {
         super();
@@ -165,6 +194,7 @@ public final class CapabilityServlet extends AgentServlet {
      */
     public void answer(SlingHttpServletRequest request, SlingHttpServletResponse response)
             throws IOException {
+        final CapabilityTimings timings = new CapabilityTimings();
         final AgentRoute route = route();
         final RequestShape.Outcome shape =
                 AgentServlet.shapeOf(request).against(route);
@@ -178,6 +208,7 @@ public final class CapabilityServlet extends AgentServlet {
                     refused.get().detail());
             return;
         }
+        timings.authenticating();
         final java.util.Optional<AuthenticationGate.Refused> anonymous =
                 AuthenticationGate.refusalIn(AuthenticationGate.of(request));
         if (anonymous.isPresent()) {
@@ -185,9 +216,11 @@ public final class CapabilityServlet extends AgentServlet {
                     anonymous.get().detail());
             return;
         }
+        timings.rendering();
         final String document = document(readiness(), binding.get().commands()).render();
         response.setContentType(route.mediaType());
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        timings.writeTo(response);
         response.getWriter().write(document);
     }
 
@@ -229,24 +262,48 @@ public final class CapabilityServlet extends AgentServlet {
      */
     public static CapabilityDocument document(AdvertisedCapabilities.Readiness observing,
                                               List<CommandContractIdentity> commands) {
-        final AgentContract.Outcome outcome = AgentContract.load();
-        if (outcome instanceof final AgentContract.Refused refused) {
-            throw new IllegalStateException("no contract: " + refused.failure() + refused.detail());
-        }
-        final AgentContract contract = ((AgentContract.Loaded) outcome).contract();
+        final LoadedMetadata metadata = metadata();
         final AdvertisedCapabilities capabilities = new AdvertisedCapabilities(
                 generation(),
                 capabilityRevision(),
-                canonicalContractDigest(),
+                metadata.canonical(),
                 commands,
                 observing.observe(),
-                digest(AgentContract.transportContractDigest()));
+                metadata.transport());
         final CapabilityDocument.Outcome built = CapabilityDocument.of(capabilities,
-                contract.value(ContractLimit.MAXIMUM_AGENT_PROTOCOL_DOCUMENT_BYTES));
+                metadata.contract().value(ContractLimit.MAXIMUM_AGENT_PROTOCOL_DOCUMENT_BYTES));
         if (built instanceof final CapabilityDocument.Refused refused) {
             throw new IllegalStateException("cannot answer: " + refused.refusal() + refused.detail());
         }
         return ((CapabilityDocument.Held) built).document();
+    }
+
+    private static LoadedMetadata metadata() {
+        if (METADATA.get() instanceof final LoadedMetadata loaded) {
+            return loaded;
+        }
+        METADATA_LOCK.lock();
+        try {
+            return loadedMetadata();
+        } finally {
+            METADATA_LOCK.unlock();
+        }
+    }
+
+    private static LoadedMetadata loadedMetadata() {
+        if (METADATA.get() instanceof final LoadedMetadata loaded) {
+            return loaded;
+        }
+        final AgentContract.Outcome outcome = AgentContract.load();
+        if (outcome instanceof final AgentContract.Refused refused) {
+            throw new IllegalStateException("no contract: " + refused.failure() + refused.detail());
+        }
+        final LoadedMetadata loaded = new LoadedMetadata(((AgentContract.Loaded) outcome).contract(),
+                canonicalContractDigest(), digest(AgentContract.transportContractDigest()));
+        // Publish only success. A resource failure remains a normal refusal on every attempt,
+        // rather than poisoning a static initializer or remembering a partially loaded contract.
+        METADATA.set(loaded);
+        return loaded;
     }
 
     /**

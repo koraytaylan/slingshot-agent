@@ -13,20 +13,22 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * Where a continuation token says to resume, in full.
  *
- * <p>Five members and all five required: which partition the query ran in, which incarnation of the
- * store it ran against, exactly which query it was, where in that query's results to resume, and
- * when the token stops being honoured. A position on its own would resume the wrong search; a
- * position and a query would resume it against the wrong target; and a token with no expiry would
+ * <p>Six members and all six required: which partition the query ran in, which incarnation of the
+ * store it ran against, exactly which query it was, where in that query's results to resume,
+ * the original maximum page size, and when the token stops being honoured. A position on its own
+ * would resume the wrong search; a position and a query would resume it against the wrong target;
+ * and a token with no expiry would
  * outlive the key that signed it.</p>
  *
  * @param generation which incarnation of the store the query ran against
  * @param targetDigest the partition the query ran in, which this side compares and never parses
  * @param queryDigest exactly which query this token belongs to
  * @param position where in that query's results to resume
+ * @param initialResultLimit the maximum page size fixed when enumeration began
  * @param expiresAtUnixMilliseconds when this token stops being honoured
  */
 public record ContinuationState(EventStoreGeneration generation, DigestValue targetDigest,
-                                DigestValue queryDigest, long position,
+                                DigestValue queryDigest, long position, long initialResultLimit,
                                 long expiresAtUnixMilliseconds) {
 
     /** The member the store's incarnation is carried in. */
@@ -41,19 +43,22 @@ public record ContinuationState(EventStoreGeneration generation, DigestValue tar
     /** The member the position is carried in. */
     public static final String POSITION = "position";
 
+    /** The member carrying the maximum page size fixed by the initial request. */
+    public static final String INITIAL_RESULT_LIMIT = "initial_result_limit";
+
     /** The member the expiry is carried in. */
     public static final String EXPIRES_AT = "expires_at_unix_milliseconds";
 
-    /** Every member this document has, and there is no sixth. */
+    /** Every member this document has, and there is no seventh. */
     public static final List<String> MEMBERS =
-            List.of(GENERATION, TARGET_DIGEST, EXPIRES_AT, POSITION, QUERY_DIGEST);
+            List.of(GENERATION, TARGET_DIGEST, EXPIRES_AT, INITIAL_RESULT_LIMIT, POSITION, QUERY_DIGEST);
 
     /** The result of reading one: the state, or the one reason there is none. */
     public sealed interface Outcome permits Held, Refused {
     }
 
     /**
-     * A document carrying all five members, each in shape.
+     * A document carrying all six members, each in shape.
      *
      * @param state the state it carried
      */
@@ -77,7 +82,7 @@ public record ContinuationState(EventStoreGeneration generation, DigestValue tar
     public static Outcome of(DocumentValue document) {
         if (!(document instanceof final DocumentValue.Mapping mapping)) {
             return new Refused(new IdentityRefusal(IdentityRefusal.Failure.NOT_A_DOCUMENT, "",
-                    "a continuation state is an object with five members"));
+                    "a continuation state is an object with six members"));
         }
         final Optional<IdentityRefusal> shape = shapeOf(mapping);
         if (shape.isPresent()) {
@@ -98,7 +103,7 @@ public record ContinuationState(EventStoreGeneration generation, DigestValue tar
         return MEMBERS.stream()
                 .filter(member -> mapping.member(member).isEmpty())
                 .map(member -> new IdentityRefusal(IdentityRefusal.Failure.MEMBER_ABSENT, member,
-                        "a continuation state is all five members or none"))
+                        "a continuation state is all six members or none"))
                 .findFirst();
     }
 
@@ -106,13 +111,22 @@ public record ContinuationState(EventStoreGeneration generation, DigestValue tar
         final Optional<Long> generation = whole(mapping, GENERATION);
         final Optional<Long> position = whole(mapping, POSITION);
         final Optional<Long> expiry = whole(mapping, EXPIRES_AT);
+        final Optional<Long> limit = whole(mapping, INITIAL_RESULT_LIMIT);
         if (generation.isEmpty() || position.isEmpty() || expiry.isEmpty()) {
             return new Refused(new IdentityRefusal(IdentityRefusal.Failure.NOT_TEXT, POSITION,
-                    "the generation, the position, and the expiry are whole numbers"));
+                    "the generation, position, original limit and expiry are whole numbers"));
         }
         if (position.get() < 0 || expiry.get() < 0) {
             return new Refused(new IdentityRefusal(IdentityRefusal.Failure.OUT_OF_RANGE, POSITION,
                     "a position and an expiry are counted from zero"));
+        }
+        if (limit.isEmpty()) {
+            return new Refused(new IdentityRefusal(IdentityRefusal.Failure.NOT_TEXT,
+                    INITIAL_RESULT_LIMIT, "the original page size is a whole number"));
+        }
+        if (limit.get() < 1) {
+            return new Refused(new IdentityRefusal(IdentityRefusal.Failure.OUT_OF_RANGE,
+                    INITIAL_RESULT_LIMIT, "the original page size is positive"));
         }
         final EventStoreGeneration.Outcome held = EventStoreGeneration.of(generation.get());
         if (held instanceof final EventStoreGeneration.Refused refused) {
@@ -120,11 +134,11 @@ public record ContinuationState(EventStoreGeneration generation, DigestValue tar
                     refused.refusal() + ": " + refused.detail()));
         }
         return digests(mapping, ((EventStoreGeneration.Held) held).generation(), position.get(),
-                expiry.get());
+                limit.get(), expiry.get());
     }
 
     private static Outcome digests(DocumentValue.Mapping mapping, EventStoreGeneration generation,
-                                   long position, long expiry) {
+                                   long position, long limit, long expiry) {
         final Optional<DigestValue> target = digest(mapping, TARGET_DIGEST);
         final Optional<DigestValue> query = digest(mapping, QUERY_DIGEST);
         if (target.isEmpty()) {
@@ -135,7 +149,7 @@ public record ContinuationState(EventStoreGeneration generation, DigestValue tar
             return new Refused(new IdentityRefusal(IdentityRefusal.Failure.NOT_A_DIGEST,
                     QUERY_DIGEST, "a digest is sixty-four lower-case hexadecimal characters"));
         }
-        return new Held(new ContinuationState(generation, target.get(), query.get(), position,
+        return new Held(new ContinuationState(generation, target.get(), query.get(), position, limit,
                 expiry));
     }
 

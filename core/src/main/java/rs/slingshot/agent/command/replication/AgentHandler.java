@@ -105,6 +105,12 @@ public final class AgentHandler implements CommandHandler {
             return new Failed(AgentCommands.AGENT_INVENTORY_FAILED,
                     refused.refusal().refusal() + ": " + refused.refusal().detail());
         }
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(
+                ((AgentCommands.Windowed) asked).window(), AgentCommands.LIST_WIRE_NAME,
+                arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final ReplicationInventory.Outcome found = inventory.agents();
         if (found instanceof final ReplicationInventory.Refused refused) {
             return new Failed(refused.category(), refused.detail());
@@ -117,7 +123,7 @@ public final class AgentHandler implements CommandHandler {
                     + " this caller may examine");
         }
         final PagingSupport.Outcome<ReplicationInventory.Agent> page = PagingSupport.page(agents,
-                ((AgentCommands.Windowed) asked).window(), AgentCommands.LIST_WIRE_NAME, arguments,
+                (PagingSupport.Ready) prepared, AgentCommands.LIST_WIRE_NAME,
                 context, contract);
         if (page instanceof final PagingSupport.Refused<ReplicationInventory.Agent> refused) {
             return new Failed(refused.category(), refused.detail());
@@ -149,6 +155,11 @@ public final class AgentHandler implements CommandHandler {
                     refused.refusal().refusal() + ": " + refused.refusal().detail());
         }
         final AgentCommands.Windowed windowed = (AgentCommands.Windowed) asked;
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(windowed.window(),
+                AgentCommands.INSPECT_QUEUE_WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final ReplicationInventory.Outcome read = inventory.queue(windowed.agentIdentifier());
         if (read instanceof final ReplicationInventory.Refused refused) {
             return new Failed(refused.category(), refused.detail());
@@ -160,7 +171,7 @@ public final class AgentHandler implements CommandHandler {
                     + " this caller may examine");
         }
         final PagingSupport.Outcome<ReplicationInventory.Entry> page = PagingSupport.page(
-                queue.entries(), windowed.window(), AgentCommands.INSPECT_QUEUE_WIRE_NAME, arguments,
+                queue.entries(), (PagingSupport.Ready) prepared, AgentCommands.INSPECT_QUEUE_WIRE_NAME,
                 context, contract);
         if (page instanceof final PagingSupport.Refused<ReplicationInventory.Entry> refused) {
             return new Failed(refused.category(), refused.detail());

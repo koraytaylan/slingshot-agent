@@ -120,8 +120,9 @@ final class ResourceResolutionCommandTest {
         // A mapping that changed nothing has nothing to trace, and saying so is the useful answer:
         // an operator chasing a link that was not rewritten needs to know no rule fired, which is
         // a different thing from a rule firing and producing the same text.
-        assertTrue(traced.member(MapResourcePathResult.TRACE).isEmpty(),
-                "an address nothing rewrote was reported as having gone through a rule");
+        assertEquals(new DocumentValue.Sequence(List.of()),
+                traced.member(MapResourcePathResult.TRACE).orElseThrow(),
+                "an unchanged mapping must answer a requested trace with no entries");
     }
 
     @Test
@@ -236,14 +237,15 @@ final class ResourceResolutionCommandTest {
                 "the resolution was refused").result();
         // Nothing rewrote this address, so there is nothing to trace and saying so is the useful
         // answer: an operator chasing a link that was not rewritten needs to know no rule fired.
-        assertTrue(traced.member(ResolveResourcePathResult.TRACE).isEmpty(),
-                "an address nothing rewrote was reported as having gone through a rule");
+        assertEquals(new DocumentValue.Sequence(List.of()),
+                traced.member(ResolveResourcePathResult.TRACE).orElseThrow(),
+                "an unchanged resolution must answer a requested trace with no entries");
         assertEquals(new DocumentValue.Text("/content/site/page"),
                 traced.member(ResolveResourcePathResult.RESOLVED_PATH).orElseThrow());
         final DocumentValue.Mapping rendered = ResolveResourcePathResult.documentOf(
                 new ResolveResourcePathResult.Resolution("https://example.test/site.print.html",
                         "/content/site", "site/components/page", List.of("print"), "html",
-                        "/a/b", List.of("/content/site")));
+                        "/a/b", List.of("/content/site")), TraceDisclosure.INCLUDED);
         assertEquals(new DocumentValue.Text("site/components/page"),
                 rendered.member(ResolveResourcePathResult.RESOURCE_TYPE).orElseThrow());
         assertEquals(new DocumentValue.Text("html"),
@@ -257,7 +259,7 @@ final class ResourceResolutionCommandTest {
                 new ResolveResourcePathResult.Resolution("https://example.test/site",
                         ResolveResourcePathResult.ABSENT, ResolveResourcePathResult.ABSENT,
                         List.of(), ResolveResourcePathResult.ABSENT,
-                        ResolveResourcePathResult.ABSENT, List.of()));
+                        ResolveResourcePathResult.ABSENT, List.of()), TraceDisclosure.OMITTED);
         assertTrue(bare.member(ResolveResourcePathResult.EXTENSION).isEmpty(),
                 "a request that named no extension was answered with an empty one, which reads as"
                         + " an extension that is the empty string");
@@ -268,7 +270,7 @@ final class ResourceResolutionCommandTest {
     void amappingReportsWhereItStarted() {
         final DocumentValue.Mapping rendered = MapResourcePathResult.documentOf(
                 "/content/site/page", "https://example.test/page.html",
-                List.of("/content/site/page"));
+                List.of("/content/site/page"), TraceDisclosure.INCLUDED);
         assertEquals(new DocumentValue.Text("https://example.test/page.html"),
                 rendered.member(MapResourcePathResult.MAPPED_ADDRESS).orElseThrow());
         assertEquals(1, ((DocumentValue.Sequence) rendered.member(MapResourcePathResult.TRACE)

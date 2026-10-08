@@ -33,7 +33,7 @@ import rs.slingshot.agent.json.DocumentValue;
 public final class ContinuationToken {
 
     /** The version every token is derived under, which is inside the integrity digest. */
-    public static final String VERSION = "slingshot.agent-continuation/1";
+    public static final String VERSION = "slingshot.agent-continuation/2";
 
     /** What separates two fields inside the derivation, which no field can carry. */
     public static final byte FIELD_SEPARATOR = 0;
@@ -190,6 +190,8 @@ public final class ContinuationToken {
         members.put(ContinuationState.EXPIRES_AT, new DocumentValue.Whole(
                 state.expiresAtUnixMilliseconds()));
         members.put(ContinuationState.POSITION, new DocumentValue.Whole(state.position()));
+        members.put(ContinuationState.INITIAL_RESULT_LIMIT,
+                new DocumentValue.Whole(state.initialResultLimit()));
         members.put(ContinuationState.QUERY_DIGEST, new DocumentValue.Text(
                 state.queryDigest().rendered()));
         return new DocumentValue.Mapping(members);
@@ -242,7 +244,9 @@ public final class ContinuationToken {
                             EventStoreGeneration serving, long nowUnixMilliseconds,
                             AgentContract contract) {
         if (stateBytes() > contract.value(
-                ContractLimit.MAXIMUM_AGENT_CONTINUATION_KEY_STATE_BYTES)) {
+                ContractLimit.MAXIMUM_AGENT_CONTINUATION_KEY_STATE_BYTES)
+                || state.initialResultLimit() < 1
+                || state.initialResultLimit() > contract.value(ContractLimit.MAXIMUM_RESULT_LIMIT)) {
             return new Refused(Refusal.MALFORMED);
         }
         final Optional<ValidatingKey> signing = signingKey(ring, nowUnixMilliseconds);
@@ -279,6 +283,7 @@ public final class ContinuationToken {
                         state.queryDigest().rendered().getBytes(StandardCharsets.UTF_8),
                         wholeNumber(state.generation().number()),
                         wholeNumber(state.position()),
+                        wholeNumber(state.initialResultLimit()),
                         wholeNumber(state.expiresAtUnixMilliseconds()))
                 .forEach(field -> {
                     bound.writeBytes(field);

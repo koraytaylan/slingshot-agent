@@ -101,9 +101,11 @@ public final class ResolveResourcePathResult {
      * The result one resolution produces.
      *
      * @param resolution what the platform did
+     * @param disclosure whether the caller asked to see the trace, including an empty one
      * @return the result document
      */
-    public static DocumentValue.Mapping documentOf(Resolution resolution) {
+    public static DocumentValue.Mapping documentOf(Resolution resolution,
+                                                   TraceDisclosure disclosure) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(REQUEST_ADDRESS, new DocumentValue.Text(resolution.requestAddress()));
         put(result, RESOLVED_PATH, resolution.resolvedPath());
@@ -113,7 +115,7 @@ public final class ResolveResourcePathResult {
                 .toList()));
         put(result, EXTENSION, resolution.extension());
         put(result, SUFFIX, resolution.suffix());
-        if (!resolution.trace().isEmpty()) {
+        if (disclosure == TraceDisclosure.INCLUDED) {
             result.put(TRACE, new DocumentValue.Sequence(resolution.trace().stream()
                     .map(rule -> (DocumentValue) new DocumentValue.Text(rule))
                     .toList()));

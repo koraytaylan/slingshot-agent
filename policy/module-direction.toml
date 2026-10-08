@@ -43,13 +43,13 @@ artifact = "slingshot-agent-all"
 kind = "content-package"
 
 [[module]]
-name = "development"
-artifact = "slingshot-agent-development"
+name = "interop"
+artifact = "slingshot-agent-interop"
 kind = "tooling"
 
 [[module]]
-name = "interop"
-artifact = "slingshot-agent-interop"
+name = "development"
+artifact = "slingshot-agent-development"
 kind = "tooling"
 
 # The only edge between two product modules. It is provided rather than embedded: the aem bundle

@@ -10,6 +10,7 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.osgi.framework.BundleContext;
@@ -43,6 +44,7 @@ import rs.slingshot.agent.command.content.AuthoringCatalogHandler;
 import rs.slingshot.agent.command.content.ChildListingHandler;
 import rs.slingshot.agent.command.content.ComponentInstancesCommand;
 import rs.slingshot.agent.command.content.ContentCatalogHandler;
+import rs.slingshot.agent.command.content.DiscoveryRegistry;
 import rs.slingshot.agent.command.content.DownloadContentPackageCommand;
 import rs.slingshot.agent.command.content.DownloadContentPackageHandler;
 import rs.slingshot.agent.command.content.FindAssetsByMetadataCommand;
@@ -132,7 +134,8 @@ public final class DefaultCommandRuntime implements CommandRuntime {
     private sealed interface State extends Serializable permits Active, Missing {
     }
 
-    private record Active(CommandDispatch dispatch, AgentContract contract) implements State {
+    private record Active(CommandDispatch dispatch, AgentContract contract,
+            DiscoveryRegistry discovery) implements State {
     }
 
     private enum Missing implements State {
@@ -146,7 +149,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
      */
     public DefaultCommandRuntime(CommandDispatch dispatch, AgentContract contract) {
         state.set(new Active(java.util.Objects.requireNonNull(dispatch, "dispatch"),
-                java.util.Objects.requireNonNull(contract, "contract")));
+                java.util.Objects.requireNonNull(contract, "contract"), new DiscoveryRegistry(contract)));
     }
 
     /** Creates the fail-closed runtime before declarative-services activation. */
@@ -200,19 +203,46 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         if (!(rows instanceof final CommandRegistry.Loaded embedded)) {
             return;
         }
+        try (var activation = new DiscoveryActivation(present.contract())) {
+            activateDispatch(present.contract(), embedded.registry(), staging, activation);
+        }
+    }
+
+    private void activateDispatch(AgentContract contract, CommandRegistry registry,
+                                    java.util.List<Path> staging, DiscoveryActivation activation) {
         final java.util.List<CommandDispatch.Registration> registrations =
-                java.util.stream.Stream.of(registrations(present.contract()),
-                        PlatformRegistrations.registrations(present.contract(), seams.get()),
-                        staged(present.contract(), embedded.registry(), staging))
+                java.util.stream.Stream.of(registrations(contract, activation.discovery),
+                        PlatformRegistrations.registrations(contract, seams.get()),
+                        staged(contract, registry, staging))
                         .flatMap(java.util.List::stream).toList();
-        final CommandRegistry.Outcome active = embedded.registry().active(registrations.stream()
+        final CommandRegistry.Outcome active = registry.active(registrations.stream()
                 .map(CommandDispatch.Registration::wireName).toList());
         if (!(active instanceof final CommandRegistry.Loaded selected)) {
             return;
         }
         final CommandDispatch.Outcome dispatch = CommandDispatch.from(selected.registry(), registrations);
         if (dispatch instanceof final CommandDispatch.Held ready) {
-            state.set(new Active(ready.dispatch(), present.contract()));
+            activation.discovery.start();
+            final State previous = state.getAndSet(new Active(ready.dispatch(), contract,
+                    activation.discovery));
+            activation.retained.set(true);
+            closeDiscovery(previous);
+        }
+    }
+
+    private static final class DiscoveryActivation implements AutoCloseable {
+        private final DiscoveryRegistry discovery;
+        private final AtomicBoolean retained = new AtomicBoolean();
+
+        private DiscoveryActivation(AgentContract contract) {
+            this.discovery = new DiscoveryRegistry(contract);
+        }
+
+        @Override
+        public void close() {
+            if (!retained.get()) {
+                discovery.close();
+            }
         }
     }
 
@@ -341,7 +371,13 @@ public final class DefaultCommandRuntime implements CommandRuntime {
     /** Revokes the runtime before the DS component is released. */
     @Deactivate
     public void deactivate() {
-        state.set(Missing.INSTANCE);
+        closeDiscovery(state.getAndSet(Missing.INSTANCE));
+    }
+
+    private static void closeDiscovery(State previous) {
+        if (previous instanceof final Active active) {
+            active.discovery().close();
+        }
     }
 
     /**
@@ -374,18 +410,19 @@ public final class DefaultCommandRuntime implements CommandRuntime {
         }
     }
 
-    private static java.util.List<CommandDispatch.Registration> registrations(AgentContract contract) {
+    private static java.util.List<CommandDispatch.Registration> registrations(AgentContract contract,
+                                                                              DiscoveryRegistry discovery) {
         return java.util.List.of(
                 new CommandDispatch.Registration(FindAssetsByMetadataCommand.WIRE_NAME,
-                        new FindAssetsByMetadataHandler(contract)),
+                        new FindAssetsByMetadataHandler(contract, discovery)),
                 new CommandDispatch.Registration(FindAssetsReferencedByPageCommand.WIRE_NAME,
                         new FindAssetsReferencedByPageHandler(contract)),
                 new CommandDispatch.Registration(FindPagesByTemplateCommand.WIRE_NAME,
                         new FindPagesByTemplateHandler(contract)),
                 new CommandDispatch.Registration(FindPagesContainingPhraseCommand.WIRE_NAME,
-                        new FindPagesContainingPhraseHandler(contract)),
+                        new FindPagesContainingPhraseHandler(contract, discovery)),
                 new CommandDispatch.Registration(FindPagesUsingComponentsCommand.WIRE_NAME,
-                        new FindPagesUsingComponentsHandler(contract)),
+                        new FindPagesUsingComponentsHandler(contract, discovery)),
                 new CommandDispatch.Registration(ListAssetRenditionsCommand.WIRE_NAME,
                         new ListAssetRenditionsHandler(contract)),
                 new CommandDispatch.Registration(ListChildNodesCommand.WIRE_NAME,
@@ -402,15 +439,16 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                                 AuthoringCatalogHandler.Kind.FRAGMENT_MODELS)),
                 new CommandDispatch.Registration(ListComponentDefinitionsCommand.WIRE_NAME,
                         new ContentCatalogHandler(contract,
-                                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS)),
+                                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, discovery)),
                 new CommandDispatch.Registration(ComponentInstancesCommand.WIRE_NAME,
-                        new ContentCatalogHandler(contract, ContentCatalogHandler.Kind.COMPONENTS)),
+                        new ContentCatalogHandler(contract, ContentCatalogHandler.Kind.COMPONENTS,
+                        discovery)),
                 new CommandDispatch.Registration(ListContentFragmentsCommand.WIRE_NAME,
                         new ContentCatalogHandler(contract,
-                                ContentCatalogHandler.Kind.CONTENT_FRAGMENTS)),
+                                ContentCatalogHandler.Kind.CONTENT_FRAGMENTS, discovery)),
                 new CommandDispatch.Registration(ListExperienceFragmentsCommand.WIRE_NAME,
                         new ContentCatalogHandler(contract,
-                                ContentCatalogHandler.Kind.EXPERIENCE_FRAGMENTS)),
+                                ContentCatalogHandler.Kind.EXPERIENCE_FRAGMENTS, discovery)),
                 new CommandDispatch.Registration(ListResourceMappingsCommand.WIRE_NAME,
                         new ListResourceMappingsHandler(contract)),
                 new CommandDispatch.Registration("load_content_as_json",
@@ -418,7 +456,7 @@ public final class DefaultCommandRuntime implements CommandRuntime {
                 new CommandDispatch.Registration(MapResourcePathCommand.WIRE_NAME,
                         new MapResourcePathHandler(contract)),
                 new CommandDispatch.Registration(QueryPathsCommand.WIRE_NAME,
-                        new QueryPathsHandler(contract)),
+                        new QueryPathsHandler(contract, discovery)),
                 new CommandDispatch.Registration(ReadContentFragmentCommand.WIRE_NAME,
                         new ReadContentFragmentHandler(contract)),
                 new CommandDispatch.Registration(ResolveResourcePathCommand.WIRE_NAME,

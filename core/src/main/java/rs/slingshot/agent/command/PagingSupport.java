@@ -77,25 +77,81 @@ public final class PagingSupport {
     public static <R> Outcome<R> page(List<R> entries, ResultWindow window, String wireName,
                                       DocumentValue.Mapping arguments, CallerContext context,
                                       AgentContract contract) {
+        final Preparation prepared = prepare(window, wireName, arguments, context, contract);
+        if (prepared instanceof final WindowRefused refused) {
+            return new Refused<>(refused.category(), refused.detail());
+        }
+        return page(entries, (Ready) prepared, wireName, context, contract);
+    }
+
+    /** A window validated before a handler begins repository discovery. */
+    public sealed interface Preparation permits Ready, WindowRefused {
+    }
+
+    /**
+     * Validated window parameters and the query they are bound to.
+     * @param offset where enumeration resumes
+     * @param limit maximum matches returned
+     * @param digest the authenticated query digest
+     * @param expiresAtUnixMilliseconds the fixed expiry inherited by every successor token
+     */
+    public record Ready(long offset, long limit, QueryDigest digest,
+                        long expiresAtUnixMilliseconds) implements Preparation {
+    }
+
+    /**
+     * The refusal that prevents any repository discovery.
+     * @param category the declared continuation failure
+     * @param detail the reason, without reflecting token contents
+     */
+    public record WindowRefused(String category, String detail) implements Preparation {
+    }
+
+    /**
+     * Validates continuation authority before a caller touches repository content.
+     * @param window the requested window
+     * @param wireName the command being paged
+     * @param arguments its complete arguments
+     * @param context per-call continuation authority and identity
+     * @param contract authenticated bounds
+     * @return the prepared window or the exact validation refusal
+     */
+    public static Preparation prepare(ResultWindow window, String wireName,
+                                       DocumentValue.Mapping arguments, CallerContext context,
+                                       AgentContract contract) {
         final Optional<PagedQuery> query = query(wireName, context);
         final QueryDigest.Outcome digest = query.map(value -> value.digestOf(arguments))
                 .orElseGet(() -> QueryDigest.of(wireName, arguments));
         if (!(digest instanceof final QueryDigest.Held held)) {
-            return new Refused<>("continuation_token_malformed",
-                    "the query arguments cannot be represented canonically");
+            return refused(ContinuationToken.Refusal.MALFORMED);
         }
-        final long offset = offset(window, held.digest(), context, contract);
-        if (offset < 0) {
-            return new Refused<>("continuation_token_integrity_invalid",
-                    "the continuation token was not accepted");
-        }
-        final long limit = window instanceof final ResultWindow.Initial initial
-                ? initial.limit() : contract.value(ContractLimit.DEFAULT_RESULT_LIMIT);
-        final List<R> fromOffset = entries.stream().skip(offset).toList();
-        final PagedQuery.Page<R> page = PagedQuery.pageOf(fromOffset, limit, offset);
-        final Optional<String> token = token(page, wireName, held.digest(), context, contract);
-        if (page.following() instanceof PagedQuery.More
-                && context.paging() instanceof CallerContext.Unavailable) {
+        return switch (window) {
+            case ResultWindow.Initial initial ->
+                    new Ready(initial.offset(), initial.limit(), held.digest(),
+                            expiresAt(context, contract));
+            case ResultWindow.Continuation resumed ->
+                    continuation(resumed, held.digest(), context, contract);
+        };
+    }
+
+    /**
+     * Applies an already validated window and requires a token whenever rows remain.
+     * @param entries the complete bounded result in stable order
+     * @param prepared the previously validated window
+     * @param wireName the command being paged
+     * @param context the per-call continuation authority
+     * @param contract authenticated bounds
+     * @param <R> the row type
+     * @return a page or an authority refusal
+     */
+    public static <R> Outcome<R> page(List<R> entries, Ready prepared, String wireName,
+                                      CallerContext context, AgentContract contract) {
+        final List<R> fromOffset = entries.stream().skip(prepared.offset())
+                .limit(prepared.limit() + 1).toList();
+        final PagedQuery.Page<R> page = PagedQuery.pageOf(fromOffset, prepared.limit(),
+                prepared.offset());
+        final Optional<String> token = token(page, wireName, prepared, context);
+        if (page.following() instanceof PagedQuery.More && token.isEmpty()) {
             return new Refused<>("continuation_token_integrity_invalid",
                     "continuation authority is unavailable");
         }
@@ -108,33 +164,52 @@ public final class PagingSupport {
                 : Optional.empty();
     }
 
-    private static long offset(ResultWindow window, QueryDigest query, CallerContext context,
-                               AgentContract contract) {
-        if (window instanceof final ResultWindow.Initial initial) {
-            return initial.offset();
-        }
+    private static long expiresAt(CallerContext context, AgentContract contract) {
+        return context.paging() instanceof final CallerContext.Available paging
+                ? paging.nowUnixMilliseconds()
+                        + contract.value(ContractLimit.CONTINUATION_TOKEN_LIFETIME_MILLISECONDS)
+                : 0;
+    }
+
+    private static Preparation continuation(ResultWindow.Continuation continuation, QueryDigest query,
+                                            CallerContext context, AgentContract contract) {
         if (!(context.paging() instanceof final CallerContext.Available paging)) {
-            return -1;
+            return refused(ContinuationToken.Refusal.INTEGRITY_INVALID);
         }
-        final ResultWindow.Continuation continuation = (ResultWindow.Continuation) window;
         final BoundedDocumentReader.Outcome read = BoundedDocumentReader.read(
                 continuation.continuationToken().getBytes(StandardCharsets.UTF_8),
                 BoundedDocumentReader.Bounds.from(contract));
         if (!(read instanceof final BoundedDocumentReader.Read parsed)
-                || !(ContinuationToken.read(parsed.value()) instanceof final ContinuationToken.Read token)
-                || !(paging.authority().read() instanceof final ContinuationKeyAuthority.Read authority)) {
-            return -1;
+                || !(ContinuationToken.read(parsed.value()) instanceof final ContinuationToken.Read token)) {
+            return refused(ContinuationToken.Refusal.MALFORMED);
+        }
+        if (!(paging.authority().read() instanceof final ContinuationKeyAuthority.Read authority)) {
+            return refused(ContinuationToken.Refusal.INTEGRITY_INVALID);
         }
         final ContinuationToken.Outcome validated = token.token().validate(authority.ring(),
                 paging.targetDigest(), query, paging.generation(), paging.nowUnixMilliseconds(),
                 contract);
-        return validated instanceof ContinuationToken.Honoured
-                ? token.token().unvalidatedState().position() : -1;
+        if (validated instanceof final ContinuationToken.Refused refusal) {
+            return refused(refusal.refusal());
+        }
+        return new Ready(token.token().unvalidatedState().position(),
+                token.token().unvalidatedState().initialResultLimit(), query,
+                token.token().unvalidatedState().expiresAtUnixMilliseconds());
+    }
+
+    private static WindowRefused refused(ContinuationToken.Refusal refusal) {
+        final String category = switch (refusal) {
+            case MALFORMED -> "continuation_token_malformed";
+            case INTEGRITY_INVALID -> "continuation_token_integrity_invalid";
+            case WRONG_TARGET -> "continuation_token_wrong_target";
+            case WRONG_QUERY -> "continuation_token_wrong_query";
+            case WRONG_GENERATION, EXPIRED -> "continuation_token_expired";
+        };
+        return new WindowRefused(category, ContinuationRefusal.detailOf(refusal));
     }
 
     private static Optional<String> token(PagedQuery.Page<?> page, String wireName,
-                                          QueryDigest query, CallerContext context,
-                                          AgentContract contract) {
+                                          Ready prepared, CallerContext context) {
         if (!(page.following() instanceof PagedQuery.More)) {
             return Optional.of("");
         }
@@ -143,7 +218,8 @@ public final class PagingSupport {
             return Optional.empty();
         }
         return new PagedQuery(wireName, paging.targetDigest(), paging.generation())
-                .tokenFor(page, query, read.ring(), paging.nowUnixMilliseconds(), contract)
+                .tokenFor(page, prepared.digest(), read.ring(), prepared.limit(),
+                        prepared.expiresAtUnixMilliseconds())
                 .map(ContinuationToken::rendered);
     }
 }

@@ -12,9 +12,9 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * One fragment's elements in one variation, keyed by their own names.
  *
- * <p>An element is text, or a list of text where it holds several, and its type is not restated
- * beside it. The model is what declares an element's type and the answer names the model, so a
- * caller who needs the type reads it from the one place that defines it rather than from a copy
+ * <p>An element is text, or a list of text where the repository records an array, and its type
+ * is not restated beside it. The model declares an element's type and the answer names the model,
+ * so a caller who needs the type reads it from the one place that defines it rather than from a copy
  * that can disagree.</p>
  *
  * <p>The answer echoes the fragment's own address and the variation it read. A caller comparing
@@ -46,22 +46,41 @@ public final class ReadContentFragmentResult {
     public static final List<String> MEMBERS =
             List.of(ELEMENTS, MODEL_PATH, REPOSITORY_PATH, TITLE, VARIATION_NAME);
 
+    /** Whether the repository recorded scalar text or an array, including an array of one. */
+    public enum Cardinality {
+        /** One scalar text property. */
+        SINGLE,
+        /** An array property whose length does not change its cardinality. */
+        MULTIPLE
+    }
+
     /**
      * One element of one fragment as a caller receives it.
      *
-     * <p>Its value is text, or a list of text where the element holds several. That is what the
+     * <p>Its value is text, or a list where the repository records multiple cardinality, even
+     * when that list holds one value. That is what the
      * client's schema declares and it is the whole of what a fragment element is on the wire: an
      * element's type belongs to the model, which the answer names, rather than being restated
      * beside every value.</p>
      *
      * @param name the element's own name, which is how the model declares it
      * @param values the value, or the values where the element holds several
+     * @param cardinality whether the repository recorded scalar text or an array
      */
-    public record Element(String name, List<String> values) {
+    public record Element(String name, List<String> values, Cardinality cardinality) {
 
         /** Holds the values apart from whatever produced them. */
         public Element {
             values = List.copyOf(values);
+        }
+
+        /**
+         * Holds normalized values using the original scalar-or-several convention.
+         * @param name the element's name
+         * @param values the already normalized values
+         */
+        public Element(String name, List<String> values) {
+            this(name, values, values.size() == 1 ? Cardinality.SINGLE : Cardinality.MULTIPLE);
         }
 
         /**
@@ -80,7 +99,7 @@ public final class ReadContentFragmentResult {
          * @return whether it does, which decides how the value is written
          */
         public boolean isSingle() {
-            return values.size() == 1;
+            return cardinality == Cardinality.SINGLE;
         }
     }
 

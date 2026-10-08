@@ -169,12 +169,12 @@ public final class ArtifactStore {
         if (refused.isPresent()) {
             return refused.get();
         }
-        final Optional<CapacityReservation> pending = CapacityReservation.create(session,
-                CapacityReservation.processOwner(), caller, charges(publication));
+        final Optional<CapacityReservation.Guard> pending = CapacityReservation.createGuard(session,
+                CapacityReservation.processOwner(), caller, charges(publication), contract);
         if (pending.isEmpty()) {
             return contended();
         }
-        try (CapacityReservation.Guard guard = pending.get().guard(session, contract)) {
+        try (CapacityReservation.Guard guard = pending.get()) {
             return streamed(session, operation, publication, nowUnixMilliseconds,
                     node -> CapacityLedger.transfer(session, session.getNode(prepaid.declaration().path()),
                             node, guard.reservation(), contract),

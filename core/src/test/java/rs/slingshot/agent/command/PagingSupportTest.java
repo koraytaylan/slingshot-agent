@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
 import rs.slingshot.agent.continuation.KeyRing;
@@ -69,6 +70,120 @@ final class PagingSupportTest {
                 "query_paths", empty(), paging, CONTRACT);
         final PagingSupport.Accepted<?> accepted = (PagingSupport.Accepted<?>) resumed;
         assertEquals(List.of("b"), accepted.page().rows());
+    }
+
+    @Test
+    void everyContinuationPreservesTheOriginalOneRowLimit() {
+        final CallerContext paging = availableContext();
+        final List<String> entries = List.of("a", "b", "c", "d");
+        final PagingSupport.Accepted<?> first = assertInstanceOf(PagingSupport.Accepted.class,
+                PagingSupport.page(entries, new ResultWindow.Initial(1, 1), "list_child_nodes",
+                        empty(), paging, CONTRACT));
+        assertEquals(List.of("b"), first.page().rows());
+        final PagingSupport.Accepted<?> second = assertInstanceOf(PagingSupport.Accepted.class,
+                PagingSupport.page(entries,
+                        new ResultWindow.Continuation(first.page().continuationToken()),
+                        "list_child_nodes", empty(), paging, CONTRACT));
+        assertEquals(List.of("c"), second.page().rows());
+        assertFalse(second.page().continuationToken().isEmpty());
+        final PagingSupport.Accepted<?> third = assertInstanceOf(PagingSupport.Accepted.class,
+                PagingSupport.page(entries,
+                        new ResultWindow.Continuation(second.page().continuationToken()),
+                        "list_child_nodes", empty(), paging, CONTRACT));
+        assertEquals(List.of("d"), third.page().rows());
+        assertEquals("", third.page().continuationToken());
+    }
+
+    @Test
+    void continuationCannotRenewTheInitialExpiry() {
+        final CallerContext paging = availableContext();
+        final CallerContext.Available authority = (CallerContext.Available) paging.paging();
+        final long expiry = authority.nowUnixMilliseconds()
+                + CONTRACT.value(ContractLimit.CONTINUATION_TOKEN_LIFETIME_MILLISECONDS);
+        final List<String> entries = IntStream.range(0,
+                        Math.toIntExact(CONTRACT.value(ContractLimit.DEFAULT_RESULT_LIMIT)) + 2)
+                .mapToObj(index -> "row-" + index).toList();
+        final PagingSupport.Accepted<?> first = assertInstanceOf(PagingSupport.Accepted.class,
+                PagingSupport.page(entries, new ResultWindow.Initial(0, 1), "list_child_nodes",
+                        empty(), paging, CONTRACT));
+        final CallerContext early = withPaging(paging, new CallerContext.Available(
+                authority.authority(), authority.targetDigest(), authority.generation(), expiry - 1));
+        final PagingSupport.Accepted<?> second = assertInstanceOf(PagingSupport.Accepted.class,
+                PagingSupport.page(entries,
+                        new ResultWindow.Continuation(first.page().continuationToken()),
+                        "list_child_nodes", empty(), early, CONTRACT));
+        final CallerContext expired = withPaging(paging, new CallerContext.Available(
+                authority.authority(), authority.targetDigest(), authority.generation(), expiry));
+        final PagingSupport.WindowRefused refused = assertInstanceOf(
+                PagingSupport.WindowRefused.class, PagingSupport.prepare(
+                        new ResultWindow.Continuation(second.page().continuationToken()),
+                        "list_child_nodes", empty(), expired, CONTRACT));
+        assertEquals("continuation_token_expired", refused.category());
+    }
+
+    @Test
+    void malformedAndWrongQueryTokensKeepTheirDistinctRefusals() {
+        final CallerContext paging = availableContext();
+        final PagingSupport.WindowRefused malformed = assertInstanceOf(
+                PagingSupport.WindowRefused.class, PagingSupport.prepare(
+                        new ResultWindow.Continuation("bad-token"), "query_paths", empty(),
+                        paging, CONTRACT));
+        assertEquals("continuation_token_malformed", malformed.category());
+        final PagingSupport.Accepted<?> first = (PagingSupport.Accepted<?>) PagingSupport.page(
+                List.of("a", "b"), new ResultWindow.Initial(0, 1), "query_paths", empty(),
+                paging, CONTRACT);
+        final PagingSupport.WindowRefused wrongQuery = assertInstanceOf(
+                PagingSupport.WindowRefused.class, PagingSupport.prepare(
+                        new ResultWindow.Continuation(first.page().continuationToken()),
+                        "list_components", empty(), paging, CONTRACT));
+        assertEquals("continuation_token_wrong_query", wrongQuery.category());
+    }
+
+    @Test
+    void expirationIsCheckedBeforePreparingAWindow() {
+        final CallerContext paging = availableContext();
+        final PagingSupport.Accepted<?> first = (PagingSupport.Accepted<?>) PagingSupport.page(
+                List.of("a", "b"), new ResultWindow.Initial(0, 1), "query_paths", empty(),
+                paging, CONTRACT);
+        final CallerContext.Available authority = (CallerContext.Available) paging.paging();
+        final long expiry = authority.nowUnixMilliseconds()
+                + CONTRACT.value(ContractLimit.CONTINUATION_TOKEN_LIFETIME_MILLISECONDS);
+        final CallerContext expired = withPaging(paging, new CallerContext.Available(
+                authority.authority(), authority.targetDigest(), authority.generation(), expiry));
+        final PagingSupport.WindowRefused refused = assertInstanceOf(
+                PagingSupport.WindowRefused.class, PagingSupport.prepare(
+                        new ResultWindow.Continuation(first.page().continuationToken()),
+                        "query_paths", empty(), expired, CONTRACT));
+        assertEquals("continuation_token_expired", refused.category());
+    }
+
+    @Test
+    void failedTokenIssuanceCannotLookLikeACompleteCatalogue() {
+        final CallerContext paging = availableContext();
+        final CallerContext.Available available = (CallerContext.Available) paging.paging();
+        final ContinuationKeyAuthority unavailable = new ContinuationKeyAuthority() {
+            @Override
+            public ReadOutcome read() {
+                return new Unavailable(new KeyRingRefusal(KeyRingRefusal.Failure.ABSENT, "test"));
+            }
+
+            @Override
+            public WriteOutcome compareAndSet(KeyRing expected, KeyRing next, Lease lease,
+                                              long nowUnixMilliseconds) {
+                return new NotWritten(new KeyRingRefusal(KeyRingRefusal.Failure.ABSENT, "test"));
+            }
+        };
+        final CallerContext missing = withPaging(paging, new CallerContext.Available(unavailable,
+                available.targetDigest(), available.generation(), available.nowUnixMilliseconds()));
+        final PagingSupport.Refused<?> refused = assertInstanceOf(PagingSupport.Refused.class,
+                PagingSupport.page(List.of("a", "b"), new ResultWindow.Initial(0, 1),
+                        "query_paths", empty(), missing, CONTRACT));
+        assertEquals("continuation_token_integrity_invalid", refused.category());
+    }
+
+    private static CallerContext withPaging(CallerContext original, CallerContext.Paging paging) {
+        return new CallerContext(original.operation(), original.discovery(), original.time(),
+                original.result(), original.progress(), paging);
     }
 
     private static DocumentValue.Mapping empty() {

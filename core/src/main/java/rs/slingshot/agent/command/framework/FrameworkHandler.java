@@ -109,6 +109,11 @@ public final class FrameworkHandler implements CommandHandler {
                     refused.refusal() + ": " + refused.detail());
         }
         final ListBundlesCommand command = ((ListBundlesCommand.Held) asked).command();
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                ListBundlesCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final BundleInventory.Outcome found =
                 inventory.bundles(command.prefix(), command.states());
         if (found instanceof final BundleInventory.Refused refused) {
@@ -121,7 +126,7 @@ public final class FrameworkHandler implements CommandHandler {
                         + context.discovery().limit() + " this caller may examine");
         }
         final PagingSupport.Outcome<BundleInventory.BundleEntry> page = PagingSupport.page(entries,
-                command.window(), ListBundlesCommand.WIRE_NAME, arguments, context, contract);
+                (PagingSupport.Ready) prepared, ListBundlesCommand.WIRE_NAME, context, contract);
         if (page instanceof final PagingSupport.Refused<BundleInventory.BundleEntry> refused) {
             return new Failed(refused.category(), refused.detail());
         }
@@ -138,6 +143,11 @@ public final class FrameworkHandler implements CommandHandler {
                     refused.refusal() + ": " + refused.detail());
         }
         final ListComponentsCommand command = ((ListComponentsCommand.Held) asked).command();
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                ListComponentsCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final BundleInventory.Outcome found =
                 inventory.components(command.prefix(), command.states());
         if (found instanceof final BundleInventory.Refused refused) {
@@ -150,7 +160,7 @@ public final class FrameworkHandler implements CommandHandler {
                         + " the " + context.discovery().limit() + " this caller may examine");
         }
         final PagingSupport.Outcome<BundleInventory.ComponentEntry> page = PagingSupport.page(entries,
-                command.window(), ListComponentsCommand.WIRE_NAME, arguments, context, contract);
+                (PagingSupport.Ready) prepared, ListComponentsCommand.WIRE_NAME, context, contract);
         if (page instanceof final PagingSupport.Refused<BundleInventory.ComponentEntry> refused) {
             return new Failed(refused.category(), refused.detail());
         }

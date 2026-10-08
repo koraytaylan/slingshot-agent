@@ -211,7 +211,9 @@ public final class ReadContentFragmentHandler implements CommandHandler {
     private static ReadContentFragmentResult.Element elementOf(String name, Object value) {
         return new ReadContentFragmentResult.Element(name, value instanceof final Object[] several
                 ? java.util.Arrays.stream(several).map(String::valueOf).toList()
-                : List.of(String.valueOf(value)));
+                : List.of(String.valueOf(value)), value instanceof Object[]
+                ? ReadContentFragmentResult.Cardinality.MULTIPLE
+                : ReadContentFragmentResult.Cardinality.SINGLE);
     }
 
 

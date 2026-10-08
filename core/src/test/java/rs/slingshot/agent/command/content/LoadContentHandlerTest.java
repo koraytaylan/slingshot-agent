@@ -33,6 +33,7 @@ import rs.slingshot.agent.command.ProgressSink;
 import rs.slingshot.agent.command.ReadOnlyResolver;
 import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.json.DocumentValue;
@@ -55,6 +56,30 @@ final class LoadContentHandlerTest {
     private static final Path REGISTRY = repositoryRoot().resolve("policy/commands");
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    @Test
+    @DisplayName("omitted depth renders the same document as the authenticated contract default")
+    void omittedDepthUsesTheContract() throws RepositoryException {
+        nodeAt("/content/default-depth").addNode("child", "nt:unstructured")
+                .addNode("grandchild", "nt:unstructured");
+        session().save();
+        final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
+        members.put(LoadContentCommand.PATH, new DocumentValue.Text("/content/default-depth"));
+        final CommandHandler.Produced omitted = assertInstanceOf(CommandHandler.Produced.class,
+                new LoadContentHandler().run(new DocumentValue.Mapping(members),
+                        readOnly(), context()));
+        final CommandHandler.Produced explicit = assertInstanceOf(CommandHandler.Produced.class,
+                run("/content/default-depth", CONTRACT.value(ContractLimit.DEFAULT_LOAD_DEPTH)));
+        assertEquals(explicit.result(), omitted.result());
+    }
+
+    @Test
+    @DisplayName("the handler applies the contract depth ceiling before reading the repository")
+    void depthAboveContractMaximumIsRefused() {
+        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                run("/content/absent", CONTRACT.value(ContractLimit.MAXIMUM_LOAD_DEPTH) + 1));
+        assertEquals(LoadContentHandler.ARGUMENT_REJECTED, failed.category());
+    }
 
     @Test
     @DisplayName("a subtree the caller can see is answered with what is in it")

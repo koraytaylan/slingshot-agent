@@ -221,10 +221,8 @@ public record FindAssetsByMetadataCommand(String rootPath, List<String> tags,
     private static Optional<MatchMode> tagMode(DocumentValue.Mapping mapping) {
         final Optional<DocumentValue> asked = mapping.member(TAG_MATCH_MODE);
         if (asked.isEmpty()) {
-            // A caller who named tags and no mode is asking about any of them. That is the commoner
-            // question and the safer default: answering with the assets carrying all of them would
-            // silently answer a narrower question than the one that was asked.
-            return Optional.of(MatchMode.ANY);
+            // The published consumer contract requires every requested tag when mode is omitted.
+            return Optional.of(MatchMode.ALL);
         }
         return asked.orElseThrow() instanceof final DocumentValue.Text spelled
                 ? MatchMode.named(spelled.value()) : Optional.empty();

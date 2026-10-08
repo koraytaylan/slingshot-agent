@@ -53,23 +53,6 @@ public sealed interface PropertyValue permits PropertyValue.Single, PropertyValu
     List<PropertyScalar> values();
 
     /**
-     * This value as the repository takes it.
-     *
-     * <p>A list stays a list, including a list of one. The repository tells a property holding one
-     * value from one holding a list of one, and so does every tool that reads the node afterwards —
-     * so the shape the caller stated is the shape that gets written.</p>
-     *
-     * @return what to hand the repository
-     */
-    default Object stored() {
-        return this instanceof Single
-                ? values().getFirst().value()
-                : values().stream()
-                        .map(PropertyScalar::value)
-                        .toArray(String[]::new);
-    }
-
-    /**
      * A property holding one value.
      *
      * @param scalar the value

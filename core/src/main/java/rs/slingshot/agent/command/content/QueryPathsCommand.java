@@ -23,10 +23,9 @@ import rs.slingshot.agent.json.DocumentValue;
  * where to start and no rule about which wins.</p>
  *
  * @param rootPath the subtree to search, which bounds the search rather than describing it
- * @param primaryNodeType the node type to return, which is what makes the query answerable from an
- *     index rather than by walking, and is empty where the caller named none
- * @param predicates what else the caller asks about each candidate, applied to the rows the query
- *     returns rather than being part of it
+ * @param primaryNodeType the node type to return, applied to each currently readable resource,
+ *     and empty where the caller named none
+ * @param predicates what else the caller asks about each currently readable candidate
  * @param window which page of the addresses is wanted
  */
 public record QueryPathsCommand(String rootPath, String primaryNodeType,
@@ -49,7 +48,7 @@ public record QueryPathsCommand(String rootPath, String primaryNodeType,
      * The member a caller has to send.
      *
      * <p>Only the root. A search with no type and no predicate is every node under the root, which
-     * is a question this command can answer from an index and a caller is entitled to ask.</p>
+     * is answered through bounded traversal pages with explicit completeness.</p>
      */
     public static final List<String> REQUIRED = List.of(ROOT_PATH);
 

@@ -28,6 +28,7 @@ import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.identity.OperationIdentity;
 import rs.slingshot.agent.json.CanonicalByteWriter;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.log.AgentLog;
 import rs.slingshot.agent.route.AgentRoute;
 import rs.slingshot.agent.route.AgentRouteTable;
 import rs.slingshot.agent.store.GenerationRotation;
@@ -175,6 +176,10 @@ public final class OperationLookupServlet extends AgentServlet {
         super();
     }
 
+    private static void writeObservation(SequencedMap<String, String> fields, Long bound) {
+        AgentLog.warn(AgentLog.event("slow logical lookup refusal", fields), AgentServlet::internal, bound);
+    }
+
     @Override
     protected String routeName() {
         return ROUTE_NAME;
@@ -190,6 +195,23 @@ public final class OperationLookupServlet extends AgentServlet {
     @Override
     protected void serve(SlingHttpServletRequest request, SlingHttpServletResponse response)
             throws IOException {
+        observe(request, response, rs.slingshot.agent.stream.DefaultStreamTicker::monotonicNanoseconds,
+                OperationLookupServlet::writeObservation);
+    }
+
+    /**
+     * Measures one request with call-local sources, without retaining servlet state.
+     * @param request the request, whose shape the base has already settled
+     * @param response the original response to write before any eligible observation
+     * @param timeSource monotonic readings owned by this call and never emitted directly
+     * @param observation the receiver of fixed numeric fields after an eligible refusal flush
+     * @throws IOException if the original response cannot be written
+     */
+    void observe(SlingHttpServletRequest request, SlingHttpServletResponse response,
+                 java.util.function.LongSupplier timeSource,
+                 java.util.function.BiConsumer<SequencedMap<String, String>, Long> observation)
+            throws IOException {
+        final LookupTimings timings = new LookupTimings(timeSource);
         final AgentContract.Outcome loaded = AgentContract.load();
         if (loaded instanceof final AgentContract.Refused unreadable) {
             refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, unreadable.failure().name(),
@@ -204,15 +226,34 @@ public final class OperationLookupServlet extends AgentServlet {
                     anonymous.get().detail());
             return;
         }
-        withState(response, state -> answer(request, response, held.contract(), state));
+        timings.dispatching();
+        try {
+            withState(response, state -> observedAnswer(request, response, held.contract(), state, timings));
+        } finally {
+            timings.slowFields().ifPresent(fields -> observation.accept(fields,
+                    held.contract().value(ContractLimit.MAXIMUM_LOG_MESSAGE_BYTES)));
+        }
+    }
+
+    private void observedAnswer(SlingHttpServletRequest request, SlingHttpServletResponse response,
+                                AgentContract contract, Session session, LookupTimings timings)
+            throws IOException, RepositoryException {
+        timings.generating();
+        try {
+            answer(request, response, contract, session, timings);
+            timings.completedWork();
+        } finally {
+            timings.returning();
+        }
     }
 
     private void answer(SlingHttpServletRequest request, SlingHttpServletResponse response,
-                        AgentContract contract, Session session)
+                        AgentContract contract, Session session, LookupTimings timings)
             throws IOException, RepositoryException {
         final Optional<AgentOperationIdentifier> asked =
                 identifierIn(request.getParameter(OPERATION_QUERY_MEMBER), contract);
         if (asked.isEmpty()) {
+            timings.responding();
             refuse(response, REFUSED, UNREADABLE_REQUEST,
                     "the request names no operation identifier this build reads");
             return;
@@ -222,26 +263,30 @@ public final class OperationLookupServlet extends AgentServlet {
         if (access instanceof GenerationRotation.Retired) {
             // An incarnation nothing answers about any more is a thing a client may stop waiting
             // for, and the only answer that lets it stop is one that says so.
+            timings.responding();
             refuse(response, GONE, RETIRED_GENERATION,
                     "the generation named is one this store no longer answers about");
             return;
         }
+        timings.owning();
         final Optional<StateAuthority.Viewer> viewer = StateAuthority.viewer(request);
         final StatePath operation = StatePath.operation(named, asked.get());
         if (viewer.isEmpty() || !StateAuthority.operation(session, operation, viewer.get(), ROUTE_NAME)) {
-            notYet(response, contract);
+            notYet(response, contract, timings);
             return;
         }
-        found(response, session, operation, contract);
+        timings.snapshotting();
+        found(response, session, operation, contract, timings);
     }
 
     private void found(SlingHttpServletResponse response, Session session, StatePath operation,
-                       AgentContract contract) throws IOException, RepositoryException {
+                       AgentContract contract, LookupTimings timings)
+            throws IOException, RepositoryException {
         final SnapshotStore.Materialised current = SnapshotStore.read(session, operation);
         if (!(current instanceof final SnapshotStore.Known known)) {
             // Somebody else's operation is answered exactly as one nobody has: a caller who could
             // tell the two apart could ask this route which identifiers exist.
-            notYet(response, contract);
+            notYet(response, contract, timings);
             return;
         }
         final OperationStore.Outcome read =
@@ -249,29 +294,33 @@ public final class OperationLookupServlet extends AgentServlet {
                         instanceof final EventStoreGeneration.Held held ? held.generation()
                                 : throwMissingGeneration(), operation);
         if (!(read instanceof final OperationStore.Held held)) {
-            notYet(response, contract);
+            notYet(response, contract, timings);
             return;
         }
         final Optional<String> rendered =
                 rendered(session, operation, held.operation(), known.snapshot(), contract);
         if (rendered.isEmpty()) {
+            timings.responding();
             refuse(response, NOTHING_THIS_BUILD_CAN_SERVE, UNRENDERABLE,
                     "the operation snapshot could not be rendered");
             return;
         }
+        timings.responding();
         response.setStatus(SERVED);
         response.setContentType(route().mediaType());
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(rendered.get());
     }
 
-    private void notYet(SlingHttpServletResponse response, AgentContract contract)
+    private void notYet(SlingHttpServletResponse response, AgentContract contract, LookupTimings timings)
             throws IOException {
+        timings.responding();
         response.setHeader(RETRY_AFTER, String.valueOf(Math.max(1,
                 contract.value(ContractLimit.MISSING_OPERATION_GRACE_MILLISECONDS)
                         / MILLISECONDS_IN_A_SECOND)));
         refuse(response, NOT_YET, NOT_HELD_FOR_THIS_CALLER,
                 "no operation this caller may read is held under that identifier yet");
+        timings.refused();
     }
 
     private static Optional<String> rendered(Session session, StatePath operation,

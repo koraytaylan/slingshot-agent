@@ -30,22 +30,17 @@ bundle, and asks the running instance questions:
 It refuses, rather than pulling, when a pinned image is absent or its digest differs, and the
 refusal names `scripts/prepare_interop_images`.
 
-### A known slowness in the pinned image
+### Runtime and scenario isolation
 
-The image ships `org.objectweb.asm` 9.2, and that version refuses a Java 21 class file:
-`Unsupported class file major version 65`. Apache Sling Models registers a weaving hook, so every
-class it is asked to weave produces an `IllegalArgumentException` wrapped in a
-`ClassFormatError: Weaving hook failed`, and the platform logs the whole stack. The requests still
-complete — the failure is logged rather than fatal — so a tier that came up answers every question
-here correctly.
+The public image uses digest-pinned Sling 14 and the declared Java 21 runtime.
+The Containerfile records why the older Sling 12 image could not read Java 21
+classes. A readiness failure on the current image must be investigated from
+that run's retained logs rather than attributed to the old ASM incompatibility.
 
-What it costs is start-up time. A single container writes megabytes of stack traces in its first
-two minutes, and when several scenarios start containers at once on a loaded machine one of them
-occasionally spends longer than the readiness deadline producing them rather than starting. A tier
-that fails this way reports `NEVER_BECAME_READY` and names the log it kept; the same scenario run
-on its own comes up in about eight seconds. The fix is a pinned image whose ASM can read Java 21,
-which is an image to be prepared rather than a value to be changed here, and until then a
-`NEVER_BECAME_READY` on a loaded machine is to be reproduced alone before it is believed.
+Ordinary scenarios obtain one shared runtime through `SharedPublicSlingTier`.
+Scenarios that stop the platform, replace bundles, or change storage lifecycle
+use a dedicated runtime. Leak checks allow only the shared instance while its
+test process is alive; shutdown releases it.
 
 ## Optional Tier B — owner-supplied Adobe quickstart
 

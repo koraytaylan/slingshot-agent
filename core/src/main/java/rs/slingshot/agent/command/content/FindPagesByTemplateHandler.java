@@ -71,6 +71,11 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
 
     private Answer searched(FindPagesByTemplateCommand command, DocumentValue.Mapping arguments,
                             ResourceResolver resolver, CallerContext context) {
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                FindPagesByTemplateCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final Resource root = resolver.getResource(command.rootPath());
         if (root == null) {
             return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
@@ -107,7 +112,7 @@ public final class FindPagesByTemplateHandler implements CommandHandler {
                     + " narrower root under " + PageTree.CONTENT + " instead");
         }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
-                search.found(), command.window(), FindPagesByTemplateCommand.WIRE_NAME, arguments,
+                search.found(), (PagingSupport.Ready) prepared, FindPagesByTemplateCommand.WIRE_NAME,
                 context, contract);
         if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
             return new Failed(refused.category(), refused.detail());

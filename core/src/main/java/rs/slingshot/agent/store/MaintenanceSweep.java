@@ -74,12 +74,17 @@ public final class MaintenanceSweep {
         final long bound = contract.value(ContractLimit.MAINTENANCE_SWEEP_WORK_BOUND_ROWS);
         final List<Long> present = buckets(session, generation);
         final int start = present.stream().takeWhile(bucket -> bucket < from.bucket()).toList().size();
-        final SweepState state = advance(session, pass, from, present, start, bound);
-        final long examined = state.examined();
+        final MaintenanceProgress progress = progress(session, pass, from, present, start, bound);
+        final SweepState state = progress.operations();
+        final long examined = state.examined() + progress.subscriptions().examined();
         if (examined > 0) {
             session.save();
         }
-        SweepCursor.advance(session, from, state.next(), state.nextRecord(), nowUnixMilliseconds);
+        SweepCursor.advance(session, from, state.next(), state.nextRecord(),
+                progress.subscriptions().nextRecord(),
+                from.firstFamily() == SweepCursor.FirstFamily.SUBSCRIPTIONS
+                        ? SweepCursor.FirstFamily.OPERATIONS : SweepCursor.FirstFamily.SUBSCRIPTIONS,
+                nowUnixMilliseconds);
         return new SweepReport(from.bucket(),
                 state.next() >= SweepCursor.BUCKETS ? SweepCursor.FIRST : state.next(), examined,
                 pass.removed(),
@@ -87,6 +92,92 @@ public final class MaintenanceSweep {
     }
 
     private record SweepState(long examined, long next, String nextRecord) { }
+
+    private record SubscriptionProgress(long examined, String nextRecord) { }
+
+    private record MaintenanceProgress(SweepState operations, SubscriptionProgress subscriptions) { }
+
+    private static MaintenanceProgress progress(Session session, Pass pass, SweepCursor from,
+                                                 List<Long> present, int start, long bound)
+            throws RepositoryException {
+        if (from.firstFamily() == SweepCursor.FirstFamily.SUBSCRIPTIONS) {
+            final SubscriptionProgress subscriptions = subscriptions(session, pass, from.subscriptionAfter(),
+                    bound);
+            return new MaintenanceProgress(operations(session, pass, from, present, start,
+                    bound - subscriptions.examined()), subscriptions);
+        }
+        final SweepState operations = operations(session, pass, from, present, start, bound);
+        return new MaintenanceProgress(operations, subscriptions(session, pass, from.subscriptionAfter(),
+                bound - operations.examined()));
+    }
+
+    private static SweepState operations(Session session, Pass pass, SweepCursor from,
+                                          List<Long> present, int start, long bound) throws
+                                                  RepositoryException {
+        return bound == 0 ? new SweepState(0, from.bucket(), from.cycleStartRecord())
+                : advance(session, pass, from, present, start, bound);
+    }
+
+    private static SubscriptionProgress subscriptions(Session session, Pass pass, String after, long bound)
+            throws RepositoryException {
+        if (bound == 0) {
+            return new SubscriptionProgress(0, after);
+        }
+        final StatePath root = StatePath.deployment(SubscriptionRecord.NODE);
+        if (!session.nodeExists(root.path())) {
+            return new SubscriptionProgress(0, "");
+        }
+        final NodeIterator records = orderedRecords(session, root, after, RecordOrder.NAME);
+        long examined = 0;
+        String cursor = after;
+        while (examined < bound && records.hasNext()) {
+            cursor = records.nextNode().getName();
+            examined++;
+            pass.releasedSome(expireSubscription(session, cursor, pass));
+        }
+        return new SubscriptionProgress(examined, records.hasNext() ? cursor : "");
+    }
+
+    private static long expireSubscription(Session session, String name, Pass pass) throws
+                RepositoryException {
+        final SubscriptionRecord.Outcome named = SubscriptionRecord.identifier(name, pass.contract());
+        if (!(named instanceof final SubscriptionRecord.Held held)) {
+            return 0;
+        }
+        int attempt = 0;
+        while (attempt < CompareAndSet.ATTEMPTS) {
+            session.refresh(false);
+            try {
+                return expireSubscriptionAttempt(session, held.identifier(), pass);
+            } catch (final InvalidItemStateException contended) {
+                attempt++;
+            } finally {
+                session.refresh(false);
+            }
+        }
+        throw new RepositoryException("subscription expiry remained contended");
+    }
+
+    private static long expireSubscriptionAttempt(Session session, SubscriptionRecord.Identifier identifier,
+                                                    Pass pass) throws RepositoryException {
+        final StatePath path = SubscriptionRecord.pathOf(identifier);
+        if (!session.nodeExists(path.path())) {
+            return 0;
+        }
+        CompareAndSet.stamp(session.getNode(path.path()));
+        final java.util.Optional<SubscriptionRecord> record = SubscriptionLedger.read(session, identifier,
+                pass.contract());
+        if (record.isEmpty() || !SubscriptionLedger.expired(record.get(), pass.nowUnixMilliseconds(),
+                pass.contract())) {
+            return 0;
+        }
+        SubscriptionLedger.stageEnd(session, record.get());
+        session.getNode(path.path()).remove();
+        session.save();
+        return record.get().bytes();
+    }
+
+    private enum RecordOrder { INSERTION, NAME }
 
     private enum Stop { YES, NO }
 
@@ -220,11 +311,17 @@ public final class MaintenanceSweep {
 
     private static NodeIterator orderedRecords(Session session, StatePath bucket, String after)
             throws RepositoryException {
-        if (after.isEmpty()) {
+        return orderedRecords(session, bucket, after, RecordOrder.INSERTION);
+    }
+
+    private static NodeIterator orderedRecords(Session session, StatePath bucket, String after,
+                                                RecordOrder order) throws RepositoryException {
+        if (after.isEmpty() && order == RecordOrder.INSERTION) {
             return session.getNode(bucket.path()).getNodes();
         }
         final String escapedBucket = bucket.path().replace("'", "''");
-        final String condition = " AND NAME(record) > '" + after.replace("'", "''") + "'";
+        final String condition = after.isEmpty() ? "" : " AND NAME(record) > '" + after.replace("'", "''") +
+                "'";
         final String statement = "SELECT * FROM [nt:base] AS record WHERE ISCHILDNODE(record, '"
                 + escapedBucket + "')" + condition + " ORDER BY NAME(record)";
         final Query query = session.getWorkspace().getQueryManager()

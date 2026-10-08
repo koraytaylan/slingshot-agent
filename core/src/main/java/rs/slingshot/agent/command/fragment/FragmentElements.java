@@ -6,8 +6,11 @@ package rs.slingshot.agent.command.fragment;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.SequencedMap;
+import java.util.Set;
+import java.util.stream.Collectors;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
@@ -25,8 +28,9 @@ import rs.slingshot.agent.json.DocumentValue;
  * asked when there is a fragment to ask it about.</p>
  *
  * @param values the elements, by name, in the order they were written
+ * @param multipleNames the elements explicitly supplied as lists, including lists of one
  */
-public record FragmentElements(SequencedMap<String, List<String>> values) {
+public record FragmentElements(SequencedMap<String, List<String>> values, Set<String> multipleNames) {
 
     /** The member a caller carries these in. */
     public static final String ARGUMENT_MEMBER = "elements";
@@ -39,6 +43,27 @@ public record FragmentElements(SequencedMap<String, List<String>> values) {
         final SequencedMap<String, List<String>> held = new LinkedHashMap<>();
         values.forEach((name, value) -> held.put(name, List.copyOf(value)));
         values = held;
+        multipleNames = Set.copyOf(multipleNames);
+    }
+
+    /**
+     * Holds already normalized values using the original scalar-or-several convention.
+     * @param values the elements supplied by an internal caller
+     */
+    public FragmentElements(SequencedMap<String, List<String>> values) {
+        this(values, values.entrySet().stream().filter(entry -> entry.getValue().size() != 1)
+                .map(Map.Entry::getKey).collect(Collectors.toSet()));
+    }
+
+    /**
+     * Converts values while retaining the caller's text-or-list distinction.
+     * @return a new property map ready for creation or the typed assignment writer
+     */
+    public Map<String, Object> properties() {
+        final Map<String, Object> properties = new LinkedHashMap<>();
+        values.forEach((name, held) -> properties.put(name, multipleNames.contains(name)
+                ? held.toArray(new String[0]) : held.getFirst()));
+        return properties;
     }
 
     /**
@@ -129,7 +154,10 @@ public record FragmentElements(SequencedMap<String, List<String>> values) {
                 return valued;
             }
         }
-        return new Held(new FragmentElements(held));
+        final Set<String> multiple = elements.members().entrySet().stream()
+                .filter(element -> element.getValue() instanceof DocumentValue.Sequence)
+                .map(Map.Entry::getKey).collect(Collectors.toSet());
+        return new Held(new FragmentElements(held, multiple));
     }
 
     private static Outcome named(String name, AgentContract contract) {
@@ -149,6 +177,9 @@ public record FragmentElements(SequencedMap<String, List<String>> values) {
         if (!(value instanceof final DocumentValue.Sequence items)) {
             return new Refused(Refusal.VALUE_REJECTED,
                     name + " is set to text or to a list of text, and to nothing else");
+        }
+        if (items.items().isEmpty()) {
+            return new Refused(Refusal.VALUE_REJECTED, name + " is set to a nonempty list of text");
         }
         final long bound =
                 contract.value(ContractLimit.MAXIMUM_CONTENT_FRAGMENT_ELEMENT_VALUES);

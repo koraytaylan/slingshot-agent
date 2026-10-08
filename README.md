@@ -4,7 +4,8 @@ The Adobe Experience Manager half of Slingshot. The sibling repository holds the
 the local daemon that submit work over a versioned transport and follow it; this one holds the agent
 that receives it, runs it against the author's own repository, and reports what happened.
 
-It answers eight routes and seventy-two commands, renders five console screens an operator finds
+It answers eight routes and the commands in the [generated command reference](docs/COMMANDS.md),
+renders five console screens an operator finds
 under Adobe's own Tools navigation, and publishes six health checks into the author's own
 dashboard. Everything described here is in this commit; nothing here describes what the bundles
 under `docs/plans` intend, and the deployment rows carry the evidence that actually ran against them
@@ -49,7 +50,7 @@ starting work additionally requires membership of a group an operator permitted.
 
 ## What an operator gets
 
-Sixty-four commands, one row each in `policy/commands`, split into what they may do: reads that
+The commands, one row each in `policy/commands`, split into what they may do: reads that
 cannot commit through the caller's own resolver, and writes that commit only through the caller's
 own session. Every one of them runs as the person who asked, inside their own request, so it does
 exactly what that person could have done by hand and nothing more. There is no impersonation call

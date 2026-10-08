@@ -84,6 +84,11 @@ public final class ListAssetRenditionsHandler implements CommandHandler {
 
     private Answer listed(ListAssetRenditionsCommand command, DocumentValue.Mapping arguments,
                           ResourceResolver resolver, CallerContext context) {
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                ListAssetRenditionsCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final Resource asset = resolver.getResource(command.assetPath());
         if (asset == null) {
             return new Failed(ASSET_NOT_FOUND, command.assetPath() + " is not there");
@@ -106,7 +111,7 @@ public final class ListAssetRenditionsHandler implements CommandHandler {
                     + " the " + context.discovery().limit() + " this caller may examine");
         }
         final PagingSupport.Outcome<ListAssetRenditionsResult.Rendition> page = PagingSupport.page(
-                held, command.window(), ListAssetRenditionsCommand.WIRE_NAME, arguments, context,
+                held, (PagingSupport.Ready) prepared, ListAssetRenditionsCommand.WIRE_NAME, context,
                 contract);
         if (page instanceof final PagingSupport.Refused<ListAssetRenditionsResult.Rendition> refused) {
             return new Failed(refused.category(), refused.detail());

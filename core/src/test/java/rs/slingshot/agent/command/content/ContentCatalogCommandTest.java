@@ -4,16 +4,27 @@
 package rs.slingshot.agent.command.content;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.IntStream;
+import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.api.resource.ResourceWrapper;
+import org.apache.sling.api.wrappers.ResourceResolverWrapper;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +32,6 @@ import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.ReadOnlyResolver;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.command.fragment.FragmentHandlers;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
@@ -43,21 +53,37 @@ final class ContentCatalogCommandTest {
     private static final AgentContract CONTRACT = assertInstanceOf(AgentContract.Loaded.class,
             AgentContract.load(), "the contract did not authenticate").contract();
 
-    private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
+    private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_MOCK);
+
+    private final DiscoveryRegistry discovery = new DiscoveryRegistry(CONTRACT);
+
+    @AfterEach
+    void releaseDiscovery() {
+        discovery.close();
+    }
 
     @Test
-    @DisplayName("an environment-shaped anchor lists every definition under /apps")
-    void anEnvironmentShapedAnchorListsEveryDefinitionUnderApps() {
+    void resultWriterRefusesContradictoryCompletion() {
+        assertThrows(IllegalArgumentException.class,
+                () -> IncrementalDiscoveryResult.documentOf(
+                        List.of(), DocumentValue.Truth.TRUE, 0, "cursor"));
+        assertThrows(IllegalArgumentException.class,
+                () -> IncrementalDiscoveryResult.documentOf(List.of(), DocumentValue.Truth.FALSE, 0, ""));
+    }
+
+    @Test
+    @DisplayName("a missing root does not expand the listing to an ancestor")
+    void aMissingRootDoesNotExpandTheListingToAnAncestor() {
         sling.create().resource("/apps/acme/components/text", Map.of(
                 ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
         sling.create().resource("/apps/other/components/title", Map.of(
                 ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
         sling.create().resource("/libs/core/components/image", Map.of(
                 ListChildPagesHandler.TYPE_PROPERTY, ContentCatalogHandler.COMPONENT_DEFINITION_TYPE));
-        final DocumentValue.Mapping answered = listed(
-                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, "/apps/acme-rde");
-        assertEquals(List.of("/apps/acme/components/text", "/apps/other/components/title"),
-                paths(answered));
+        final var answer = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, discovery)
+                .run(arguments("/apps/acme-rde"), requestResolver(), context());
+        assertEquals("root_not_found", assertInstanceOf(CommandHandler.Failed.class, answer).category());
     }
 
     @Test
@@ -83,7 +109,7 @@ final class ContentCatalogCommandTest {
         final DocumentValue.Mapping answered = listed(
                 ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, "/apps");
         assertEquals(List.of("/apps/example/components/text"), paths(answered));
-        assertEquals("example/components/text", text(answered, ComponentListingResult.RESOURCE_TYPE));
+        assertEquals("example/components/text", text(answered, IncrementalDiscoveryResult.RESOURCE_TYPE));
     }
 
     @Test
@@ -96,7 +122,7 @@ final class ContentCatalogCommandTest {
         final DocumentValue.Mapping answered = listed(ContentCatalogHandler.Kind.COMPONENTS,
                 "/content/site/page");
         assertEquals(List.of("/content/site/page/jcr:content/text"), paths(answered));
-        assertEquals("example/components/text", text(answered, ComponentListingResult.RESOURCE_TYPE));
+        assertEquals("example/components/text", text(answered, IncrementalDiscoveryResult.RESOURCE_TYPE));
     }
 
     @Test
@@ -123,6 +149,47 @@ final class ContentCatalogCommandTest {
     }
 
     @Test
+    @DisplayName("fragment discovery checks current readability without looking up children of nonassets")
+    void fragmentDiscoveryDoesNotLookUpNonassetContentChildren()
+            throws org.apache.sling.api.resource.LoginException {
+        final String root = "/content/synthetic-fragment-cost";
+        final int count = 128;
+        IntStream.range(0, count).forEach(index -> sling.create().resource(root + "/folder-" + index,
+                ListChildPagesHandler.TYPE_PROPERTY, "sling:Folder"));
+        final AtomicLong currentReads = new AtomicLong();
+        final AtomicLong contentReads = new AtomicLong();
+        try (ResourceResolver current = new ResourceResolverWrapper(requestResolver().clone(Map.of())) {
+            @Override
+            public Resource getResource(String path) {
+                final Resource resource = super.getResource(path);
+                if (!path.startsWith(root + "/folder-")) {
+                    return resource;
+                }
+                currentReads.incrementAndGet();
+                return new ResourceWrapper(resource) {
+                    @Override
+                    public Resource getChild(String relativePath) {
+                        contentReads.incrementAndGet();
+                        return super.getChild(relativePath);
+                    }
+                };
+            }
+        }) {
+            final var answered = produced(new ContentCatalogHandler(CONTRACT,
+                    ContentCatalogHandler.Kind.CONTENT_FRAGMENTS, discovery)
+                    .run(arguments(root), current, context()));
+            assertTrue(paths(answered).isEmpty());
+            assertEquals(new DocumentValue.Flag(DocumentValue.Truth.TRUE),
+                    answered.member(IncrementalDiscoveryResult.COMPLETE).orElseThrow());
+            assertEquals(new DocumentValue.Whole(count + 1L),
+                    answered.member(IncrementalDiscoveryResult.EXAMINED_NODES).orElseThrow());
+            assertEquals(count, currentReads.get(),
+                    "every visited resource must still check current authority");
+            assertEquals(0, contentReads.get(), "a nonasset primary type cannot identify a content fragment");
+        }
+    }
+
+    @Test
     @DisplayName("an experience fragment is the page whose content is the fragment page")
     void anExperienceFragmentIsNotItsVariation() {
         final String fragment = "/content/experience-fragments/site/promo";
@@ -146,7 +213,8 @@ final class ContentCatalogCommandTest {
     void anArgumentThisCatalogueDoesNotTakeIsRefused() {
         for (final ContentCatalogHandler.Kind kind : ContentCatalogHandler.Kind.values()) {
             final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
-                    new ContentCatalogHandler(CONTRACT, kind).run(stray(), readOnly(), context()));
+                    new ContentCatalogHandler(CONTRACT, kind, discovery).run(stray(),
+                        requestResolver(), context()));
             assertEquals(ContentCatalogHandler.ARGUMENT_REJECTED, failed.category());
         }
         final List<String> expected = List.of("NOT_A_DOCUMENT", "MEMBER_UNKNOWN", "MEMBER_ABSENT",
@@ -173,27 +241,30 @@ final class ContentCatalogCommandTest {
     @DisplayName("an anchor nothing is at is refused rather than answered empty")
     void anAnchorNothingIsAtIsRefused() {
         final CommandHandler.Answer answer = new ContentCatalogHandler(CONTRACT,
-                ContentCatalogHandler.Kind.COMPONENTS)
-                .run(arguments("/content/missing"), readOnly(), context());
+                ContentCatalogHandler.Kind.COMPONENTS, discovery)
+                .run(arguments("/content/missing"), requestResolver(), context());
         assertInstanceOf(CommandHandler.Failed.class, answer,
                 "a missing anchor was answered, which reads as there being no components");
     }
 
     @Test
-    @DisplayName("a walk that reaches its node budget exactly answers, and one node more is refused")
-    void aWalkPastItsNodeBudgetIsRefusedRatherThanAnsweredInPart() {
+    @DisplayName("a bounded walk returns explicit partial progress and a continuation")
+    void aBoundedWalkReturnsExplicitPartialProgress() {
         sling.create().resource("/content/site/first", Map.of(
                 ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/components/text"));
         sling.create().resource("/content/site/second", Map.of(
                 ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/components/title"));
         final ContentCatalogHandler handler = new ContentCatalogHandler(CONTRACT,
-                ContentCatalogHandler.Kind.COMPONENTS);
+                ContentCatalogHandler.Kind.COMPONENTS, discovery);
         final int everyNode = 3;
         assertInstanceOf(CommandHandler.Produced.class,
-                handler.run(arguments("/content/site"), readOnly(), budgeted(everyNode)));
-        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
-                handler.run(arguments("/content/site"), readOnly(), budgeted(everyNode - 1)));
-        assertEquals(ContentCatalogHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
+                handler.run(arguments("/content/site"), requestResolver(), budgeted(everyNode)));
+        final var partial = assertInstanceOf(CommandHandler.Produced.class,
+                handler.run(arguments("/content/site"), requestResolver(), budgeted(everyNode - 1))).result();
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.FALSE),
+                partial.member("complete").orElseThrow());
+        assertEquals(new DocumentValue.Whole(everyNode - 1), partial.member("examined_nodes").orElseThrow());
+        assertInstanceOf(DocumentValue.Text.class, partial.member("next_continuation_token").orElseThrow());
     }
 
     private static CallerContext budgeted(long nodes) {
@@ -204,9 +275,242 @@ final class ContentCatalogCommandTest {
                 new CallerContext.Available(authority(), target(), generation(), 1_000L));
     }
 
+    @Test
+    void invalidContinuationIsRefusedBeforeAnyRepositoryAccess()
+            throws org.apache.sling.api.resource.LoginException {
+        try (ResourceResolver forbidden =
+                new ResourceResolverWrapper(sling.resourceResolver().clone(Map.of())) {
+                    @Override
+                    public Resource getResource(String path) {
+                        throw new AssertionError("invalid continuation reached the repository");
+                    }
+                }) {
+            final SequencedMap<String, DocumentValue> request = new LinkedHashMap<>();
+            request.put(RootedWindow.ROOT_PATH, new DocumentValue.Text("/apps"));
+            final SequencedMap<String, DocumentValue> window = new LinkedHashMap<>();
+            window.put(ResultWindow.MODE, new DocumentValue.Text("continuation"));
+            window.put("continuation_token", new DocumentValue.Text("bad-token"));
+            request.put(ResultWindow.ARGUMENT_MEMBER, new DocumentValue.Mapping(window));
+            final CommandHandler.Failed failure = assertInstanceOf(CommandHandler.Failed.class,
+                    new ContentCatalogHandler(CONTRACT,
+                        ContentCatalogHandler.Kind.COMPONENT_DEFINITIONS, discovery)
+                            .run(new DocumentValue.Mapping(request), forbidden, context()));
+            assertEquals("continuation_token_malformed", failure.category());
+        }
+    }
+
+    @Test
+    void aLargeCatalogueKeepsItsInitialLimitAndCanReplayOnePage() {
+        final String root = "/content/large";
+        final int count = 450;
+        final int limit = 4;
+        final int work = 17;
+        IntStream.range(0, count).forEach(index -> sling.create().resource(root + "/node-" + index,
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/component"));
+        final var handler = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENTS, discovery);
+        final List<String> found = new ArrayList<>();
+        String token = "";
+        long examined = 0;
+        int pages = 0;
+        do {
+            final var request = windowed(root, limit, token);
+            final var page = produced(handler.run(request, requestResolver(), budgeted(work)));
+            if (!token.isEmpty()) {
+                assertEquals(page, produced(handler.run(request, requestResolver(), budgeted(work))),
+                        "a repeated token must replay its page without advancing");
+            }
+            assertTrue(paths(page).size() <= limit);
+            final long consumed = ((DocumentValue.Whole) page.member("examined_nodes").orElseThrow()).value();
+            assertTrue(consumed <= work);
+            examined += consumed;
+            found.addAll(paths(page));
+            token = next(page);
+            assertEquals(new DocumentValue.Flag(token.isEmpty()
+                            ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE),
+                    page.member("complete").orElseThrow());
+            pages++;
+            assertTrue(pages <= count);
+        } while (!token.isEmpty());
+        assertEquals(count + 1, examined, "one retained traversal must examine each node only once");
+        assertEquals(count, found.size());
+        assertEquals(count, new HashSet<>(found).size());
+    }
+
+    @Test
+    void initialOffsetsSpendWorkWithoutRescanningThePrefix() {
+        final String root = "/content/offset";
+        IntStream.range(0, 6).forEach(index -> sling.create().resource(root + "/node-" + index,
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/component"));
+        final var handler = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENTS, discovery);
+        final var initial = windowed(root, 2, "");
+        final var initialWindow = (DocumentValue.Mapping) initial.member("result_window").orElseThrow();
+        final var members = new LinkedHashMap<>(initialWindow.members());
+        members.put("offset", new DocumentValue.Whole(4));
+        final var arguments = new LinkedHashMap<>(initial.members());
+        arguments.put("result_window", new DocumentValue.Mapping(members));
+        final var first = produced(handler.run(new DocumentValue.Mapping(arguments),
+                requestResolver(), budgeted(3)));
+        assertEquals(List.of(), paths(first));
+        assertFalse(next(first).isEmpty());
+        final List<String> found = new ArrayList<>();
+        String token = next(first);
+        int pages = 0;
+        while (!token.isEmpty()) {
+            final var page = produced(handler.run(windowed(root, 2, token), requestResolver(), budgeted(3)));
+            found.addAll(paths(page));
+            token = next(page);
+            pages++;
+            assertTrue(pages < 8);
+        }
+        assertEquals(List.of(root + "/node-4", root + "/node-5"), found);
+    }
+
+    @Test
+    void changedRowsInvalidateAReplayInsteadOfReturningStaleData() {
+        final String root = "/content/replay";
+        IntStream.range(0, 4).forEach(index -> sling.create().resource(root + "/node-" + index,
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/component"));
+        final var handler = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENTS, discovery);
+        final var first = produced(handler.run(windowed(root, 1, ""), requestResolver(), context()));
+        final var resumed = windowed(root, 1, next(first));
+        final var second = produced(handler.run(resumed, requestResolver(), context()));
+        final Resource changed = sling.resourceResolver().getResource(paths(second).getFirst());
+        final var values = java.util.Objects.requireNonNull(changed)
+                .adaptTo(org.apache.sling.api.resource.ModifiableValueMap.class);
+        java.util.Objects.requireNonNull(values).put("jcr:title", "changed");
+        assertEquals("continuation_token_expired", assertInstanceOf(CommandHandler.Failed.class,
+                handler.run(resumed, requestResolver(), context())).category());
+    }
+
+    @Test
+    void idleExpiryReleasesCapacityAndCannotRestartAnOldToken() {
+        final String root = "/content/capacity";
+        IntStream.range(0, 2).forEach(index -> sling.create().resource(root + "/node-" + index,
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/component"));
+        final AtomicLong clock = new AtomicLong();
+        try (var registry = new DiscoveryRegistry(CONTRACT, clock::get)) {
+            final var handler = new ContentCatalogHandler(CONTRACT,
+                    ContentCatalogHandler.Kind.COMPONENTS, registry);
+            final long capacity = CONTRACT.value(ContractLimit.MAXIMUM_DISCOVERY_CURSORS);
+            final List<DocumentValue.Mapping> pages = IntStream.range(0, Math.toIntExact(capacity))
+                    .mapToObj(index -> produced(handler.run(windowed(root, 1, ""),
+                        requestResolver(), context()))).toList();
+            assertEquals("discovery_budget_exceeded", assertInstanceOf(CommandHandler.Failed.class,
+                    handler.run(windowed(root, 1, ""), requestResolver(), context())).category());
+            clock.set(CONTRACT.value(ContractLimit.CONTINUATION_TOKEN_LIFETIME_MILLISECONDS));
+            registry.collect();
+            assertEquals("continuation_token_expired", assertInstanceOf(CommandHandler.Failed.class,
+                    handler.run(windowed(root, 1, next(pages.getFirst())), requestResolver(),
+                        context())).category());
+            assertInstanceOf(CommandHandler.Produced.class,
+                    handler.run(windowed(root, 1, ""), requestResolver(), context()));
+        }
+    }
+
+    @Test
+    void completeInitialListingsDoNotOccupyCursorCapacity() {
+        final String root = "/content/complete";
+        sling.create().resource(root, ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/component");
+        final var handler = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENTS, discovery);
+        final long beyondCapacity = CONTRACT.value(ContractLimit.MAXIMUM_DISCOVERY_CURSORS) + 1;
+        IntStream.range(0, Math.toIntExact(beyondCapacity)).forEach(index -> {
+            final var page = produced(handler.run(windowed(root, 1, ""), requestResolver(), context()));
+            assertEquals("", next(page));
+            assertEquals(new DocumentValue.Flag(DocumentValue.Truth.TRUE),
+                    page.member("complete").orElseThrow());
+        });
+    }
+
+    @Test
+    void aTokenFromAnotherRuntimeCannotAliasANewCursor() {
+        final String root = "/content/restart";
+        sling.create().resource(root + "/first", ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/first");
+        sling.create().resource(root + "/second",
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/second");
+        final var original = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENTS, discovery);
+        final var first = produced(original.run(windowed(root, 1, ""), requestResolver(), context()));
+        try (var restarted = new DiscoveryRegistry(CONTRACT)) {
+            final var handler = new ContentCatalogHandler(CONTRACT,
+                    ContentCatalogHandler.Kind.COMPONENTS, restarted);
+            assertInstanceOf(CommandHandler.Produced.class,
+                    handler.run(windowed(root, 1, ""), requestResolver(), context()));
+            assertEquals("continuation_token_wrong_query", assertInstanceOf(CommandHandler.Failed.class,
+                    handler.run(windowed(root, 1, next(first)), requestResolver(), context())).category());
+        }
+    }
+
+    @Test
+    void closingTheRegistryRefusesBothContinuationAndNewTraversal() {
+        final String root = "/content/closed";
+        sling.create().resource(root + "/first", ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/first");
+        sling.create().resource(root + "/second",
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/second");
+        final var handler = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENTS, discovery);
+        final var first = produced(handler.run(windowed(root, 1, ""), requestResolver(), context()));
+        discovery.close();
+        assertEquals("continuation_token_expired", assertInstanceOf(CommandHandler.Failed.class,
+                handler.run(windowed(root, 1, next(first)), requestResolver(), context())).category());
+        assertEquals("continuation_token_expired", assertInstanceOf(CommandHandler.Failed.class,
+                handler.run(windowed(root, 1, ""), requestResolver(), context())).category());
+    }
+
+    @Test
+    void aTokenForAnotherRootIsRefusedBeforeRepositoryAccess()
+            throws org.apache.sling.api.resource.LoginException {
+        final String root = "/content/scope";
+        sling.create().resource(root + "/first", ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/first");
+        sling.create().resource(root + "/second",
+                ContentCatalogHandler.RESOURCE_TYPE_PROPERTY, "site/second");
+        final var handler = new ContentCatalogHandler(CONTRACT,
+                ContentCatalogHandler.Kind.COMPONENTS, discovery);
+        final var first = produced(handler.run(windowed(root, 1, ""), requestResolver(), context()));
+        try (ResourceResolver forbidden =
+                new ResourceResolverWrapper(sling.resourceResolver().clone(Map.of())) {
+                    @Override
+                    public Resource getResource(String path) {
+                        throw new AssertionError("wrong-query continuation reached the repository");
+                    }
+                }) {
+            assertEquals("continuation_token_wrong_query", assertInstanceOf(CommandHandler.Failed.class,
+                    handler.run(windowed("/content/other", 1, next(first)),
+                            forbidden, context())).category());
+        }
+        assertInstanceOf(CommandHandler.Produced.class,
+                handler.run(windowed(root, 1, next(first)), requestResolver(), context()));
+    }
+
+    private static DocumentValue.Mapping produced(CommandHandler.Answer answer) {
+        return assertInstanceOf(CommandHandler.Produced.class, answer).result();
+    }
+
+    private static String next(DocumentValue.Mapping page) {
+        return page.member("next_continuation_token").map(DocumentValue.Text.class::cast)
+                .map(DocumentValue.Text::value).orElse("");
+    }
+
+    private static DocumentValue.Mapping windowed(String root, long limit, String token) {
+        final var window = new LinkedHashMap<String, DocumentValue>();
+        window.put("mode", new DocumentValue.Text(token.isEmpty() ? "initial" : "continuation"));
+        if (token.isEmpty()) {
+            window.put("offset", new DocumentValue.Whole(0));
+            window.put("limit", new DocumentValue.Whole(limit));
+        } else {
+            window.put("continuation_token", new DocumentValue.Text(token));
+        }
+        final var request = new LinkedHashMap<>(arguments(root).members());
+        request.put("result_window", new DocumentValue.Mapping(window));
+        return new DocumentValue.Mapping(request);
+    }
+
     private DocumentValue.Mapping listed(ContentCatalogHandler.Kind kind, String root) {
-        final CommandHandler.Answer answer = new ContentCatalogHandler(CONTRACT, kind)
-                .run(arguments(root), readOnly(), context());
+        final CommandHandler.Answer answer = new ContentCatalogHandler(CONTRACT, kind, discovery)
+                .run(arguments(root), requestResolver(), context());
         assertInstanceOf(CommandHandler.Produced.class, answer, answer.toString());
         return ((CommandHandler.Produced) answer).result();
     }
@@ -256,8 +560,13 @@ final class ContentCatalogCommandTest {
         return new DocumentValue.Mapping(members);
     }
 
-    private ResourceResolver readOnly() {
-        return ReadOnlyResolver.around(sling.resourceResolver());
+    private ResourceResolver requestResolver() {
+        try {
+            sling.resourceResolver().commit();
+            return sling.resourceResolver();
+        } catch (final org.apache.sling.api.resource.PersistenceException failure) {
+            throw new AssertionError(failure);
+        }
     }
 
     private static CallerContext context() {

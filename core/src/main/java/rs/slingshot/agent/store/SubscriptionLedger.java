@@ -327,6 +327,21 @@ public final class SubscriptionLedger {
     }
 
     /**
+     * Stages a subscription's complete capacity release in an enclosing expiry transaction.
+     *
+     * @param session the enclosing cleanup session
+     * @param record the freshly read, expired subscription
+     * @throws RepositoryException if its accounting cannot be retired exactly
+     */
+    static void stageEnd(Session session, SubscriptionRecord record) throws RepositoryException {
+        CapacityLedger.stageResourceRelease(session,
+                session.getNode(SubscriptionRecord.pathOf(record.identifier()).path()),
+                        record.binding().caller(),
+                new CapacityLedger.ResourceCharge(AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
+                        AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, BYTE_COUNT, record.bytes()));
+    }
+
+    /**
      * Prepares the counters a subscription is admitted against.
      *
      * @param session the session to write under

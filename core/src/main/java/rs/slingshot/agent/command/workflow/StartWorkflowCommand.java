@@ -24,7 +24,10 @@ import rs.slingshot.agent.json.DocumentValue;
  *
  * <p>The metadata is text keyed by name and nothing else. Workflow metadata is read by steps that
  * were written by somebody else entirely, and a structured value here would be a way to send that
- * somebody a document they did not expect.</p>
+ * somebody a document they did not expect. Nonempty title and comment arguments are recorded
+ * under the platform metadata keys {@code workflowTitle} and {@code startComment}; they take
+ * precedence over metadata entries with those names. Omitted descriptions leave those entries
+ * unchanged.</p>
  *
  * @param modelIdentifier which workflow model to run
  * @param payloadPath what to run it on

@@ -16,15 +16,13 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.CommandRegistry;
-import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.ReadOnlyResolver;
 import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
@@ -45,32 +43,42 @@ final class FindPagesUsingComponentsCommandTest {
     @Test
     void handlerRefusesMalformedArgumentsBeforePlatformAccess() {
         assertInstanceOf(CommandHandler.Failed.class,
-                new FindPagesUsingComponentsHandler(CONTRACT).run(
+                new FindPagesUsingComponentsHandler(CONTRACT, discovery).run(
                         new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
                 "malformed arguments reached the platform handler");
         assertInstanceOf(CommandHandler.Failed.class,
-                new FindPagesUsingComponentsHandler(CONTRACT).run(
+                new FindPagesUsingComponentsHandler(CONTRACT, discovery).run(
                         argument("/content/missing", List.of(TEASER), 100), readOnly(), context()),
                 "a missing root was answered as an empty result");
     }
 
     @Test
-    @DisplayName("a search that reaches its node budget exactly answers, and one node more is refused")
-    void asearchPastItsNodeBudgetIsRefusedRatherThanAnsweredInPart() {
+    @DisplayName("a bounded component search reports explicit partial progress at both budget boundaries")
+    void aSearchReportsPartialProgressAtBothBudgetBoundaries() {
         corpus();
         final long everyNode = CORPUS_NODES_BEFORE_TEASERS + TEASERS;
-        final CommandHandler.Answer whole = new FindPagesUsingComponentsHandler(CONTRACT).run(
+        final CommandHandler.Answer whole = new FindPagesUsingComponentsHandler(CONTRACT, discovery).run(
                 argument("/content/site", List.of(TEASER), 100), readOnly(), context());
-        final CommandHandler.Answer exactly = new FindPagesUsingComponentsHandler(CONTRACT)
+        final DocumentValue.Mapping exactly = assertInstanceOf(CommandHandler.Produced.class,
+                new FindPagesUsingComponentsHandler(CONTRACT, discovery)
                 .run(argument("/content/site", List.of(TEASER), 100), readOnly(),
-                        budgeted(everyNode));
-        assertEquals(((CommandHandler.Produced) whole).result(),
-                assertInstanceOf(CommandHandler.Produced.class, exactly).result());
-        final CommandHandler.Failed past = assertInstanceOf(CommandHandler.Failed.class,
-                new FindPagesUsingComponentsHandler(CONTRACT).run(
+                        budgeted(everyNode))).result();
+        final DocumentValue.Mapping past = assertInstanceOf(CommandHandler.Produced.class,
+                new FindPagesUsingComponentsHandler(CONTRACT, discovery).run(
                         argument("/content/site", List.of(TEASER), 100), readOnly(),
-                        budgeted(everyNode - 1)));
-        assertEquals(FindPagesUsingComponentsHandler.DISCOVERY_BUDGET_EXCEEDED, past.category());
+                        budgeted(everyNode - 1))).result();
+        assertEquals(DocumentValue.Truth.TRUE, ((DocumentValue.Flag)
+                ((CommandHandler.Produced) whole).result().member("complete").orElseThrow()).value());
+        List.of(exactly, past).forEach(partial -> {
+            assertEquals(DocumentValue.Truth.FALSE,
+                    ((DocumentValue.Flag) partial.member("complete").orElseThrow()).value());
+            assertInstanceOf(DocumentValue.Text.class,
+                    partial.member("next_continuation_token").orElseThrow());
+        });
+        assertTrue(((DocumentValue.Whole) exactly.member("examined_nodes").orElseThrow()).value()
+                <= everyNode);
+        assertTrue(((DocumentValue.Whole) past.member("examined_nodes").orElseThrow()).value()
+                <= everyNode - 1);
     }
 
     /** Nodes the corpus holds besides its teasers: two pages' worth of structure and three more. */
@@ -89,7 +97,13 @@ final class FindPagesUsingComponentsCommandTest {
     /** A component type nothing in the corpus uses. */
     private static final String UNUSED = "site/components/nobody-uses-this";
 
-    private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
+    private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_MOCK);
+    private final DiscoveryRegistry discovery = new DiscoveryRegistry(CONTRACT);
+
+    @AfterEach
+    void releaseDiscovery() {
+        discovery.close();
+    }
 
     @Test
     @DisplayName("a page holding many matching nodes appears once")
@@ -178,7 +192,7 @@ final class FindPagesUsingComponentsCommandTest {
         assertEquals(RegistryRow.OperationKey.REFUSED, row.operationKey());
         assertEquals(1048576, row.resultBytes());
         assertEquals(row.failureCategories().stream().sorted().toList(),
-                new FindPagesUsingComponentsHandler(CONTRACT).categories().stream().sorted()
+                new FindPagesUsingComponentsHandler(CONTRACT, discovery).categories().stream().sorted()
                         .toList(),
                 "the handler and its row disagree about what this command can fail with");
     }
@@ -189,7 +203,7 @@ final class FindPagesUsingComponentsCommandTest {
 
     private DocumentValue.Mapping listed(List<String> types, MatchMode mode) {
         return assertInstanceOf(CommandHandler.Produced.class,
-                new FindPagesUsingComponentsHandler(CONTRACT)
+                new FindPagesUsingComponentsHandler(CONTRACT, discovery)
                         .run(argument("/content/site", types, 100, mode), readOnly(), context()),
                 "the search was refused").result();
     }
@@ -261,22 +275,16 @@ final class FindPagesUsingComponentsCommandTest {
     }
 
     private ResourceResolver readOnly() {
-        return ReadOnlyResolver.around(sling.resourceResolver());
+        return PageSearchTestSupport.readOnly(sling.resourceResolver());
     }
 
     private static CallerContext budgeted(long nodes) {
-        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, nodes),
-                Budget.time(CONTRACT),
-                new Budget(Budget.Kind.RESULT,
-                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
-                ProgressSink.under(CONTRACT));
+        return PageSearchTestSupport.context(CONTRACT, operation(), nodes);
     }
 
     private static CallerContext context() {
-        return new CallerContext(operation(), Budget.discovery(CONTRACT), Budget.time(CONTRACT),
-                new Budget(Budget.Kind.RESULT,
-                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
-                ProgressSink.under(CONTRACT));
+        return PageSearchTestSupport.context(CONTRACT, operation(),
+                CONTRACT.value(ContractLimit.MAXIMUM_DISCOVERY_CANDIDATE_NODES));
     }
 
     private static AgentOperationIdentifier operation() {

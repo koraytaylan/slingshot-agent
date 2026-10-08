@@ -13,6 +13,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * The one place a route path is produced.
@@ -37,6 +39,25 @@ public final class AgentRouteTable {
     private static final String PREFIX_TABLE = "prefix";
 
     private static final String ALIAS_TABLE = "alias";
+
+    /** Successfully validated immutable metadata, owned by this bundle's defining classloader. */
+    private static final AtomicReference<EmbeddedState> EMBEDDED =
+            new AtomicReference<>(MissingEmbedded.INSTANCE);
+
+    private static final ReentrantLock EMBEDDED_LOCK = new ReentrantLock();
+
+    private sealed interface EmbeddedState permits MissingEmbedded, LoadedEmbedded {
+    }
+
+    private enum MissingEmbedded implements EmbeddedState {
+        INSTANCE
+    }
+
+    /** A whole embedded table; deployment alias configuration remains outside this value.
+     * @param loaded the successful embedded load
+     */
+    private record LoadedEmbedded(Loaded loaded) implements EmbeddedState {
+    }
 
     private final String prefix;
     private final SequencedMap<String, AgentRoute> routes;
@@ -93,11 +114,39 @@ public final class AgentRouteTable {
     }
 
     /**
-     * Reads the table embedded in this bundle.
+     * Reads the table embedded in this bundle, reusing a successful validated load.
+     *
+     * <p>A failed read is retried. Each defining bundle holds its own immutable table, while
+     * caller-provided documents still pass through {@link #read(String)} independently.</p>
      *
      * @return the table, or the one reason it was refused
      */
     public static Outcome load() {
+        final EmbeddedState state = EMBEDDED.get();
+        if (state instanceof final LoadedEmbedded held) {
+            return held.loaded();
+        }
+        EMBEDDED_LOCK.lock();
+        try {
+            return loadedEmbedded();
+        } finally {
+            EMBEDDED_LOCK.unlock();
+        }
+    }
+
+    private static Outcome loadedEmbedded() {
+        final EmbeddedState state = EMBEDDED.get();
+        if (state instanceof final LoadedEmbedded held) {
+            return held.loaded();
+        }
+        final Outcome outcome = readEmbedded();
+        if (outcome instanceof final Loaded loaded) {
+            EMBEDDED.set(new LoadedEmbedded(loaded));
+        }
+        return outcome;
+    }
+
+    private static Outcome readEmbedded() {
         try (InputStream stream = AgentRouteTable.class.getResourceAsStream(TABLE_RESOURCE)) {
             if (stream == null) {
                 return new Refused(Failure.UNREADABLE,

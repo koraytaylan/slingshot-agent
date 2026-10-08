@@ -416,6 +416,128 @@ final class SubscriptionLedgerTest {
                         : method.invoke(session, arguments));
     }
 
+    @Test
+    void expiredSubscriptionsReleaseCapacityThroughProductionMaintenance() throws RepositoryException {
+        final Session session = prepared();
+        final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final long boundary = NOW + CONTRACT.value(rs.slingshot.agent.contract.ContractLimit
+                .MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS);
+        MaintenanceSweep.run(session, generation(), boundary, CONTRACT);
+        assertTrue(session.nodeExists(SubscriptionRecord.pathOf(record.identifier()).path()),
+                "maintenance removed a subscription at the inclusive retention boundary");
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        MaintenanceSweep.run(session, generation(), boundary + 1, CONTRACT);
+        assertFalse(session.nodeExists(SubscriptionRecord.pathOf(record.identifier()).path()),
+                "production maintenance retained a subscription beyond its maximum retention");
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT),
+                "an expired subscription permanently retained its admission row");
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, caller(),
+                CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, caller(),
+                CONTRACT));
+    }
+
+    @Test
+    void productionExpiryRetainsAConcurrentlyAdvancedSubscription() throws RepositoryException,
+                LoginException {
+        final Session session = prepared();
+        final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final long now = NOW + CONTRACT.value(rs.slingshot.agent.contract.ContractLimit
+                .MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS) + 1;
+        final Session competing = second();
+        MaintenanceSweep.run(SaveInterleaving.before(session, () ->
+                assertInstanceOf(HighWaterMark.Advanced.class,
+                HighWaterMark.advance(competing, record.identifier(), sequence(1), now))), generation(), now,
+                        CONTRACT);
+        assertTrue(session.nodeExists(SubscriptionRecord.pathOf(record.identifier()).path()));
+        assertEquals(now, SubscriptionLedger.read(session, record.identifier(), CONTRACT).orElseThrow()
+                .lastAdvancedAtUnixMilliseconds());
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        assertEquals(record.bytes(), CapacityLedger.heldBy(session,
+                AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES,
+                caller(), CONTRACT));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void interruptedProductionExpiryKeepsTheRowAndChargesAtomic(boolean committed)
+            throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final long now = NOW + CONTRACT.value(rs.slingshot.agent.contract.ContractLimit
+                .MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS) + 1;
+        assertThrows(RepositoryException.class, () -> MaintenanceSweep.run(
+                SaveInterleaving.interruptSave(session, 1, committed), generation(), now, CONTRACT));
+        final Session observer = second();
+        final long rows = observer.nodeExists(SubscriptionRecord.pathOf(record.identifier()).path()) ? 1 : 0;
+        assertEquals(committed ? 0 : 1, rows);
+        assertEquals(rows, CapacityLedger.held(observer, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
+                CONTRACT));
+        assertEquals(rows * record.bytes(), CapacityLedger.held(observer,
+                AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, CONTRACT));
+        assertEquals(rows, CapacityLedger.heldBy(observer, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS,
+                caller(), CONTRACT));
+        assertEquals(rows * record.bytes(), CapacityLedger.heldBy(observer,
+                AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES,
+                caller(), CONTRACT));
+        MaintenanceSweep.run(observer, generation(), now, CONTRACT);
+        MaintenanceSweep.run(observer, generation(), now, CONTRACT);
+        assertEquals(0, CapacityLedger.held(observer, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(observer, AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, caller(),
+                CONTRACT));
+    }
+
+    @Test
+    void boundedSubscriptionExpiryResumesPastLiveAndMalformedRows() throws RepositoryException {
+        final Session session = prepared();
+        final long now = NOW + CONTRACT.value(rs.slingshot.agent.contract.ContractLimit
+                .MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS) + 1;
+        final SubscriptionRecord expired = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                SubscriptionLedger.subscribe(session, caller(), "synthetic-z-expired", generation(), NOW,
+                        CONTRACT)).record();
+        final SubscriptionRecord live = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                SubscriptionLedger.subscribe(session, caller(), "synthetic-a-live", generation(), now,
+                        CONTRACT)).record();
+        final SubscriptionRecord malformed = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                SubscriptionLedger.subscribe(session, caller(), "synthetic-m-malformed", generation(), NOW,
+                        CONTRACT)).record();
+        session.getNode(SubscriptionRecord.pathOf(malformed.identifier()).path()).
+                getProperty(SubscriptionLedger.SUBSCRIBER).remove();
+        session.save();
+        final AgentContract bounded = contractWith(Map.of("maintenance_sweep_work_bound_rows", 1L));
+        for (final int pass : List.of(1, 2, 3)) {
+            final SweepReport report = MaintenanceSweep.run(session, generation(), now, bounded);
+            assertEquals(1, report.examined(), "pass " + pass + " did not respect the one-row budget");
+        }
+        assertFalse(session.nodeExists(SubscriptionRecord.pathOf(expired.identifier()).path()));
+        assertTrue(session.nodeExists(SubscriptionRecord.pathOf(live.identifier()).path()));
+        assertTrue(session.nodeExists(SubscriptionRecord.pathOf(malformed.identifier()).path()));
+        assertEquals(2, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        assertEquals(live.bytes() + malformed.bytes(), CapacityLedger.heldBy(session,
+                AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, caller(), CONTRACT));
+    }
+
+    @Test
+    void twoProductionSweepsReleaseAnExpiredSubscriptionOnce() throws RepositoryException, LoginException {
+        final Session session = prepared();
+        final SubscriptionRecord record = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                subscribe(session, "a-new-subscription", CONTRACT)).record();
+        final long now = NOW + CONTRACT.value(rs.slingshot.agent.contract.ContractLimit
+                .MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS) + 1;
+        final Session competing = second();
+        MaintenanceSweep.run(SaveInterleaving.before(session,
+                () -> MaintenanceSweep.run(competing, generation(), now, CONTRACT)), generation(), now,
+                        CONTRACT);
+        assertFalse(session.nodeExists(SubscriptionRecord.pathOf(record.identifier()).path()));
+        assertEquals(0, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+        assertEquals(0, CapacityLedger.heldBy(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_BYTES, caller(),
+                CONTRACT));
+    }
+
     private SubscriptionLedger.Outcome subscribe(Session session, String fixture,
                                                  AgentContract contract)
             throws RepositoryException {

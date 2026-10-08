@@ -3,40 +3,24 @@
 
 package rs.slingshot.agent.command.content;
 
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
-import rs.slingshot.agent.command.PagedQuery;
-import rs.slingshot.agent.command.ResultWindow;
-import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
-import rs.slingshot.agent.continuation.ContinuationToken;
-import rs.slingshot.agent.continuation.QueryDigest;
 import rs.slingshot.agent.contract.AgentContract;
-import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * Addresses under one root, of one type, a page at a time.
+ * Bounded live discovery under an exact readable root, including the root itself.
  *
- * <p>It issues the one query this command declares — a subtree and a primary type, filtering on
- * nothing else — because that is the shape Oak's own node-type index answers on every supported
- * deployment. A query that filtered on anything else would be answered by walking the repository,
- * and walking somebody's author instance is the failure this whole plan exists to prevent.</p>
- *
- * <p>Ordering is by path, ascending. It has to be <em>some</em> total order that two pages agree
- * on, and path is the only property this command is allowed to look at — which makes it the only
- * candidate. An unordered query would let two pages overlap or skip, and a caller reading both
- * would see one address twice and another never, with nothing to tell them it happened.</p>
+ * <p>Version two uses provider depth-first order with explicit per-page progress. The runtime-owned
+ * registry authenticates continuations before repository work, preserves the initial page limit,
+ * rechecks current caller authority and releases the cursor on expiry or deactivation. A stable
+ * subtree is visited once; concurrent changes are live rather than a snapshot.</p>
  */
 public final class QueryPathsHandler implements CommandHandler {
-
-    /** The name of the query this command issues, which the coverage policy declares. */
-    public static final String QUERY_NAME = "query-paths-by-type";
 
     /** The category a root nothing is at, or nobody may see, is refused under. */
     public static final String ROOT_NOT_FOUND = "root_not_found";
@@ -51,18 +35,16 @@ public final class QueryPathsHandler implements CommandHandler {
     public static final String ARGUMENT_REJECTED = "argument_rejected";
 
     private final AgentContract contract;
+    private final DiscoveryRegistry discovery;
 
     /**
-     * Holds one handler bound to the contract its bounds come from.
-     *
-     * <p>The contract is the only thing it holds, and it holds nothing about any one run: what a
-     * run may use arrives as an argument to {@link #run}, so two callers running this command at
-     * once cannot reach anything of each other's.</p>
-     *
+     * Holds the authenticated bounds and the runtime-owned discovery registry.
      * @param contract the authenticated contract
+     * @param discovery the cursor registry closed by the runtime
      */
-    public QueryPathsHandler(AgentContract contract) {
+    public QueryPathsHandler(AgentContract contract, DiscoveryRegistry discovery) {
         this.contract = contract;
+        this.discovery = discovery;
     }
 
     @Override
@@ -72,114 +54,15 @@ public final class QueryPathsHandler implements CommandHandler {
         if (asked instanceof final QueryPathsCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return searched(((QueryPathsCommand.Held) asked).command(), arguments, resolver, context);
+        final QueryPathsCommand command = ((QueryPathsCommand.Held) asked).command();
+        return discovery.page(new DiscoveryRegistry.Request(QueryPathsCommand.WIRE_NAME,
+                command.rootPath(), command.window(), arguments), resolver, context,
+                new DiscoveryRegistry.Traversal(resource -> true,
+                        resource -> matches(resource, command)
+                                ? Optional.of(QueryPathsResult.matchOf(resource.getPath()))
+                                : Optional.empty()));
     }
 
-    private Answer searched(QueryPathsCommand command, DocumentValue.Mapping arguments,
-                            ResourceResolver resolver,
-                            CallerContext context) {
-        final Resource root = resolver.getResource(command.rootPath());
-        if (root == null) {
-            return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
-                    + " read, which is the same answer as nothing being there");
-        }
-        final Optional<List<String>> walked = gather(root, command, context);
-        if (walked.isEmpty()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search examined more than the "
-                    + context.discovery().limit() + " nodes or ran longer than the "
-                    + context.time().limit() + " milliseconds it is allowed before it had visited"
-                    + " every node under " + command.rootPath() + ", and stopped rather than"
-                    + " answer with part of them; name a narrower root instead");
-        }
-        final List<String> gathered = walked.get();
-        final Optional<PagedQuery> query = context.paging() instanceof CallerContext.Available paging
-                ? Optional.of(new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(),
-                        paging.generation())) : Optional.empty();
-        final QueryDigest.Outcome digest = query.map(value -> value.digestOf(arguments))
-                .orElseGet(() -> QueryDigest.of(QueryPathsCommand.WIRE_NAME, arguments));
-        if (!(digest instanceof final QueryDigest.Held held)) {
-            return new Failed("continuation_token_malformed", "the query arguments cannot be"
-                    + " represented canonically");
-        }
-        final long offset = switch (command.window()) {
-            case ResultWindow.Initial initial -> initial.offset();
-            case ResultWindow.Continuation continuation -> continuationOffset(continuation,
-                    held.digest(), context);
-        };
-        if (offset < 0) {
-            return new Failed("continuation_token_malformed", "the continuation token was not"
-                    + " accepted");
-        }
-        final long limit = command.window() instanceof ResultWindow.Initial initial
-                ? initial.limit()
-                : contract.value(rs.slingshot.agent.contract.ContractLimit.DEFAULT_RESULT_LIMIT);
-        final List<String> fromOffset = gathered.stream().skip(offset).toList();
-        final PagedQuery.Page<String> page = PagedQuery.pageOf(fromOffset, limit, offset);
-        final Optional<String> token = nextToken(page, held.digest(), context);
-        if (token.isEmpty()) {
-            if (command.window() instanceof ResultWindow.Initial) {
-                return new Produced(QueryPathsResult.documentOf(page.rows(), ""));
-            }
-            return new Failed("continuation_token_integrity_invalid", "continuation authority is"
-                    + " unavailable");
-        }
-        return new Produced(QueryPathsResult.documentOf(page.rows(), token.orElseThrow()));
-    }
-
-    private long continuationOffset(ResultWindow.Continuation continuation, QueryDigest query,
-                                    CallerContext context) {
-        if (!(context.paging() instanceof CallerContext.Available paging)) {
-            return -1;
-        }
-        final BoundedDocumentReader.Outcome read = BoundedDocumentReader.read(
-                continuation.continuationToken().getBytes(StandardCharsets.UTF_8),
-                BoundedDocumentReader.Bounds.from(contract));
-        if (!(read instanceof final BoundedDocumentReader.Read parsed)) {
-            return -1;
-        }
-        final ContinuationToken.ReadOutcome token = ContinuationToken.read(parsed.value());
-        if (!(token instanceof final ContinuationToken.Read decoded)) {
-            return -1;
-        }
-        if (!(paging.authority().read() instanceof ContinuationKeyAuthority.Read authorityRead)) {
-            return -1;
-        }
-        final ContinuationToken.Outcome validated = decoded.token().validate(
-                authorityRead.ring(),
-                paging.targetDigest(), query, paging.generation(), paging.nowUnixMilliseconds(),
-                contract);
-        return validated instanceof ContinuationToken.Honoured
-                ? decoded.token().unvalidatedState().position() : -1;
-    }
-
-    private Optional<String> nextToken(PagedQuery.Page<String> page, QueryDigest query,
-                                       CallerContext context) {
-        if (page.following() instanceof PagedQuery.Nothing) {
-            return Optional.of("");
-        }
-        if (!(context.paging() instanceof CallerContext.Available paging)) {
-            return Optional.empty();
-        }
-        if (!(paging.authority().read() instanceof ContinuationKeyAuthority.Read read)) {
-            return Optional.empty();
-        }
-        return new PagedQuery(QueryPathsCommand.WIRE_NAME, paging.targetDigest(), paging.generation())
-                .tokenFor(page, query, read.ring(), paging.nowUnixMilliseconds(), contract)
-                .map(ContinuationToken::rendered);
-    }
-
-    /**
-     * Whether one candidate is one of the addresses this search is for.
-     *
-     * <p>The type narrows what the query returns; the predicates are applied to those rows here.
-     * That is the split the index requires: a query can be answered from an index because it asks
-     * about a node's type and its path, and a predicate about an arbitrary property is a filter
-     * over rows already found rather than a second index nobody has.</p>
-     *
-     * @param resource the candidate
-     * @param command what was asked
-     * @return whether it belongs in the answer
-     */
     private static boolean matches(Resource resource, QueryPathsCommand command) {
         final Resource current = java.util.Objects.requireNonNull(resource);
         if (!QueryPathsCommand.ANY_NODE_TYPE.equals(command.primaryNodeType())
@@ -188,7 +71,7 @@ public final class QueryPathsHandler implements CommandHandler {
         }
         return command.predicates().stream()
                 .allMatch(predicate -> predicate.isSatisfiedBy(
-                        storedAt(current, predicate.propertyPath())));
+                        PredicatePropertyReader.at(current, predicate.propertyPath())));
     }
 
     /**
@@ -218,41 +101,8 @@ public final class QueryPathsHandler implements CommandHandler {
         return one == null ? List.of() : List.of(one);
     }
 
-    private static Optional<List<String>> gather(Resource root, QueryPathsCommand command,
-                                                 CallerContext context) {
-        final List<String> found = new ArrayList<>();
-        final boolean finished = BoundedWalk.every(root, context, resource -> true, resource -> {
-            if (matches(resource, command)) {
-                found.add(resource.getPath());
-            }
-        });
-        return finished ? Optional.of(found.stream().sorted().toList()) : Optional.empty();
-    }
-
     private static String typeOf(Resource resource) {
         return String.valueOf(resource.getValueMap().get("jcr:primaryType", String.class));
-    }
-
-    /**
-     * The page one window takes out of everything the search found.
-     *
-     * <p>Kept apart from the searching so that paging can be proved without a repository. Two pages
-     * of one enumeration never overlap and never skip, because both are taken from one ascending
-     * order by position rather than by re-running a query whose answer may have moved.</p>
-     *
-     * @param found everything the search found, in ascending order
-     * @param window which page is wanted
-     * @param contract the authenticated contract, which declares the default page size
-     * @return the addresses that page carries
-     */
-    public static List<String> pageOf(List<String> found, ResultWindow window,
-                                      AgentContract contract) {
-        final long offset = window instanceof final ResultWindow.Initial initial
-                ? initial.offset() : 0;
-        final long limit = window instanceof final ResultWindow.Initial initial
-                ? initial.limit()
-                : contract.value(rs.slingshot.agent.contract.ContractLimit.DEFAULT_RESULT_LIMIT);
-        return found.stream().skip(offset).limit(limit).toList();
     }
 
     @Override

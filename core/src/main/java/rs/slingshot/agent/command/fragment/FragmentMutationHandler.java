@@ -20,6 +20,7 @@ import rs.slingshot.agent.command.mutation.MutationOutcome;
 import rs.slingshot.agent.command.mutation.ReferencePolicy;
 import rs.slingshot.agent.command.mutation.RepositoryReach;
 import rs.slingshot.agent.command.mutation.SingleCommit;
+import rs.slingshot.agent.command.mutation.StoredProperties;
 import rs.slingshot.agent.command.page.CreatePageHandler;
 import rs.slingshot.agent.command.page.TemplateContent;
 import rs.slingshot.agent.contract.AgentContract;
@@ -207,22 +208,8 @@ public final class FragmentMutationHandler implements CommandHandler {
                 FragmentHandlers.MODEL_PROPERTY, command.modelPath()));
         final Map<String, Object> master = new LinkedHashMap<>();
         master.put(ListChildPagesHandler.TYPE_PROPERTY, FragmentHandlers.UNSTRUCTURED_TYPE);
-        command.elements().values().forEach((name, values) -> master.put(name, stored(values)));
+        master.putAll(command.elements().properties());
         session.create(data, FragmentHandlers.MASTER_VARIATION, master);
-    }
-
-    /**
-     * How one element's values are held in a repository.
-     *
-     * <p>One value is one string and several are an array, which is the platform's own distinction
-     * rather than this build's: an element declared as one value and stored as an array of one
-     * reads back through the authoring tools as a different element.</p>
-     *
-     * @param values what the caller asked for
-     * @return what to store
-     */
-    private static Object stored(List<String> values) {
-        return values.size() == 1 ? values.getFirst() : values.toArray(new String[0]);
     }
 
     private Answer contentUpdate(DocumentValue.Mapping arguments, ResourceResolver resolver) {
@@ -295,7 +282,12 @@ public final class FragmentMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(FragmentHandlers.FRAGMENT_ACCESS_DENIED,
                     command.fragmentPath() + " is not a fragment this caller may change");
         }
-        command.elements().values().forEach((name, held) -> values.put(name, stored(held)));
+        final Optional<StoredProperties.Refused> refusal =
+                new StoredProperties.Held(command.elements().properties()).writeTo(variation);
+        if (refusal.isPresent()) {
+            return new MutationOutcome.Refused(FragmentHandlers.ELEMENT_VALUE_REJECTED,
+                    refusal.orElseThrow().detail());
+        }
         if (UpdateContentFragmentCommand.TITLE_UNCHANGED.equals(command.title())) {
             return sealed(session, FragmentResult.documentOf(command.fragmentPath()));
         }
@@ -443,13 +435,22 @@ public final class FragmentMutationHandler implements CommandHandler {
             return new MutationOutcome.Refused(FragmentHandlers.VARIATION_ACCESS_DENIED,
                     command.variationPath() + " is not a variation this caller may change");
         }
+        final StoredProperties.Outcome properties = StoredProperties.of(command.change(), session);
+        if (properties instanceof final StoredProperties.Refused refused) {
+            return new MutationOutcome.Refused(FragmentHandlers.PROPERTY_REJECTED, refused.detail());
+        }
         final Optional<String> immovable = command.change().immovableIn(values);
         if (immovable.isPresent()) {
             return new MutationOutcome.Refused(FragmentHandlers.PROPERTY_NOT_REMOVABLE,
                     immovable.get() + " is a property this repository will not let go of, and the"
                             + " whole change is refused rather than applied without it");
         }
-        command.change().set().forEach((name, value) -> values.put(name, value.stored()));
+        final Optional<StoredProperties.Refused> refusal =
+                ((StoredProperties.Held) properties).writeTo(content);
+        if (refusal.isPresent()) {
+            return new MutationOutcome.Refused(FragmentHandlers.PROPERTY_REJECTED,
+                    refusal.orElseThrow().detail());
+        }
         if (!UpdateExperienceFragmentCommand.TITLE_UNCHANGED.equals(command.title())) {
             values.put(ListChildPagesHandler.TITLE_PROPERTY, command.title());
         }

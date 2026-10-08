@@ -79,3 +79,50 @@ It reads neither the sibling source nor its Git history. It therefore cannot est
 recorded constant really exists, discover a newly added constant, or automatically retire an alias
 when a newer client corrects it. These aliases remain opt-in historical compatibility, not a
 requirement for the newer commit named above.
+
+## Submission phase diagnostics
+
+An authenticated submission answered with HTTP 202 carries a `Server-Timing` header with three
+fixed metrics: `admission;dur=N,execution;dur=N,persistence;dur=N`. Each duration is an integer
+number of milliseconds measured on the existing monotonic clock seam. The header contains no
+description, command name, path, caller or operation identifier and changes no response-body
+member, command identity, execution deadline, retention rule or retry behavior.
+
+Admission begins after authorization and bounded request-body intake. It includes document and
+identity parsing, state-session acquisition, durable registration and accepted-event recording,
+execution-capacity reservation, journal start and command-context preparation. Execution measures
+the synchronous command-runtime invocation, including any repository work performed by that
+runtime. Persistence measures completion journalling, terminal publication and acknowledgement
+preparation after the runtime returns. The header is sampled immediately before the response is
+written; response writing, execution-capacity release and state-session cleanup follow that sample.
+Network transit, platform request queuing, authentication and body intake are outside these metrics.
+Submillisecond remainders are truncated separately for each phase.
+
+A phase this request never enters has duration zero. A terminal resend therefore reports zero
+execution and persistence; a request resuming a recorded pending outcome reports zero execution
+and measures its own persistence attempt. A submission waiting for artifact intake reports only
+admission. The header is produced in the accepted-response path; refusals before acknowledgement
+preparation do not carry it. A later response-write or cleanup failure can still prevent complete
+delivery. These request-local measurements do not describe another request's original execution
+or establish why a client lost a response.
+
+## Capability phase diagnostics
+
+An authenticated capability GET answered successfully carries one `Server-Timing` header with
+three fixed metrics: `cap_shape;dur=N,cap_identity;dur=N,cap_document;dur=N`. Values are
+nonnegative integer milliseconds from the existing monotonic clock seam. The header contains
+no descriptions, caller names, paths, operation identifiers or capability field values.
+The canonical body, command identities, document limits and deadlines are unchanged.
+
+Shape measures route lookup and shape validation inside the capability answer method.
+Identity measures only checking the user the platform has already established; it does not
+measure credential exchange or platform authentication. Document measures immutable metadata
+authentication, current atomic lifecycle observations, command-document construction and
+serialization, followed by response content-type and character-encoding preparation.
+The header is sampled before obtaining the response writer. Request queuing, platform filters,
+the base servlet's earlier route validation, network transit, response writing and resolver
+cleanup are outside these measurements. Submillisecond remainders truncate independently.
+
+Shape and authentication refusals carry no capability timing header. Later writer or cleanup
+failures can still prevent complete delivery. Each answer owns its measurements; a later
+request does not describe an earlier request, and these durations do not establish a delay cause.

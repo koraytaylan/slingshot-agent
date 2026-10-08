@@ -9,6 +9,7 @@ import rs.slingshot.agent.continuation.ContinuationToken;
 import rs.slingshot.agent.continuation.KeyRing;
 import rs.slingshot.agent.continuation.QueryDigest;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.DocumentValue;
@@ -127,7 +128,7 @@ public final class ContinuationTokenTarget implements FuzzTarget {
 
     private ContinuationState stateFrom(byte[] input) {
         return new ContinuationState(generation(), targetDigest(), queryDigest().value(),
-                offsetFrom(input), NOW + A_WHILE);
+                offsetFrom(input), contract.value(ContractLimit.DEFAULT_RESULT_LIMIT), NOW + A_WHILE);
     }
 
     /**

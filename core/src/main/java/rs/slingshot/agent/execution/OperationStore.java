@@ -326,6 +326,27 @@ public final class OperationStore {
      * Claims every bucket a record sits under, so a first record in a bucket does not fail for
      * want of a parent nobody has created yet.
      */
+    /**
+     * Stages the remaining empty buckets under a newly claimed ancestor.
+     * @param parent the pending ancestor
+     * @param path the validated fixed operation-layout path
+     * @param index the next bucket segment, excluding the operation record
+     * @throws RepositoryException if the structural buckets cannot be staged
+     */
+    private static void bucketChildren(javax.jcr.Node parent, StatePath path, int index)
+            throws RepositoryException {
+        final String[] segments = path.path().substring(StatePath.ROOT.length() + 1).split("/");
+        if (index >= segments.length - 1) {
+            return;
+        }
+        rs.slingshot.agent.store.CompareAndSet.stamp(parent);
+        final javax.jcr.Node child = parent.addNode(path.path().substring(StatePath.ROOT.length() +
+                1).split("/")[index],
+                "nt:unstructured");
+        rs.slingshot.agent.store.CompareAndSet.stamp(child);
+        bucketChildren(child, path, index + 1);
+    }
+
     private static void bucketsFor(Session session, StatePath path) throws RepositoryException {
         final String[] segments = path.path().substring(StatePath.ROOT.length() + 1).split("/");
         final StringBuilder walked = new StringBuilder(StatePath.ROOT);
@@ -333,9 +354,10 @@ public final class OperationStore {
         while (index < segments.length - 1) {
             walked.append('/').append(segments[index]);
             if (!session.nodeExists(walked.toString())) {
+                final int next = index + 1;
                 ClaimByCreation.claim(session, StatePath.deployment(
                         walked.substring(StatePath.ROOT.length() + 1)), "nt:unstructured",
-                        node -> { });
+                        node -> bucketChildren(node, path, next));
             }
             index = index + 1;
         }

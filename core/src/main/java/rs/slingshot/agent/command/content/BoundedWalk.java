@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import org.apache.sling.api.resource.Resource;
 import rs.slingshot.agent.command.CallerContext;
+import rs.slingshot.agent.stream.ElapsedTime;
 
 /**
  * A depth-first walk of one subtree inside the caller's node and time budgets.
@@ -39,9 +40,26 @@ final class BoundedWalk {
      */
     static boolean every(Resource root, CallerContext context, Predicate<Resource> opens,
                          Consumer<Resource> visitor) {
+        return every(root, context, opens, visitor, ElapsedTime.start());
+    }
+
+    /**
+     * Visits a subtree using the supplied monotonic duration.
+     *
+     * @param root the first counted resource
+     * @param context the execution budgets
+     * @param opens whether children may be opened
+     * @param visitor the action applied to each resource
+     * @param elapsed the duration shared by this complete traversal
+     * @return whether the traversal completed within its budgets
+     */
+    static boolean every(Resource root, CallerContext context, Predicate<Resource> opens,
+                         Consumer<Resource> visitor, ElapsedTime elapsed) {
         final Deque<Iterator<Resource>> pending = new ArrayDeque<>();
-        final long started = System.currentTimeMillis();
         long examined = 1;
+        if (context.exceeded(examined, elapsed.milliseconds(), 0).isPresent()) {
+            return false;
+        }
         visitor.accept(root);
         if (opens.test(root)) {
             pending.push(root.listChildren());
@@ -53,7 +71,7 @@ final class BoundedWalk {
                 continue;
             }
             examined++;
-            if (context.exceeded(examined, System.currentTimeMillis() - started, 0).isPresent()) {
+            if (context.exceeded(examined, elapsed.milliseconds(), 0).isPresent()) {
                 return false;
             }
             final Resource next = children.next();
@@ -62,6 +80,6 @@ final class BoundedWalk {
                 pending.push(next.listChildren());
             }
         }
-        return true;
+        return context.exceeded(examined, elapsed.milliseconds(), 0).isEmpty();
     }
 }

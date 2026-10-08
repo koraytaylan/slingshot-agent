@@ -39,9 +39,10 @@ final class LiveOperatorConfigurationScenario {
     void updatesGrantAndRevokeSubmissionAndDiagnosticsWithoutRestart()
             throws IOException, InterruptedException {
         SharedPublicSlingTier.release();
-        final InteropTier tier = assertInstanceOf(InteropTier.Running.class,
-                PublicSlingTier.start(REPOSITORY,
-                        "localhost/slingshot-agent-public-sling:1", PRODUCT)).tier();
+        final InteropTier.Outcome outcome = PublicSlingTier.start(REPOSITORY,
+                "localhost/slingshot-agent-public-sling:1", PRODUCT);
+        final InteropTier tier = assertInstanceOf(InteropTier.Running.class, outcome,
+                outcome::toString).tier();
         try {
             install(tier);
             assertEquals("done", change(tier, "prepare"));
@@ -105,13 +106,23 @@ final class LiveOperatorConfigurationScenario {
                 .header("Content-Type", "application/json").header("Referer", submit)
                 .POST(HttpRequest.BodyPublishers.ofString("{}")).build(),
                 HttpResponse.BodyHandlers.ofString());
-        assertEquals(admitted ? 400 : 403, submitted.statusCode(), user + ": " + submitted.body());
+        assertEquals(admitted ? 400 : 403, submitted.statusCode(),
+                () -> diagnostic(tier, user, submitted));
         // A 400 proves passage through authorization to malformed-body validation, not command execution.
         final var console = client.send(HttpRequest.newBuilder(URI.create(tier.address() + ENDPOINT))
                 .timeout(Duration.ofSeconds(10)).header("Authorization", authorization).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
         assertEquals(200, console.statusCode(), console.body());
         assertEquals(admitted ? "Unreadable" : "Denied", console.body(), user);
+    }
+
+    private String diagnostic(InteropTier tier, String user, HttpResponse<String> submitted) {
+        final String refusals = tier.capturedOutput().lines()
+                .filter(line -> line.contains("refused a request"))
+                .filter(line -> line.contains("route=submit"))
+                .reduce("", (all, line) -> all + line + "\n");
+        return user + ": " + submitted.body() + "; protocol=" + submitted.version()
+                + "; current configuration=" + state(tier) + "; submit refusals:\n" + refusals;
     }
 
     private static void await(BooleanSupplier condition) throws InterruptedException {

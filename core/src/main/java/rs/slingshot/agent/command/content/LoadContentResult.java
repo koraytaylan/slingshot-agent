@@ -376,7 +376,8 @@ public final class LoadContentResult {
 
         private final long nodeBudget;
         private final long timeBudgetMilliseconds;
-        private final long startedMilliseconds = System.currentTimeMillis();
+        private final rs.slingshot.agent.stream.ElapsedTime elapsed =
+                rs.slingshot.agent.stream.ElapsedTime.start();
         private final java.util.concurrent.atomic.AtomicLong read =
                 new java.util.concurrent.atomic.AtomicLong();
 
@@ -390,7 +391,7 @@ public final class LoadContentResult {
                 return budgetExceeded(RESOURCE_NODES, "this load examined more than the "
                         + nodeBudget + " nodes it is allowed, and stopped rather than going on");
             }
-            if (System.currentTimeMillis() - startedMilliseconds > timeBudgetMilliseconds) {
+            if (elapsed.milliseconds() > timeBudgetMilliseconds) {
                 return budgetExceeded(TRAVERSAL_DURATION, "this load ran longer than the "
                         + timeBudgetMilliseconds + " milliseconds it is allowed after examining "
                         + read.get() + " nodes; ask for less depth or a narrower path");

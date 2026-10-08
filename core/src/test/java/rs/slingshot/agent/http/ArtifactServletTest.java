@@ -212,23 +212,28 @@ final class ArtifactServletTest {
     void readAndWriteFailuresCarryTransferContext() {
         final ArtifactServlet servlet = new ArtifactServlet(new AdvancingTicker(0));
         final IOException unreadable = assertThrows(IOException.class,
-                () -> servlet.transfer(new InputStream() {
-                    @Override
-                    public int read() throws IOException {
-                        throw new IOException("read failed");
-                    }
-                }, new ByteArrayOutputStream(), CONTRACT));
+                () -> servlet.transfer(new UnreadableStream(),
+                        new ByteArrayOutputStream(), CONTRACT));
         assertEquals("artifact read failed", unreadable.getMessage());
 
         final IOException unwritable = assertThrows(IOException.class,
                 () -> servlet.transfer(new ByteArrayInputStream(new byte[] {1}),
-                        new OutputStream() {
-                            @Override
-                            public void write(int value) throws IOException {
-                                throw new IOException("write failed");
-                            }
-                        }, CONTRACT));
+                        new UnwritableStream(), CONTRACT));
         assertEquals("artifact write failed", unwritable.getMessage());
+    }
+
+    private static final class UnreadableStream extends InputStream {
+        @Override
+        public int read() throws IOException {
+            throw new IOException("read failed");
+        }
+    }
+
+    private static final class UnwritableStream extends OutputStream {
+        @Override
+        public void write(int value) throws IOException {
+            throw new IOException("write failed");
+        }
     }
 
     @Test

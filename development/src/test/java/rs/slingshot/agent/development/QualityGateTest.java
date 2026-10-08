@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import org.apache.maven.model.Plugin;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +45,19 @@ final class QualityGateTest {
         assertEquals("locked-dependency-cache", stages.getFirst());
         assertEquals("pinned-interop-images", stages.get(1));
         assertEquals("public-interop-tier", stages.getLast());
+    }
+
+    @Test
+    @DisplayName("artifact policies execute once after all inspected jars are packaged")
+    void artifactPoliciesExecuteAfterPackaging() {
+        final ReactorModel reactor = ReactorModel.at(REPOSITORY);
+        assertEquals("development", reactor.modules().getLast());
+        final Plugin runner = reactor.raw("development").getBuild().getPlugins().stream()
+                .filter(plugin -> "maven-surefire-plugin".equals(plugin.getArtifactId()))
+                .findFirst().orElseThrow();
+        assertEquals(List.of("none", "verify"), runner.getExecutions().stream()
+                .map(execution -> execution.getPhase()).toList());
+        assertEquals(List.of("test"), runner.getExecutions().getLast().getGoals());
     }
 
     @Test

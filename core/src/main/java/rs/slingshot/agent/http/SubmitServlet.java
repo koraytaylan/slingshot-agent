@@ -68,6 +68,9 @@ public final class SubmitServlet extends AgentServlet {
     /** The member the canonical argument bytes arrive in. */
     public static final String ARGUMENTS = "canonical_arguments";
 
+    /** The standard diagnostic header containing only this request's numeric phase durations. */
+    public static final String SERVER_TIMING = "Server-Timing";
+
     /** The member the artifact manifest arrives in. */
     public static final String MANIFEST = "artifact_manifest";
 
@@ -328,7 +331,7 @@ public final class SubmitServlet extends AgentServlet {
             return;
         }
         recorded(request, response, new Arriving(caller, ((BoundedRequestBody.Read) body).bytes(),
-                contract, asking.get(), request.getResourceResolver()));
+                contract, asking.get(), request.getResourceResolver(), new SubmissionTimings()));
     }
 
     /**
@@ -339,15 +342,19 @@ public final class SubmitServlet extends AgentServlet {
      * @param contract the authenticated contract, which declares every bound
      * @param effects the original caller's session, used only for requested content effects
      * @param resolver the original caller's resource resolver
+     * @param timings this request's monotonic phase measurements, never shared between requests
      */
     private record Arriving(CallerIdentity caller, byte[] body, AgentContract contract, Session effects,
-                            ResourceResolver resolver) {
+                            ResourceResolver resolver, SubmissionTimings timings) {
     }
 
     private void recorded(SlingHttpServletRequest request, SlingHttpServletResponse response,
                           Arriving arriving) throws IOException {
         final BoundedDocumentReader.Outcome read = BoundedDocumentReader.read(arriving.body(),
-                BoundedDocumentReader.Bounds.from(arriving.contract()));
+                BoundedDocumentReader.Bounds.from(arriving.contract()),
+                new BoundedDocumentReader.RootStringBound(ARGUMENTS,
+                        arriving.contract().value(rs.slingshot.agent.contract.ContractLimit
+                                .MAXIMUM_COMMAND_ARGUMENT_BYTES)));
         if (!(read instanceof final BoundedDocumentReader.Read document)
                 || !(document.value() instanceof final DocumentValue.Mapping submission)) {
             refuse(response, REFUSED, UNREADABLE_SUBMISSION,
@@ -375,9 +382,9 @@ public final class SubmitServlet extends AgentServlet {
         final IntakeSlotWrite.Admission intake = SubmissionRegistration.admit(session,
                 new SubmissionRegistration.Request(asked, text(submission, SUBSCRIPTION),
                         declaredSlots(submission)), System.currentTimeMillis(), arriving.contract());
-        if (intake instanceof IntakeSlotWrite.AtCapacity || intake instanceof IntakeSlotWrite.NotCounted) {
-            refuse(response, AT_CAPACITY, AT_CAPACITY_REFUSAL,
-                    "no intake slot could be counted for this submission");
+        final Optional<String> intakeRefusal = IntakeSlotWrite.admissionRefusalIn(intake);
+        if (intakeRefusal.isPresent()) {
+            refuse(response, AT_CAPACITY, AT_CAPACITY_REFUSAL, intakeRefusal.get());
             return;
         }
         final AdmissionOutcome outcome = ((IntakeSlotWrite.Decided) intake).outcome();
@@ -585,8 +592,12 @@ public final class SubmitServlet extends AgentServlet {
                             contract.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
                     ProgressSink.under(contract),
                     commands.get().paging(running, contract, session));
-            attempt.complete(commands.get().run(running, submission, arriving.effects(),
-                    arriving.resolver(), context));
+            arriving.timings().executing();
+            final rs.slingshot.agent.execution.ExecutionOutcome.Completion completion =
+                    commands.get().run(running, submission, arriving.effects(),
+                            arriving.resolver(), context);
+            arriving.timings().persisting();
+            attempt.complete(completion);
         }
         finalised(response, running, submission, arriving, session, acceptance);
     }
@@ -594,6 +605,7 @@ public final class SubmitServlet extends AgentServlet {
     private void finalised(SlingHttpServletResponse response, LogicalOperation running,
                            DocumentValue.Mapping submission, Arriving arriving, Session session,
                            SubmissionResponse.Acceptance acceptance) throws IOException, RepositoryException {
+        arriving.timings().persisting();
         final StatePath path = rs.slingshot.agent.execution.OperationStore.pathOf(running.identity());
         final Optional<rs.slingshot.agent.execution.ExecutionOutcome> pending =
                 rs.slingshot.agent.execution.ExecutionJournal.pending(session, path, arriving.contract());
@@ -652,6 +664,7 @@ public final class SubmitServlet extends AgentServlet {
             return;
         }
         response.setStatus(ACCEPTED);
+        arriving.timings().writeTo(response);
         response.setContentType(route().mediaType());
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(rendered.get());

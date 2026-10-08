@@ -346,6 +346,16 @@ public enum ContractLimit {
     /** The commands this agent will have running at once, across every caller. */
     MAXIMUM_CONCURRENT_COMMAND_EXECUTIONS(Section.AGENT, "maximum_concurrent_command_executions"),
 
+    /** The discovery traversals and bounded replay pages one runtime may retain. */
+    MAXIMUM_DISCOVERY_CURSORS(Section.AGENT, "maximum_discovery_cursors"),
+
+    /** The deepest iterator stack a retained discovery cursor may hold. */
+    MAXIMUM_DISCOVERY_CURSOR_DEPTH(Section.AGENT, "maximum_discovery_cursor_depth"),
+
+    /** How often idle discovery cursors are checked for fixed-lifetime expiry. */
+    DISCOVERY_CURSOR_COLLECTION_INTERVAL_MILLISECONDS(
+            Section.AGENT, "discovery_cursor_collection_interval_milliseconds"),
+
     /** The event streams this agent will hold open at once, across every caller. */
     MAXIMUM_CONCURRENT_EVENT_STREAMS(Section.AGENT, "maximum_concurrent_event_streams"),
 

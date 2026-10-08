@@ -103,6 +103,11 @@ public final class ConfigurationHandler implements CommandHandler {
         }
         final FindConfigurationsCommand command =
                 ((FindConfigurationsCommand.Held) asked).command();
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                FindConfigurationsCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final ConfigurationCatalogue.Outcome found =
                 catalogues.open().find(command.prefix(), context.discovery().limit());
         if (found instanceof final ConfigurationCatalogue.Failed failed) {
@@ -116,7 +121,7 @@ public final class ConfigurationHandler implements CommandHandler {
                     + " this caller may examine");
         }
         final PagingSupport.Outcome<ConfigurationCatalogue.Entry> page = PagingSupport.page(entries,
-                command.window(), FindConfigurationsCommand.WIRE_NAME, arguments, context,
+                (PagingSupport.Ready) prepared, FindConfigurationsCommand.WIRE_NAME, context,
                 contract);
         if (page instanceof final PagingSupport.Refused<ConfigurationCatalogue.Entry> refused) {
             return new Failed(refused.category(), refused.detail());

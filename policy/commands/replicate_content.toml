@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["admission_budget_exceeded", "admission_outcome_unknown", "admission_rejected", "candidate_limit_exceeded", "source_access_denied", "source_not_found", "traversal_budget_exceeded"]
-argument_schema_digest = "c34b02f8db4a3cdb971e9ddc17e24caae8937e195d8809efe8c2b94a3bd0bd85"
-result_schema_digest = "cbf6e451ce50b1e76bb23dfb86888ce423c05bf6aeefdd28fcc29f39743803d3"
-contract_limits_digest = "5afebb38aab4322731e6872e02fadb111beb61ee457976b4e573f891943452c9"
+argument_schema_digest = "a033dea595204019bfe58d41d9a0426033a6325b37c4616e3d711e5525788736"
+result_schema_digest = "f8a8af56befbd3d6ebe200f29d6a34f9f88bd4e2b466f13faa845cf2101fa62e"
+contract_limits_digest = "fe98b915cb84f787a5c54f8fab2e1408e108524e2765e96c9877cd236451da78"
 staging_bytes = 0
 execution = "immediate"

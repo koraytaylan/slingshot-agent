@@ -295,7 +295,7 @@ final class DefaultContinuationKeyAuthorityTest {
         final EventStoreGeneration generation = assertInstanceOf(EventStoreGeneration.Held.class,
                 EventStoreGeneration.of(1)).generation();
         final ContinuationState state = new ContinuationState(generation, query.value(), query.value(),
-                0, until + 1000);
+                0, CONTRACT.value(ContractLimit.DEFAULT_RESULT_LIMIT), until + 1000);
         final ContinuationToken before = ContinuationToken.issue(state, original.current());
         final KeyRing next = rotated(original, authority.material(), NOW);
         assertInstanceOf(ContinuationKeyAuthority.Written.class,

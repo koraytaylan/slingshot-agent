@@ -226,7 +226,8 @@ public final class DownloadContentPackageHandler implements CommandHandler {
     private Answer built(DownloadContentPackageCommand command, ResourceResolver resolver,
                          CallerContext context) {
         final List<String> selected = new ArrayList<>();
-        final long started = System.currentTimeMillis();
+        final rs.slingshot.agent.stream.ElapsedTime elapsed =
+                rs.slingshot.agent.stream.ElapsedTime.start();
         for (final String root : command.roots()) {
             final Resource held = resolver.getResource(root);
             if (held == null) {
@@ -234,7 +235,7 @@ public final class DownloadContentPackageHandler implements CommandHandler {
                         + " read, and a package cannot be built from a root that is not there");
             }
             final Selection selection = select(held, command, new Bounds(
-                    context.discovery().limit(), context.time().limit(), started), selected.size());
+                    context.discovery().limit(), context.time().limit(), elapsed), selected.size());
             if (selection.ending() == Ending.THE_BUDGET_RAN_OUT) {
                 return new Failed(EVALUATION_BUDGET_EXCEEDED, "this filter selects more than the "
                         + context.discovery().limit() + " nodes that may be evaluated, or takes"
@@ -278,12 +279,13 @@ public final class DownloadContentPackageHandler implements CommandHandler {
      *
      * @param nodes how many nodes may be evaluated across every root
      * @param milliseconds how long the selection may take
-     * @param started when it began
+     * @param elapsed the monotonic duration shared by every selected root
      */
-    private record Bounds(long nodes, long milliseconds, long started) {
+    private record Bounds(long nodes, long milliseconds,
+                          rs.slingshot.agent.stream.ElapsedTime elapsed) {
 
         boolean spent(long evaluated) {
-            return evaluated > nodes || System.currentTimeMillis() - started > milliseconds;
+            return evaluated > nodes || elapsed.milliseconds() > milliseconds;
         }
     }
 

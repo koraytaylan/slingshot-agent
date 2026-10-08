@@ -245,6 +245,11 @@ public final class PrincipalHandler implements CommandHandler {
                     refused.refusal().refusal() + ": " + refused.refusal().detail());
         }
         final PrincipalCommands.Listing listing = (PrincipalCommands.Listing) asked;
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(listing.window(),
+                PrincipalCommands.LIST_MEMBERS_WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final PrincipalDirectory.Outcome found =
                 directories.open().members(listing.groupIdentifier(), listing.reach(), resolver);
         if (found instanceof final PrincipalDirectory.Refused refused) {
@@ -257,7 +262,7 @@ public final class PrincipalHandler implements CommandHandler {
                     + " the " + context.discovery().limit() + " this caller may examine");
         }
         final PagingSupport.Outcome<PrincipalDirectory.Member> page = PagingSupport.page(members,
-                listing.window(), PrincipalCommands.LIST_MEMBERS_WIRE_NAME, arguments, context,
+                (PagingSupport.Ready) prepared, PrincipalCommands.LIST_MEMBERS_WIRE_NAME, context,
                 contract);
         if (page instanceof final PagingSupport.Refused<PrincipalDirectory.Member> refused) {
             return new Failed(refused.category(), refused.detail());

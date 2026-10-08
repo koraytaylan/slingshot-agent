@@ -22,6 +22,7 @@ import rs.slingshot.agent.command.mutation.DeletedResourceResult;
 import rs.slingshot.agent.command.mutation.MutationAnswer;
 import rs.slingshot.agent.command.mutation.MutationOutcome;
 import rs.slingshot.agent.command.mutation.SingleCommit;
+import rs.slingshot.agent.command.mutation.StoredProperties;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
@@ -157,10 +158,19 @@ public final class ComponentPathHandler implements CommandHandler {
 
     private static MutationOutcome changed(ComponentPathCommand command, Resource component,
                                            ResourceResolver session) {
+        if (!AddComponentHandler.ORDERED_TYPE.equals(String.valueOf(component.getValueMap()
+                .get(ListChildPagesHandler.TYPE_PROPERTY, String.class)))) {
+            return new MutationOutcome.Refused(COMPONENT_INVALID, command.componentPath()
+                    + " is not a component node");
+        }
         final ModifiableValueMap values = component.adaptTo(ModifiableValueMap.class);
         if (values == null) {
             return new MutationOutcome.Refused(COMPONENT_ACCESS_DENIED, command.componentPath()
                     + " is not a component this caller may change");
+        }
+        final StoredProperties.Outcome properties = StoredProperties.of(command.change(), session);
+        if (properties instanceof final StoredProperties.Refused refused) {
+            return new MutationOutcome.Refused(PROPERTY_REJECTED, refused.detail());
         }
         final Optional<String> immovable = command.change().immovableIn(values);
         if (immovable.isPresent()) {
@@ -168,7 +178,11 @@ public final class ComponentPathHandler implements CommandHandler {
                     + " property this repository will not let go of, and the whole change is"
                     + " refused rather than applied without it");
         }
-        command.change().set().forEach((name, value) -> values.put(name, value.stored()));
+        final Optional<StoredProperties.Refused> refusal =
+                ((StoredProperties.Held) properties).writeTo(component);
+        if (refusal.isPresent()) {
+            return new MutationOutcome.Refused(PROPERTY_REJECTED, refusal.orElseThrow().detail());
+        }
         return committed(session, UpdateComponentResult.documentOf(command.componentPath()));
     }
 

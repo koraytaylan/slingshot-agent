@@ -9,11 +9,17 @@ import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
+import rs.slingshot.agent.command.mutation.SingleCommit;
 import rs.slingshot.agent.command.platform.ControlCapability;
 import rs.slingshot.agent.command.platform.JobInventory;
+import rs.slingshot.agent.command.platform.JobState;
 import rs.slingshot.agent.command.platform.PlatformControl;
 import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
+import rs.slingshot.agent.stream.DefaultStreamTicker;
+import rs.slingshot.agent.stream.ElapsedTime;
+import rs.slingshot.agent.stream.StreamTicker;
 
 /**
  * The four commands about the work the platform is holding: three listings and one cancellation.
@@ -43,6 +49,7 @@ public final class JobHandler implements CommandHandler {
     private final Kind kind;
     private final JobInventory inventory;
     private final PlatformControl control;
+    private final StreamTicker ticker;
 
     /**
      * Holds one handler for one of the four.
@@ -54,10 +61,25 @@ public final class JobHandler implements CommandHandler {
      */
     public JobHandler(AgentContract contract, Kind kind, JobInventory inventory,
                       PlatformControl control) {
+        this(contract, kind, inventory, control, new DefaultStreamTicker());
+    }
+
+    /**
+     * Holds a handler whose cancellation confirmation uses an injected monotonic clock.
+     *
+     * @param contract the authenticated contract
+     * @param kind which command this handler answers
+     * @param inventory the platform inventory
+     * @param control the deployment's control gate
+     * @param ticker the monotonic clock and pause boundary
+     */
+    JobHandler(AgentContract contract, Kind kind, JobInventory inventory,
+               PlatformControl control, StreamTicker ticker) {
         this.contract = contract;
         this.kind = kind;
         this.inventory = inventory;
         this.control = control;
+        this.ticker = ticker;
     }
 
     @Override
@@ -67,7 +89,7 @@ public final class JobHandler implements CommandHandler {
             case QUEUES -> queues(arguments, context);
             case JOBS -> jobs(arguments, context);
             case INSPECTION -> inspected(arguments);
-            case CANCELLATION -> cancelled(arguments);
+            case CANCELLATION -> cancelled(arguments, context);
         };
     }
 
@@ -76,6 +98,12 @@ public final class JobHandler implements CommandHandler {
         if (asked instanceof final JobCommands.QueueRefused refused) {
             return new Failed(JobCommands.INVENTORY_FAILED,
                     refused.refusal() + ": " + refused.detail());
+        }
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(
+                ((JobCommands.QueueWindow) asked).window(), JobCommands.QUEUES_WIRE_NAME,
+                arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
         }
         final JobInventory.Outcome found = inventory.queues();
         if (found instanceof final JobInventory.Refused refused) {
@@ -88,7 +116,7 @@ public final class JobHandler implements CommandHandler {
                     + " this caller may examine");
         }
         final PagingSupport.Outcome<JobInventory.Queue> page = PagingSupport.page(queues,
-                ((JobCommands.QueueWindow) asked).window(), JobCommands.QUEUES_WIRE_NAME, arguments,
+                (PagingSupport.Ready) prepared, JobCommands.QUEUES_WIRE_NAME,
                 context, contract);
         if (page instanceof final PagingSupport.Refused<JobInventory.Queue> refused) {
             return new Failed(refused.category(), refused.detail());
@@ -105,6 +133,11 @@ public final class JobHandler implements CommandHandler {
                     refused.refusal() + ": " + refused.detail());
         }
         final JobCommands.Search search = (JobCommands.Search) asked;
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(search.window(),
+                JobCommands.JOBS_WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final JobInventory.Outcome found = inventory.jobs(search.topic(), search.states());
         if (found instanceof final JobInventory.Refused refused) {
             return new Failed(refused.category(), refused.detail());
@@ -115,7 +148,7 @@ public final class JobHandler implements CommandHandler {
                     + " than the " + context.discovery().limit() + " this caller may examine");
         }
         final PagingSupport.Outcome<JobInventory.Job> page = PagingSupport.page(jobs,
-                search.window(), JobCommands.JOBS_WIRE_NAME, arguments, context, contract);
+                (PagingSupport.Ready) prepared, JobCommands.JOBS_WIRE_NAME, context, contract);
         if (page instanceof final PagingSupport.Refused<JobInventory.Job> refused) {
             return new Failed(refused.category(), refused.detail());
         }
@@ -152,7 +185,7 @@ public final class JobHandler implements CommandHandler {
                 : new Produced(JobResults.detailOf(((JobInventory.Inspected) read).detail()));
     }
 
-    private Answer cancelled(DocumentValue.Mapping arguments) {
+    private Answer cancelled(DocumentValue.Mapping arguments, CallerContext context) {
         final PlatformControl.Verdict verdict = control.permits(ControlCapability.JOB_CONTROL);
         if (verdict instanceof final PlatformControl.Refused refused) {
             return new Failed(refused.category(), refused.detail());
@@ -163,11 +196,76 @@ public final class JobHandler implements CommandHandler {
                     refused.refusal() + ": " + refused.detail());
         }
         final String identifier = ((JobCommands.Identifier) asked).jobIdentifier();
-        final JobInventory.Outcome gone = inventory.cancel(identifier);
+        if (Thread.currentThread().isInterrupted()) {
+            return new Failed(JobCommands.CONTROL_REJECTED,
+                    "The worker was interrupted before cancellation was requested.");
+        }
+        final ElapsedTime elapsed = ElapsedTime.start(ticker::elapsedMilliseconds);
+        final JobInventory.Outcome gone;
+        try {
+            gone = inventory.cancel(identifier);
+        } catch (final IllegalStateException uncertain) {
+            return unconfirmed();
+        }
         return gone instanceof final JobInventory.Refused refused
                 ? new Failed(refused.category(), refused.detail())
-                : new Produced(JobResults.cancelledOf(identifier,
-                        ((JobInventory.Cancelled) gone).observed()));
+                : confirmed(identifier, ((JobInventory.Cancelled) gone).observed(), elapsed,
+                        Math.min(context.time().limit(),
+                                contract.value(ContractLimit.PLATFORM_CALL_DEADLINE_MILLISECONDS)));
+    }
+
+    /**
+     * Observes fresh snapshots after one control request, within the existing platform deadline.
+     *
+     * <p>Sling's stop call leaves completion to the consumer. An active or queued snapshot is
+     * therefore not a successful cancellation. The client's existing retry base spaces read-only
+     * observations; neither waiting nor an uncertain answer issues another control request.</p>
+     */
+    private Answer confirmed(String identifier, JobState initial, ElapsedTime elapsed,
+                             long deadlineMilliseconds) {
+        JobState observed = initial;
+        while (true) {
+            if (Thread.currentThread().isInterrupted()
+                    || elapsed.milliseconds() >= deadlineMilliseconds) {
+                return unconfirmed();
+            }
+            if (observed != JobState.ACTIVE && observed != JobState.QUEUED) {
+                return new Produced(JobResults.cancelledOf(identifier, observed));
+            }
+            ticker.pause(Math.min(contract.value(ContractLimit.RETRY_BASE_MILLISECONDS),
+                    deadlineMilliseconds - elapsed.milliseconds()));
+            if (Thread.currentThread().isInterrupted()
+                    || elapsed.milliseconds() >= deadlineMilliseconds) {
+                return unconfirmed();
+            }
+            final JobInventory.Outcome snapshot = freshSnapshot(identifier);
+            if (snapshot instanceof final JobInventory.Refused refused) {
+                return JobCommands.JOB_NOT_FOUND.equals(refused.category())
+                        ? new Produced(JobResults.cancelledOf(identifier, JobState.CANCELLED))
+                        : unconfirmed();
+            }
+            final JobInventory.Job held = ((JobInventory.Inspected) snapshot).detail().job();
+            if (!identifier.equals(held.jobIdentifier())) {
+                return unconfirmed();
+            }
+            observed = held.state();
+        }
+    }
+
+    private JobInventory.Outcome freshSnapshot(String identifier) {
+        try {
+            return inventory.inspect(identifier);
+        } catch (final IllegalStateException unavailable) {
+            return new JobInventory.Refused(SingleCommit.PLATFORM_CONTROL_OUTCOME_UNKNOWN,
+                    "A fresh job snapshot was unavailable after cancellation was requested.");
+        }
+    }
+
+    private static Answer unconfirmed() {
+        return new Failed(SingleCommit.PLATFORM_CONTROL_OUTCOME_UNKNOWN,
+                "Cancellation was requested once, but a terminal job state was not confirmed"
+                        + " within the permitted wait. Observe this job before deciding what"
+                        + " to do next; the control request has not been repeated.");
     }
 
     @Override

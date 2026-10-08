@@ -53,17 +53,18 @@ final class ContinuationTokenTest {
     private static final long NOW = 1787999000000L;
 
     @Test
-    @DisplayName("a state carrying all five members is read, and each is readable")
+    @DisplayName("a state carrying all six members is read, and each is readable")
     void aCompleteStateIsRead() {
         final ContinuationState state = held("accepted.json");
         assertEquals(1, state.generation().number());
         assertEquals(400, state.position());
+        assertEquals(25, state.initialResultLimit());
         assertEquals(1788000000000L, state.expiresAtUnixMilliseconds());
         assertNotEquals(state.targetDigest().rendered(), state.queryDigest().rendered());
     }
 
     @Test
-    @DisplayName("each of the five members absent is refused, naming that member")
+    @DisplayName("each of the six members absent is refused, naming that member")
     void eachAbsentMemberIsRefusedNamingIt() {
         ContinuationState.MEMBERS.forEach(member -> {
             final IdentityRefusal refusal = refusal("absent-" + member.replace('_', '-') + ".json");
@@ -71,7 +72,7 @@ final class ContinuationTokenTest {
             assertEquals(member, refusal.member());
         });
         assertEquals(IdentityRefusal.Failure.MEMBER_UNKNOWN,
-                refusal("a-sixth-member.json").failure());
+                refusal("a-seventh-member.json").failure());
         assertEquals(IdentityRefusal.Failure.NOT_A_DOCUMENT,
                 assertInstanceOf(ContinuationState.Refused.class,
                         ContinuationState.of(value("not-an-object.json")),
@@ -112,6 +113,61 @@ final class ContinuationTokenTest {
                 ContinuationToken.issue(held("another-query.json"), KEY).integrity(), state);
         assertEquals(ContinuationToken.Refusal.INTEGRITY_INVALID, refusedBy(forged, state),
                 "a forged token reached a comparison against the data it named");
+    }
+
+    @Test
+    void changingTheOriginalLimitInvalidatesTheToken() {
+        final ContinuationState state = held("accepted.json");
+        final ContinuationState widened = new ContinuationState(state.generation(),
+                state.targetDigest(), state.queryDigest(), state.position(), state.initialResultLimit() + 1,
+                state.expiresAtUnixMilliseconds());
+        final ContinuationToken original = ContinuationToken.issue(state, KEY);
+        final ContinuationToken forged = ContinuationToken.arrived(original.integrity(), widened);
+        assertEquals(ContinuationToken.Refusal.INTEGRITY_INVALID, refusedBy(forged, state));
+    }
+
+    @Test
+    void versionTwoSignatureMatchesTheIndependentCrossLanguageVector() {
+        final ContinuationToken expected = assertInstanceOf(ContinuationToken.Read.class,
+                ContinuationToken.read(value("token-v2.json"))).token();
+        final ContinuationToken issued = ContinuationToken.issue(held("accepted.json"), KEY);
+        assertEquals(expected.rendered(), issued.rendered());
+        assertInstanceOf(ContinuationToken.Honoured.class,
+                honour(expected, expected.unvalidatedState()));
+    }
+
+    @Test
+    void originalLimitAcceptsTheBoundaryAndRefusesBothOutsideValues() {
+        final ContinuationState original = held("accepted.json");
+        final long maximum = CONTRACT.value(ContractLimit.MAXIMUM_RESULT_LIMIT);
+        for (final long limit : List.of(1L, maximum, 0L, maximum + 1)) {
+            final ContinuationState state = new ContinuationState(original.generation(),
+                    original.targetDigest(), original.queryDigest(), original.position(), limit,
+                    original.expiresAtUnixMilliseconds());
+            final ContinuationToken.Outcome outcome = honour(ContinuationToken.issue(state, KEY), state);
+            if (limit > 0 && limit <= maximum) {
+                assertInstanceOf(ContinuationToken.Honoured.class, outcome);
+            } else {
+                assertEquals(ContinuationToken.Refusal.MALFORMED,
+                        assertInstanceOf(ContinuationToken.Refused.class, outcome).refusal());
+            }
+        }
+    }
+
+    @Test
+    void originalLimitMustBeAPositiveWholeNumber() {
+        final DocumentValue.Mapping accepted = assertInstanceOf(DocumentValue.Mapping.class,
+                value("accepted.json"));
+        for (final DocumentValue limit : List.of(new DocumentValue.Text("25"),
+                new DocumentValue.Whole(0), new DocumentValue.Whole(-1))) {
+            final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>(accepted.members());
+            members.put(ContinuationState.INITIAL_RESULT_LIMIT, limit);
+            final ContinuationState.Refused refused = assertInstanceOf(ContinuationState.Refused.class,
+                    ContinuationState.of(new DocumentValue.Mapping(members)));
+            assertEquals(ContinuationState.INITIAL_RESULT_LIMIT, refused.refusal().member());
+            assertEquals(limit instanceof DocumentValue.Text ? IdentityRefusal.Failure.NOT_TEXT
+                    : IdentityRefusal.Failure.OUT_OF_RANGE, refused.refusal().failure());
+        }
     }
 
     @Test

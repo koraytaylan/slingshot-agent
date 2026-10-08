@@ -235,17 +235,16 @@ public final class CapacityLedger {
                 return new NotCounted(charge.quantity(), WriteOutcome.VALUE_CHANGED);
             }
         }
-        final Optional<CapacityReservation> pending = CapacityReservation.create(session,
-                CapacityReservation.processOwner(), caller, charges);
+        final Optional<CapacityReservation.Guard> pending = CapacityReservation.createGuard(session,
+                CapacityReservation.processOwner(), caller, charges, contract);
         if (pending.isEmpty()) {
             return new NotCounted(charges.getFirst().quantity(), WriteOutcome.CONTENDED);
         }
-        final CapacityReservation reservation = pending.get();
-        try (CapacityReservation.Guard guard = reservation.guard(session, contract)) {
-            final Admission admission = reserve(session, reservation, contract);
+        try (CapacityReservation.Guard guard = pending.get()) {
+            final Admission admission = reserve(session, guard.reservation(), contract);
             if (admission instanceof Admitted) {
                 guard.handoff();
-                return new Reserved(reservation);
+                return new Reserved(guard.reservation());
             }
             return admission instanceof final Refused refused ? refused : (NotCounted) admission;
         }
@@ -656,6 +655,11 @@ public final class CapacityLedger {
      */
     public static void prepare(Session session, AccountedQuantity quantity,
                                StatePath.Caller caller) throws RepositoryException {
+        session.refresh(false);
+        if (session.nodeExists(totalPath(quantity).path())
+                && session.nodeExists(callerPath(quantity, caller).path())) {
+            return;
+        }
         claim(session, StatePath.deployment(StatePath.CAPACITY));
         claim(session, totalPath(quantity));
         claim(session, StatePath.deployment(StatePath.CAPACITY).child(StatePath.CALLERS));

@@ -142,6 +142,19 @@ final class AgentContractTest {
                 "one digest is embedded twice, so one of the two contracts is unauthenticated");
     }
 
+    @Test
+    void theEmbeddedCommandDigestAuthenticatesTheActualClientContract() {
+        final byte[] input = new String(read(FIXTURES.resolve("sibling-command-contract.json")),
+                StandardCharsets.UTF_8).stripTrailing().getBytes(StandardCharsets.UTF_8);
+        final var parsed = assertInstanceOf(rs.slingshot.agent.json.BoundedDocumentReader.Read.class,
+                rs.slingshot.agent.json.BoundedDocumentReader.read(
+                        input,
+                        rs.slingshot.agent.json.BoundedDocumentReader.Bounds.from(loaded(committed()))));
+        final var canonical = assertInstanceOf(rs.slingshot.agent.json.CanonicalByteWriter.Written.class,
+                rs.slingshot.agent.json.CanonicalByteWriter.write(parsed.value()));
+        assertEquals(AgentContract.digestOf(canonical.bytes()), AgentContract.commandContractLimitsDigest());
+    }
+
     /** How many characters a digest written in hexadecimal has. */
     private static final int DIGEST_CHARACTERS = 64;
 

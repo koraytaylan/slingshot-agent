@@ -22,6 +22,7 @@ import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import org.apache.sling.api.resource.LoginException;
+import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
@@ -157,21 +158,24 @@ final class GenerationRotationTest {
     @Test
     @DisplayName("two nodes rotating at once leave one new incarnation")
     void twonodesRotatingAtOnceLeaveOne() throws RepositoryException, LoginException {
-        final Session second = second();
-        final Session session = established();
-        second.refresh(false);
-        assertInstanceOf(GenerationRotation.Rotated.class,
-                GenerationRotation.rotate(session, generationOf(2), NOW, CONTRACT));
-        second.refresh(false);
-        assertEquals(GenerationRotation.Refusal.STORE_REFUSED, GenerationRotation.refusalIn(
-                GenerationRotation.rotate(second, generationOf(2), NOW, CONTRACT)).orElseThrow()
-                .refusal(), "two nodes both rotated to one incarnation");
-        assertEquals(2, assertInstanceOf(GenerationStore.Held.class,
-                GenerationStore.serving(session)).generation().number(),
-                "the store is serving something other than the one rotation that happened");
-        assertEquals(1, GenerationRotation.retained(session).size(),
-                "one rotation kept more than one incarnation");
-        second.logout();
+        try (var resolver = second()) {
+            final Session second = java.util.Objects.requireNonNull(resolver.adaptTo(Session.class),
+                    "a second session over the same repository is not available");
+            final Session session = established();
+            second.refresh(false);
+            assertInstanceOf(GenerationRotation.Rotated.class,
+                    GenerationRotation.rotate(session, generationOf(2), NOW, CONTRACT));
+            second.refresh(false);
+            assertEquals(GenerationRotation.Refusal.STORE_REFUSED, GenerationRotation.refusalIn(
+                    GenerationRotation.rotate(second, generationOf(2), NOW, CONTRACT)).orElseThrow()
+                    .refusal(), "two nodes both rotated to one incarnation");
+            assertEquals(2, assertInstanceOf(GenerationStore.Held.class,
+                    GenerationStore.serving(session)).generation().number(),
+                    "the store is serving something other than the one rotation that happened");
+            assertEquals(1, GenerationRotation.retained(session).size(),
+                    "one rotation kept more than one incarnation");
+            second.logout();
+        }
     }
 
     @Test
@@ -456,12 +460,10 @@ final class GenerationRotationTest {
                 fixture + " is not a document this reader accepts").value();
     }
 
-    private Session second() throws LoginException {
-        return java.util.Objects.requireNonNull(
-                java.util.Objects.requireNonNull(sling.getService(ResourceResolverFactory.class),
-                                "this context registers no resolver factory")
-                        .getResourceResolver(Map.of()).adaptTo(Session.class),
-                "a second session over the same repository is not available");
+    private ResourceResolver second() throws LoginException {
+        return java.util.Objects.requireNonNull(sling.getService(ResourceResolverFactory.class),
+                        "this context registers no resolver factory")
+                .getResourceResolver(Map.of());
     }
 
     private Session established() throws RepositoryException {

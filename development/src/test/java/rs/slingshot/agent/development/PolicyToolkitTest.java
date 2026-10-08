@@ -175,7 +175,7 @@ final class PolicyToolkitTest {
     void theModelReadsThisRepository() {
         final ReactorModel reactor = ReactorModel.at(REPOSITORY);
         assertEquals(List.of("core", "aem", "ui.apps.structure", "ui.apps", "ui.config", "all",
-                "development", "interop"), reactor.modules());
+                "interop", "development"), reactor.modules());
         assertEquals("rs.slingshot", reactor.aggregator().getGroupId());
     }
 

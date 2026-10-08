@@ -3,7 +3,6 @@
 
 package rs.slingshot.agent.command.content;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,13 +12,12 @@ import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.PagedQuery;
+import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
 import rs.slingshot.agent.continuation.ContinuationToken;
-import rs.slingshot.agent.continuation.QueryDigest;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
-import rs.slingshot.agent.json.BoundedDocumentReader;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -43,9 +41,8 @@ import rs.slingshot.agent.json.DocumentValue;
  * {@code list_child_nodes_by_type} returns for {@code cq:Page}. This handler builds that request,
  * runs it, and keeps the path and title. It does not walk the anchor itself.</p>
  *
- * <p>Order is the repository's own. A caller navigating a site sees what an author sees in their
- * own console; sorting here would answer a different question whose answer looks plausible and is
- * not the site.</p>
+ * <p>The typed listing orders paths by their bytes, as the client's canonical result contract
+ * requires. Every page retains that order.</p>
  */
 public final class ListChildPagesHandler implements CommandHandler {
 
@@ -115,16 +112,16 @@ public final class ListChildPagesHandler implements CommandHandler {
 
     private Answer listed(ListChildPagesCommand command, DocumentValue.Mapping arguments,
                           ResourceResolver resolver, CallerContext context) {
-        final Resume resume = resume(command, arguments, context);
-        final Answer typed = nodesByType.run(typedRequest(arguments, command, resume), resolver,
-                context);
-        if (!(typed instanceof final Produced produced)) {
-            return typed;
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                ListChildPagesCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
         }
-        return switch (resume) {
-            case Refused refused -> refused.answer();
-            case Open open -> producedPages(produced.result(), arguments, open, context);
-        };
+        final PagingSupport.Ready ready = (PagingSupport.Ready) prepared;
+        final Answer typed = nodesByType.run(typedRequest(arguments, command, ready), resolver,
+                context);
+        return typed instanceof final Produced produced
+                ? producedPages(produced.result(), ready, context) : typed;
     }
 
     /**
@@ -132,30 +129,28 @@ public final class ListChildPagesHandler implements CommandHandler {
      *
      * <p>A continuation cannot be handed across. Its token names this command, and the typed listing
      * would refuse it as someone else's query. The resumed position is asked for as an initial
-     * window of the same offset and the contract's continuation limit, which is the page the token
+     * window of the same offset and the original authenticated limit, which is the page the token
      * named.</p>
      *
      * @param arguments the page listing's own argument
      * @param command the page listing those arguments named
-     * @param resume where that window resumes, or the refusal a bad token already is
+     * @param ready the authenticated original window and fixed expiry
      * @return the typed listing's argument
      */
     private DocumentValue.Mapping typedRequest(DocumentValue.Mapping arguments,
-                                               ListChildPagesCommand command, Resume resume) {
+                                               ListChildPagesCommand command,
+                                               PagingSupport.Ready ready) {
         final SequencedMap<String, DocumentValue> members = new LinkedHashMap<>();
         members.put(ListChildNodesByTypeCommand.PRIMARY_NODE_TYPE,
                 new DocumentValue.Text(PAGE_TYPE));
         members.put(ListChildPagesCommand.ROOT_PATH,
                 arguments.member(ListChildPagesCommand.ROOT_PATH).orElseThrow());
-        if (resume instanceof Open
-                && !(command.window() instanceof ResultWindow.Continuation)
+        if (!(command.window() instanceof ResultWindow.Continuation)
                 && arguments.member(ResultWindow.ARGUMENT_MEMBER).isPresent()) {
             members.put(ResultWindow.ARGUMENT_MEMBER,
                     arguments.member(ResultWindow.ARGUMENT_MEMBER).orElseThrow());
-        } else if (resume instanceof final Open open) {
-            members.put(ResultWindow.ARGUMENT_MEMBER, initialWindow(open.offset(), open.limit()));
         } else {
-            members.put(ResultWindow.ARGUMENT_MEMBER, initialWindow(0, 1));
+            members.put(ResultWindow.ARGUMENT_MEMBER, initialWindow(ready.offset(), ready.limit()));
         }
         return new DocumentValue.Mapping(members);
     }
@@ -168,66 +163,9 @@ public final class ListChildPagesHandler implements CommandHandler {
         return new DocumentValue.Mapping(members);
     }
 
-    /**
-     * Where this page listing resumes, checked against its own query before any child is read.
-     *
-     * @param command the page listing
-     * @param arguments the argument, whose digest a continuation token has to match
-     * @param context the caller's continuation authority
-     * @return the offset and limit to ask the typed listing for, or the token refusal
-     */
-    private Resume resume(ListChildPagesCommand command, DocumentValue.Mapping arguments,
-                          CallerContext context) {
-        if (command.window() instanceof final ResultWindow.Initial initial) {
-            return new Open(initial.offset(), initial.limit());
-        }
-        final QueryDigest.Outcome digest = pageDigest(arguments, context);
-        if (!(digest instanceof final QueryDigest.Held held)) {
-            return new Refused(new Failed("continuation_token_malformed",
-                    "the query arguments cannot be represented canonically"));
-        }
-        final long position = resumedPosition(held.digest(), context,
-                (ResultWindow.Continuation) command.window());
-        if (position < 0) {
-            return new Refused(new Failed("continuation_token_integrity_invalid",
-                    "the continuation token was not accepted"));
-        }
-        return new Open(position, contract.value(ContractLimit.DEFAULT_RESULT_LIMIT));
-    }
-
-    private QueryDigest.Outcome pageDigest(DocumentValue.Mapping arguments, CallerContext context) {
-        if (context.paging() instanceof final CallerContext.Available paging) {
-            return new PagedQuery(ListChildPagesCommand.WIRE_NAME, paging.targetDigest(),
-                    paging.generation()).digestOf(arguments);
-        }
-        return QueryDigest.of(ListChildPagesCommand.WIRE_NAME, arguments);
-    }
-
-    private long resumedPosition(QueryDigest query, CallerContext context,
-                                 ResultWindow.Continuation continuation) {
-        if (!(context.paging() instanceof final CallerContext.Available paging)) {
-            return -1;
-        }
-        final BoundedDocumentReader.Outcome read = BoundedDocumentReader.read(
-                continuation.continuationToken().getBytes(StandardCharsets.UTF_8),
-                BoundedDocumentReader.Bounds.from(contract));
-        if (!(read instanceof final BoundedDocumentReader.Read parsed)
-                || !(ContinuationToken.read(parsed.value())
-                instanceof final ContinuationToken.Read token)
-                || !(paging.authority().read()
-                instanceof final ContinuationKeyAuthority.Read authority)) {
-            return -1;
-        }
-        final ContinuationToken.Outcome validated = token.token().validate(authority.ring(),
-                paging.targetDigest(), query, paging.generation(), paging.nowUnixMilliseconds(),
-                contract);
-        return validated instanceof ContinuationToken.Honoured
-                ? token.token().unvalidatedState().position() : -1;
-    }
-
-    private Answer producedPages(DocumentValue.Mapping typed, DocumentValue.Mapping arguments,
-                                 Open open, CallerContext context) {
-        final DocumentValue.Mapping pages = project(typed, arguments, open.offset(), context);
+    private Answer producedPages(DocumentValue.Mapping typed, PagingSupport.Ready prepared,
+                                 CallerContext context) {
+        final DocumentValue.Mapping pages = project(typed, prepared, context);
         if (typed.member(ChildNodeListingResult.NEXT_CONTINUATION_TOKEN).isPresent()
                 && pages.member(PageListingResult.NEXT_CONTINUATION_TOKEN).isEmpty()) {
             return new Failed("continuation_token_integrity_invalid",
@@ -244,13 +182,12 @@ public final class ListChildPagesHandler implements CommandHandler {
      * page listing rather than a different query that happens to share an anchor.</p>
      *
      * @param typed the typed listing's result
-     * @param arguments the page listing's own argument, which the successor token is bound to
-     * @param offset where this page began
+     * @param prepared the authenticated original window and fixed expiry
      * @param context the caller's continuation authority
      * @return the page listing result
      */
     private DocumentValue.Mapping project(DocumentValue.Mapping typed,
-                                          DocumentValue.Mapping arguments, long offset,
+                                          PagingSupport.Ready prepared,
                                           CallerContext context) {
         final List<PageListingResult.Page> pages = new ArrayList<>();
         final DocumentValue matches = typed.member(ChildNodeListingResult.MATCHES).orElseThrow();
@@ -258,7 +195,7 @@ public final class ListChildPagesHandler implements CommandHandler {
             pages.add(asPage((DocumentValue.Mapping) item));
         }
         final String token = typed.member(ChildNodeListingResult.NEXT_CONTINUATION_TOKEN).isEmpty()
-                ? "" : successor(arguments, offset + pages.size(), context);
+                ? "" : successor(prepared.offset() + pages.size(), prepared, context);
         return PageListingResult.documentOf(pages, token);
     }
 
@@ -272,41 +209,18 @@ public final class ListChildPagesHandler implements CommandHandler {
         return new PageListingResult.Page(path, title);
     }
 
-    private String successor(DocumentValue.Mapping arguments, long nextOffset, CallerContext context) {
+    private String successor(long nextOffset, PagingSupport.Ready prepared, CallerContext context) {
         if (!(context.paging() instanceof final CallerContext.Available paging)
                 || !(paging.authority().read() instanceof final ContinuationKeyAuthority.Read read)) {
             return "";
         }
         final PagedQuery query = new PagedQuery(ListChildPagesCommand.WIRE_NAME,
                 paging.targetDigest(), paging.generation());
-        if (!(query.digestOf(arguments) instanceof final QueryDigest.Held held)) {
-            return "";
-        }
         return query.tokenFor(new PagedQuery.Page<>(List.of(), new PagedQuery.More(nextOffset)),
-                        held.digest(), read.ring(), paging.nowUnixMilliseconds(), contract)
+                        prepared.digest(), read.ring(), prepared.limit(),
+                        prepared.expiresAtUnixMilliseconds())
                 .map(ContinuationToken::rendered)
                 .orElse("");
-    }
-
-    /** Where a page listing resumes, or the refusal a continuation token already is. */
-    private sealed interface Resume permits Open, Refused {
-    }
-
-    /**
-     * A window the typed listing can be asked for.
-     *
-     * @param offset how many matches to skip
-     * @param limit how many matches the page may carry
-     */
-    private record Open(long offset, long limit) implements Resume {
-    }
-
-    /**
-     * A continuation this command does not honour.
-     *
-     * @param answer the refusal the caller receives
-     */
-    private record Refused(Answer answer) implements Resume {
     }
 
     /**

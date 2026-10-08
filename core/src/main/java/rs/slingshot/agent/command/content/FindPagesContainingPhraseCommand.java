@@ -13,11 +13,9 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * A phrase to look for, a subtree to look in, and which page of the matches is wanted.
  *
- * <p>Full-text search is where an unbounded query does the most damage, because the phrase comes
- * from a caller who has no idea what it will match. A phrase of two letters against a large site
- * matches most of it, and the caller did not mean to ask for most of it. So the phrase is bounded
- * as it arrives and the search is bounded as it runs, and the second of those refuses rather than
- * trims.</p>
+ * <p>The phrase has a declared input bound. Search consumes bounded continuation pages and
+ * reports partial progress when its node or duration budget is spent. Matching preserves case
+ * and Unicode spelling; results never disclose the matched text.</p>
  *
  * @param rootPath the subtree to search, which bounds the search rather than describing it
  * @param phrase the text to look for

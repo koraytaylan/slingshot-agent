@@ -453,7 +453,7 @@ reason = "Which query a token belongs to, taken over the whole query. Two querie
 [[type]]
 name = "ContinuationState"
 pattern = "value-object"
-reason = "Where to resume, in full: partition, incarnation, query, position, and expiry. A position on its own would resume the wrong search."
+reason = "Where to resume, in full: partition, incarnation, query, position, original page size, and fixed expiry. A position on its own would resume the wrong search."
 
 [[type]]
 name = "ContinuationToken"
@@ -899,6 +899,11 @@ reason = "What time it is to a stream and how it waits, so a suite proving a hea
 name = "DefaultStreamTicker"
 pattern = "accessor"
 reason = "The clock a stream runs on when it is running on an instance rather than in a suite, holding nothing and answering the system's own time."
+
+[[type]]
+name = "ElapsedTime"
+pattern = "accessor"
+reason = "A local duration holds one monotonic source and its initial reading; repository walks share it across their complete execution rather than subtracting epoch timestamps."
 
 [[type]]
 name = "StreamHandoff"
@@ -1398,7 +1403,7 @@ reason = "Addresses and where to resume, and nothing else at all — no property
 [[type]]
 name = "QueryPathsHandler"
 pattern = "accessor"
-reason = "One declared query, filtering on a primary type and nothing else, which is the shape Oak's own node-type index answers on every supported deployment rather than by walking somebody's author instance. Results are ordered by path because two pages must agree on some total order and path is the only property this command may look at — an unordered query would let a caller read one address twice and another never with nothing to tell them."
+reason = "Materializes address-only rows through the runtime-owned bounded discovery registry. Continuations are authenticated before repository work, preserve the initial match limit and resume live provider-order traversal with explicit completeness rather than gathering and sorting the entire subtree."
 
 [[type]]
 name = "ListChildNodesCommand"
@@ -2173,7 +2178,7 @@ reason = "Health checks are read from live state only after console authorizatio
 [[type]]
 name = "ContentCatalogHandler"
 pattern = "accessor"
-reason = "It issues no query: it walks the subtree under one anchor through the caller's own read-only resolver and decides, for one catalogue at a time, what a component definition, a component instance, a content fragment, or an experience fragment is. The walk is bounded by the discovery and time budgets and a walk that runs out answers nothing rather than part of the catalogue."
+reason = "It delegates bounded live traversal under an exact root to the runtime-owned cursor registry. Rows are materialized through the current caller resolver in provider order. Exhausting a page budget returns explicit partial progress and a continuation, while terminal cursor refusals discard that page."
 
 [[type]]
 name = "AuthoringCatalogHandler"
@@ -2181,14 +2186,14 @@ pattern = "accessor"
 reason = "It reads the templates or fragment models directly inside one configuration folder through the caller's own read-only resolver. Those live in a fixed place under each configuration, so a direct read of that place is the whole answer and no search is needed to find them."
 
 [[type]]
-name = "ComponentListingResult"
+name = "IncrementalDiscoveryResult"
 pattern = "stateless-policy"
-reason = "A list of components, each an address, the resource type it resolves as or declares, and a title where it has one, shared by the definition and instance listings. The order is strictly ascending by repository-path bytes, which is what lets a continuation token mean one page after another."
+reason = "Writes bounded discovery rows in provider order, with explicit completeness and examined-node counts. Components and fragments have separately declared row members."
 
 [[type]]
 name = "ListComponentDefinitionsCommand"
 pattern = "value-object"
-reason = "An anchor and which window of the component definitions under it is wanted. A caller asking for every component on an environment names /apps, and an anchor that names the environment rather than a folder is read as that same question."
+reason = "An exact repository root and a bounded page of component definitions beneath it. A missing root is refused; callers may choose /apps when they want its definitions."
 
 [[type]]
 name = "ComponentInstancesCommand"
@@ -2254,3 +2259,18 @@ reason = "The component the configuration commands reach the platform's configur
 name = "TemplateContent"
 pattern = "stateless-policy"
 reason = "What a template gives a page or a fragment variation made from it: its initial content and the resource type it renders with, copied through the caller's own session in the same commit, leaving the repository's own bookkeeping for the repository to write."
+
+[[type]]
+name = "DiscoveryRegistry"
+pattern = "accessor"
+reason = "The runtime owns one bounded cursor registry with final lifecycle, capacity and identity dependencies; requests borrow it without replacing its configuration."
+
+[[type]]
+name = "StoredProperties"
+pattern = "stateless-policy"
+reason = "Complete typed conversion and assignment through the caller's own repository, with no retained resolver, session or mutable shared state. Conversion refuses unsupported kinds before publishing a writable map; assignments stage changes without committing."
+
+[[type]]
+name = "ObservedProperty"
+pattern = "closed-value"
+reason = "A caller-readable observation is absent, an empty multivalue, an unsupported native kind or a complete typed property. Closed records preserve these distinctions without nullable values or string coercion."

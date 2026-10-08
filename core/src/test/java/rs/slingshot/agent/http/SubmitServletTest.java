@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -148,6 +149,8 @@ final class SubmitServletTest {
                     conflicting + " was not refused as a conflict");
             assertEquals("", answered.getOutputAsString(),
                     conflicting + " was answered with something rather than refused");
+            assertNull(answered.getHeader(SubmitServlet.SERVER_TIMING),
+                    "a refused conflict carried submission timing");
         }
         assertEquals(before, written(session, "a-submission.json"),
                 "a refused conflict changed the record it conflicted with");
@@ -397,7 +400,10 @@ final class SubmitServletTest {
         assertEquals(1, commands.ran());
         assertEquals(0, CapacityLedger.held(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS,
                 CONTRACT));
-        assertEquals(SubmitServlet.ACCEPTED, answering(commands, "a-submission.json").getStatus());
+        final var retry = answering(commands, "a-submission.json");
+        assertEquals(SubmitServlet.ACCEPTED, retry.getStatus());
+        assertTrue(SubmitServletTimingTest.timingHeader(retry).contains(",execution;dur=0,"),
+                "resuming terminal publication claimed to execute the command again");
         session.refresh(false);
         assertEquals(OperationState.SUCCEEDED, stored(session, "a-submission.json").state());
         assertTrue(TerminalCommit.answerIn(session, path).isPresent());
@@ -921,14 +927,14 @@ final class SubmitServletTest {
         final Session session = java.util.Objects.requireNonNull(
                 sling.resourceResolver().adaptTo(Session.class),
                 "the resolver has no session, which is a repository that did not start");
-        walked(session, StatePath.ROOT);
+        SubmissionTestFixture.walked(session, StatePath.ROOT);
         GenerationStore.establish(session);
         LedgerAdmission.prepare(session, caller());
         rs.slingshot.agent.store.SubscriptionLedger.prepare(session, caller());
         CapacityLedger.prepare(session, AccountedQuantity.OPERATION_DETAIL_ROWS, caller());
         CapacityLedger.prepare(session, AccountedQuantity.CONCURRENT_COMMAND_EXECUTIONS, caller());
-        walked(session, StatePath.deployment(StatePath.OPERATIONS).path());
-        permitted(session);
+        SubmissionTestFixture.walked(session, StatePath.deployment(StatePath.OPERATIONS).path());
+        SubmissionTestFixture.permitted(session);
         rs.slingshot.agent.store.CapacityLedger.prepare(session,
                 rs.slingshot.agent.store.AccountedQuantity.RESULT_ROWS, caller());
         rs.slingshot.agent.store.CapacityLedger.prepare(session,
@@ -938,42 +944,6 @@ final class SubmitServletTest {
         rs.slingshot.agent.store.CapacityLedger.prepare(session,
                 rs.slingshot.agent.store.AccountedQuantity.SNAPSHOT_BYTES, caller());
         return session;
-    }
-
-    /**
-     * Puts this suite's own caller in the group a fresh install permits.
-     *
-     * <p>Done through the repository's own user manager rather than around it, because the gate
-     * asks the repository and a suite that answered for it would be proving something about the
-     * suite.</p>
-     *
-     * @param session the session whose user is asking
-     * @throws RepositoryException if the repository fails
-     */
-    private static void permitted(Session session) throws RepositoryException {
-        final org.apache.jackrabbit.api.security.user.UserManager users =
-                ((org.apache.jackrabbit.api.JackrabbitSession) session).getUserManager();
-        final org.apache.jackrabbit.api.security.user.Authorizable existing =
-                users.getAuthorizable(PERMITTED_GROUP);
-        final org.apache.jackrabbit.api.security.user.Group group = existing == null
-                ? users.createGroup(PERMITTED_GROUP)
-                : (org.apache.jackrabbit.api.security.user.Group) existing;
-        group.addMember(java.util.Objects.requireNonNull(
-                users.getAuthorizable(session.getUserID()),
-                "this repository has no authorizable for the user its own session is"));
-        session.save();
-    }
-
-    /** The group a fresh install permits, which this suite's caller is put in. */
-    private static final String PERMITTED_GROUP = "administrators";
-
-    private static void walked(Session session, String path) throws RepositoryException {
-        Node node = session.getRootNode();
-        for (final String segment : path.substring(1).split("/")) {
-            node = node.hasNode(segment) ? node.getNode(segment)
-                    : node.addNode(segment, "nt:unstructured");
-        }
-        session.save();
     }
 
     private static AgentContract contract() {

@@ -39,14 +39,15 @@ public final class MapResourcePathResult {
      * @param repositoryPath the path that was asked about
      * @param mappedAddress what it publishes as
      * @param trace the rules it went through, which is empty where none were asked for
+     * @param disclosure whether the caller asked to see the trace, including an empty one
      * @return the result document
      */
     public static DocumentValue.Mapping documentOf(String repositoryPath, String mappedAddress,
-                                                   List<String> trace) {
+                                                   List<String> trace, TraceDisclosure disclosure) {
         final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
         result.put(REPOSITORY_PATH, new DocumentValue.Text(repositoryPath));
         result.put(MAPPED_ADDRESS, new DocumentValue.Text(mappedAddress));
-        if (!trace.isEmpty()) {
+        if (disclosure == TraceDisclosure.INCLUDED) {
             result.put(TRACE, new DocumentValue.Sequence(
                     Collections.unmodifiableList(trace).stream()
                             .map(rule -> (DocumentValue) new DocumentValue.Text(rule))

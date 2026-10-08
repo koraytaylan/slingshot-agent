@@ -98,6 +98,11 @@ public final class AuthoringCatalogHandler implements CommandHandler {
             return new Failed(refused.category(), refused.detail());
         }
         final Held held = (Held) asked;
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(held.window(), wireName(),
+                arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final Resource root = resolver.getResource(held.rootPath());
         if (root == null) {
             return new Failed(ListChildPagesHandler.ROOT_NOT_FOUND, held.rootPath()
@@ -113,7 +118,7 @@ public final class AuthoringCatalogHandler implements CommandHandler {
                     + CONFIGURATIONS + " as the anchor instead");
         }
         final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
-                search.pages(), held.window(), wireName(), arguments, context, contract);
+                search.pages(), (PagingSupport.Ready) prepared, wireName(), context, contract);
         if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
             return new Failed(refused.category(), refused.detail());
         }

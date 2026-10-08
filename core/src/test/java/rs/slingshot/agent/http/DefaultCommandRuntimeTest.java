@@ -407,6 +407,7 @@ final class DefaultCommandRuntimeTest {
             assertFalse(unstaged.serves("download_content_package"),
                     "a runtime given nowhere to stage advertised the package build");
             assertTrue(unstaged.serves("query_paths"));
+            unstaged.deactivate();
         } finally {
             try (var walked = Files.walk(area)) {
                 walked.sorted(java.util.Comparator.reverseOrder()).map(Path::toFile)

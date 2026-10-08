@@ -71,7 +71,6 @@ import rs.slingshot.agent.command.workflow.WorkflowInstanceCommand;
 import rs.slingshot.agent.continuation.ContinuationState;
 import rs.slingshot.agent.continuation.ContinuationToken;
 import rs.slingshot.agent.contract.AgentContract;
-import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.Digest;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.discovery.CapabilityDocument;
@@ -224,8 +223,7 @@ final class ProtocolVectorTest {
                     instanceof ContinuationState.Held;
             case "continuation-token" -> readsAsToken(document);
             case "capabilities" -> readsAsCapabilities(document);
-            case "load-content-as-json-argument" -> LoadContentCommand.of(document,
-                    CONTRACT.value(ContractLimit.MAXIMUM_LOAD_DEPTH))
+            case "load-content-as-json-argument" -> LoadContentCommand.of(document, CONTRACT)
                     instanceof LoadContentCommand.Held;
             case "query-paths-argument" ->
                     QueryPathsCommand.of(document, CONTRACT) instanceof QueryPathsCommand.Held;

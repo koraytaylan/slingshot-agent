@@ -237,6 +237,30 @@ final class ComponentMutationTest {
     }
 
     @Test
+    @DisplayName("a protected JCR removal is returned as a declared component refusal without committing")
+    void aProtectedJcrRemovalDoesNotEscapeTheComponentHandler()
+            throws javax.jcr.RepositoryException {
+        final String path = "/content/synthetic-protected-component";
+        ordering.create().resource(path, Map.of(
+                ListChildPagesHandler.TYPE_PROPERTY, AddComponentHandler.ORDERED_TYPE,
+                "aaa_synthetic_remove", "synthetic-original"));
+        java.util.Objects.requireNonNull(ordering.resourceResolver().adaptTo(javax.jcr.Session.class))
+                .save();
+        final CommandHandler.Failed refused = assertInstanceOf(CommandHandler.Failed.class,
+                new ComponentPathHandler(CONTRACT, ComponentPathCommand.Shape.UPDATE).run(
+                        pathArgument(path, new LinkedHashMap<>(),
+                                List.of("aaa_synthetic_remove", "jcr:primaryType")),
+                        ordering.resourceResolver(), context()));
+        assertEquals(ComponentPathHandler.PROPERTY_NOT_REMOVABLE, refused.category());
+        ordering.resourceResolver().revert();
+        final Resource held = java.util.Objects.requireNonNull(
+                ordering.resourceResolver().getResource(path));
+        assertEquals("synthetic-original", held.getValueMap().get("aaa_synthetic_remove"));
+        assertEquals(AddComponentHandler.ORDERED_TYPE,
+                held.getValueMap().get(ListChildPagesHandler.TYPE_PROPERTY));
+    }
+
+    @Test
     @DisplayName("deleting an ordinary folder is refused without changing it")
     void anordinaryFolderIsNotAComponent() {
         page();

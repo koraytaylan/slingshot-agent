@@ -43,13 +43,12 @@ import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * Navigating one level of a site, without a query and without re-ordering it.
+ * Navigating one level of a site, without a query and in canonical path order.
  *
  * <p>Two claims here are structural rather than incidental. This command issues no query at all,
  * which is checked against the declared-query inventory rather than by reading the handler. And the
- * order it answers in is the repository's own, checked against a direct child iteration of the same
- * parent rather than against a list this suite wrote down — a sorted answer would look perfectly
- * reasonable and would not be the site.</p>
+ * order it answers in follows the client's declared ascending path order, checked against a
+ * deliberately unordered fixture and across successive windows.</p>
  */
 @ExtendWith(SlingContextExtension.class)
 final class ListChildPagesCommandTest {
@@ -163,6 +162,50 @@ final class ListChildPagesCommandTest {
                 "a parent was refused because of how many children it holds").result();
         assertEquals(CHILDREN, ((DocumentValue.Sequence) result.member(PageListingResult.MATCHES)
                 .orElseThrow()).items().size());
+    }
+
+    @Test
+    void malformedContinuationCannotInvokeTheTypedListing() {
+        final CommandHandler untouched = new CommandHandler() {
+            @Override
+            public Answer run(DocumentValue.Mapping arguments, ResourceResolver resolver,
+                              CallerContext context) {
+                throw new AssertionError("a malformed page token reached content discovery");
+            }
+
+            @Override
+            public List<String> categories() {
+                return List.of();
+            }
+        };
+        final DocumentValue.Mapping window = new DocumentValue.Mapping(new LinkedHashMap<>(
+                java.util.Map.of(ResultWindow.MODE,
+                        new DocumentValue.Text(ResultWindow.CONTINUATION_MODE),
+                        ResultWindow.TOKEN, new DocumentValue.Text("malformed-token"))));
+        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
+                new ListChildPagesHandler(CONTRACT, untouched).run(
+                        argument("/content", window), readOnly(), context()));
+        assertEquals("continuation_token_malformed", failed.category());
+    }
+
+    @Test
+    void eachSuccessorPageKeepsTheOriginalOneRowLimit() {
+        final Resource parent = parentWithChildren(3);
+        final List<String> expected = pathsFrom(listed(parent.getPath(), 0, 3));
+        DocumentValue.Mapping result = listed(parent.getPath(), 0, 1);
+        for (final String path : expected) {
+            assertEquals(List.of(path), pathsFrom(result));
+            if (result.member(PageListingResult.NEXT_CONTINUATION_TOKEN).isPresent()) {
+                final SequencedMap<String, DocumentValue> window = new LinkedHashMap<>();
+                window.put(ResultWindow.MODE, new DocumentValue.Text(ResultWindow.CONTINUATION_MODE));
+                window.put(ResultWindow.TOKEN,
+                        result.member(PageListingResult.NEXT_CONTINUATION_TOKEN).orElseThrow());
+                result = assertInstanceOf(CommandHandler.Produced.class,
+                        new ListChildPagesHandler(CONTRACT).run(argument(parent.getPath(),
+                                new DocumentValue.Mapping(window)), readOnly(), context())).result();
+            }
+        }
+        assertTrue(result.member(PageListingResult.NEXT_CONTINUATION_TOKEN).isEmpty());
     }
 
     private static CallerContext narrowContext() {

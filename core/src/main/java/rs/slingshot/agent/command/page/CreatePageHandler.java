@@ -16,6 +16,7 @@ import rs.slingshot.agent.command.content.ListChildPagesHandler;
 import rs.slingshot.agent.command.mutation.MutationAnswer;
 import rs.slingshot.agent.command.mutation.MutationOutcome;
 import rs.slingshot.agent.command.mutation.SingleCommit;
+import rs.slingshot.agent.command.mutation.StoredProperties;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.json.DocumentValue;
 
@@ -164,6 +165,10 @@ public final class CreatePageHandler implements CommandHandler {
 
     private static MutationOutcome written(CreatePageCommand command, Resource parent,
                                            ResourceResolver session) {
+        final StoredProperties.Outcome properties = StoredProperties.of(command.initialProperties(), session);
+        if (properties instanceof final StoredProperties.Refused refused) {
+            return refused(PROPERTY_REJECTED, command, refused.detail());
+        }
         try {
             final Resource page = session.create(parent, command.pageName(),
                     Map.of(ListChildPagesHandler.TYPE_PROPERTY, PAGE_TYPE));
@@ -176,6 +181,11 @@ public final class CreatePageHandler implements CommandHandler {
                     type -> starting.putIfAbsent(TemplateContent.RESOURCE_TYPE, type));
             final Resource content = session.create(page, ListChildPagesHandler.PAGE_CONTENT,
                     content(command, starting));
+            final Optional<StoredProperties.Refused> refusal =
+                    ((StoredProperties.Held) properties).writeTo(content);
+            if (refusal.isPresent()) {
+                return refused(PROPERTY_REJECTED, command, refusal.orElseThrow().detail());
+            }
             if (initial.isPresent()) {
                 TemplateContent.copyChildren(session, initial.get(), content,
                         TEMPLATE_CONTENT_NODES);
@@ -194,8 +204,8 @@ public final class CreatePageHandler implements CommandHandler {
     private static final long TEMPLATE_CONTENT_NODES = 10_000;
 
     /**
-     * What a new page's content node holds: what its template starts it with, the resource type
-     * it renders with, its type, its template, its title, and what was asked - later ones winning.
+     * The new content node's base properties: template defaults, resource type, node type,
+     * template and title. The caller's typed assignments are staged after this node is created.
      *
      * @param command what was asked
      * @param starting what the template starts a page with, which is empty where it keeps nothing
@@ -207,8 +217,6 @@ public final class CreatePageHandler implements CommandHandler {
         content.put(ListChildPagesHandler.TYPE_PROPERTY, "cq:PageContent");
         content.put(TEMPLATE_PROPERTY, command.templatePath());
         content.put(ListChildPagesHandler.TITLE_PROPERTY, command.title());
-        command.initialProperties().set()
-                .forEach((name, value) -> content.put(name, value.stored()));
         return content;
     }
 

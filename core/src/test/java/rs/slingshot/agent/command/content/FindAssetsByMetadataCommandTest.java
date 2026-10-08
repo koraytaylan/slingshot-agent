@@ -11,11 +11,13 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.SequencedMap;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,15 +25,12 @@ import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.CommandRegistry;
-import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.ReadOnlyResolver;
 import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.command.property.PropertyScalar;
 import rs.slingshot.agent.command.property.ScalarKind;
 import rs.slingshot.agent.command.search.PredicateOperator;
 import rs.slingshot.agent.command.search.PropertyPredicate;
 import rs.slingshot.agent.contract.AgentContract;
-import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.json.DocumentValue;
 
@@ -50,34 +49,43 @@ final class FindAssetsByMetadataCommandTest {
     @Test
     void handlerRefusesMalformedArgumentsBeforePlatformAccess() {
         assertInstanceOf(CommandHandler.Failed.class,
-                new FindAssetsByMetadataHandler(CONTRACT).run(
+                new FindAssetsByMetadataHandler(CONTRACT, discovery).run(
                         new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), context()),
                 "malformed arguments reached the platform handler");
         assertInstanceOf(CommandHandler.Failed.class,
-                new FindAssetsByMetadataHandler(CONTRACT).run(
+                new FindAssetsByMetadataHandler(CONTRACT, discovery).run(
                         argument("/content/missing", new LinkedHashMap<>()), readOnly(), context()),
                 "a missing root was answered as an empty result");
     }
 
     @Test
-    @DisplayName("a search reaching its node budget exactly answers, and one node more is refused")
-    void asearchPastItsNodeBudgetIsRefusedRatherThanAnsweredInPart() {
+    @DisplayName("asset pages keep the original node boundary and explicitly report partial progress")
+    void aSearchBeyondItsNodeBudgetReportsBoundedProgress() {
         corpus();
         final DocumentValue.Mapping whole = assertInstanceOf(CommandHandler.Produced.class,
-                new FindAssetsByMetadataHandler(CONTRACT).run(
+                new FindAssetsByMetadataHandler(CONTRACT, discovery).run(
                         argument("/content/dam", new LinkedHashMap<>()), readOnly(), context()),
                 "the search was refused").result();
         final DocumentValue.Mapping exactly = assertInstanceOf(CommandHandler.Produced.class,
-                new FindAssetsByMetadataHandler(CONTRACT).run(
+                new FindAssetsByMetadataHandler(CONTRACT, discovery).run(
                         argument("/content/dam", new LinkedHashMap<>()), readOnly(),
                         budgeted(FOLDER_AND_ITS_ASSETS)),
                 "a search inside its budget was refused").result();
         assertEquals(pathsFrom(whole), pathsFrom(exactly));
-        final CommandHandler.Failed past = assertInstanceOf(CommandHandler.Failed.class,
-                new FindAssetsByMetadataHandler(CONTRACT).run(
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.FALSE),
+                exactly.member(FindAssetsByMetadataResult.COMPLETE).orElseThrow());
+        assertEquals(new DocumentValue.Whole(FOLDER_AND_ITS_ASSETS),
+                exactly.member(FindAssetsByMetadataResult.EXAMINED_NODES).orElseThrow());
+        final var partial = assertInstanceOf(CommandHandler.Produced.class,
+                new FindAssetsByMetadataHandler(CONTRACT, discovery).run(
                         argument("/content/dam", new LinkedHashMap<>()), readOnly(),
-                        budgeted(FOLDER_AND_ITS_ASSETS - 1)));
-        assertEquals(FindAssetsByMetadataHandler.DISCOVERY_BUDGET_EXCEEDED, past.category());
+                        budgeted(FOLDER_AND_ITS_ASSETS - 1))).result();
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.FALSE),
+                partial.member(FindAssetsByMetadataResult.COMPLETE).orElseThrow());
+        assertEquals(new DocumentValue.Whole(FOLDER_AND_ITS_ASSETS - 1),
+                partial.member(FindAssetsByMetadataResult.EXAMINED_NODES).orElseThrow());
+        assertEquals(FOLDER_AND_ITS_ASSETS - 2, matchesIn(partial).size());
+        assertTrue(partial.member(FindAssetsByMetadataResult.NEXT_CONTINUATION_TOKEN).isPresent());
     }
 
     /** The corpus folder and its two assets, whose renditions and metadata are never walked. */
@@ -93,7 +101,13 @@ final class FindAssetsByMetadataCommandTest {
     /** The value of that property on every asset, which must never reach a caller. */
     private static final String CUSTOMER_VALUE = "a-licence-reference-nobody-asked-about";
 
-    private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
+    private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_MOCK);
+    private final DiscoveryRegistry discovery = new DiscoveryRegistry(CONTRACT);
+
+    @AfterEach
+    void releaseDiscovery() {
+        discovery.close();
+    }
 
     @Test
     @DisplayName("a search naming nothing but a root is every asset under it")
@@ -198,7 +212,7 @@ final class FindAssetsByMetadataCommandTest {
         assertEquals(RegistryRow.OperationKey.REFUSED, row.operationKey());
         assertEquals(1048576, row.resultBytes());
         assertEquals(row.failureCategories().stream().sorted().toList(),
-                new FindAssetsByMetadataHandler(CONTRACT).categories().stream().sorted().toList(),
+                new FindAssetsByMetadataHandler(CONTRACT, discovery).categories().stream().sorted().toList(),
                 "the handler and its row disagree about what this command can fail with");
     }
 
@@ -208,7 +222,7 @@ final class FindAssetsByMetadataCommandTest {
 
     private DocumentValue.Mapping listed(SequencedMap<String, DocumentValue> narrowings) {
         return assertInstanceOf(CommandHandler.Produced.class,
-                new FindAssetsByMetadataHandler(CONTRACT)
+                new FindAssetsByMetadataHandler(CONTRACT, discovery)
                         .run(argument("/content/dam", narrowings), readOnly(), context()),
                 "the search was refused").result();
     }
@@ -255,7 +269,7 @@ final class FindAssetsByMetadataCommandTest {
         return matchesIn(result).stream()
                 .map(asset -> ((DocumentValue.Text) ((DocumentValue.Mapping) asset)
                         .member(FindAssetsByMetadataResult.REPOSITORY_PATH).orElseThrow()).value())
-                .toList();
+                .sorted().toList();
     }
 
     private void corpus() {
@@ -279,6 +293,15 @@ final class FindAssetsByMetadataCommandTest {
                 FindAssetsByMetadataHandler.SIZE_PROPERTY, size,
                 FindAssetsByMetadataHandler.TAGS_PROPERTY, tags,
                 CUSTOMER_PROPERTY, CUSTOMER_VALUE));
+        final var original = sling.create().resource(
+                path + "/jcr:content/renditions/original/jcr:content", Map.of("jcr:mimeType", format));
+        final var node = Objects.requireNonNull(original.adaptTo(javax.jcr.Node.class));
+        try {
+            node.setProperty("jcr:data", node.getSession().getValueFactory().createBinary(
+                    new java.io.ByteArrayInputStream(new byte[Math.toIntExact(size)])));
+        } catch (final javax.jcr.RepositoryException failure) {
+            throw new AssertionError(failure);
+        }
     }
 
     private static FindAssetsByMetadataCommand.Refused refusalOf(DocumentValue.Mapping arguments) {
@@ -295,22 +318,15 @@ final class FindAssetsByMetadataCommandTest {
     }
 
     private ResourceResolver readOnly() {
-        return ReadOnlyResolver.around(sling.resourceResolver());
+        return PageSearchTestSupport.readOnly(sling.resourceResolver());
     }
 
     private static CallerContext budgeted(long nodes) {
-        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, nodes),
-                Budget.time(CONTRACT),
-                new Budget(Budget.Kind.RESULT,
-                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
-                ProgressSink.under(CONTRACT));
+        return PageSearchTestSupport.context(CONTRACT, operation(), nodes);
     }
 
     private static CallerContext context() {
-        return new CallerContext(operation(), Budget.discovery(CONTRACT), Budget.time(CONTRACT),
-                new Budget(Budget.Kind.RESULT,
-                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
-                ProgressSink.under(CONTRACT));
+        return budgeted(Budget.discovery(CONTRACT).limit());
     }
 
     private static AgentOperationIdentifier operation() {

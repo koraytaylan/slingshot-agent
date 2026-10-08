@@ -96,29 +96,15 @@ public record PropertyScalar(ScalarKind kind, String value) {
      * @param stored what the repository holds, as it renders it
      * @return negative where the stored value sorts first, zero where they are equal, positive
      *     where this one sorts first
+     * @throws NumberFormatException if either numeric spelling has no representable value;
+     *     an invalid number has no order and never stands for zero
      */
     public int compareWith(String stored) {
         return switch (kind) {
-            case INTEGER -> Long.compare(wholeOf(stored), wholeOf(value));
-            case DECIMAL -> new java.math.BigDecimal(digitsOf(stored))
-                    .compareTo(new java.math.BigDecimal(digitsOf(value)));
+            case INTEGER -> Long.compare(Long.parseLong(stored), Long.parseLong(value));
+            case DECIMAL -> new java.math.BigDecimal(stored)
+                    .compareTo(new java.math.BigDecimal(value));
             default -> stored.compareTo(value);
         };
-    }
-
-    private static long wholeOf(String written) {
-        try {
-            return Long.parseLong(written);
-        } catch (final NumberFormatException notANumber) {
-            return 0;
-        }
-    }
-
-    private static String digitsOf(String written) {
-        try {
-            return new java.math.BigDecimal(written).toPlainString();
-        } catch (final NumberFormatException notANumber) {
-            return "0";
-        }
     }
 }

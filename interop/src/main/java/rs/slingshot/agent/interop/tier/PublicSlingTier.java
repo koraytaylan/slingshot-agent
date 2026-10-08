@@ -146,8 +146,12 @@ public final class PublicSlingTier implements InteropTier {
         final PublicSlingTier tier = new PublicSlingTier(harness, running, requests);
         final Optional<String> configured = tier.configureState(root);
         if (configured.isPresent()) {
-            tier.stop();
-            return new Refused(Failure.NOT_INSTALLED, configured.get());
+            try {
+                return new Refused(Failure.NOT_INSTALLED, configured.orElseThrow() + "; "
+                        + configurationDiagnostics(tier.capturedOutput()));
+            } finally {
+                tier.stop();
+            }
         }
         final Optional<String> installed = tier.install(bundle);
         if (installed.isPresent()) {
@@ -172,6 +176,32 @@ public final class PublicSlingTier implements InteropTier {
         return new Running(tier);
     }
 
+    /** The most distinct public runtime causes a setup failure may report. */
+    private static final long CONFIGURATION_DIAGNOSTIC_ITEMS = 8;
+
+    private static final java.util.regex.Pattern CONFIGURATION_EXCEPTION_TYPES =
+            java.util.regex.Pattern.compile("\\b(?:javax\\.jcr|org\\.apache\\.(?:sling|jackrabbit)"
+                    + "|java\\.lang)\\.[A-Za-z0-9_.$]*(?:Exception|Error)\\b");
+
+    private static final java.util.regex.Pattern CONFIGURATION_REPOSITORY_CODES =
+            java.util.regex.Pattern.compile("\\bOak[A-Za-z]+[0-9]{4}\\b");
+
+    /**
+     * Selects bounded public exception types and repository codes without their messages or paths.
+     * @param runtimeOutput the owned local runtime's captured output
+     * @return sanitized setup diagnostics, including whether a conflict was reported
+     */
+    static String configurationDiagnostics(String runtimeOutput) {
+        final List<String> types = CONFIGURATION_EXCEPTION_TYPES.matcher(runtimeOutput).results()
+                .map(java.util.regex.MatchResult::group).distinct().limit(CONFIGURATION_DIAGNOSTIC_ITEMS)
+                .toList();
+        final List<String> codes = CONFIGURATION_REPOSITORY_CODES.matcher(runtimeOutput).results()
+                .map(java.util.regex.MatchResult::group).distinct().limit(CONFIGURATION_DIAGNOSTIC_ITEMS)
+                .toList();
+        return "runtime_exception_types=" + types + ", repository_failure_codes=" + codes
+                + ", unresolved_conflict=" + runtimeOutput.contains("Unresolved conflicts");
+    }
+
     private Optional<String> configureState(Path root) {
         final String tree = "/apps/slingshot-agent/osgiconfig/config";
         final List<String> folders = List.of("/apps/slingshot-agent",
@@ -186,10 +216,10 @@ public final class PublicSlingTier implements InteropTier {
                 "org.apache.sling.jcr.repoinit.RepositoryInitializer~slingshot-agent.cfg.json",
                 "org.apache.sling.serviceusermapping.impl."
                         + "ServiceUserMapperImpl.amended~slingshot-agent.cfg.json");
-        final Optional<String> refused = names.stream().filter(name -> upload(tree + "/", "./" + name,
-                committed.resolve(name)).statusCode() >= BAD_REQUEST).findFirst();
+        final Optional<String> refused = names.stream().map(name ->
+                serviceConfiguration(tree, committed, name)).flatMap(Optional::stream).findFirst();
         if (refused.isPresent()) {
-            return Optional.of("the platform refused service configuration " + refused.get());
+            return refused;
         }
         final boolean ready = IntStream.range(0, INSTALL_ATTEMPTS).anyMatch(attempt -> {
             if (attempt > 0) {
@@ -202,6 +232,36 @@ public final class PublicSlingTier implements InteropTier {
                     .contains("rs.slingshot.agent.core:state=[slingshot-agent-state]");
         });
         return ready ? Optional.empty() : Optional.of("the state configuration never became available");
+    }
+
+    private Optional<String> serviceConfiguration(String tree, Path committed, String name) {
+        final HttpResponse<String> answer = configurationUpload(attempt ->
+                configurationUploaded(attempt, tree, name, committed.resolve(name)));
+        return answer.statusCode() < BAD_REQUEST ? Optional.empty()
+                : Optional.of("the platform refused service configuration " + name + " with "
+                        + answer.statusCode() + ": " + said(answer));
+    }
+
+    /**
+     * Waits for a configuration upload's servlet using the existing installation attempt ceiling.
+     * @param upload one owned configuration upload, including the existing pause between attempts
+     * @return the first registered answer, or the original refusal if registration never completes
+     */
+    static HttpResponse<String> configurationUpload(
+            java.util.function.IntFunction<HttpResponse<String>> upload) {
+        final HttpResponse<String> first = upload.apply(0);
+        if (!stillArriving(first)) {
+            return first;
+        }
+        return IntStream.range(1, INSTALL_ATTEMPTS).mapToObj(upload)
+                .filter(answered -> !stillArriving(answered)).findFirst().orElse(first);
+    }
+
+    private HttpResponse<String> configurationUploaded(int attempt, String tree, String name, Path file) {
+        if (attempt > 0) {
+            pause();
+        }
+        return upload(tree + "/", "./" + name, file);
     }
 
     private Optional<String> configurationFolder(String path) {

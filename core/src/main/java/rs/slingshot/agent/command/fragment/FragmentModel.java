@@ -21,8 +21,16 @@ import org.apache.sling.api.resource.ResourceResolver;
  * <p>A model whose declaration cannot be found at all is refused rather than treated as declaring
  * everything. Treating it as permissive is how an element name with a typo in it becomes a property
  * that sits in the repository forever, matching nothing and read by nobody.</p>
+ *
+ * <p>An authoring item's {@code name} names the stored element, with an optional relative-property
+ * prefix, independently of the item's own repository node name. A legacy item carrying no name
+ * metadata retains its node name; explicit invalid or duplicate declarations refuse the model.</p>
  */
 public final class FragmentModel {
+
+    private static final String DECLARED_ELEMENT_NAME = "name";
+
+    private static final String RELATIVE_PROPERTY_PREFIX = "./";
 
     private final String modelPath;
     private final List<String> elementNames;
@@ -110,11 +118,34 @@ public final class FragmentModel {
                     + FragmentHandlers.MODEL_ELEMENTS + "; what is there is something other than a"
                     + " content fragment model");
         }
-        final List<String> names = new ArrayList<>();
-        items.getChildren().forEach(item -> names.add(item.getName()));
+        final List<Optional<String>> declarations = new ArrayList<>();
+        items.getChildren().forEach(item -> declarations.add(elementName(item)));
+        if (declarations.stream().anyMatch(Optional::isEmpty)) {
+            return new Invalid(modelPath, "contains an item with an invalid element name");
+        }
+        final List<String> names = declarations.stream().flatMap(Optional::stream).toList();
+        if (names.stream().distinct().count() != names.size()) {
+            return new Invalid(modelPath, "declares an element name more than once");
+        }
         return names.isEmpty()
                 ? new Invalid(modelPath, "declares no elements at all, and a fragment made from it"
                         + " would hold nothing")
                 : new Read(new FragmentModel(modelPath, names));
+    }
+
+    private static Optional<String> elementName(Resource item) {
+        final org.apache.sling.api.resource.ValueMap metadata = item.getValueMap();
+        if (!metadata.containsKey(DECLARED_ELEMENT_NAME)) {
+            return Optional.of(item.getName());
+        }
+        final Object declared = metadata.get(DECLARED_ELEMENT_NAME);
+        if (!(declared instanceof final String name)) {
+            return Optional.empty();
+        }
+        final String normalized = name.startsWith(RELATIVE_PROPERTY_PREFIX)
+                ? name.substring(RELATIVE_PROPERTY_PREFIX.length()) : name;
+        return normalized.isBlank() || normalized.contains("/")
+                || ".".equals(normalized) || "..".equals(normalized)
+                ? Optional.empty() : Optional.of(normalized);
     }
 }

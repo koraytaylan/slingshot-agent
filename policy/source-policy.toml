@@ -74,6 +74,11 @@ name = "serialVersionUID"
 dictated_by = "the Java platform's own serialisation contract"
 reason = "The runtime looks for this exact field by this exact name. Spelling it in full would leave a servlet without the version marker every servlet is required to carry."
 
+[[dictated_name]]
+name = "getUserID"
+dictated_by = "org.apache.sling.api.resource.ResourceResolver"
+reason = "A resolver wrapper must override this exact API method to report its authenticated caller. A different spelling would declare another method and leave the actual identity method unchanged."
+
 # What this checker deliberately does not decide. Each entry is a question a reader answers, and an
 # assertion refuses a checker that so much as restates one of them as a rule - because restating a
 # question reads as a claim to have answered it.
@@ -236,7 +241,7 @@ reason = "The placeholder form of the same mistake, which looks structured and i
 wall_clock = "System.currentTimeMillis"
 monotonic = "System.nanoTime"
 seam = "rs/slingshot/agent/stream"
-reason = "The stream is the one place both sources are read, because it is the one place a bound on elapsed time and an instant on the wire meet. Everywhere else an instant arrives as an argument, which is what makes it testable at all."
+reason = "Monotonic reads belong to the stream clock boundary. ElapsedTime shares that source with repository commands, and duration subtraction from a direct wall-clock read is refused structurally regardless of variable names. Naming checks provide additional diagnostics, not a proof of clock semantics."
 
 [[duration_word]]
 word = "elapsed"

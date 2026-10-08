@@ -4,6 +4,7 @@
 package rs.slingshot.agent.interop.tier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,13 +19,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
 /**
- * Full-text search, on a running instance.
+ * Public route admission and registry/query inventory checks for resumable page search.
  *
- * <p>This is where an unbounded query does the most damage, because the phrase comes from a caller
- * who cannot know what it will match. What a unit suite proves is that the budget refuses; what it
- * cannot prove is that the command is registered on a real runtime and that the query it issues is
- * one the committed coverage policy answers from an index rather than by walking somebody's author
- * instance.</p>
+ * <p>The running public tier proves refusal of unauthenticated and incomplete submissions.
+ * The committed inventory proves operation-key policy and removal of the obsolete SQL query.
+ * Matching, progress, cursor bounds and current-authority checks have separate core and
+ * candidate-pair assertions; this scenario does not claim positive page enumeration.</p>
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 final class FindPagesContainingPhraseScenario {
@@ -75,16 +75,13 @@ final class FindPagesContainingPhraseScenario {
     }
 
     @Test
-    @DisplayName("the query this command issues is declared and covered by an index")
-    void thequeryIsDeclaredAndCovered() {
+    @DisplayName("resumable traversal has no obsolete SQL declaration and preserves platform indexes")
+    void theTraversalHasNoUnusedQueryDeclaration() {
         final String coverage = read(REPOSITORY.resolve("policy/query-index-coverage.toml"));
-        assertTrue(coverage.contains("issued_by = \"" + COMMAND + "\""),
-                "this command issues a query nobody declared, so nothing checks it against the"
-                        + " indexes a deployment provides — and a full-text search is the query"
-                        + " that most needs one behind it");
+        assertFalse(coverage.contains("issued_by = \"" + COMMAND + "\""),
+                "the resumable traversal must not retain an unused SQL query declaration");
         assertTrue(coverage.contains("cqPageLucene"),
-                "the page index this search relies on is no longer among the indexes the"
-                        + " deployments are recorded as providing");
+                "removing a search query must preserve the platform's declared index inventory");
     }
 
     @Test

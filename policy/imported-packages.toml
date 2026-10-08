@@ -36,6 +36,13 @@ provided_by = ["aem-cloud-service", "aem-6-5-lts"]
 reason = "The repository itself. Everything durable this agent holds is a node it wrote through a session, and the two conditional-write primitives are about what this interface does when two writers meet."
 
 [[package]]
+name = "javax.jcr.lock"
+range = "[2.0,3)"
+bundle = "core"
+provided_by = ["aem-cloud-service", "aem-6-5-lts"]
+reason = "JCR lock state and owning-session admission before rewriting a matching reference. The existing JCR 2 repository API provides the lock interfaces on every supported deployment."
+
+[[package]]
 name = "javax.jcr.nodetype"
 range = "[2.0,3)"
 bundle = "core"

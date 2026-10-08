@@ -10,11 +10,10 @@ import rs.slingshot.agent.json.DocumentValue;
 /**
  * One command's own work, and everything it is allowed to reach.
  *
- * <p>One method. A handler is given its arguments and a caller context and answers a result; it
- * takes no session, opens nothing, and has no lifecycle callback it could keep state between
- * invocations in. Everything else in this plan follows from that being true rather than intended:
- * a handler that cannot obtain a session cannot run as anybody but the caller, and a handler with
- * nowhere to keep state cannot be the fortieth one that quietly does.</p>
+ * <p>A handler receives validated arguments, the requesting user's resolver and bounded caller
+ * context. Incremental discovery delegates retained iterators to the runtime-owned discovery
+ * registry, which clones that resolver with unchanged authentication. The registry owns expiry
+ * and shutdown; handlers must not retain the borrowed request resolver.</p>
  *
  * <p>What it may fail with is not its own decision either. The categories are its registry row's,
  * and the correspondence is checked in both directions: a category no handler can produce is as
@@ -51,8 +50,8 @@ public interface CommandHandler {
      * A result whose bytes must be committed by the execution boundary.
      *
      * <p>The handler supplies bytes and the wire result, while the runtime supplies the caller
-     * session and operation identity to the artifact store. This keeps handlers unable to obtain
-     * a session while preventing a descriptor from referring to discarded staging bytes.</p>
+     * session and operation identity to the artifact store. Publication precedes exposure of a
+     * descriptor so it cannot refer to discarded staging bytes.</p>
      *
      * @param result the descriptor to expose after publication
      * @param slot the artifact slot

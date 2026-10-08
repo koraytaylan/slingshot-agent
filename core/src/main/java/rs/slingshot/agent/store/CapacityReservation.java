@@ -19,8 +19,8 @@ import rs.slingshot.agent.contract.AgentContract;
 /**
  * A durable admission identity, created pending and consumed by one release.
  *
- * <p>Only {@link #create} creates a pending record, always with a fresh identifier. Admission
- * requires that record to exist. Removing it therefore also fences delayed admission retries;
+ * <p>{@link #create}, {@link #createGuard} and {@link Batch} allocate fresh pending identities.
+ * Admission requires those records to exist. Removing them therefore also fences delayed admission retries;
  * released identities need no tombstone and cannot be recreated through the admission API.</p>
  *
  * @param identifier the unique reservation identity
@@ -113,6 +113,7 @@ public record CapacityReservation(UUID identifier, UUID owner, StatePath.Caller 
         private final Session session;
         private final AgentContract contract;
         private final List<CapacityReservation> reservations = new ArrayList<>();
+        private final List<CapacityReservation> cleanupReservations = new ArrayList<>();
         private final AtomicBoolean closed = new AtomicBoolean();
 
         private Batch(Session session, AgentContract contract) {
@@ -130,13 +131,37 @@ public record CapacityReservation(UUID identifier, UUID owner, StatePath.Caller 
          */
         public Optional<CapacityReservation> create(StatePath.Caller caller, List<Charge> charges)
                 throws RepositoryException {
+            return createAll(caller, List.of(charges)).map(List::getFirst);
+        }
+
+        /**
+         * Allocates a manifest's pending identities in one fenced commit, owning uncertain saves.
+         *
+         * @param caller the manifest owner
+         * @param vectors the complete charge vector of each slot, in manifest order
+         * @return all new identities, or absence after bounded allocation contention
+         * @throws IllegalArgumentException if no slot or an invalid vector was supplied
+         * @throws RepositoryException if allocation fails; closing still cancels uncertain identities
+         */
+        public Optional<List<CapacityReservation>> createAll(StatePath.Caller caller,
+                                                            List<List<Charge>> vectors)
+                throws RepositoryException {
             if (closed.get()) {
                 throw new IllegalStateException("a closed reservation batch cannot allocate identities");
             }
-            final Optional<CapacityReservation> created =
-                    CapacityReservation.create(session, processOwner(), caller, charges);
-            created.ifPresent(reservations::add);
-            return created;
+            if (vectors.isEmpty()) {
+                throw new IllegalArgumentException("a reservation batch requires at least one slot");
+            }
+            final List<CapacityReservation> prepared = vectors.stream()
+                    .map(charges -> new CapacityReservation(UUID.randomUUID(), processOwner(), caller,
+                            charges))
+                    .toList();
+            cleanupReservations.addAll(prepared);
+            if (!createPending(session, prepared)) {
+                return Optional.empty();
+            }
+            reservations.addAll(prepared);
+            return Optional.of(prepared);
         }
 
         /**
@@ -157,7 +182,7 @@ public record CapacityReservation(UUID identifier, UUID owner, StatePath.Caller 
         public void close() throws RepositoryException {
             closed.set(true);
             final List<RepositoryException> failures = new ArrayList<>();
-            for (final CapacityReservation reservation : reservations) {
+            for (final CapacityReservation reservation : cleanupReservations) {
                 try {
                     CapacityLedger.cancel(session, reservation, contract);
                 } catch (final RepositoryException failed) {
@@ -246,43 +271,85 @@ public record CapacityReservation(UUID identifier, UUID owner, StatePath.Caller 
                                               List<Charge> charges) throws RepositoryException {
         final CapacityReservation reservation =
                 new CapacityReservation(UUID.randomUUID(), owner, caller, charges);
+        return createPending(session, List.of(reservation)) ? Optional.of(reservation) : Optional.empty();
+    }
+
+    /**
+     * Owns a fresh pending identity before its first uncertain save, then hands it to a cleanup scope.
+     *
+     * @param session the session borrowed for creation and cleanup
+     * @param owner the responsible process incarnation
+     * @param caller whose capacity will be charged
+     * @param charges the complete charge vector
+     * @param contract the authenticated counter layout
+     * @return the pending identity's scope, or absence after bounded creation contention
+     * @throws RepositoryException if creation or cleanup fails, preserving suppressed cleanup failures
+     */
+    public static Optional<Guard> createGuard(Session session, UUID owner, StatePath.Caller caller,
+                                              List<Charge> charges, AgentContract contract)
+            throws RepositoryException {
+        final CapacityReservation reservation =
+                new CapacityReservation(UUID.randomUUID(), owner, caller, charges);
+        try (Guard creating = reservation.guard(session, contract)) {
+            if (!createPending(session, List.of(reservation))) {
+                return Optional.empty();
+            }
+            final Optional<Guard> prepared = Optional.of(reservation.guard(session, contract));
+            creating.handoff();
+            return prepared;
+        }
+    }
+
+    private static boolean createPending(Session session, List<CapacityReservation> reservations)
+            throws RepositoryException {
         int attempt = 0;
         while (attempt < CompareAndSet.ATTEMPTS) {
-            if (creating(session, reservation)) {
-                return Optional.of(reservation);
+            if (creating(session, reservations)) {
+                return true;
             }
             attempt = attempt + 1;
         }
-        return Optional.empty();
+        return false;
     }
 
-    private static boolean creating(Session session, CapacityReservation reservation)
+    private static boolean creating(Session session, List<CapacityReservation> reservations)
             throws RepositoryException {
         session.refresh(false);
         try {
             final Node capacity = session.getNode(StatePath.deployment(StatePath.CAPACITY).path());
             CompareAndSet.stamp(capacity);
-            final Optional<CapacityReservation> existing = read(session, reservation.path());
-            if (existing.isPresent()) {
-                return existing.get().equals(reservation);
+            boolean changed = false;
+            for (final CapacityReservation reservation : reservations) {
+                final Optional<CapacityReservation> existing = read(session, reservation.path());
+                if (existing.isPresent() && !existing.get().equals(reservation)) {
+                    return false;
+                }
+                if (existing.isEmpty()) {
+                    reservation.add(capacity);
+                    changed = true;
+                }
             }
-            final StatePath path = reservation.path();
-            final String name = path.path().substring(path.path().lastIndexOf('/') + 1);
-            final StatePath rootPath = StatePath.deployment(StatePath.CAPACITY).child(NODE);
-            final Node root = child(capacity, rootPath);
-            final StatePath firstPath = rootPath.child(name.substring(0, StatePath.BUCKET_CHARACTERS));
-            final Node first = child(root, firstPath);
-            final Node second = child(first, firstPath.child(name.substring(StatePath.BUCKET_CHARACTERS,
-                    StatePath.BUCKET_CHARACTERS * StatePath.BUCKET_DEPTH)));
-            final Node record = second.addNode(name, "nt:unstructured");
-            reservation.fill(record);
-            session.save();
+            if (changed) {
+                session.save();
+            }
             return true;
         } catch (final InvalidItemStateException contended) {
             return false;
         } finally {
             session.refresh(false);
         }
+    }
+
+    private void add(Node capacity) throws RepositoryException {
+        final StatePath path = path();
+        final String name = path.path().substring(path.path().lastIndexOf('/') + 1);
+        final StatePath rootPath = StatePath.deployment(StatePath.CAPACITY).child(NODE);
+        final Node root = child(capacity, rootPath);
+        final StatePath firstPath = rootPath.child(name.substring(0, StatePath.BUCKET_CHARACTERS));
+        final Node first = child(root, firstPath);
+        final Node second = child(first, firstPath.child(name.substring(StatePath.BUCKET_CHARACTERS,
+                StatePath.BUCKET_CHARACTERS * StatePath.BUCKET_DEPTH)));
+        fill(second.addNode(name, "nt:unstructured"));
     }
 
     private static Node child(Node parent, StatePath path) throws RepositoryException {

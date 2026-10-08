@@ -117,14 +117,18 @@ public final class ChildListingHandler implements CommandHandler {
     private Answer listed(String type, ChildListingArgument.Accepted accepted,
                           DocumentValue.Mapping arguments, ResourceResolver resolver,
                           CallerContext context) {
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(accepted.window(),
+                wireName(type), arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final Resource parent = resolver.getResource(accepted.rootPath());
         if (parent == null) {
             return new Failed(ROOT_NOT_FOUND, whyNothingIsListed(accepted.rootPath()));
         }
         final List<ChildNodeListingResult.Child> children = matching(parent, type);
         final PagingSupport.Outcome<ChildNodeListingResult.Child> page = PagingSupport.page(
-                children, accepted.window(), wireName(type), arguments, context,
-                contract);
+                children, (PagingSupport.Ready) prepared, wireName(type), context, contract);
         if (page instanceof final PagingSupport.Refused<ChildNodeListingResult.Child> refused) {
             return new Failed(refused.category(), refused.detail());
         }

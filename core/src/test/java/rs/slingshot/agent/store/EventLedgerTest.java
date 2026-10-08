@@ -21,6 +21,7 @@ import javax.jcr.Session;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,6 +55,15 @@ final class EventLedgerTest {
     private static final long NOW = 1788000000000L;
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+
+    private final java.util.List<org.apache.sling.api.resource.ResourceResolver> opened =
+            new java.util.ArrayList<>();
+
+    @AfterEach
+    void closePeerResolvers() {
+        opened.forEach(org.apache.sling.api.resource.ResourceResolver::close);
+    }
+
 
     @Test
     @DisplayName("a first append at the first sequence is written where its sequence says")
@@ -200,12 +210,16 @@ final class EventLedgerTest {
     }
 
     private Session second() throws org.apache.sling.api.resource.LoginException {
-        return java.util.Objects.requireNonNull(
-                java.util.Objects.requireNonNull(sling.getService(
-                                org.apache.sling.api.resource.ResourceResolverFactory.class),
-                        "this context registers no resolver factory")
-                        .getResourceResolver(java.util.Map.of()).adaptTo(Session.class),
+        opened.add(anotherResolver());
+        return java.util.Objects.requireNonNull(opened.getLast().adaptTo(Session.class),
                 "a second session over the same repository is not available");
+    }
+
+    private org.apache.sling.api.resource.ResourceResolver anotherResolver()
+            throws org.apache.sling.api.resource.LoginException {
+        return java.util.Objects.requireNonNull(sling.getService(
+                        org.apache.sling.api.resource.ResourceResolverFactory.class),
+                "this context registers no resolver factory").getResourceResolver(java.util.Map.of());
     }
 
     @Test

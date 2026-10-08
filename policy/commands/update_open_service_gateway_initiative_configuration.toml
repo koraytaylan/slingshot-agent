@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["configuration_lookup_ambiguous", "configuration_lookup_failed", "configuration_lookup_mismatch", "configuration_value_malformed", "configuration_value_unsupported", "platform_control_outcome_unknown", "platform_control_rejected"]
-argument_schema_digest = "766a8a617c40cdb4655ad0d69c8fe374eaa3b2d6f9131c0f5c7d89033462cbf1"
-result_schema_digest = "c400d7682fd5f40aadddc6021503ac1da32e7fd70e5ae669d39d7b6b7c0c43b7"
-contract_limits_digest = "5afebb38aab4322731e6872e02fadb111beb61ee457976b4e573f891943452c9"
+argument_schema_digest = "15ec7890d30fef5da861fc8bc6abb4c59fbef1236d478a3920e4efd25ad66cfe"
+result_schema_digest = "45526e053c052b3e5916011da0301337fd1654f3fe8d0adfdd72e017c91aaade"
+contract_limits_digest = "fe98b915cb84f787a5c54f8fab2e1408e108524e2765e96c9877cd236451da78"
 staging_bytes = 0
 execution = "immediate"

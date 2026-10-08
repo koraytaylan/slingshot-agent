@@ -6,6 +6,7 @@ package rs.slingshot.agent.command.component;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.sling.api.resource.PersistenceException;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
@@ -16,6 +17,7 @@ import rs.slingshot.agent.command.content.ListChildPagesHandler;
 import rs.slingshot.agent.command.mutation.MutationAnswer;
 import rs.slingshot.agent.command.mutation.MutationOutcome;
 import rs.slingshot.agent.command.mutation.SingleCommit;
+import rs.slingshot.agent.command.mutation.StoredProperties;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.json.DocumentValue;
 
@@ -155,8 +157,17 @@ public final class AddComponentHandler implements CommandHandler {
             return new MutationOutcome.Refused(TARGET_ALREADY_EXISTS,
                     target + " is already there, and this command replaces nothing");
         }
+        final StoredProperties.Outcome properties = StoredProperties.of(command.properties(), session);
+        if (properties instanceof final StoredProperties.Refused refused) {
+            return new MutationOutcome.Refused(PROPERTY_REJECTED, refused.detail());
+        }
         try {
-            session.create(parent, command.componentName(), properties(command));
+            final Resource component = session.create(parent, command.componentName(), properties(command));
+            final Optional<StoredProperties.Refused> refusal =
+                    ((StoredProperties.Held) properties).writeTo(component);
+            if (refusal.isPresent()) {
+                return new MutationOutcome.Refused(PROPERTY_REJECTED, refusal.orElseThrow().detail());
+            }
             session.commit();
             return new MutationOutcome.Changed(AddComponentResult.documentOf(target));
         } catch (final PersistenceException refused) {
@@ -170,8 +181,6 @@ public final class AddComponentHandler implements CommandHandler {
         written.put(ListChildPagesHandler.TYPE_PROPERTY, ORDERED_TYPE);
         written.put(FindPagesUsingComponentsHandler.RESOURCE_TYPE_PROPERTY,
                 command.resourceType());
-        command.properties().set().forEach((name, value) ->
-                written.put(name, value.stored()));
         return written;
     }
 

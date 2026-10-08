@@ -46,6 +46,10 @@ final class PagedQueryTest {
     /** What this side's clock says, fixed so an expiry is arithmetic rather than a race. */
     private static final long NOW = 1_700_000_000_000L;
 
+    /** The original expiry shared by every token this suite issues. */
+    private static final long EXPIRY = NOW
+            + CONTRACT.value(ContractLimit.CONTINUATION_TOKEN_LIFETIME_MILLISECONDS);
+
     @Test
     @DisplayName("a page carrying every remaining row has no token, so the end is definite")
     void theEndIsDefinite() {
@@ -54,7 +58,7 @@ final class PagedQueryTest {
         assertInstanceOf(PagedQuery.Nothing.class, whole.following(),
                 "a page that carried everything claimed something followed it");
         assertEquals(Optional.empty(),
-                query().tokenFor(whole, theQuery(), ring(), NOW, CONTRACT),
+                query().tokenFor(whole, theQuery(), ring(), 10, EXPIRY),
                 "a page with nothing following it was given a token to reach it by");
     }
 
@@ -65,7 +69,7 @@ final class PagedQueryTest {
         assertEquals(List.of("row-0", "row-1", "row-2"), first.rows(),
                 "the row that proved more exist was served to the caller");
         assertEquals(new PagedQuery.More(3), first.following());
-        assertTrue(query().tokenFor(first, theQuery(), ring(), NOW, CONTRACT).isPresent());
+        assertTrue(query().tokenFor(first, theQuery(), ring(), 3, EXPIRY).isPresent());
     }
 
     @Test
@@ -149,7 +153,7 @@ final class PagedQueryTest {
     void aTokenCannotBeCarriedToAnotherQuery() {
         final PagedQuery.Page<String> page = PagedQuery.pageOf(rows(4), 3, 0);
         final ContinuationToken token =
-                query().tokenFor(page, theQuery(), ring(), NOW, CONTRACT).orElseThrow();
+                query().tokenFor(page, theQuery(), ring(), 3, EXPIRY).orElseThrow();
         final ContinuationToken.Outcome carried =
                 token.validate(ring(), target(), anotherQuery(), serving(), NOW, CONTRACT);
         assertEquals(ContinuationToken.Refusal.WRONG_QUERY,
@@ -166,7 +170,9 @@ final class PagedQueryTest {
     void aTokenResumesWhereThePageEnded() {
         final PagedQuery.Page<String> page = PagedQuery.pageOf(rows(9), 4, 0);
         final ContinuationToken token =
-                query().tokenFor(page, theQuery(), ring(), NOW, CONTRACT).orElseThrow();
+                query().tokenFor(page, theQuery(), ring(), 4, EXPIRY).orElseThrow();
+        assertEquals(4, token.unvalidatedState().initialResultLimit());
+        assertEquals(EXPIRY, token.unvalidatedState().expiresAtUnixMilliseconds());
         assertEquals(4, token.unvalidatedState().position(),
                 "the token resumes somewhere other than where the served page ended");
     }

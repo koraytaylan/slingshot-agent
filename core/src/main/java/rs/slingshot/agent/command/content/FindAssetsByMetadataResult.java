@@ -43,9 +43,15 @@ public final class FindAssetsByMetadataResult {
     /** The member the token reaching the next page is carried in, where there is one. */
     public static final String NEXT_CONTINUATION_TOKEN = "next_continuation_token";
 
+    /** Whether all readable assets under the root have been examined. */
+    public static final String COMPLETE = "complete";
+
+    /** Nodes examined during this bounded page. */
+    public static final String EXAMINED_NODES = "examined_nodes";
+
     /** Every member this result's document has, nested ones included. */
     public static final List<String> MEMBERS = List.of(BYTE_LENGTH, MATCHES, MEDIA_FORMAT,
-            NEXT_CONTINUATION_TOKEN, REPOSITORY_PATH, TAGS);
+            NEXT_CONTINUATION_TOKEN, REPOSITORY_PATH, TAGS, COMPLETE, EXAMINED_NODES);
 
     /** Where the platform has recorded no size for an asset, which is not a size of zero. */
     public static final long NO_SIZE = -1;
@@ -81,41 +87,11 @@ public final class FindAssetsByMetadataResult {
     }
 
     /**
-     * The result one window of matching assets produces.
-     *
-     * @param matched the assets, in the order the search found them
-     * @param continuationToken the token reaching the next page, or empty where this is the end
-     * @return the result document
+     * Materializes one detached asset row; the cursor owns page order and progress.
+     * @param asset the exact current metadata description
+     * @return the closed asset row
      */
-    public static DocumentValue.Mapping documentOf(List<MatchedAsset> matched,
-                                                   String continuationToken) {
-        final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
-        result.put(MATCHES, new DocumentValue.Sequence(ascending(matched).stream()
-                .map(FindAssetsByMetadataResult::assetOf)
-                .toList()));
-        if (!continuationToken.isEmpty()) {
-            result.put(NEXT_CONTINUATION_TOKEN, new DocumentValue.Text(continuationToken));
-        }
-        return new DocumentValue.Mapping(result);
-    }
-
-    /**
-     * The assets of one listing, in the order the client's own contract requires.
-     *
-     * <p>The contract declares this listing strictly ascending by repository-path bytes, and the
-     * order an asset query returns is not that order: a continuation taken against a different
-     * order can repeat or skip an asset, which is a migration acting on the wrong set.</p>
-     *
-     * @param matched the assets, in whatever order the search returned them
-     * @return the same assets, strictly ascending by path
-     */
-    public static List<MatchedAsset> ascending(List<MatchedAsset> matched) {
-        return matched.stream()
-                .sorted(java.util.Comparator.comparing(MatchedAsset::repositoryPath))
-                .toList();
-    }
-
-    private static DocumentValue assetOf(MatchedAsset asset) {
+    public static DocumentValue.Mapping assetOf(MatchedAsset asset) {
         final SequencedMap<String, DocumentValue> held = new LinkedHashMap<>();
         held.put(REPOSITORY_PATH, new DocumentValue.Text(asset.repositoryPath()));
         if (asset.byteLength() != NO_SIZE) {

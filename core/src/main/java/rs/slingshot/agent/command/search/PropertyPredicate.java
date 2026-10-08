@@ -5,10 +5,9 @@ package rs.slingshot.agent.command.search;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
+import rs.slingshot.agent.command.mutation.PropertyValue;
 import rs.slingshot.agent.command.property.PropertyScalar;
 import rs.slingshot.agent.command.property.ScalarKind;
 import rs.slingshot.agent.contract.AgentContract;
@@ -32,7 +31,7 @@ import rs.slingshot.agent.json.DocumentValue;
  * has found nothing.</p>
  */
 public sealed interface PropertyPredicate
-        permits PropertyPredicate.Presence, PropertyPredicate.Comparison,
+        permits PropertyPredicate.Presence, PropertyPredicate.Comparison, PropertyPredicate.Equality,
                 PropertyPredicate.Membership {
 
     /** The member a list of these is carried in. */
@@ -83,6 +82,37 @@ public sealed interface PropertyPredicate
     boolean isSatisfiedBy(List<String> stored);
 
     /**
+     * Whether a native, caller-readable property satisfies this predicate.
+     * @param stored the observation retaining its native kind and cardinality
+     * @return whether the candidate matches the shared client model
+     */
+    default boolean isSatisfiedBy(ObservedProperty stored) {
+        return TypedPredicateMatch.of(this, stored);
+    }
+
+    /**
+     * Whole-property equality, including native kind, cardinality and list order.
+     * @param operator equals or not_equals
+     * @param propertyPath which relative property
+     * @param value the complete value to compare
+     */
+    record Equality(PredicateOperator operator, String propertyPath, PropertyValue value)
+            implements PropertyPredicate {
+
+        @Override
+        public boolean isSatisfiedBy(List<String> stored) {
+            if (stored.isEmpty()) {
+                return false;
+            }
+            final List<PropertyScalar> scalars = stored.stream()
+                    .map(text -> new PropertyScalar(value.values().getFirst().kind(), text)).toList();
+            final PropertyValue observed = value instanceof PropertyValue.Single && scalars.size() == 1
+                    ? new PropertyValue.Single(scalars.getFirst()) : new PropertyValue.Multiple(scalars);
+            return isSatisfiedBy(new ObservedProperty.Held(observed));
+        }
+    }
+
+    /**
      * A predicate asking only whether a property is there.
      *
      * @param propertyPath which property
@@ -91,8 +121,8 @@ public sealed interface PropertyPredicate
 
         @Override
         public boolean isSatisfiedBy(List<String> stored) {
-            // A repository can hold a property with no values, and it is still there. Presence is
-            // about the property rather than about what is in it.
+            // This historical string-list adapter cannot represent an empty present property.
+            // Discovery uses the typed observation overload, which preserves that distinction.
             return !stored.isEmpty();
         }
     }
@@ -110,18 +140,26 @@ public sealed interface PropertyPredicate
         @Override
         public boolean isSatisfiedBy(List<String> stored) {
             if (operator == PredicateOperator.NOT_EQUALS) {
-                return stored.stream().noneMatch(held -> value.compareWith(held) == 0);
+                return !stored.isEmpty() && stored.stream().allMatch(this::holds);
             }
             return stored.stream().anyMatch(this::holds);
         }
 
         private boolean holds(String held) {
-            final int order = value.compareWith(held);
+            try {
+                return ordered(value.compareWith(held));
+            } catch (final NumberFormatException noNumericOrder) {
+                return false;
+            }
+        }
+
+        private boolean ordered(int order) {
             // The order is the stored value's against the asked-about one, so "less than" is the
             // stored value sorting first. Reading it the other way round makes every one of these
             // four answer the opposite question, which no single example would reveal.
             return switch (operator) {
                 case EQUALS -> order == 0;
+                case NOT_EQUALS -> order != 0;
                 case LESS_THAN -> order < 0;
                 case LESS_THAN_OR_EQUAL -> order <= 0;
                 case GREATER_THAN -> order > 0;
@@ -164,7 +202,15 @@ public sealed interface PropertyPredicate
         }
 
         private static boolean matched(PropertyScalar value, List<String> stored) {
-            return stored.stream().anyMatch(held -> value.compareWith(held) == 0);
+            return stored.stream().anyMatch(held -> equal(value, held));
+        }
+
+        private static boolean equal(PropertyScalar value, String held) {
+            try {
+                return value.compareWith(held) == 0;
+            } catch (final NumberFormatException noNumericOrder) {
+                return false;
+            }
         }
     }
 
@@ -287,7 +333,7 @@ public sealed interface PropertyPredicate
         }
         if (!(mapping.member(PROPERTY_PATH).orElse(new DocumentValue.Nothing())
                 instanceof final DocumentValue.Text path)
-                || path.value().isEmpty() || path.value().charAt(0) == '/') {
+                || !PredicatePropertyPath.relative(path.value(), contract)) {
             return new Refused(Refusal.PROPERTY_PATH_REJECTED, PROPERTY_PATH + " names a property"
                     + " relative to the node being examined, so it does not begin at the root");
         }
@@ -306,7 +352,7 @@ public sealed interface PropertyPredicate
             case ONE_VALUE, ONE_ORDERED_VALUE -> carriesValues || !carriesValue
                     ? new Refused(Refusal.FIELDS_DO_NOT_MATCH_OPERATOR, operator.spelling()
                             + " compares against exactly one value")
-                    : compared(operator, path, mapping.member(VALUE).orElseThrow());
+                    : compared(operator, path, mapping.member(VALUE).orElseThrow(), contract);
             case SEVERAL_VALUES -> carriesValue || !carriesValues
                     ? new Refused(Refusal.FIELDS_DO_NOT_MATCH_OPERATOR, operator.spelling()
                             + " looks for several values")
@@ -314,7 +360,13 @@ public sealed interface PropertyPredicate
         };
     }
 
-    private static Outcome compared(PredicateOperator operator, String path, DocumentValue written) {
+    private static Outcome compared(PredicateOperator operator, String path, DocumentValue written,
+                                    AgentContract contract) {
+        if (operator.comparand() == PredicateOperator.Comparand.ONE_VALUE
+                && written instanceof final DocumentValue.Mapping mapping
+                && mapping.member(PropertyValue.CARDINALITY).isPresent()) {
+            return property(operator, path, written, contract);
+        }
         final PropertyScalar.Outcome read = PropertyScalar.of(written);
         if (read instanceof final PropertyScalar.Refused refused) {
             return new Refused(Refusal.VALUE_REJECTED, refused.detail());
@@ -328,6 +380,22 @@ public sealed interface PropertyPredicate
                     + " arbitrarily.");
         }
         return new Held(List.of(new Comparison(operator, path, value)));
+    }
+
+    private static Outcome property(PredicateOperator operator, String path, DocumentValue written,
+                                    AgentContract contract) {
+        if (!PredicatePropertyValue.usable(written, contract)) {
+            return new Refused(Refusal.VALUE_REJECTED, "a predicate holds one closed, typed property value");
+        }
+        final PropertyValue.Outcome read = PropertyValue.of(written, contract);
+        if (read instanceof final PropertyValue.Refused refused) {
+            return new Refused(Refusal.VALUE_REJECTED, refused.detail());
+        }
+        final PropertyValue value = ((PropertyValue.Held) read).value();
+        if (value.values().stream().map(PropertyScalar::kind).distinct().count() > 1) {
+            return new Refused(Refusal.VALUES_NOT_HOMOGENEOUS, "a property holds values of one kind");
+        }
+        return new Held(List.of(new Equality(operator, path, value)));
     }
 
     private static Outcome membership(PredicateOperator operator, String path,
@@ -357,8 +425,7 @@ public sealed interface PropertyPredicate
 
     private static Outcome uniform(PredicateOperator operator, String path,
                                    List<PropertyScalar> values) {
-        final Set<PropertyScalar> distinct = new LinkedHashSet<>(values);
-        if (distinct.size() != values.size()) {
+        if (values.stream().map(TypedScalarComparison::equalityKey).distinct().count() != values.size()) {
             return new Refused(Refusal.VALUES_NOT_UNIQUE, operator.spelling() + " names one value"
                     + " twice, which asks the same question twice and answers it once");
         }

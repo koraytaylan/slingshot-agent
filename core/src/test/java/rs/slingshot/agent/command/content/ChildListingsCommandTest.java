@@ -231,10 +231,10 @@ final class ChildListingsCommandTest {
 
     @Test
     @DisplayName("a continuation token this command cannot read is refused before any child is listed")
-    void agarbageContinuationIsRefused() {
+    void agarbageContinuationIsRefusedAsMalformed() {
         node(ANCHOR, FOLDER_TYPE);
         refused(new ListChildPagesHandler(CONTRACT), pages(ANCHOR, continuation("not-a-token")),
-                "continuation_token_integrity_invalid", context());
+                "continuation_token_malformed", context());
     }
 
     @Test

@@ -67,6 +67,24 @@
 
   <build>
     <plugins>
+      <!-- Policies inspect packaged bytes, including this module and interop. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-test</id>
+            <phase>none</phase>
+          </execution>
+          <execution>
+            <id>repository-policy</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>test</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <!--
         This module holds the checks rather than the product. A floor on its coverage would be a
         floor on how thoroughly the gate tests itself, which the gate already answers by refusing a

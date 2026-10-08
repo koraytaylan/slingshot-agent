@@ -23,6 +23,8 @@ import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
@@ -35,8 +37,10 @@ import rs.slingshot.agent.json.DocumentValue;
 @ExtendWith(SlingContextExtension.class)
 final class LoadContentCommandTest {
 
-    /** How deep this suite lets a walk go, which is deeper than anything it builds. */
-    private static final long DEPTH_BOUND = 32;
+    private static final AgentContract CONTRACT =
+            assertInstanceOf(AgentContract.Loaded.class, AgentContract.load()).contract();
+
+    private static final long DEPTH_BOUND = CONTRACT.value(ContractLimit.MAXIMUM_LOAD_DEPTH);
 
     /** How many nodes this suite lets a walk examine, which is more than anything it builds. */
     private static final long NODE_BOUND = 1000;
@@ -294,17 +298,14 @@ final class LoadContentCommandTest {
     }
 
     @Test
-    @DisplayName("the address is required; an omitted depth is the addressed node by itself")
+    @DisplayName("the address is required; omitted depth uses the shared contract default")
     void theaddressIsRequiredAndTheDepthIsNot() {
         assertEquals(LoadContentCommand.Refusal.MEMBER_ABSENT,
                 refusalOf(argument(null, 1L)).refusal(),
                 "an argument with no address was given one");
-        // The client's own schema makes the depth optional. An omitted one reaches the addressed
-        // node and nothing else: any deeper default would walk content the caller did not ask for,
-        // which is the one direction a default must not err in.
-        assertEquals(LoadContentCommand.THE_NODE_ALONE,
+        assertEquals(CONTRACT.value(ContractLimit.DEFAULT_LOAD_DEPTH),
                 assertInstanceOf(LoadContentCommand.Held.class,
-                        LoadContentCommand.of(argument("/content", null), DEPTH_BOUND),
+                        LoadContentCommand.of(argument("/content", null), CONTRACT),
                         "a caller who named an address and no depth was refused")
                         .command().depth());
         assertEquals(LoadContentCommand.Refusal.NOT_AN_ABSOLUTE_PATH,
@@ -312,8 +313,11 @@ final class LoadContentCommandTest {
         assertEquals(LoadContentCommand.Refusal.DEPTH_ABOVE_MAXIMUM,
                 refusalOf(argument("/content", DEPTH_BOUND + 1)).refusal());
         assertInstanceOf(LoadContentCommand.Held.class,
-                LoadContentCommand.of(argument("/content", 0L), DEPTH_BOUND),
+                LoadContentCommand.of(argument("/content", 0L), CONTRACT),
                 "a depth of zero was refused, and zero is the addressed node by itself");
+        assertInstanceOf(LoadContentCommand.Held.class,
+                LoadContentCommand.of(argument("/content", DEPTH_BOUND), CONTRACT),
+                "the declared maximum is inclusive");
     }
 
     @Test
@@ -340,7 +344,7 @@ final class LoadContentCommandTest {
 
     private static LoadContentCommand.Refused refusalOf(DocumentValue arguments) {
         return assertInstanceOf(LoadContentCommand.Refused.class,
-                LoadContentCommand.of(arguments, DEPTH_BOUND), "the argument was accepted");
+                LoadContentCommand.of(arguments, CONTRACT), "the argument was accepted");
     }
 
     private static DocumentValue argument(String path, Long depth) {

@@ -16,15 +16,13 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import rs.slingshot.agent.command.Budget;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.CommandRegistry;
-import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.ReadOnlyResolver;
 import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
@@ -33,12 +31,7 @@ import rs.slingshot.agent.identity.AgentOperationIdentifier;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * Full-text search, where the budget is the whole safety story.
- *
- * <p>The assertion that matters most is that the budget <em>refuses</em>. A shortened list of
- * matches is the one answer worse than no answer: the caller asked which pages contain a phrase and
- * received a list of pages that contain it, so every page the search never reached looks like a page
- * that does not match. Nothing in a trimmed answer says otherwise, which is why this refuses.</p>
+ * Exact phrase search reports bounded partial progress and never claims unvisited pages are absent.
  */
 @ExtendWith(SlingContextExtension.class)
 final class FindPagesContainingPhraseCommandTest {
@@ -46,7 +39,7 @@ final class FindPagesContainingPhraseCommandTest {
     @Test
     void handlerRefusesMalformedArgumentsBeforePlatformAccess() {
         assertInstanceOf(CommandHandler.Failed.class,
-                new FindPagesContainingPhraseHandler(CONTRACT).run(
+                new FindPagesContainingPhraseHandler(CONTRACT, discovery).run(
                         new DocumentValue.Mapping(new LinkedHashMap<>()), readOnly(), budgeted(10)),
                 "malformed arguments reached the platform handler");
     }
@@ -70,23 +63,31 @@ final class FindPagesContainingPhraseCommandTest {
     /** The phrase this suite searches for, which appears only in the covered property. */
     private static final String PHRASE = "quarterly-report";
 
-    private final SlingContext sling = new SlingContext(ResourceResolverType.RESOURCERESOLVER_MOCK);
+    private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_MOCK);
+    private final DiscoveryRegistry discovery = new DiscoveryRegistry(CONTRACT);
+
+    @AfterEach
+    void releaseDiscovery() {
+        discovery.close();
+    }
 
     @Test
-    @DisplayName("a search reads each page and its content node, and is refused past its budget")
-    void asearchReadsOnlyPagesAndIsRefusedPastItsBudget() {
+    @DisplayName("a bounded search reports explicit partial progress rather than false completeness")
+    void aSearchReportsExplicitPartialProgressAtItsBudget() {
         corpus(PAGES);
         assertInstanceOf(CommandHandler.Produced.class,
-                new FindPagesContainingPhraseHandler(CONTRACT).run(
+                new FindPagesContainingPhraseHandler(CONTRACT, discovery).run(
                         argument("/content/site", PHRASE, 100), readOnly(),
                         budgeted(PAGES * 2 + 1)),
                 "a budget covering every page and its content node was not enough");
-        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
-                new FindPagesContainingPhraseHandler(CONTRACT)
+        final DocumentValue.Mapping partial = assertInstanceOf(CommandHandler.Produced.class,
+                new FindPagesContainingPhraseHandler(CONTRACT, discovery)
                         .run(argument("/content/site", PHRASE, 100), readOnly(), budgeted(2)),
-                "a search past its budget was answered with part of the tree");
-        assertEquals(FindPagesContainingPhraseHandler.DISCOVERY_BUDGET_EXCEEDED,
-                failed.category());
+                "a bounded search must retain its next traversal step").result();
+        assertEquals(DocumentValue.Truth.FALSE,
+                ((DocumentValue.Flag) partial.member("complete").orElseThrow()).value());
+        assertTrue(((DocumentValue.Whole) partial.member("examined_nodes").orElseThrow()).value() <= 2);
+        assertInstanceOf(DocumentValue.Text.class, partial.member("next_continuation_token").orElseThrow());
     }
 
     /** How many pages the corpus holds. */
@@ -97,7 +98,7 @@ final class FindPagesContainingPhraseCommandTest {
     void anuncoveredPropertyIsNotSearched() {
         corpus(PAGES);
         final DocumentValue.Mapping result = assertInstanceOf(CommandHandler.Produced.class,
-                new FindPagesContainingPhraseHandler(CONTRACT)
+                new FindPagesContainingPhraseHandler(CONTRACT, discovery)
                         .run(argument("/content/site", "body-text-no-index", 100), readOnly(),
                                 budgeted(PAGES * 4)),
                 "the search was refused").result();
@@ -112,7 +113,7 @@ final class FindPagesContainingPhraseCommandTest {
     void amatchCarriesNoExcerpt() {
         corpus(PAGES);
         final DocumentValue.Mapping result = assertInstanceOf(CommandHandler.Produced.class,
-                new FindPagesContainingPhraseHandler(CONTRACT)
+                new FindPagesContainingPhraseHandler(CONTRACT, discovery)
                         .run(argument("/content/site", PHRASE, 100), readOnly(),
                                 budgeted(PAGES * 4)),
                 "the search was refused").result();
@@ -129,7 +130,9 @@ final class FindPagesContainingPhraseCommandTest {
                         .filter(member -> !List.of(
                                 PageListingResult.MATCHES, PageListingResult.REPOSITORY_PATH,
                                 PageListingResult.TITLE,
-                                PageListingResult.NEXT_CONTINUATION_TOKEN).contains(member))
+                                PageListingResult.NEXT_CONTINUATION_TOKEN,
+                                IncrementalDiscoveryResult.COMPLETE,
+                                IncrementalDiscoveryResult.EXAMINED_NODES).contains(member))
                         .toList(),
                 "the result carries a member this command does not declare");
     }
@@ -180,19 +183,18 @@ final class FindPagesContainingPhraseCommandTest {
         assertEquals(RegistryRow.OperationKey.REFUSED, row.operationKey());
         assertEquals(1048576, row.resultBytes());
         assertEquals(row.failureCategories().stream().sorted().toList(),
-                new FindPagesContainingPhraseHandler(CONTRACT).categories().stream().sorted()
+                new FindPagesContainingPhraseHandler(CONTRACT, discovery).categories().stream().sorted()
                         .toList(),
                 "the handler and its row disagree about what this command can fail with");
     }
 
     @Test
-    @DisplayName("the query this command issues is one the coverage policy declares")
-    void thequeryIsDeclared() {
-        assertTrue(read(REPOSITORY.resolve("policy/query-index-coverage.toml"))
+    @DisplayName("direct phrase traversal declares no unused repository query")
+    void directTraversalDeclaresNoRepositoryQuery() {
+        assertTrue(!read(REPOSITORY.resolve("policy/query-index-coverage.toml"))
                         .contains("issued_by = \"" + FindPagesContainingPhraseCommand.WIRE_NAME
                                 + "\""),
-                "this command issues a query nobody declared, so nothing checks it against the"
-                        + " indexes a deployment provides");
+                "the registry claims an index-backed query that this direct traversal never issues");
     }
 
     private static List<String> everyMember(DocumentValue value) {
@@ -252,15 +254,11 @@ final class FindPagesContainingPhraseCommandTest {
     }
 
     private ResourceResolver readOnly() {
-        return ReadOnlyResolver.around(sling.resourceResolver());
+        return PageSearchTestSupport.readOnly(sling.resourceResolver());
     }
 
     private static CallerContext budgeted(long nodes) {
-        return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, nodes),
-                Budget.time(CONTRACT),
-                new Budget(Budget.Kind.RESULT,
-                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
-                ProgressSink.under(CONTRACT));
+        return PageSearchTestSupport.context(CONTRACT, operation(), nodes);
     }
 
     private static AgentOperationIdentifier operation() {

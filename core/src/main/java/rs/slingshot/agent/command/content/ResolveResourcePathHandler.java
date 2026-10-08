@@ -88,7 +88,7 @@ public final class ResolveResourcePathHandler implements CommandHandler {
                     new ResolveResourcePathResult.Resolution(command.requestAddress(),
                             ResolveResourcePathResult.ABSENT, ResolveResourcePathResult.ABSENT,
                             List.of(), ResolveResourcePathResult.ABSENT,
-                            ResolveResourcePathResult.ABSENT, List.of())));
+                            ResolveResourcePathResult.ABSENT, List.of()), command.trace()));
         }
         final String path = held.getPath();
         if (path.isBlank()) {
@@ -106,7 +106,7 @@ public final class ResolveResourcePathHandler implements CommandHandler {
         return new Produced(ResolveResourcePathResult.documentOf(
                 new ResolveResourcePathResult.Resolution(command.requestAddress(), path,
                         typeOf(held), parts.selectors(), parts.extension(), parts.suffix(),
-                        trace)));
+                        trace), command.trace()));
     }
 
     /**

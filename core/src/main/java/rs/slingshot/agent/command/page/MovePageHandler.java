@@ -133,12 +133,20 @@ public final class MovePageHandler implements CommandHandler {
                     + " links pointing at each address is a state nobody can reason about.");
         }
         try {
+            if (!RepositoryReach.adjustmentsWithin(pointing, command.sourcePath(), bound)) {
+                return new MutationOutcome.Refused(ADJUSTMENT_BUDGET_EXCEEDED,
+                        "matching reference values exceed the " + bound
+                                + " one move may adjust, so the move was refused before any change");
+            }
+            RepositoryReach.requireAdjustable(pointing, command.sourcePath(), command.destinationPath());
             RepositoryReach.moveTo(session, command.sourcePath(), command.destinationPath());
             final long moved = RepositoryReach.repointed(pointing, command.sourcePath(),
-                    command.destinationPath());
+                    command.destinationPath(), bound);
             session.commit();
             return new MutationOutcome.Changed(MovePageResult.documentOf(command.sourcePath(),
                     command.destinationPath(), moved));
+        } catch (final RepositoryReach.ReferenceAdjustmentBudgetExceeded exceeded) {
+            return new MutationOutcome.Refused(ADJUSTMENT_BUDGET_EXCEEDED, exceeded.getMessage());
         } catch (final PersistenceException refused) {
             return new MutationOutcome.Refused(COMMIT_FAILED,
                     "the repository refused this move: " + refused.getMessage());

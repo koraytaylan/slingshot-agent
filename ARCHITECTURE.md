@@ -38,11 +38,11 @@ edges between modules.
 
 ## The contract
 
-`support/agent-contract.toml` carries the sibling's seventy-one transport bounds reproduced
-byte-equivalently beside this side's own twenty-five event-store, request, and lease bounds, with
+`support/agent-contract.toml` carries the sibling's transport and command bounds reproduced
+byte-equivalently beside this side's event-store, request, lease and cursor bounds, with
 its digest in `support/agent-contract.sha256` and the sibling's transport-contract digest in
 `support/transport-contract.sha256`. The file is embedded in `core` at build time and authenticated
-against its digest before a bound is parsed, and every bound is reached through one of ninety-six
+against its digest before a bound is parsed, and every bound is reached through
 named constants rather than by string key. Nothing may declare a bound a second time.
 
 ## The route table
@@ -53,9 +53,9 @@ media type, whether a body is permitted, and the plan that owns it. A route outs
 refusals.
 
 The namespace is a decision rather than an inheritance: Adobe reserves `/libs`, and a third-party
-servlet path in that namespace is a collision waiting for an upgrade to happen. One route is served
-today, `/bin/slingshot/agent/capabilities`, and the interoperability-coverage gate refuses the day a
-second one is served with nothing proving it on a running instance.
+servlet path in that namespace is a collision waiting for an upgrade to happen. The route table
+includes capabilities, submission, operation lookup, artifact transfer and event streaming.
+The interoperability-coverage gate requires running-instance scenarios for served features.
 
 ## The access model
 
@@ -66,18 +66,18 @@ not do themselves.
   write `/var/slingshot-agent` and nothing else. `policy/repository-access.toml` declares every
   grant with a reason, and a scenario compares the declared grants with the ones a running
   repository created out of the committed configuration, in both directions.
-- Everything a caller asked for runs as the caller. A command executes inside the request that
-  submitted it, so the caller's session is the request's own and there is nothing to obtain, borrow,
-  or grant.
+- Everything a caller asked for runs as the caller. Commands use the request's resolver.
+  Incremental discovery retains iterators using a separately owned clone with unchanged
+  authentication; it rechecks every returned row through the current request's resolver.
+  The runtime owns bounded cursor admission, periodic expiry and shutdown cleanup.
 
-`AgentSession` is the only place a session is obtained, and it offers exactly those two paths. There
-is no third: no impersonation, no stored credential, no token. An agent that executed later would
-have needed a standing privilege over other people's identities; not needing it is worth more than
-any amount of care in bounding it.
+`AgentSession` supplies bookkeeping and request access. `DiscoveryCursor` owns only its caller
+resolver clone and closes it on terminal traversal, refusal or expiry. It cannot change the caller
+identity. A continuation carries authenticated traversal scope and position, never credentials.
 
 ## The gate
 
-`scripts/quality` runs nineteen declared stages, in one order, with no argument and no way to run
+`scripts/quality` runs every declared stage, in one order, with no argument and no way to run
 less of it. `policy/quality-gate.toml` declares the same stages and the same tiers, and the two are
 compared in both directions, so a stage that exists in one and not the other fails the build.
 

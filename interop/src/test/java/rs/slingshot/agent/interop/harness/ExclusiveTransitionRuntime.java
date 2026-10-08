@@ -293,10 +293,7 @@ final class ExclusiveTransitionRuntime {
             manifest.getMainAttributes().putValue("Bundle-Activator",
                     "rs.slingshot.agent.proof.ExclusiveTransitionProbe");
             manifest.getMainAttributes().putValue("Import-Package",
-                    "org.osgi.framework.wiring,javax.jcr.version,"
-                    + "javax.jcr.lock,javax.jcr.security,javax.jcr.retention,org.xml.sax,"
-                    + source.getManifest().getMainAttributes()
-                    .getValue("Import-Package"));
+                    importsFor(source.getManifest().getMainAttributes().getValue("Import-Package")));
             try (JarOutputStream output = new JarOutputStream(Files.newOutputStream(target), manifest)) {
                 final var entries = source.entries();
                 while (entries.hasMoreElements()) {
@@ -314,6 +311,16 @@ final class ExclusiveTransitionRuntime {
             }
         }
         return target;
+    }
+
+    /** Retains product import ranges and adds only interfaces absent from the product header. */
+    static String importsFor(String productImports) {
+        return java.util.stream.Stream.concat(List.of("org.osgi.framework.wiring", "javax.jcr.version",
+                        "javax.jcr.lock", "javax.jcr.security", "javax.jcr.retention", "org.xml.sax")
+                .stream().filter(name -> !java.util.regex.Pattern.compile("(^|,)"
+                        + java.util.regex.Pattern.quote(name) + "(;|,|$)")
+                        .matcher(productImports).find()), java.util.stream.Stream.of(productImports))
+                .collect(java.util.stream.Collectors.joining(","));
     }
 
     private static void addProofFiles(Path root, JarOutputStream output) throws IOException {

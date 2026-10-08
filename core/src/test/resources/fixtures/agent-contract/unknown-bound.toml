@@ -111,6 +111,9 @@ worker_execution_lease_renewal_milliseconds = 10000
 # bound that never applies, and loading refuses one.
 
 [agent]
+maximum_discovery_cursors = 64
+maximum_discovery_cursor_depth = 256
+discovery_cursor_collection_interval_milliseconds = 1000
 clock_skew_allowance_milliseconds = 5000
 health_check_interval_milliseconds = 60000
 maintenance_sweep_work_bound_rows = 1024

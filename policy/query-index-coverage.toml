@@ -4,9 +4,10 @@
 # Every query this product issues, and the index each deployment row already provides for it.
 #
 # Adobe Experience Manager answers a query either from an index or by walking the repository, and
-# walking it is how a single command takes an author instance down. So no command here may traverse:
-# every query is declared as data, checked against the indexes below at build time, and checked
-# again against the plan the instance in front of it actually returns before a node is examined.
+# an unbounded walk can exhaust the instance. Every repository query is declared as data and
+# checked against the indexes below. Direct discovery uses bounded live cursors with explicit
+# progress instead; query_paths version two does not issue a repository query. Those traversal
+# limits are tested independently and are not proved by this index inventory.
 #
 # The two checks are different claims and both are needed. This file is what a deployment row was
 # declared to provide; the plan is what the instance really has. A customer can remove an index, and
@@ -40,7 +41,7 @@ reason = "The same index on the other supported row."
 name = "cqPageLucene"
 deployment = "aem-cloud-service"
 covers = ["jcr:primaryType", "jcr:content/cq:template", "jcr:content/jcr:title", "jcr:content/jcr:description"]
-reason = "Adobe's own page index, provided by the product. Finding pages by template or by phrase is answered from it where it indexes those properties. An environment's copy is its operator's to change, and some do not index the template, so the template search reads the index's own definition before it names the index in its option clause, and walks within its budgets where the index cannot answer."
+reason = "Adobe's own page index, provided by the product. Finding pages by template is answered from it where it indexes that property. An environment's copy is its operator's to change, and some do not index the template, so the template search reads the index's own definition before it names the index in its option clause, and walks within its budgets where the index cannot answer."
 
 [[index]]
 name = "cqPageLucene"
@@ -52,7 +53,7 @@ reason = "The same index on the other supported row."
 name = "slingResourceType"
 deployment = "aem-cloud-service"
 covers = ["sling:resourceType"]
-reason = "Adobe's own property index on the resource type, shipped with the product. Finding the pages that use a component is answered from it; without it the same question is a walk of every node under the root, which is why the query that asks it is checked against this row rather than trusted."
+reason = "Adobe's own property index on the resource type, shipped with the product. Declared resource-type queries are checked against this row. The resumable page-component search walks scoped content directly and does not issue this query."
 
 [[index]]
 name = "slingResourceType"
@@ -80,32 +81,11 @@ reason = "The same index on the other supported row."
 # string a handler builds is a query nobody can check against the indexes a deployment provides.
 
 [[query]]
-name = "query-paths-by-type"
-roots = ["/content"]
-properties = ["jcr:primaryType"]
-issued_by = "query_paths"
-reason = "One subtree, one primary type, addresses only. The query filters on jcr:primaryType and on nothing else, which is what makes it answerable from Oak's own node-type index on every supported deployment rather than by walking the repository — and walking it is how one command takes an author instance down. The property predicates a caller may also send are not part of this query: they are applied to the rows it returns, bounded by the caller's examination budget, which is what lets a caller ask about a property nobody indexed without that question becoming a repository walk."
-
-[[query]]
-name = "find-pages-containing-phrase"
-roots = ["/content"]
-properties = ["jcr:primaryType", "jcr:content/jcr:title", "jcr:content/jcr:description"]
-issued_by = "find_pages_containing_phrase"
-reason = "A phrase against a page's title and description, restricted to one subtree. Exactly the properties Adobe's own page index covers and no others: a search over every string a page carries cannot be answered from that index, and would walk somebody's repository instead. The phrase comes from a caller who cannot know what it matches, so this is the query that most needs an index behind it — which means it is the query that must not ask for more than one can answer."
-
-[[query]]
 name = "find-pages-by-template"
 roots = ["/content"]
 properties = ["jcr:primaryType", "jcr:content/cq:template"]
 issued_by = "find_pages_by_template"
 reason = "Which pages use one template, under one subtree. The template property is one Adobe's own page index covers on every supported deployment, which is why this question has an answer that does not walk the repository — and the person asking it is about to change every page in the answer, so producing that list must not itself be the thing that takes the instance down."
-
-[[query]]
-name = "find-pages-using-components"
-roots = ["/content"]
-properties = ["sling:resourceType"]
-issued_by = "find_pages_using_components"
-reason = "Which nodes carry one of these component resource types, under one subtree. It filters on the resource type and on nothing else, because that is what one index can answer: a query naming two properties no single index covers is answered by walking, whatever the union of the indexes happens to contain. What makes a match into a page happens after the query, by folding each match up to its nearest page-typed ancestor. A search with no type at all would be a walk of everything under the root, which is why an empty list is refused at construction."
 
 [[query]]
 name = "list-component-definitions"

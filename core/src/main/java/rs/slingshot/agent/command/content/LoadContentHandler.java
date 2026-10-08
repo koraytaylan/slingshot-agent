@@ -49,7 +49,7 @@ public final class LoadContentHandler implements CommandHandler {
     public Answer run(DocumentValue.Mapping arguments, ResourceResolver resolver,
                       CallerContext context) {
         final LoadContentCommand.Outcome asked =
-                LoadContentCommand.of(arguments, context.discovery().limit());
+                LoadContentCommand.of(arguments, contract());
         if (asked instanceof final LoadContentCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
@@ -118,13 +118,17 @@ public final class LoadContentHandler implements CommandHandler {
      * @return the bound
      */
     private static long inlineBound() {
+        return contract().value(
+                rs.slingshot.agent.contract.ContractLimit.MAXIMUM_AGENT_INLINE_LOADED_DOCUMENT_BYTES);
+    }
+
+    private static rs.slingshot.agent.contract.AgentContract contract() {
         final rs.slingshot.agent.contract.AgentContract.Outcome loaded =
                 rs.slingshot.agent.contract.AgentContract.load();
         if (!(loaded instanceof final rs.slingshot.agent.contract.AgentContract.Loaded held)) {
             throw new IllegalStateException("no contract: this build cannot read its own bound");
         }
-        return held.contract().value(
-                rs.slingshot.agent.contract.ContractLimit.MAXIMUM_AGENT_INLINE_LOADED_DOCUMENT_BYTES);
+        return held.contract();
     }
 
     /**

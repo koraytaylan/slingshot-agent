@@ -82,6 +82,11 @@ public final class FindAssetsReferencedByPageHandler implements CommandHandler {
 
     private Answer walked(FindAssetsReferencedByPageCommand command, DocumentValue.Mapping arguments,
                           ResourceResolver resolver, CallerContext context) {
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                FindAssetsReferencedByPageCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final Resource page = resolver.getResource(command.pagePath());
         if (page == null) {
             return new Failed(PAGE_NOT_FOUND, command.pagePath() + " is not there");
@@ -94,8 +99,8 @@ public final class FindAssetsReferencedByPageHandler implements CommandHandler {
         final Walk walk = new Walk(command.pagePath());
         walk.under(page);
         final PagingSupport.Outcome<FindAssetsReferencedByPageResult.ReferencedAsset> pagingPage =
-                PagingSupport.page(walk.found(), command.window(),
-                        FindAssetsReferencedByPageCommand.WIRE_NAME, arguments, context, contract);
+                PagingSupport.page(walk.found(), (PagingSupport.Ready) prepared,
+                        FindAssetsReferencedByPageCommand.WIRE_NAME, context, contract);
         if (pagingPage instanceof final PagingSupport.Refused<
                 FindAssetsReferencedByPageResult.ReferencedAsset> refused) {
             return new Failed(refused.category(), refused.detail());

@@ -57,11 +57,27 @@ public final class SweepCursor {
      */
     public static final long BUCKETS = 1L << (LEVEL_SHIFT * StatePath.BUCKET_DEPTH);
 
+    /** Which record family has first use of the next shared maintenance budget. */
+    enum FirstFamily {
+        /** Operation records use the budget first. */
+        OPERATIONS,
+        /** Subscription records use the budget first. */
+        SUBSCRIPTIONS
+    }
+
     private final long bucket;
 
     private final long advancedAtUnixMilliseconds;
 
     private final String cycleStartRecord;
+
+    private static final String SUBSCRIPTION_AFTER = "subscription_after";
+
+    private static final String SUBSCRIPTIONS_FIRST = "subscriptions_first";
+
+    private final String subscriptionAfter;
+
+    private final boolean subscriptionsFirst;
 
     private final long version;
 
@@ -70,10 +86,17 @@ public final class SweepCursor {
     }
 
     private SweepCursor(long bucket, long advancedAtUnixMilliseconds, String cycleStartRecord, long version) {
+        this(bucket, advancedAtUnixMilliseconds, cycleStartRecord, version, "", FirstFamily.SUBSCRIPTIONS);
+    }
+
+    private SweepCursor(long bucket, long advancedAtUnixMilliseconds, String cycleStartRecord, long version,
+                         String subscriptionAfter, FirstFamily firstFamily) {
         this.bucket = bucket;
         this.advancedAtUnixMilliseconds = advancedAtUnixMilliseconds;
         this.cycleStartRecord = cycleStartRecord;
         this.version = version;
+        this.subscriptionAfter = subscriptionAfter;
+        this.subscriptionsFirst = firstFamily == FirstFamily.SUBSCRIPTIONS;
     }
 
     /**
@@ -92,7 +115,10 @@ public final class SweepCursor {
         return new SweepCursor(CompareAndSet.held(held, POSITION),
                 CompareAndSet.held(held, ADVANCED_AT),
                 held.hasProperty(CYCLE_START_RECORD) ? held.getProperty(CYCLE_START_RECORD).getString() : "",
-                CompareAndSet.held(held, VERSION));
+                CompareAndSet.held(held, VERSION),
+                held.hasProperty(SUBSCRIPTION_AFTER) ? held.getProperty(SUBSCRIPTION_AFTER).getString() : "",
+                !held.hasProperty(SUBSCRIPTIONS_FIRST) || held.getProperty(SUBSCRIPTIONS_FIRST).getBoolean()
+                        ? FirstFamily.SUBSCRIPTIONS : FirstFamily.OPERATIONS);
     }
 
     /**
@@ -124,6 +150,26 @@ public final class SweepCursor {
     public static WriteOutcome advance(Session session, SweepCursor read, long bucket,
                                        String cycleStartRecord, long nowUnixMilliseconds)
             throws RepositoryException {
+        return advance(session, read, bucket, cycleStartRecord, read.subscriptionAfter(),
+                read.firstFamily(), nowUnixMilliseconds);
+    }
+
+    /**
+     * Persists both record families' progress and their next priority in one fenced advancement.
+     *
+     * @param session the cleanup session
+     * @param read the complete previously read cursor
+     * @param bucket the next operation bucket
+     * @param cycleStartRecord the within-bucket operation position
+     * @param subscriptionAfter the last subscription examined, or empty when its cycle completed
+     * @param firstFamily the record family with first use of the next shared work budget
+     * @param nowUnixMilliseconds when this advancement occurs
+     * @return whether the position moved, was stale, or remained contended
+     * @throws RepositoryException if persistence fails
+     */
+    static WriteOutcome advance(Session session, SweepCursor read, long bucket, String cycleStartRecord,
+                                  String subscriptionAfter, FirstFamily firstFamily,
+                                  long nowUnixMilliseconds) throws RepositoryException {
         final StatePath path = StatePath.deployment(NODE);
         if (ClaimByCreation.claim(session, path, "nt:unstructured", node -> { }) == WriteOutcome.CONTENDED) {
             return WriteOutcome.CONTENDED;
@@ -131,7 +177,7 @@ public final class SweepCursor {
         int attempt = 0;
         while (attempt < CompareAndSet.ATTEMPTS) {
             final WriteOutcome outcome = advanceAttempt(session, read, bucket, cycleStartRecord,
-                    nowUnixMilliseconds);
+                    subscriptionAfter, firstFamily, nowUnixMilliseconds);
             if (outcome != WriteOutcome.CONTENDED) {
                 return outcome;
             }
@@ -141,13 +187,17 @@ public final class SweepCursor {
     }
 
     private static WriteOutcome advanceAttempt(Session session, SweepCursor expected, long bucket,
-                                               String cycleStartRecord, long nowUnixMilliseconds)
+                                               String cycleStartRecord, String subscriptionAfter,
+                                               FirstFamily firstFamily, long nowUnixMilliseconds)
             throws RepositoryException {
         session.refresh(false);
         try {
             if (!stage(session, expected, bucket, cycleStartRecord, nowUnixMilliseconds)) {
                 return WriteOutcome.VALUE_CHANGED;
             }
+            final Node cursor = session.getNode(StatePath.deployment(NODE).path());
+            cursor.setProperty(SUBSCRIPTION_AFTER, subscriptionAfter);
+            cursor.setProperty(SUBSCRIPTIONS_FIRST, firstFamily == FirstFamily.SUBSCRIPTIONS);
             session.save();
             return WriteOutcome.WRITTEN;
         } catch (final InvalidItemStateException contended) {
@@ -189,6 +239,22 @@ public final class SweepCursor {
      */
     public String cycleStartRecord() {
         return cycleStartRecord;
+    }
+
+    /**
+     * The last subscription examined in this cycle, or empty at the beginning.
+     * @return the subscription position
+     */
+    String subscriptionAfter() {
+        return subscriptionAfter;
+    }
+
+    /**
+     * Which record family has first use of the next pass's shared work budget.
+     * @return the next pass priority
+     */
+    FirstFamily firstFamily() {
+        return subscriptionsFirst ? FirstFamily.SUBSCRIPTIONS : FirstFamily.OPERATIONS;
     }
 
     private static long wrapped(long bucket) {
@@ -259,12 +325,15 @@ public final class SweepCursor {
     public boolean equals(Object other) {
         return other instanceof final SweepCursor held && held.bucket == bucket
                 && held.advancedAtUnixMilliseconds == advancedAtUnixMilliseconds
-                && held.cycleStartRecord.equals(cycleStartRecord) && held.version == version;
+                && held.cycleStartRecord.equals(cycleStartRecord) && held.version == version
+                && held.subscriptionAfter.equals(subscriptionAfter) && held.subscriptionsFirst ==
+                        subscriptionsFirst;
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(bucket, advancedAtUnixMilliseconds, cycleStartRecord, version);
+        return java.util.Objects.hash(bucket, advancedAtUnixMilliseconds, cycleStartRecord, version,
+                subscriptionAfter, subscriptionsFirst);
     }
 
     @Override

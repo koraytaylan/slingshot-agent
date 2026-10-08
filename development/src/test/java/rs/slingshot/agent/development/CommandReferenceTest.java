@@ -36,9 +36,11 @@ final class CommandReferenceTest {
     void thereferenceIsTheRegistry() {
         assertEquals("", CommandReference.against(REPOSITORY).render());
         final String table = CommandReference.render(REGISTRY);
-        assertEquals(RegistryCompleteness.SIXTYFOUR_COMMANDS + 2,
+        assertEquals(RegistryCompleteness.rowsIn(REGISTRY).size() + 4,
                 table.split("\n").length,
-                "the rendered table is not sixty-eight rows and a two-line heading");
+                "the reference includes a derived count, a blank line and the table heading");
+        assertTrue(table.startsWith("Commands: " + RegistryCompleteness.rowsIn(REGISTRY).size()
+                + ".\n"));
     }
 
     @Test

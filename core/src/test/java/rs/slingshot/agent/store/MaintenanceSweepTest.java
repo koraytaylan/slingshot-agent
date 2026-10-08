@@ -634,6 +634,29 @@ final class MaintenanceSweepTest {
         assertTrue(SweepCursor.at(0, REQUEST_START).orElseThrow().toString().contains("0"));
     }
 
+    @Test
+    void aSharedOneRowBudgetMakesProgressForBothMaintenanceFamilies() throws RepositoryException {
+        final Session session = recorded();
+        assertInstanceOf(GenerationStore.Held.class, GenerationStore.establish(session));
+        SubscriptionLedger.prepare(session, caller());
+        final long now = REQUEST_START + CONTRACT.value(rs.slingshot.agent.contract.ContractLimit
+                .MAXIMUM_PERSISTED_REMAINING_RETENTION_MILLISECONDS) + 1;
+        final SubscriptionRecord live = assertInstanceOf(SubscriptionLedger.Subscribed.class,
+                SubscriptionLedger.subscribe(session, caller(), "synthetic-live-maintenance", generation(),
+                        now, CONTRACT)).record();
+        final AgentContract bounded = contractWith("maintenance_sweep_work_bound_rows", 1L);
+        for (final int pass : List.of(1, 2, 3, 4, 5, 6)) {
+            assertEquals(1, MaintenanceSweep.run(session, generation(), now, bounded).examined(),
+                    "pass " + pass + " exceeded or failed to use its shared one-row budget");
+        }
+        assertTrue(session.nodeExists(SubscriptionRecord.pathOf(live.identifier()).path()));
+        for (final String operation : OPERATIONS) {
+            assertFalse(session.nodeExists(operation(operation).path()),
+                    "a live subscription starved operation cleanup");
+        }
+        assertEquals(1, CapacityLedger.held(session, AccountedQuantity.ACTIVE_SUBSCRIPTION_ROWS, CONTRACT));
+    }
+
     private void declare(Session session, String operation) throws RepositoryException {
         final Node record = session.getNode(operation(operation).path());
         final Node intake = record.hasNode(MaintenanceSweep.INTAKE)

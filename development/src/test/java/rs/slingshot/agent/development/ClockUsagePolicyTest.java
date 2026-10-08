@@ -45,6 +45,13 @@ final class ClockUsagePolicyTest {
     }
 
     @Test
+    @DisplayName("wall-clock subtraction is refused without duration naming and across lines")
+    void subtractionDoesNotDependOnNames() {
+        assertRule("subtraction-without-duration-name.java",
+                ClockUsagePolicy.DURATION_ON_A_WALL_CLOCK, "currentTimeMillis");
+    }
+
+    @Test
     @DisplayName("an instant taken from a monotonic source is refused, separately")
     void aninstantOnAMonotonicSourceIsRefused() {
         assertRule("instant-on-a-monotonic-source.java",

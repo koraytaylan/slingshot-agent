@@ -21,9 +21,10 @@ intrinsically idempotent: running it twice is not running it once, so the key is
 answer the first attempt's own result to every resend of it. A command that refuses one is a read
 nobody can repeat differently, and holding it to a single attempt would only be ceremony.
 
-**Result bytes** is the most one answer may carry inline. An answer past it is not truncated — it is
-published as an artifact carrying a count and a digest the caller verifies for themselves, because a
-shortened answer reads exactly like a complete one.
+**Result bytes** is the command's declared result budget. Commands with an artifact result contract
+can publish content with a byte count and a digest the caller verifies. Incremental discovery
+instead refuses an oversized page; request a smaller result limit. It never silently truncates a
+complete catalogue.
 
 **Fails with** is the closed set of categories a command may fail under. A caller can handle every
 one of them, and this side cannot answer any other: a category one half has never heard of is a
@@ -36,7 +37,87 @@ discloses; the commands that read configurations, jobs, and replication agents e
 different things for different reasons, and those reasons are in the code beside the decision rather
 than summarised here, where they would be believed without being read.
 
+## Incremental discovery
+
+The version 2 commands `query_paths`, `list_component_definitions`, `list_components`,
+`list_content_fragments`, `list_experience_fragments`, `find_pages_containing_phrase`,
+`find_pages_using_components` and `find_assets_by_metadata` return `matches`,
+`examined_nodes` and `complete`. A partial result always carries
+`next_continuation_token`; a complete result never does. Empty partial pages are
+valid, including while consuming an initial offset. Continue with the same command
+and unchanged query arguments until `complete` is true. The initial limit and offset govern the entire
+cursor. The root must exist exactly; an ancestor search is not substituted.
+
+`query_paths` uses version `2.0.2`. The four existing bounded discovery commands
+receive patch version `2.0.3`; other commands receive patch version `1.0.4` for
+the shared byte contract and limits identity changes. Their argument and result
+shapes remain unchanged. The two page searches use patch version `2.0.1`, with explicit
+progress and provider order in their result contracts. Asset search uses version
+`2.0.0` with the same bounded progress fields and provider order.
+
+Traversal retains depth-first provider iterators across pages and does not sort
+the catalogue. With stable content and permissions, each traversal iterator is consumed once.
+`query_paths`, phrase search and asset search include a matching root; catalogue commands exclude it.
+Concurrent changes are live observations: removed or newly unreadable subtrees are
+skipped, while inserted or moved content may be omitted or encountered again. Every
+returned row is re-read through the current request's resolver. A missing or
+unreadable original root ends the cursor.
+
+Phrase search compares the full phrase exactly, without case folding or Unicode
+normalization, against page title and description properties. It returns paths
+and optional titles, without excerpts or descriptions. Component search groups
+exact resource types by the nearest page: `any` requires one requested type and
+`all` requires every requested type across that page's scoped content. Nested
+pages own their components independently. An anchor inside a page can return
+its containing ancestor page. Component pages are emitted after their scoped
+content, preserving provider traversal order. Detached component witnesses and
+readable ancestry are checked through the current request resolver before emission
+and replay. These bounded proof and ancestry reads also count in `examined_nodes`;
+a proof too large for a whole page's node budget refuses the cursor. Page titles
+are checked against `maximum_page_title_bytes` in UTF-8 bytes. An oversized title
+refuses the cursor without truncating or omitting that title.
+
+Asset search reads original binary length without downloading binary content. Its
+media format uses one usable metadata `dc:format` string, then the original MIME
+type as fallback. Requested size excludes unknown lengths; omitted tag mode
+requires all requested tags. Returned tags are unique in UTF-8 byte order. A
+root-only search includes assets with absent optional metadata, and an asset
+prunes its rendition and metadata descendants from traversal.
+
+The runtime owns a bounded registry and clones the caller resolver with unchanged
+authentication. It closes that clone at completion, expiry, cancellation, refusal
+or shutdown. The most recent continuation has one bounded replay answer, revalidated
+against the current root and rows before delivery; changed rows expire that replay.
+Older tokens expire after another page advances. Replays retain the original work
+count. Tokens are bound to caller, query, target, generation and runtime, and their
+fixed lifetime is never renewed. A restart or runtime replacement requires a fresh
+enumeration. Completed continuation replay answers retain no resolver.
+
+`maximum_discovery_candidate_nodes`, `maximum_discovery_execution_duration_milliseconds` and
+the result limit bound each page; exhaustion returns partial progress. Iterator
+housekeeping also consumes the node-work budget, so `examined_nodes` may be smaller
+than the work limit. Cursor count, depth and idle collection interval are declared
+in `support/agent-contract.toml`. Cancellation, excessive depth or result bytes
+refuse the cursor. The time and cancellation checks run between provider calls;
+they cannot preempt a blocked repository provider.
+
+Legacy content and platform listings authenticate a continuation before reading
+repository content or inventories. Their signed state retains the initial page size and fixed
+expiry through every successor. Invalid shape, unavailable authority, tampering,
+wrong query or target, changed generation and expiry retain their declared
+refusal categories. The version-two token requires `initial_result_limit`;
+version-one tokens require a fresh initial request. This changes the opaque token
+format while preserving command argument/result shapes and numeric bounds.
+
+Workflow start preserves nonempty `title` and `comment` arguments as the platform
+metadata entries `workflowTitle` and `startComment`. Explicit descriptions take
+precedence over caller metadata with the same names; omitted descriptions preserve
+those entries. Other metadata remains unchanged, and the existing caller metadata
+entry allowance and separate title/comment bounds still apply.
+
 <!-- generated: command-table -->
+
+Commands: 72.
 
 | Command | Access | Operation key | Result bytes | Fails with |
 |---|---|---|---|---|

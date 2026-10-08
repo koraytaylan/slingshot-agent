@@ -92,6 +92,77 @@ final class WorkflowCommandTest {
     }
 
     @Test
+    @DisplayName("explicit workflow title and start comment reach the engine alongside caller metadata")
+    void workflowDescriptionsReachTheEngine() {
+        page();
+        final Engine engine = new Engine();
+        final SequencedMap<String, DocumentValue> metadata = new LinkedHashMap<>();
+        metadata.put("synthetic_marker", new DocumentValue.Text("synthetic marker"));
+        metadata.put("workflowTitle", new DocumentValue.Text("synthetic metadata title"));
+        metadata.put("startComment", new DocumentValue.Text("synthetic metadata comment"));
+        final SequencedMap<String, DocumentValue> arguments = new LinkedHashMap<>(
+                start(MODEL, PAGE).members());
+        arguments.put(StartWorkflowCommand.TITLE, new DocumentValue.Text("synthetic title"));
+        arguments.put(StartWorkflowCommand.COMMENT, new DocumentValue.Text("synthetic comment"));
+        arguments.put(StartWorkflowCommand.METADATA, new DocumentValue.Mapping(metadata));
+        assertInstanceOf(CommandHandler.Produced.class,
+                new WorkflowHandler(CONTRACT, WorkflowHandler.Kind.START, engine, permissive())
+                        .run(new DocumentValue.Mapping(arguments), sling.resourceResolver(),
+                                context()));
+        assertEquals(Map.of("workflowTitle", "synthetic title", "startComment", "synthetic comment",
+                "synthetic_marker", "synthetic marker"), engine.startedWith);
+        assertEquals(new DocumentValue.Text("synthetic metadata title"),
+                metadata.get("workflowTitle"), "description binding changed the caller metadata");
+    }
+
+    @Test
+    @DisplayName("omitted descriptions preserve metadata descriptions and add no empty entries")
+    void omittedDescriptionsPreserveCallerMetadata() {
+        page();
+        final Engine engine = new Engine();
+        final SequencedMap<String, DocumentValue> metadata = new LinkedHashMap<>();
+        metadata.put("workflowTitle", new DocumentValue.Text("synthetic metadata title"));
+        metadata.put("startComment", new DocumentValue.Text("synthetic metadata comment"));
+        final SequencedMap<String, DocumentValue> arguments = new LinkedHashMap<>(
+                start(MODEL, PAGE).members());
+        arguments.put(StartWorkflowCommand.METADATA, new DocumentValue.Mapping(metadata));
+        assertInstanceOf(CommandHandler.Produced.class,
+                new WorkflowHandler(CONTRACT, WorkflowHandler.Kind.START, engine, permissive())
+                        .run(new DocumentValue.Mapping(arguments), sling.resourceResolver(),
+                                context()));
+        assertEquals(Map.of("workflowTitle", "synthetic metadata title", "startComment",
+                "synthetic metadata comment"), engine.startedWith);
+        final Engine empty = new Engine();
+        assertInstanceOf(CommandHandler.Produced.class,
+                new WorkflowHandler(CONTRACT, WorkflowHandler.Kind.START, empty, permissive())
+                        .run(start(MODEL, PAGE), sling.resourceResolver(), context()));
+        assertEquals(Map.of(), empty.startedWith);
+    }
+
+    @Test
+    @DisplayName("a full caller metadata allowance still admits separately bounded descriptions")
+    void metadataAtItsLimitKeepsDescriptions() {
+        page();
+        final long allowance = CONTRACT.value(ContractLimit.MAXIMUM_WORKFLOW_METADATA_ENTRIES);
+        final SequencedMap<String, DocumentValue> metadata = new LinkedHashMap<>();
+        java.util.stream.LongStream.range(0, allowance).forEach(index -> metadata.put(
+                "synthetic_marker_" + index, new DocumentValue.Text("synthetic marker")));
+        final SequencedMap<String, DocumentValue> arguments = new LinkedHashMap<>(
+                start(MODEL, PAGE).members());
+        arguments.put(StartWorkflowCommand.TITLE, new DocumentValue.Text("synthetic title"));
+        arguments.put(StartWorkflowCommand.COMMENT, new DocumentValue.Text("synthetic comment"));
+        arguments.put(StartWorkflowCommand.METADATA, new DocumentValue.Mapping(metadata));
+        final Engine engine = new Engine();
+        assertInstanceOf(CommandHandler.Produced.class,
+                new WorkflowHandler(CONTRACT, WorkflowHandler.Kind.START, engine, permissive())
+                        .run(new DocumentValue.Mapping(arguments), sling.resourceResolver(),
+                                context()));
+        assertEquals(allowance + 2, engine.startedWith.size());
+        assertEquals("synthetic title", engine.startedWith.get("workflowTitle"));
+        assertEquals("synthetic comment", engine.startedWith.get("startComment"));
+    }
+
+    @Test
     @DisplayName("a payload that is not there is told apart from one the caller may not change")
     void thetwoPayloadRefusalsAreDistinct() {
         page();
@@ -404,6 +475,8 @@ final class WorkflowCommandTest {
 
         private final List<String> asked = new ArrayList<>();
 
+        private final SequencedMap<String, String> startedWith = new LinkedHashMap<>();
+
         List<String> calls() {
             return List.copyOf(asked);
         }
@@ -419,6 +492,7 @@ final class WorkflowCommandTest {
         public Outcome start(String modelIdentifier, String payloadPath,
                              SequencedMap<String, String> metadata, ResourceResolver session) {
             asked.add("start");
+            startedWith.putAll(metadata);
             return new Started(new Instance(INSTANCE, modelIdentifier, payloadPath,
                     WorkflowInstanceState.RUNNING, "2026-09-02T09:00:00Z"));
         }

@@ -134,6 +134,10 @@ worker_execution_lease_renewal_milliseconds = 10000
 
 [agent]
 clock_skew_allowance_milliseconds = 5000
+# Runtime-owned discovery cursors retain one bounded replay page and one iterator stack each.
+maximum_discovery_cursors = 64
+maximum_discovery_cursor_depth = 256
+discovery_cursor_collection_interval_milliseconds = 1000
 # How long a health check that does real work may hold its answer before doing it again. The
 # continuation-authority check issues a token and validates it, which is a write and a read against
 # the key ring; a dashboard and a monitor both polling is the ordinary case rather than the

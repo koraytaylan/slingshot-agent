@@ -84,6 +84,11 @@ public final class ListResourceMappingsHandler implements CommandHandler {
 
     private Answer listed(ListResourceMappingsCommand command, DocumentValue.Mapping arguments,
                           ResourceResolver resolver, CallerContext context) {
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                ListResourceMappingsCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final Resource inventory = resolver.getResource(MAPPING_ROOT);
         if (inventory == null) {
             return new Failed(INVENTORY_FAILED, "the mapping inventory at " + MAPPING_ROOT
@@ -97,8 +102,8 @@ public final class ListResourceMappingsHandler implements CommandHandler {
                     + context.discovery().limit() + " entries this caller may examine");
         }
         final PagingSupport.Outcome<ListResourceMappingsResult.MappingEntry> page =
-                PagingSupport.page(entries, command.window(), ListResourceMappingsCommand.WIRE_NAME,
-                        arguments, context, contract);
+                PagingSupport.page(entries, (PagingSupport.Ready) prepared,
+                        ListResourceMappingsCommand.WIRE_NAME, context, contract);
         if (page instanceof final PagingSupport.Refused<ListResourceMappingsResult.MappingEntry> refused) {
             return new Failed(refused.category(), refused.detail());
         }

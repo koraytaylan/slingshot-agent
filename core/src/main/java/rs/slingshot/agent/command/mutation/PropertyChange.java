@@ -113,7 +113,10 @@ public record PropertyChange(SequencedMap<String, PropertyValue> set,
      * list here would be this build's guess at what a particular repository protects, and
      * repositories differ — an automatically maintained property on one is an ordinary property on
      * another. What does not differ is that the repository itself knows, and it answers by still
-     * having the property afterwards.</p>
+     * having the property afterwards or explicitly rejecting its removal. A provider that refuses
+     * the map operation with an illegal argument or an unsupported operation is a removal refusal;
+     * an unexpected provider failure still escapes, so it cannot be mistaken for proof of no
+     * effect.</p>
      *
      * <p>The removals are staged and not committed, so a refusal from here leaves the repository as
      * it was: the session is discarded with the request.</p>
@@ -123,11 +126,17 @@ public record PropertyChange(SequencedMap<String, PropertyValue> set,
      */
     public Optional<String> immovableIn(java.util.Map<String, Object> values) {
         return removed.stream()
-                .filter(name -> {
-                    values.remove(name);
-                    return values.containsKey(name);
-                })
+                .filter(name -> kept(values, name))
                 .findFirst();
+    }
+
+    private static boolean kept(java.util.Map<String, Object> values, String name) {
+        try {
+            values.remove(name);
+        } catch (final IllegalArgumentException | UnsupportedOperationException refused) {
+            return true;
+        }
+        return values.containsKey(name);
     }
 
     /** The result of reading one: the change, or the one reason there is none. */

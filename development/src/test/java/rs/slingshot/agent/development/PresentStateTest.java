@@ -33,15 +33,6 @@ final class PresentStateTest {
     /** How many checks this agent publishes. */
     private static final int HEALTH_CHECKS = 6;
 
-    /**
-     * The same count as this repository's prose writes it.
-     *
-     * <p>Numbers are written in words in the documents and in digits in the code, so the check
-     * accepts either — what it is about is whether the document still names the count, not which
-     * of the two spellings somebody used.</p>
-     */
-    private static final String SPELLED_COUNT = "seventy-two";
-
     @Test
     @DisplayName("the documents describe what is here rather than what is planned")
     void thedocumentsDescribeThePresent() {
@@ -93,10 +84,14 @@ final class PresentStateTest {
         final String readme = RepositoryTree.text(REPOSITORY.resolve("README.md"));
         assertEquals(PUBLISHED_COMMANDS, EscalationSurface.rowsIn(REPOSITORY).size(),
                 "the registry no longer holds the commands the client publishes");
-        assertTrue(readme.contains(SPELLED_COUNT) || readme.contains(
-                        String.valueOf(PUBLISHED_COMMANDS)),
-                "the README no longer says how many commands there are, and a reader counting"
-                        + " them by hand is a reader the document failed");
+        assertTrue(readme.contains("[generated command reference](docs/COMMANDS.md)"),
+                "the README links to the generated count instead of repeating it");
+        final String reference = RepositoryTree.text(
+                REPOSITORY.resolve(CommandReference.REFERENCE_FILE));
+        assertTrue(reference.contains("Commands: "
+                        + RegistryCompleteness.rowsIn(REPOSITORY.resolve(
+                                CommandReference.REGISTRY_DIRECTORY)).size() + "."),
+                "the generated reference states the registry's actual count");
     }
 
     @Test

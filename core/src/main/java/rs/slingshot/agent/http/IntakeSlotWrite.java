@@ -137,6 +137,26 @@ public final class IntakeSlotWrite {
     }
 
     /**
+     * Names the bound that refused admission or the accounting transition that failed.
+     *
+     * <p>Only capacity quantities, counts, bounds and closed write outcomes reach this detail.
+     * An ordinary admission decision carries no accounting refusal, so none of its caller
+     * supplied values can reach this diagnostic.</p>
+     *
+     * @param admission the complete admission outcome
+     * @return the accounting refusal detail, or absence for an ordinary decision
+     */
+    public static Optional<String> admissionRefusalIn(Admission admission) {
+        if (admission instanceof final AtCapacity refused) {
+            return Optional.of("intake capacity refused: " + refused.refusal().rendered());
+        }
+        if (admission instanceof final NotCounted missed) {
+            return Optional.of("intake accounting did not complete: " + missed.outcome());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Reserves a manifest and commits its declarations with operation acceptance.
      *
      * @param session the admission session
@@ -176,10 +196,10 @@ public final class IntakeSlotWrite {
                     contract, alongside));
         }
         try (CapacityReservation.Batch batch = CapacityReservation.batch(session, contract)) {
-            for (final Declared slot : manifest) {
-                if (batch.create(submission.caller(), charges(slot)).isEmpty()) {
-                    return new NotCounted(WriteOutcome.CONTENDED);
-                }
+            final List<List<CapacityReservation.Charge>> vectors = manifest.stream()
+                    .map(IntakeSlotWrite::charges).toList();
+            if (batch.createAll(submission.caller(), vectors).isEmpty()) {
+                return new NotCounted(WriteOutcome.CONTENDED);
             }
             final CapacityLedger.Admission room =
                     CapacityLedger.reserve(session, batch.reservations(), contract);

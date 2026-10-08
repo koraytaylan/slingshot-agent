@@ -11,15 +11,20 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.SequencedMap;
 import javax.jcr.Node;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
+import org.apache.sling.api.resource.LoginException;
+import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.api.wrappers.ResourceResolverWrapper;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +33,6 @@ import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
 import rs.slingshot.agent.command.CommandRegistry;
 import rs.slingshot.agent.command.ProgressSink;
-import rs.slingshot.agent.command.ReadOnlyResolver;
 import rs.slingshot.agent.command.RegistryRow;
 import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.continuation.ContinuationKeyAuthority;
@@ -46,8 +50,8 @@ import rs.slingshot.agent.json.DocumentValue;
  *
  * <p>Two things matter here beyond the ordinary. Paging must be gapless and non-overlapping — a
  * caller reading every page must see every address exactly once — which is proved by comparing the
- * concatenated pages against one unbounded read of the same corpus rather than against a list this
- * suite wrote down. And the result must carry nothing but addresses, proved over a corpus whose
+ * concatenated pages against independently planted paths. And the result rows carry nothing
+ * but addresses, proved over a corpus whose
  * nodes carry distinctive property values that must not appear anywhere in it.</p>
  */
 @ExtendWith(SlingContextExtension.class)
@@ -61,25 +65,39 @@ final class QueryPathsCommandTest {
     private static final String A_SECRET = "a-value-no-address-contains";
 
     private final SlingContext sling = new SlingContext(ResourceResolverType.JCR_OAK);
+    private final DiscoveryRegistry discovery = new DiscoveryRegistry(CONTRACT);
+
+    @AfterEach
+    void releaseDiscovery() {
+        discovery.close();
+    }
 
     @Test
-    @DisplayName("every page together is exactly one unbounded read, in the same order")
+    @DisplayName("bounded pages enumerate the stable subtree once without widening the initial limit")
     void pagingIsGaplessAndNonOverlapping() throws RepositoryException {
-        final List<String> corpus = corpus(CORPUS);
-        final List<String> whole = QueryPathsHandler.pageOf(corpus,
-                new ResultWindow.Initial(0, CORPUS * 2), CONTRACT);
-        final List<String> paged = new ArrayList<>();
-        for (long offset = 0; offset < corpus.size(); offset = offset + PAGE) {
-            paged.addAll(QueryPathsHandler.pageOf(corpus,
-                    new ResultWindow.Initial(offset, PAGE), CONTRACT));
+        final List<String> expected = new ArrayList<>(corpus(CORPUS));
+        expected.add("/content/corpus");
+        final List<String> seen = new ArrayList<>();
+        final CommandHandler handler = new QueryPathsHandler(CONTRACT, discovery);
+        DocumentValue window = window("initial", 0, PAGE, "");
+        boolean complete = false;
+        while (!complete) {
+            final var result = assertInstanceOf(CommandHandler.Produced.class,
+                    handler.run(argument("/content/corpus", null, window),
+                            requestResolver(), pagingContext())).result();
+            final List<String> paths = pathsIn(result);
+            assertTrue(paths.size() <= PAGE, "a continuation widened the initial page size");
+            seen.addAll(paths);
+            assertTrue(seen.size() <= expected.size(), "the traversal repeated addresses");
+            complete = result.member("complete").orElseThrow()
+                    .equals(new DocumentValue.Flag(DocumentValue.Truth.TRUE));
+            if (!complete) {
+                window = continuationWindow(((DocumentValue.Text) result.member(
+                        QueryPathsResult.NEXT_CONTINUATION_TOKEN).orElseThrow()).value());
+            }
         }
-        assertEquals(whole, paged,
-                "reading every page did not produce what one unbounded read produces, so two pages"
-                        + " overlap or skip and a caller would see an address twice or never");
-        assertEquals(whole.size(), whole.stream().distinct().count(),
-                "one unbounded read returned the same address twice");
-        assertEquals(whole, whole.stream().sorted().toList(),
-                "the order is not one two pages can agree on");
+        assertEquals(expected.stream().sorted().toList(), seen.stream().sorted().toList());
+        assertEquals(seen.size(), seen.stream().distinct().count());
     }
 
     /** How many pages of nodes the corpus holds, which is more than one window. */
@@ -92,7 +110,7 @@ final class QueryPathsCommandTest {
     @DisplayName("the result carries addresses and nothing else, over content full of values")
     void theresultDisclosesNoPropertyValue() throws RepositoryException {
         final List<String> found = corpus(SMALL);
-        final DocumentValue.Mapping result = QueryPathsResult.documentOf(found, "");
+        final DocumentValue.Mapping result = documentOf(found, "");
         assertEquals(List.of(), QueryPathsResult.disclosedBeyondAddresses(result, found),
                 "something that is not an address reached the result");
         assertTrue(!rendered(result).contains(A_SECRET),
@@ -111,7 +129,7 @@ final class QueryPathsCommandTest {
     void thedisclosureCheckLooksAllTheWayDown() {
         final List<String> addresses = List.of("/content/a", "/content/b");
         assertEquals(List.of(), QueryPathsResult.disclosedBeyondAddresses(
-                        QueryPathsResult.documentOf(addresses, "a-token"), addresses),
+                        documentOf(addresses, "a-token"), addresses),
                 "a result carrying only addresses and a token was reported as disclosing");
         final SequencedMap<String, DocumentValue> leaking = new LinkedHashMap<>();
         final SequencedMap<String, DocumentValue> buried = new LinkedHashMap<>();
@@ -131,12 +149,12 @@ final class QueryPathsCommandTest {
     @Test
     @DisplayName("a page with nothing following it carries no token, so the end is definite")
     void theendCarriesNoToken() {
-        final DocumentValue.Mapping ended = QueryPathsResult.documentOf(List.of("/content/a"), "");
+        final DocumentValue.Mapping ended = documentOf(List.of("/content/a"), "");
         assertTrue(ended.member(QueryPathsResult.NEXT_CONTINUATION_TOKEN).isEmpty(),
                 "a page at the end carried a token member, so an end is indistinguishable from a"
                         + " token that happens to be empty");
         final DocumentValue.Mapping more =
-                QueryPathsResult.documentOf(List.of("/content/a"), "a-token");
+                documentOf(List.of("/content/a"), "a-token");
         assertEquals(new DocumentValue.Text("a-token"),
                 more.member(QueryPathsResult.NEXT_CONTINUATION_TOKEN).orElseThrow());
     }
@@ -163,7 +181,7 @@ final class QueryPathsCommandTest {
         assertEquals(QueryPathsCommand.Refusal.MEMBER_ABSENT,
                 refusalOf(argument(null, "cq:Page", window("initial", 0, 10, ""))).refusal());
         // The client's own schema requires the root alone. A search with no type is every node
-        // under the root, which the path index answers and a caller is entitled to ask for; a
+        // under the root, answered in bounded traversal pages; a
         // search with no window is the first page of it.
         final QueryPathsCommand open = assertInstanceOf(QueryPathsCommand.Held.class,
                 QueryPathsCommand.of(argument("/content", null, null), CONTRACT),
@@ -193,9 +211,9 @@ final class QueryPathsCommandTest {
     @DisplayName("every category this handler produces is one its own committed row declares")
     void everycategoryIsTheRowsOwn() {
         assertEquals(row().failureCategories().stream().sorted().toList(),
-                new QueryPathsHandler(CONTRACT).categories().stream().sorted().toList(),
+                new QueryPathsHandler(CONTRACT, discovery).categories().stream().sorted().toList(),
                 "the handler and its row disagree about what this command can fail with");
-        assertEquals(FIVE_CONTINUATION_CATEGORIES, new QueryPathsHandler(CONTRACT).categories()
+        assertEquals(FIVE_CONTINUATION_CATEGORIES, new QueryPathsHandler(CONTRACT, discovery).categories()
                         .stream()
                         .filter(category -> category.startsWith("continuation_token_"))
                         .count(),
@@ -218,26 +236,58 @@ final class QueryPathsCommandTest {
     @DisplayName("a root nothing is at, or nobody may see, is one answer rather than two")
     void anabsentRootIsOneAnswer() {
         final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
-                new QueryPathsHandler(CONTRACT).run(
+                new QueryPathsHandler(CONTRACT, discovery).run(
                         argument("/content/nothing-is-here", "cq:Page", window("initial", 0, 10, "")),
-                        readOnly(), context()),
+                        requestResolver(), context()),
                 "a root with nothing at it was answered");
         assertEquals(QueryPathsHandler.ROOT_NOT_FOUND, failed.category());
     }
 
     @Test
-    @DisplayName("a search reaching its node budget exactly answers, and one node more is refused")
-    void asearchPastItsNodeBudgetIsRefused() throws RepositoryException {
-        corpus(SMALL);
-        final long everyNode = SMALL + 1;
-        assertInstanceOf(CommandHandler.Produced.class, new QueryPathsHandler(CONTRACT).run(
-                argument("/content/corpus", null, window("initial", 0, PAGE, "")), readOnly(),
-                budgeted(everyNode)));
-        final CommandHandler.Failed failed = assertInstanceOf(CommandHandler.Failed.class,
-                new QueryPathsHandler(CONTRACT).run(
+    @DisplayName("a spent node budget returns explicit partial progress and a continuation")
+    void asearchPastItsNodeBudgetIsPartial() throws RepositoryException {
+        corpus(CORPUS);
+        final var result = assertInstanceOf(CommandHandler.Produced.class,
+                new QueryPathsHandler(CONTRACT, discovery).run(
                         argument("/content/corpus", null, window("initial", 0, PAGE, "")),
-                        readOnly(), budgeted(everyNode - 1)));
-        assertEquals(QueryPathsHandler.DISCOVERY_BUDGET_EXCEEDED, failed.category());
+                        requestResolver(), budgeted(2))).result();
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.FALSE),
+                result.member("complete").orElseThrow());
+        assertEquals(new DocumentValue.Whole(2), result.member("examined_nodes").orElseThrow());
+        assertEquals(2, pathsIn(result).size());
+        assertTrue(result.member(QueryPathsResult.NEXT_CONTINUATION_TOKEN).isPresent());
+    }
+
+    @Test
+    @DisplayName("a nonmatching bounded page still carries a cursor rather than pretending completion")
+    void anEmptyPartialPageCanResume() throws RepositoryException {
+        corpus(CORPUS);
+        final var result = assertInstanceOf(CommandHandler.Produced.class,
+                new QueryPathsHandler(CONTRACT, discovery).run(
+                        argument("/content/corpus", "cq:Page", window("initial", 0, PAGE, "")),
+                        requestResolver(), budgeted(2))).result();
+        assertEquals(List.of(), pathsIn(result));
+        assertEquals(new DocumentValue.Flag(DocumentValue.Truth.FALSE),
+                result.member("complete").orElseThrow());
+        assertTrue(result.member(QueryPathsResult.NEXT_CONTINUATION_TOKEN).isPresent());
+    }
+
+    @Test
+    @DisplayName("malformed continuation is refused before the resolver is accessed")
+    void malformedContinuationDoesNotWalkTheRepository() throws LoginException {
+        try (ResourceResolver untouched =
+                new ResourceResolverWrapper(requestResolver().clone(Map.of())) {
+                    @Override
+                    public Resource getResource(String path) {
+                        throw new AssertionError("an invalid token reached repository access");
+                    }
+                }) {
+            final var failed = assertInstanceOf(CommandHandler.Failed.class,
+                    new QueryPathsHandler(CONTRACT, discovery).run(
+                            argument("/content", null, continuationWindow("not-a-token")),
+                            untouched, pagingContext()));
+            assertEquals("continuation_token_malformed", failed.category());
+        }
     }
 
     @Test
@@ -247,10 +297,10 @@ final class QueryPathsCommandTest {
         nodeAt("/content/corpus/not-a-page");
         session().save();
         final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
-                new QueryPathsHandler(CONTRACT).run(
+                new QueryPathsHandler(CONTRACT, discovery).run(
                         argument("/content/corpus", "nt:unstructured",
                                 window("initial", 0, 100, "")),
-                        readOnly(), context()),
+                        requestResolver(), context()),
                 "the search was refused");
         assertTrue(!((DocumentValue.Sequence) produced.result()
                         .member(QueryPathsResult.MATCHES).orElseThrow()).items().isEmpty(),
@@ -262,9 +312,9 @@ final class QueryPathsCommandTest {
     void handlerAppliesInitialWindow() throws RepositoryException {
         corpus(CORPUS);
         final CommandHandler.Produced produced = assertInstanceOf(CommandHandler.Produced.class,
-                new QueryPathsHandler(CONTRACT).run(
+                new QueryPathsHandler(CONTRACT, discovery).run(
                         argument("/content/corpus", null, window("initial", 0, PAGE, "")),
-                        readOnly(), context()));
+                        requestResolver(), context()));
         final DocumentValue.Sequence matches = assertInstanceOf(DocumentValue.Sequence.class,
                 produced.result().member(QueryPathsResult.MATCHES).orElseThrow());
         assertEquals(PAGE, matches.items().size(),
@@ -275,18 +325,31 @@ final class QueryPathsCommandTest {
     @DisplayName("a verified continuation starts after the preceding page")
     void verifiedContinuationStartsAfterPrecedingPage() throws RepositoryException {
         final List<String> paths = corpus(PAGE + 1);
-        final CommandHandler handler = new QueryPathsHandler(CONTRACT);
+        final CommandHandler handler = new QueryPathsHandler(CONTRACT, discovery);
         final CommandHandler.Produced first = assertInstanceOf(CommandHandler.Produced.class,
                 handler.run(argument("/content/corpus", null, window("initial", 0, PAGE, "")),
-                        readOnly(), pagingContext()));
+                        requestResolver(), pagingContext()));
         final String token = assertInstanceOf(DocumentValue.Text.class,
                 first.result().member(QueryPathsResult.NEXT_CONTINUATION_TOKEN).orElseThrow()).value();
         final CommandHandler.Produced second = assertInstanceOf(CommandHandler.Produced.class,
-                handler.run(argument("/content/corpus", null, continuationWindow(token)), readOnly(),
+                handler.run(argument("/content/corpus", null, continuationWindow(token)), requestResolver(),
                         pagingContext()));
         final List<DocumentValue> rows = assertInstanceOf(DocumentValue.Sequence.class,
                 second.result().member(QueryPathsResult.MATCHES).orElseThrow()).items();
         assertEquals(paths.subList(PAGE - 1, paths.size()).size(), rows.size());
+    }
+
+    private static DocumentValue.Mapping documentOf(List<String> paths, String token) {
+        return IncrementalDiscoveryResult.documentOf(paths.stream().map(QueryPathsResult::matchOf).toList(),
+                token.isEmpty() ? DocumentValue.Truth.TRUE : DocumentValue.Truth.FALSE, paths.size(), token);
+    }
+
+    private static List<String> pathsIn(DocumentValue.Mapping result) {
+        return ((DocumentValue.Sequence) result.member(QueryPathsResult.MATCHES).orElseThrow())
+                .items().stream()
+                .map(value -> ((DocumentValue.Mapping) value)
+                        .member(QueryPathsResult.REPOSITORY_PATH).orElseThrow())
+                .map(value -> ((DocumentValue.Text) value).value()).toList();
     }
 
     private String rendered(DocumentValue.Mapping result) {
@@ -351,22 +414,18 @@ final class QueryPathsCommandTest {
         return paths.stream().sorted().toList();
     }
 
-    private ResourceResolver readOnly() {
-        return ReadOnlyResolver.around(sling.resourceResolver());
+    private ResourceResolver requestResolver() {
+        return sling.resourceResolver();
     }
 
     private static CallerContext budgeted(long nodes) {
+        final CallerContext paging = pagingContext();
         return new CallerContext(operation(), new Budget(Budget.Kind.DISCOVERY, nodes),
-                Budget.time(CONTRACT), new Budget(Budget.Kind.RESULT,
-                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
-                ProgressSink.under(CONTRACT));
+                Budget.time(CONTRACT), paging.result(), ProgressSink.under(CONTRACT), paging.paging());
     }
 
     private static CallerContext context() {
-        return new CallerContext(operation(), Budget.discovery(CONTRACT), Budget.time(CONTRACT),
-                new Budget(Budget.Kind.RESULT,
-                        CONTRACT.value(ContractLimit.MAXIMUM_COMMAND_RESULT_BYTES)),
-                ProgressSink.under(CONTRACT));
+        return pagingContext();
     }
 
     private static CallerContext pagingContext() {

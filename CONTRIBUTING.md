@@ -17,6 +17,20 @@ commands reach the network and say so when they run —
 `scripts/prepare_locked_dependency_cache` and `scripts/prepare_interop_images` — and they are the
 only two.
 
+The gate clears module build outputs and executes one full Maven `verify` lifecycle. That lifecycle includes formatting, static
+analysis, package analysis, coverage and the public Sling scenarios. It then reads fresh reports
+for the named policy stages. Runner failure, missing reports, skipped checks and malformed reports
+all refuse the gate. The development module runs last and executes its policy tests after packaging,
+so checks of JAR contents and resolved dependencies read this invocation's outputs. Monotonic stage durations and exit statuses are written to
+`target/quality-timings.tsv`, overwritten on each invocation; archive it with the build log when
+comparing runs. Report-reading stage time is separate from the reactor execution time.
+
+For focused feedback, run `scripts/check_layer core`, `scripts/check_layer aem`, or
+`scripts/check_layer policy`. These offline checks compile and test the selected layer and its
+reactor prerequisites; they do not establish package, coverage, or public-tier release evidence.
+Policy checks need current package artifacts, produced by the full gate or an explicit package
+build. A focused check is not a release gate.
+
 ## The rules a change is held to
 
 - Every dependency comes from the prepared cache, whose contents are verified against
@@ -24,11 +38,11 @@ only two.
 - Every container image is present at the exact digest `support/interop-images.toml` pins, and no
   tier pulls one. (stage: pinned-interop-images)
 - Every file is formatted the way `policy/analysis/checkstyle.xml` decides, which
-  `policy/static-analysis.toml` declares. (stage: formatting)
-- Every module compiles on Java 21 with every warning an error. (stage: compilation)
+  `policy/static-analysis.toml` declares. (stage: reactor-verification)
+- Every module compiles on Java 21 with every warning an error. (stage: reactor-verification)
 - Every static-analysis finding is a build failure, over the configuration
   `policy/static-analysis.toml` declares, with an exclusion file that stays empty.
-  (stage: static-analysis)
+  (stage: reactor-verification)
 - No source obtains an administrative session, acts as somebody else, or uses an identifier
   `policy/abbreviated-identifiers.txt` refuses; the whole rule set is `policy/source-policy.toml`,
   and `policy/licence-headers.toml` decides the header every file carries.
@@ -49,7 +63,7 @@ only two.
 - Every test passes and every module and class meets the coverage floor `policy/coverage.toml`
   declares; the routes a change adds are the ones `policy/agent-routes.toml` spells, the grants it
   needs are the ones `policy/repository-access.toml` declares, and the nodes it writes are the ones
-  `policy/repository-layout.toml` declares. (stage: tests-and-coverage-floor)
+  `policy/repository-layout.toml` declares. (stage: reactor-verification)
 - Every way a command can fail answers the status and the retryability the client already declares,
   one committed row per category with no default branch and no hint on a refusal that trying again
   cannot fix, as `policy/failure-status-mapping.toml` states. (stage: status-mapping-coverage)
@@ -57,11 +71,13 @@ only two.
   `policy/client-route-constants.toml`, compared in both directions, each naming its correction,
   and none served by what a customer receives. This checks local policy consistency, not the
   contents of the sibling repository or compatibility with a newer client.
-  (stage: tests-and-coverage-floor)
-- No command may traverse: every query is declared as data, checked at build time against the
+  (stage: reactor-verification)
+- Every repository query is declared as data, checked at build time against the
   indexes `policy/query-index-coverage.toml` says each deployment already provides and at run time
   against the plan the instance really returns, and nothing shipped carries an index definition.
-  (stage: tests-and-coverage-floor)
+  Direct discovery walks use bounded cursors with explicit partial progress, as described in
+  `docs/COMMANDS.md`; the query-index check does not prove those traversal bounds.
+  (stage: reactor-verification)
 - Nothing that must never leave this agent leaves it: every route is driven on a running instance
   with a planted value of every kind `policy/redaction-corpus.toml` names, and every body, header,
   log line and piece of a stream is scanned for all of them. (stage: public-interop-tier)
@@ -94,7 +110,7 @@ only two.
   does not — `support/deployments.toml` — and every control a command needs is one of the closed set
   in `ControlCapability`, mapped in `policy/control-capabilities.toml` and compared in both
   directions. (stage: control-capability)
-- This registry and the client's published table are the same seventy-two rows, compared field by
+- This registry and the client's published table have the same rows, compared field by
   field because the fixes differ. (stage: registry-completeness)
 - The rendered command reference in `docs/COMMANDS.md` is generated from the registry and checked
   against it, so a command that exists appears there or the build does not pass.

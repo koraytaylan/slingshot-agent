@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 # Copyright 2026 Koray Taylan Davgana
 
-# The gate. It takes no argument, fetches nothing, and writes nothing into the repository.
+# The gate takes no argument and fetches nothing. Build evidence is written under target/.
 #
 # What it needs prepared - the locked dependency cache and the pinned interoperability images - it
 # verifies rather than acquires, refusing with the preparation command named when either is absent.
@@ -16,7 +16,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-readonly REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPOSITORY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly REPOSITORY_ROOT
 readonly CACHE_DIRECTORY="${REPOSITORY_ROOT}/.dependency-cache"
 readonly GATE_POLICY="${REPOSITORY_ROOT}/policy/quality-gate.toml"
 readonly EXIT_USAGE=2
@@ -36,59 +37,75 @@ build() {
         "$@"
 }
 
-stage() {
-    printf '\n== %s\n' "$1"
-    shift
-    "$@"
+# Remove old module outputs, including removed classes and old packaged bytes.
+# Development policies run last and after packaging, so they inspect this run.
+prepare_reports() {
+    python3 - "${REPOSITORY_ROOT}" <<'PYTHON'
+import pathlib
+import shutil
+import sys
+import xml.etree.ElementTree as tree
+root = pathlib.Path(sys.argv[1])
+manifest = tree.parse(root / "pom.xml")
+for module in manifest.findall("{*}modules/{*}module"):
+    target = root / module.text / "target"
+    if target.exists():
+        shutil.rmtree(target)
+PYTHON
 }
 
-stage locked-dependency-cache "${REPOSITORY_ROOT}/scripts/verify_locked_dependency_cache"
-stage pinned-interop-images "${REPOSITORY_ROOT}/scripts/verify_interop_images"
-stage formatting build checkstyle:check -pl core,aem,development,interop
-stage compilation build compile -pl core,aem,development,interop
-stage static-analysis build compile pmd:check spotbugs:check -pl core,aem,development,interop
-# Every check below decides from this one pass rather than starting a build of its own.
-#
-# The gate runs every stage every time, and it did: thirty-six times, each one a fresh Maven, a
-# fresh reactor scan and a fresh JVM to run a single test class that the run before it had already
-# compiled. That is not thirty-six checks, it is one suite and thirty-five restarts - it was over a
-# fifth of the gate's hour, and none of it decided anything the first pass had not.
-#
-# So the suite runs once and each stage is held to its own result. A stage that fails still fails by
-# name, out of the report the runner wrote for that class, and a stage whose class produced no
-# report at all fails too - because a check that did not run is not a check that passed.
-run_the_policy_suite() {
-    # Cleared first, so a report that is there afterwards is one this run wrote. Reading a report
-    # left by an earlier run is how a stage reports a pass for a check that never ran.
-    rm -rf "${REPOSITORY_ROOT}/development/target/surefire-reports"
-    build test -Dtest=SourcePolicyTest,NullabilityPolicyTest,ApiShapePolicyTest,MethodShapePolicyTest,JavadocPolicyTest,AllocationPolicyTest,AdobePracticePolicyTest,DependencyPolicyTest,ImportedPackagesTest,ModuleDirectionTest,StatusMappingCoverageTest,ScenarioInventoryTest,CommandConformanceTest,MutationCoverageTest,ControlCapabilityCoverageTest,RegistryCompletenessTest,CommandReferenceTest,PlatformCoverageTest,OverlayAuditTest,FuzzTargetInventoryTest,ParserFuzzTest,TokenStreamFuzzTest,CommandArgumentFuzzTest,StateMachinePropertyTest,AcceptanceMatrixTest,PresentStateTest,WorkflowPolicyTest,InteropWorkflowTest,ReleaseWorkflowTest,ReleaseArtifactsTest,BillOfMaterialsTest,PublicationAuthorityTest,CentralPrerequisitesTest,AdvisoryGateTest,WireCompatibilityTest,PlatformFloorTest,EscalationSurfaceTest,InjectionAuditTest,ExposureSurfaceTest,ClockUsagePolicyTest,ConsoleSurfaceTest,ConsoleAccessibilityTest,LogStatementPolicyTest,FrontEndFootprintTest \
-        -pl development -am -Dsurefire.failIfNoSpecifiedTests=false > "${POLICY_SUITE_OUTPUT}" 2>&1 \
-        || true
+monotonic_time() {
+    python3 -c 'import time; print(time.monotonic())'
+}
+
+finish_stage() {
+    local status=$1
+    if [[ -n "${ACTIVE_STAGE}" ]]; then
+        python3 - "${TIMINGS}" "${ACTIVE_STAGE}" "${STAGE_STARTED}" "${status}" <<'PYTHON'
+import pathlib
+import sys
+import time
+elapsed = time.monotonic() - float(sys.argv[3])
+row = "%s\t%.6f\t%s\n" % (sys.argv[2], elapsed, sys.argv[4])
+with pathlib.Path(sys.argv[1]).open("a") as output:
+    output.write(row)
+print("timing: " + row.rstrip())
+PYTHON
+        ACTIVE_STAGE=''
+    fi
+}
+
+stage() {
+    ACTIVE_STAGE=$1
+    STAGE_STARTED=$(monotonic_time)
+    printf '\n== %s\n' "${ACTIVE_STAGE}"
+    shift
+    "$@"
+    finish_stage 0
 }
 
 decided() {
-    local passed=0
-    for class in "$@"; do
-        local report
-        report="$(find "${REPOSITORY_ROOT}/development/target/surefire-reports" \
-            -name "TEST-*.${class}.xml" -print -quit 2>/dev/null)"
-        if [[ -z "${report}" ]]; then
-            printf '%s produced no result at all; the suite output is in %s\n' \
-                "${class}" "${POLICY_SUITE_OUTPUT}" >&2
-            passed=1
-            continue
-        fi
-        if ! grep -q 'failures="0"' "${report}" || ! grep -q 'errors="0"' "${report}"; then
-            printf '%s refused this change; its report is %s\n' "${class}" "${report}" >&2
-            passed=1
-        fi
-    done
-    return "${passed}"
+    python3 "${REPOSITORY_ROOT}/support/quality_reports.py" \
+        "${REPOSITORY_ROOT}/development/target/surefire-reports" "$@"
 }
 
-readonly POLICY_SUITE_OUTPUT="${REPOSITORY_ROOT}/development/target/policy-suite.log"
+public_tier_passed() {
+    python3 "${REPOSITORY_ROOT}/support/quality_reports.py" \
+        "${REPOSITORY_ROOT}/interop/target/surefire-reports" PublicSlingTierTest
+}
 
-run_the_policy_suite
+readonly TIMINGS="${REPOSITORY_ROOT}/target/quality-timings.tsv"
+mkdir -p "${REPOSITORY_ROOT}/target"
+printf 'stage\telapsed_seconds\texit_status\n' > "${TIMINGS}"
+ACTIVE_STAGE=''
+STAGE_STARTED=''
+trap 'status=$?; finish_stage "${status}"; exit "${status}"' EXIT
+
+stage locked-dependency-cache "${REPOSITORY_ROOT}/scripts/verify_locked_dependency_cache"
+stage pinned-interop-images "${REPOSITORY_ROOT}/scripts/verify_interop_images"
+stage gate-report-verification python3 -m unittest discover -s "${REPOSITORY_ROOT}/support" -p quality_reports_test.py
+prepare_reports
+stage reactor-verification build verify
 
 stage source-policy decided SourcePolicyTest
 stage nullability decided NullabilityPolicyTest
@@ -97,8 +114,7 @@ stage method-shape decided MethodShapePolicyTest
 stage documentation decided JavadocPolicyTest
 stage allocation decided AllocationPolicyTest
 stage adobe-practice decided AdobePracticePolicyTest
-stage tests-and-coverage-floor build verify
-stage package-analysis build verify -pl all -am -DskipTests -Djacoco.skip=true
+stage package-analysis decided PackageAnalysisTest
 stage dependency-policy decided DependencyPolicyTest
 stage imported-package-footprint decided ImportedPackagesTest
 stage module-direction decided ModuleDirectionTest
@@ -128,7 +144,7 @@ stage console-surface decided ConsoleSurfaceTest
 stage console-accessibility decided ConsoleAccessibilityTest
 stage log-statement-policy decided LogStatementPolicyTest
 stage front-end-footprint decided FrontEndFootprintTest
-stage public-interop-tier build verify -pl interop -am -DskipTests -Djacoco.skip=true
+stage public-interop-tier public_tier_passed
 
 printf '\n== gate passed\n'
 printf 'Optional owner tiers are outside this gate and were not run here:\n'

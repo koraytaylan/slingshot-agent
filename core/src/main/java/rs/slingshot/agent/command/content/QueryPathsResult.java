@@ -9,7 +9,7 @@ import java.util.SequencedMap;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * Addresses, and where to resume — and nothing else at all.
+ * Address rows and their disclosure check, shared by bounded query pages.
  *
  * <p>This command answers a list of paths. It carries no property, no node type, no size, no
  * timestamp: nothing but where things are. That is worth stating as a property of the result type
@@ -26,7 +26,7 @@ public final class QueryPathsResult {
     private QueryPathsResult() {
     }
 
-    /** The member the addresses are carried in, in the order the query returned them. */
+    /** The member carrying addresses in repository provider order. */
     public static final String MATCHES = "matches";
 
     /** The member one match's address is carried in. */
@@ -35,34 +35,16 @@ public final class QueryPathsResult {
     /** The member the token reaching the next page is carried in, where there is one. */
     public static final String NEXT_CONTINUATION_TOKEN = "next_continuation_token";
 
-
-    /** Every member this result has, and there is no fourth. */
-    public static final List<String> MEMBERS =
-            List.of(MATCHES, NEXT_CONTINUATION_TOKEN, REPOSITORY_PATH);
+    /** Address and page-progress members, borrowing the shared writer's vocabulary. */
+    public static final List<String> MEMBERS = List.of(MATCHES, IncrementalDiscoveryResult.COMPLETE,
+            IncrementalDiscoveryResult.EXAMINED_NODES, NEXT_CONTINUATION_TOKEN, REPOSITORY_PATH);
 
     /**
-     * The result one page of addresses produces.
-     *
-     * <p>The token member is present only where a token exists. An absent token is a definite end,
-     * and writing it as an empty string would make the end indistinguishable from a token that
-     * happens to be empty.</p>
-     *
-     * @param paths the addresses this page carries, in the order the query returned them
-     * @param continuationToken the token reaching the next page, or empty where this is the end
-     * @return the result document
+     * Materializes one currently readable address without disclosing its stored values.
+     * @param path the exact resource path
+     * @return the detached result row
      */
-    public static DocumentValue.Mapping documentOf(List<String> paths, String continuationToken) {
-        final SequencedMap<String, DocumentValue> result = new LinkedHashMap<>();
-        result.put(MATCHES, new DocumentValue.Sequence(paths.stream()
-                .map(QueryPathsResult::matchOf)
-                .toList()));
-        if (!continuationToken.isEmpty()) {
-            result.put(NEXT_CONTINUATION_TOKEN, new DocumentValue.Text(continuationToken));
-        }
-        return new DocumentValue.Mapping(result);
-    }
-
-    private static DocumentValue matchOf(String path) {
+    public static DocumentValue.Mapping matchOf(String path) {
         final SequencedMap<String, DocumentValue> match = new LinkedHashMap<>();
         match.put(REPOSITORY_PATH, new DocumentValue.Text(path));
         return new DocumentValue.Mapping(match);

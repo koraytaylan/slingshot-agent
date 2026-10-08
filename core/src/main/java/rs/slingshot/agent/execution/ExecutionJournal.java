@@ -103,45 +103,39 @@ public final class ExecutionJournal {
                 contract) instanceof ExecutionOutcome.Refused) {
             return Optional.empty();
         }
-        final CapacityLedger.ReservationAdmission room = CapacityLedger.take(session, operation.caller(),
-                List.of(new CapacityReservation.Charge(AccountedQuantity.EVENT_ROWS, 1),
-                        new CapacityReservation.Charge(AccountedQuantity.EVENT_BYTES,
-                                TerminalCommit.maximumEventBytes(operation))), contract);
-        if (!(room instanceof final CapacityLedger.Reserved reserved)) {
-            return Optional.empty();
-        }
-        try (CapacityReservation.Guard guard = reserved.reservation().guard(session, contract)) {
-            return withCompletionRoom(session, operation, nowUnixMilliseconds, contract, guard.reservation());
-        }
+        return withCompletionRoom(session, operation, nowUnixMilliseconds, contract);
     }
 
     private static Optional<LogicalOperation> withCompletionRoom(Session session, LogicalOperation operation,
-                                                                  long now, AgentContract contract,
-                                                                  CapacityReservation event)
+                                                                  long now, AgentContract contract)
             throws RepositoryException {
         final long snapshot = java.util.Arrays.stream(OperationState.values())
                 .filter(state -> state.finality() == rs.slingshot.agent.wire.JobEventKind.Finality.ENDS)
                 .mapToLong(state -> SnapshotStore.bytesFor(state.kind())).max().orElseThrow();
-        // The result and snapshot counters are prepared before they are
-        // charged, as every admitted quantity prepares its own. Taking a charge
-        // against nodes nothing has made is a decision that could not be made,
-        // and reporting it as a start this instance has no room for would tell
-        // a caller to come back to a store that is not full.
         for (final AccountedQuantity quantity : List.of(AccountedQuantity.RESULT_ROWS,
                 AccountedQuantity.RESULT_BYTES, AccountedQuantity.SNAPSHOT_ROWS,
                 AccountedQuantity.SNAPSHOT_BYTES)) {
             CapacityLedger.prepare(session, quantity, operation.caller());
         }
-        final CapacityLedger.ReservationAdmission room = CapacityLedger.take(session, operation.caller(),
-                footprint(contract.value(ContractLimit.MAXIMUM_AGENT_INLINE_RESULT_BYTES),
-                        snapshot), contract);
-        if (!(room instanceof final CapacityLedger.Reserved reserved)) {
-            return Optional.empty();
-        }
-        try (CapacityReservation.Guard guard = reserved.reservation().guard(session, contract)) {
+        try (CapacityReservation.Batch batch = CapacityReservation.batch(session, contract)) {
+            final Optional<List<CapacityReservation>> pending = batch.createAll(operation.caller(),
+                    List.of(List.of(new CapacityReservation.Charge(AccountedQuantity.EVENT_ROWS, 1),
+                            new CapacityReservation.Charge(AccountedQuantity.EVENT_BYTES,
+                                    TerminalCommit.maximumEventBytes(operation))),
+                            footprint(contract.value(ContractLimit.MAXIMUM_AGENT_INLINE_RESULT_BYTES),
+                                    snapshot)));
+            if (pending.isEmpty()) {
+                return Optional.empty();
+            }
+            final List<CapacityReservation> reservations = pending.get();
+            if (!(CapacityLedger.reserve(session, reservations, contract) instanceof
+                    CapacityLedger.Admitted)) {
+                return Optional.empty();
+            }
             final OperationStore.Outcome started = OperationStore.start(session, operation, node -> {
-                CapacityReservation.retain(session, guard.reservation(), stageStart(node, now));
-                CapacityReservation.retain(session, event, node.addNode(TERMINAL_BUDGET, "nt:unstructured"));
+                CapacityReservation.retain(session, reservations.get(1), stageStart(node, now));
+                CapacityReservation.retain(session, reservations.getFirst(),
+                        node.addNode(TERMINAL_BUDGET, "nt:unstructured"));
             });
             return started instanceof final OperationStore.Held held
                     ? Optional.of(held.operation()) : Optional.empty();

@@ -78,8 +78,7 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
     @Override
     public Outcome queue(String agentIdentifier) {
         return named(agentIdentifier)
-                .<Outcome>map(agent -> new Queue(flowOf(agent.getQueue()),
-                        entriesOf(agent.getQueue())))
+                .<Outcome>map(DefaultReplicationInventory::queueOf)
                 .orElseGet(() -> unknown(agentIdentifier));
     }
 
@@ -145,13 +144,13 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
 
     private static ReplicationInventory.Agent agentOf(com.day.cq.replication.Agent agent) {
         final AgentConfig configuration = agent.getConfiguration();
-        final ReplicationQueue queue = agent.getQueue();
+        final List<ReplicationQueue.Entry> entries = entriesIn(agent.getQueue());
         return new ReplicationInventory.Agent(agent.getId(),
                 String.valueOf(Optional.ofNullable(configuration.getName()).orElse(agent.getId())),
                 String.valueOf(Optional.ofNullable(configuration.getConfigPath()).orElse("")),
                 kindOf(agent, configuration),
-                agent.isEnabled() ? Switch.ENABLED : Switch.DISABLED, flowOf(queue),
-                entriesIn(queue).size());
+                agent.isEnabled() ? Switch.ENABLED : Switch.DISABLED, flowOf(entries),
+                entries.size());
     }
 
     /**
@@ -180,8 +179,8 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
      * <p>A queue is stopped exactly when the entry it tries next has already been tried and is
      * still there, which is what the platform's own deprecated flag reported.</p>
      */
-    private static Flow flowOf(ReplicationQueue queue) {
-        return entriesIn(queue).stream().findFirst()
+    private static Flow flowOf(List<ReplicationQueue.Entry> entries) {
+        return entries.stream().findFirst()
                 .filter(head -> head.getNumProcessed() > 0)
                 .map(head -> Flow.BLOCKED)
                 .orElse(Flow.MOVING);
@@ -192,12 +191,24 @@ public final class DefaultReplicationInventory implements ReplicationInventory {
         return queue == null ? List.of() : queue.entries();
     }
 
-    private static List<Entry> entriesOf(ReplicationQueue queue) {
-        return entriesIn(queue).stream()
-                .map(entry -> new Entry(entry.getId(), actionOf(entry.getAction().getType()),
-                        pathOf(entry.getAction()), entry.getNumProcessed(),
-                        entry.getNumProcessed() > 0 ? DELIVERY_FAILED : NEVER_FAILED))
+    /** Holds flow and entry details from one read of the platform queue. */
+    private static Queue queueOf(com.day.cq.replication.Agent agent) {
+        final List<Entry> entries = entriesIn(agent.getQueue()).stream()
+                .map(DefaultReplicationInventory::entryOf)
                 .toList();
+        final Flow flow = entries.stream().findFirst()
+                .filter(head -> head.attemptCount() > 0)
+                .map(head -> Flow.BLOCKED)
+                .orElse(Flow.MOVING);
+        return new Queue(flow, entries);
+    }
+
+    /** Holds the attempt count and its failure category from one read of the entry. */
+    private static Entry entryOf(ReplicationQueue.Entry entry) {
+        final long attempts = entry.getNumProcessed();
+        final ReplicationAction action = entry.getAction();
+        return new Entry(entry.getId(), actionOf(action.getType()), pathOf(action), attempts,
+                attempts > 0 ? DELIVERY_FAILED : NEVER_FAILED);
     }
 
     /**

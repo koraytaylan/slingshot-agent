@@ -63,8 +63,8 @@
     <module>ui.apps</module>
     <module>ui.config</module>
     <module>all</module>
-    <module>development</module>
     <module>interop</module>
+    <module>development</module>
   </modules>
 
   <properties>

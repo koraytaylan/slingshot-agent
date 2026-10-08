@@ -4,15 +4,15 @@
 package rs.slingshot.agent.command.content;
 
 import java.util.Optional;
+import rs.slingshot.agent.contract.AgentContract;
+import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
  * What one caller asked to load: an address and a depth, both of them theirs to state.
  *
- * <p>Neither has a default. A depth somebody else chose is a depth the caller did not, and the two
- * plausible defaults — one level, or everything — are a command that answers less than anybody
- * wanted and a command that walks a repository. A caller who has to write the depth down has
- * decided it; a caller who inherits one has not.</p>
+ * <p>An omitted depth uses the authenticated shared contract default. Explicit zero reads only
+ * the addressed node; every explicit depth is bounded by that same contract.</p>
  *
  * @param repositoryPath the absolute path of the subtree to read
  * @param depth how many generations below it to include, where zero is that node by itself
@@ -31,17 +31,8 @@ public record LoadContentCommand(String repositoryPath, long depth) {
     /** Every member this command's argument has, and there is no third. */
     public static final java.util.List<String> MEMBERS = java.util.List.of(DEPTH, PATH);
 
-    /**
-     * The member a caller has to send.
-     *
-     * <p>The depth is not one of them: the client's own schema makes it optional, and a caller who
-     * names a path alone is asking for that node. Requiring it would refuse a request the client is
-     * entitled to send, and defaulting to anything deeper would walk content nobody asked for.</p>
-     */
+    /** The path is required; omitted depth resolves through the shared contract. */
     public static final java.util.List<String> REQUIRED = java.util.List.of(PATH);
-
-    /** How deep an omitted depth reaches, which is the addressed node by itself. */
-    public static final long THE_NODE_ALONE = 0;
 
     /** Why an argument is not one this command takes. */
     public enum Refusal {
@@ -84,10 +75,10 @@ public record LoadContentCommand(String repositoryPath, long depth) {
      * Reads one caller's argument.
      *
      * @param arguments the argument document
-     * @param maximumDepth how deep this deployment will walk, which the contract declares
+     * @param contract the authenticated default and maximum depth authority
      * @return the command, or the one reason there is none
      */
-    public static Outcome of(DocumentValue arguments, long maximumDepth) {
+    public static Outcome of(DocumentValue arguments, AgentContract contract) {
         if (!(arguments instanceof final DocumentValue.Mapping mapping)) {
             return new Refused(Refusal.NOT_A_DOCUMENT, "an argument is an object with two members");
         }
@@ -106,10 +97,10 @@ public record LoadContentCommand(String repositoryPath, long depth) {
                     absent.get() + " is required, and this command chooses no address for a"
                             + " caller");
         }
-        return read(mapping, maximumDepth);
+        return read(mapping, contract);
     }
 
-    private static Outcome read(DocumentValue.Mapping mapping, long maximumDepth) {
+    private static Outcome read(DocumentValue.Mapping mapping, AgentContract contract) {
         if (!(mapping.member(PATH).orElseThrow()
                 instanceof final DocumentValue.Text path)) {
             return new Refused(Refusal.NOT_AN_ABSOLUTE_PATH, PATH + " is not text");
@@ -120,7 +111,8 @@ public record LoadContentCommand(String repositoryPath, long depth) {
         }
         final Optional<DocumentValue> asked = mapping.member(DEPTH);
         if (asked.isEmpty()) {
-            return new Held(new LoadContentCommand(path.value(), THE_NODE_ALONE));
+            return new Held(new LoadContentCommand(path.value(),
+                    contract.value(ContractLimit.DEFAULT_LOAD_DEPTH)));
         }
         if (!(asked.orElseThrow() instanceof final DocumentValue.Whole depth)) {
             return new Refused(Refusal.DEPTH_NOT_WHOLE, DEPTH + " is not a whole number");
@@ -129,6 +121,7 @@ public record LoadContentCommand(String repositoryPath, long depth) {
             return new Refused(Refusal.DEPTH_NOT_WHOLE, DEPTH + " is counted from zero, where zero"
                     + " is the addressed node by itself");
         }
+        final long maximumDepth = contract.value(ContractLimit.MAXIMUM_LOAD_DEPTH);
         if (depth.value() > maximumDepth) {
             return new Refused(Refusal.DEPTH_ABOVE_MAXIMUM, depth.value() + " is deeper than the "
                     + maximumDepth + " this deployment walks");

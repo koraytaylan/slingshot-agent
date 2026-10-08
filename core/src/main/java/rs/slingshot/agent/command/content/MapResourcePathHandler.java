@@ -66,7 +66,7 @@ public final class MapResourcePathHandler implements CommandHandler {
                     + " rules it may report");
         }
         return new Produced(MapResourcePathResult.documentOf(command.repositoryPath(), produced,
-                trace));
+                trace, command.trace()));
     }
 
     /**

@@ -35,19 +35,25 @@ public final class BoundedDocumentReader {
     /** What a stream answers when it has no more bytes. */
     private static final int END_OF_INPUT = -1;
 
+    /** The mapping containing a document's root members sits inside no container. */
+    private static final long ROOT_DEPTH = 0;
+
     // A parse has exactly two pieces of state: how many bytes have been consumed, and the one byte
     // that was read to find out a value had ended. Both are held by objects that own their own
     // mutation, so this class holds none - which is what lets a reader be read as a description of
     // the grammar rather than as a description of a machine.
     private final PushbackInputStream stream;
     private final Bounds bounds;
+    private final RootStringBound rootStringBound;
     private final long declaredLength;
     private final AtomicLong consumed = new AtomicLong();
 
-    private BoundedDocumentReader(InputStream stream, long declaredLength, Bounds bounds) {
+    private BoundedDocumentReader(InputStream stream, long declaredLength, Bounds bounds,
+                                  RootStringBound rootStringBound) {
         this.stream = new PushbackInputStream(stream);
         this.declaredLength = declaredLength;
         this.bounds = bounds;
+        this.rootStringBound = rootStringBound;
     }
 
     /**
@@ -80,6 +86,18 @@ public final class BoundedDocumentReader {
         }
     }
 
+    /**
+     * The byte bound for a string carried by one named member of the root mapping.
+     *
+     * <p>Only that member's direct string value uses this bound. Its name, any nested string,
+     * and every other member retain the ordinary document string bound.</p>
+     *
+     * @param member the root member whose string has its own contract bound
+     * @param stringBytes how many decoded UTF-8 bytes that string may carry
+     */
+    public record RootStringBound(String member, long stringBytes) {
+    }
+
     /** The result of a read: the document, or the one reason there is none. */
     public sealed interface Outcome permits Read, Refused {
     }
@@ -108,8 +126,21 @@ public final class BoundedDocumentReader {
      * @return the document, or the one reason there is none
      */
     public static Outcome read(byte[] document, Bounds bounds) {
+        return read(document, bounds, new RootStringBound("", bounds.stringBytes()));
+    }
+
+    /**
+     * Reads a document with one root string bounded by its own declared contract limit.
+     *
+     * @param document the bytes
+     * @param bounds the ordinary document bounds
+     * @param rootStringBound the bound for the named root string value
+     * @return the document, or the one reason there is none
+     */
+    public static Outcome read(byte[] document, Bounds bounds, RootStringBound rootStringBound) {
         try {
-            return read(new ByteArrayInputStream(document), document.length, bounds);
+            return new BoundedDocumentReader(new ByteArrayInputStream(document), document.length,
+                    bounds, rootStringBound).run();
         } catch (final IOException impossible) {
             // Nothing in memory fails part-way, and treating it as a malformed document would
             // report a defect here as a defect in whatever sent the bytes.
@@ -129,7 +160,8 @@ public final class BoundedDocumentReader {
      */
     public static Outcome read(InputStream stream, long declaredLength, Bounds bounds)
             throws IOException {
-        return new BoundedDocumentReader(stream, declaredLength, bounds).run();
+        return new BoundedDocumentReader(stream, declaredLength, bounds,
+                new RootStringBound("", bounds.stringBytes())).run();
     }
 
     private Outcome run() throws IOException {
@@ -165,6 +197,10 @@ public final class BoundedDocumentReader {
     }
 
     private DocumentValue value(long depth) throws IOException, Refusal {
+        return value(depth, bounds.stringBytes());
+    }
+
+    private DocumentValue value(long depth, long stringBytes) throws IOException, Refusal {
         if (depth > bounds.nestingDepth()) {
             throw refusal(DocumentRefusal.Failure.NESTING_DEPTH,
                     "a value nests " + depth + " deep, past the bound of " + bounds.nestingDepth());
@@ -173,7 +209,7 @@ public final class BoundedDocumentReader {
         return switch (start) {
             case '{' -> mapping(depth);
             case '[' -> sequence(depth);
-            case '"' -> new DocumentValue.Text(text());
+            case '"' -> new DocumentValue.Text(text(stringBytes));
             case 't' -> literal("rue", new DocumentValue.Flag(DocumentValue.Truth.TRUE));
             case 'f' -> literal("alse", new DocumentValue.Flag(DocumentValue.Truth.FALSE));
             case 'n' -> literal("ull", new DocumentValue.Nothing());
@@ -204,7 +240,7 @@ public final class BoundedDocumentReader {
         if (start != '"') {
             throw malformed(start, "a member name");
         }
-        final String name = text();
+        final String name = text(bounds.stringBytes());
         if (members.containsKey(name)) {
             throw refusal(DocumentRefusal.Failure.DUPLICATE_MEMBER,
                     name + " is named twice, and two readers would not agree which one won");
@@ -217,7 +253,9 @@ public final class BoundedDocumentReader {
         if (colon != ':') {
             throw malformed(colon, "a colon");
         }
-        members.put(name, value(depth + 1));
+        final long stringBytes = depth == ROOT_DEPTH && name.equals(rootStringBound.member())
+                ? rootStringBound.stringBytes() : bounds.stringBytes();
+        members.put(name, value(depth + 1, stringBytes));
     }
 
     private DocumentValue sequence(long depth) throws IOException, Refusal {
@@ -238,7 +276,7 @@ public final class BoundedDocumentReader {
         return new DocumentValue.Sequence(items);
     }
 
-    private String text() throws IOException, Refusal {
+    private String text(long stringBytes) throws IOException, Refusal {
         final ByteArrayOutputStream held = new ByteArrayOutputStream();
         int next = readByte();
         while (next != '"') {
@@ -250,9 +288,9 @@ public final class BoundedDocumentReader {
             } else {
                 held.write(next);
             }
-            if (held.size() > bounds.stringBytes()) {
+            if (held.size() > stringBytes) {
                 throw refusal(DocumentRefusal.Failure.STRING_BYTES, "a name or string is longer"
-                        + " than the bound of " + bounds.stringBytes() + " bytes");
+                        + " than the bound of " + stringBytes + " bytes");
             }
             next = readByte();
         }

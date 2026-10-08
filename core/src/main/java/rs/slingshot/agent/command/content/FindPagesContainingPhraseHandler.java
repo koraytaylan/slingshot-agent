@@ -3,171 +3,63 @@
 
 package rs.slingshot.agent.command.content;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
-import rs.slingshot.agent.command.PagingSupport;
-import rs.slingshot.agent.command.ResultWindow;
 import rs.slingshot.agent.contract.AgentContract;
-import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * Pages whose text contains a phrase, under one subtree.
+ * Bounded live discovery of pages containing one exact contiguous phrase.
  *
- * <p>The budget is the whole safety story here, and it refuses rather than trims. A caller handed a
- * shortened list would read it as the complete answer — they asked which pages contain a phrase and
- * received a list of pages that contain it — and would conclude that every page not listed does not
- * match. That conclusion is wrong and nothing in the answer says so. Refusing is the only outcome
- * that leaves them knowing what they do not know.</p>
- *
- * <p>What comes back is an address and a title. No excerpt, no matched line, no surrounding
- * sentence: an excerpt is content, and answering with content would be performing a content read
- * that nobody checked this caller could make. A caller who wants to see the match asks for the page.
- * </p>
+ * <p>Only title and description are searched, without case folding or normalization. A row
+ * carries a page address and an optional title, never an excerpt. The runtime-owned cursor
+ * reports explicit completeness and may return an empty partial page. Its next request resumes
+ * retained provider iterators under current caller authority rather than scanning a prefix again.</p>
  */
 public final class FindPagesContainingPhraseHandler implements CommandHandler {
 
-    /** The name of the query this command issues, which the coverage policy declares. */
-    public static final String QUERY_NAME = "find-pages-containing-phrase";
-
-    /**
-     * The properties a phrase is looked for in, which are the ones the page index covers.
-     *
-     * <p>Not every string a page carries. Adobe's own page index covers a page's title and its
-     * description, and searching anything wider than what the index answers turns this command into
-     * a walk of somebody's repository — which is the failure this whole plan exists to prevent. The
-     * narrower search is the honest one: it is what an index-backed full-text search over pages can
-     * actually be, and the coverage policy holds this list and the declared query to each other.</p>
-     */
+    /** The only page-content properties this command searches. */
     public static final List<String> SEARCHED_PROPERTIES =
             List.of(ListChildPagesHandler.TITLE_PROPERTY, "jcr:description");
 
-    /** The category a root nothing is at, or nobody may see, is refused under. */
+    /** The category of a missing or initially unreadable root. */
     public static final String ROOT_NOT_FOUND = "root_not_found";
 
-    /** The category a root the repository refused is reported under. */
+    /** The category of revoked root authority. */
     public static final String ROOT_ACCESS_DENIED = "root_access_denied";
 
-    /** The category a search that reached its examination budget is refused under. */
+    /** The category of a cursor capacity or retained traversal bound refusal. */
     public static final String DISCOVERY_BUDGET_EXCEEDED = "discovery_budget_exceeded";
 
-    /** The category an argument this command does not take is refused under. */
+    /** The category of malformed command arguments. */
     public static final String ARGUMENT_REJECTED = "argument_rejected";
 
     private final AgentContract contract;
+    private final DiscoveryRegistry discovery;
 
     /**
-     * Holds one handler bound to the contract its bounds come from.
-     *
-     * @param contract the authenticated contract
+     * Creates a phrase search using the runtime's shared bounded cursor owner.
+     * @param contract the authenticated command limits
+     * @param discovery the runtime's shared cursor owner
      */
-    public FindPagesContainingPhraseHandler(AgentContract contract) {
+    public FindPagesContainingPhraseHandler(AgentContract contract, DiscoveryRegistry discovery) {
         this.contract = contract;
+        this.discovery = discovery;
     }
 
     @Override
-    public Answer run(DocumentValue.Mapping arguments, ResourceResolver resolver,
-                      CallerContext context) {
+    public Answer run(DocumentValue.Mapping arguments, ResourceResolver resolver, CallerContext context) {
         final FindPagesContainingPhraseCommand.Outcome asked =
                 FindPagesContainingPhraseCommand.of(arguments, contract);
         if (asked instanceof final FindPagesContainingPhraseCommand.Refused refused) {
             return new Failed(ARGUMENT_REJECTED, refused.refusal() + ": " + refused.detail());
         }
-        return searched(((FindPagesContainingPhraseCommand.Held) asked).command(), arguments,
-                resolver, context);
-    }
-
-    private Answer searched(FindPagesContainingPhraseCommand command,
-                            DocumentValue.Mapping arguments, ResourceResolver resolver,
-                            CallerContext context) {
-        final Resource root = resolver.getResource(command.rootPath());
-        if (root == null) {
-            return new Failed(ROOT_NOT_FOUND, command.rootPath() + " is not a path this caller can"
-                    + " read, which is the same answer as nothing being there");
-        }
-        final Search search = new Search(command.phrase());
-        final PageTree.Walk walked = PageTree.pagesUnder(resolver, root,
-                context.discovery().limit(), context.time().limit(), search::consider);
-        if (walked == PageTree.Walk.EXHAUSTED) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this search read more than the "
-                    + context.discovery().limit() + " nodes or ran longer than the " + context.time().limit()
-                    + " milliseconds it is allowed before it had visited"
-                    + " every page, and stopped rather than answer with part of them; name a"
-                    + " narrower root under " + PageTree.CONTENT + " instead");
-        }
-        final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
-                search.found(), command.window(), FindPagesContainingPhraseCommand.WIRE_NAME,
-                arguments, context, contract);
-        if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
-            return new Failed(refused.category(), refused.detail());
-        }
-        final PagingSupport.Page<PageListingResult.Page> accepted =
-                ((PagingSupport.Accepted<PageListingResult.Page>) page).page();
-        return new Produced(PageListingResult.documentOf(accepted.rows(),
-                accepted.continuationToken()));
-    }
-
-    /** One search of one subtree, carrying what it has found. */
-    private static final class Search {
-
-        private final String phrase;
-        private final List<PageListingResult.Page> found = new ArrayList<>();
-
-        Search(String phrase) {
-            this.phrase = phrase.toLowerCase(Locale.ROOT);
-        }
-
-        void consider(Resource page) {
-            if (contains(page)) {
-                found.add(new PageListingResult.Page(page.getPath(), titleOf(page)));
-            }
-        }
-
-        List<PageListingResult.Page> found() {
-            return PageListingResult.ascending(
-                    java.util.Collections.unmodifiableList(found));
-        }
-
-        private boolean contains(Resource page) {
-            // A page with no content node carries no text, so it matches nothing rather than
-            // matching everything - which is what an empty stream would quietly do.
-            return java.util.Optional
-                    .ofNullable(page.getChild(ListChildPagesHandler.PAGE_CONTENT))
-                    .map(content -> SEARCHED_PROPERTIES.stream()
-                            .map(property -> content.getValueMap().get(property, ""))
-                            .anyMatch(value -> value.toLowerCase(Locale.ROOT).contains(phrase)))
-                    .orElse(false);
-        }
-    }
-
-    private static String titleOf(Resource page) {
-        final Resource content = page.getChild(ListChildPagesHandler.PAGE_CONTENT);
-        return content == null ? ""
-                : String.valueOf(content.getValueMap()
-                        .get(ListChildPagesHandler.TITLE_PROPERTY, ""));
-    }
-
-    /**
-     * The window's worth of matches, taken out of the order the search found them in.
-     *
-     * @param found every match, in the order the search returned them
-     * @param window which page is wanted
-     * @param contract the authenticated contract, which declares the default page size
-     * @return the matches that page carries
-     */
-    public static List<PageListingResult.Page> pageOf(List<PageListingResult.Page> found,
-                                                      ResultWindow window,
-                                                      AgentContract contract) {
-        final long offset = window instanceof final ResultWindow.Initial initial
-                ? initial.offset() : 0;
-        final long limit = window instanceof final ResultWindow.Initial initial
-                ? initial.limit() : contract.value(ContractLimit.DEFAULT_RESULT_LIMIT);
-        return found.stream().skip(offset).limit(limit).toList();
+        final var command = ((FindPagesContainingPhraseCommand.Held) asked).command();
+        return discovery.page(new DiscoveryRegistry.Request(FindPagesContainingPhraseCommand.WIRE_NAME,
+                command.rootPath(), command.window(), arguments), resolver, context,
+                PhraseSearchTraversal.of(command.rootPath(), command.phrase()));
     }
 
     @Override

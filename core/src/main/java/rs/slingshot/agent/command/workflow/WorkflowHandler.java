@@ -3,8 +3,10 @@
 
 package rs.slingshot.agent.command.workflow;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.SequencedMap;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import org.apache.sling.api.resource.Resource;
@@ -110,6 +112,11 @@ public final class WorkflowHandler implements CommandHandler {
         }
         final ListWorkflowModelsCommand command =
                 ((ListWorkflowModelsCommand.Held) asked).command();
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                ListWorkflowModelsCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final WorkflowService.Outcome found =
                 workflows.models(command.titlePrefix(), resolver);
         if (found instanceof final WorkflowService.Refused refused) {
@@ -122,7 +129,7 @@ public final class WorkflowHandler implements CommandHandler {
                     + " this caller may examine");
         }
         final PagingSupport.Outcome<WorkflowService.Model> page = PagingSupport.page(models,
-                command.window(), ListWorkflowModelsCommand.WIRE_NAME, arguments, context,
+                (PagingSupport.Ready) prepared, ListWorkflowModelsCommand.WIRE_NAME, context,
                 contract);
         if (page instanceof final PagingSupport.Refused<WorkflowService.Model> refused) {
             return new Failed(refused.category(), refused.detail());
@@ -142,6 +149,11 @@ public final class WorkflowHandler implements CommandHandler {
         }
         final FindWorkflowInstancesCommand command =
                 ((FindWorkflowInstancesCommand.Held) asked).command();
+        final PagingSupport.Preparation prepared = PagingSupport.prepare(command.window(),
+                FindWorkflowInstancesCommand.WIRE_NAME, arguments, context, contract);
+        if (prepared instanceof final PagingSupport.WindowRefused refused) {
+            return new Failed(refused.category(), refused.detail());
+        }
         final WorkflowService.Outcome found = workflows.instances(
                 new WorkflowService.InstanceQuery(command.modelIdentifier(),
                         command.payloadPrefix(), command.states()), resolver);
@@ -156,7 +168,7 @@ public final class WorkflowHandler implements CommandHandler {
                     + " this caller may examine");
         }
         final PagingSupport.Outcome<WorkflowService.Instance> page = PagingSupport.page(instances,
-                command.window(), FindWorkflowInstancesCommand.WIRE_NAME, arguments, context,
+                (PagingSupport.Ready) prepared, FindWorkflowInstancesCommand.WIRE_NAME, context,
                 contract);
         if (page instanceof final PagingSupport.Refused<WorkflowService.Instance> refused) {
             return new Failed(refused.category(), refused.detail());
@@ -211,8 +223,15 @@ public final class WorkflowHandler implements CommandHandler {
                     + " own identity, so starting one here would be a way to make a change that"
                     + " was refused in the foreground.");
         }
+        final SequencedMap<String, String> metadata = new LinkedHashMap<>(command.metadata());
+        if (!StartWorkflowCommand.NO_TITLE.equals(command.title())) {
+            metadata.put("workflowTitle", command.title());
+        }
+        if (!StartWorkflowCommand.NO_COMMENT.equals(command.comment())) {
+            metadata.put("startComment", command.comment());
+        }
         final WorkflowService.Outcome running = workflows.start(command.modelIdentifier(),
-                command.payloadPath(), command.metadata(), resolver);
+                command.payloadPath(), metadata, resolver);
         return running instanceof final WorkflowService.Refused refused
                 ? new Failed(refused.category(), refused.detail())
                 : new Produced(WorkflowResults.startedOf(

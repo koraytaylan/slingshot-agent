@@ -63,6 +63,13 @@ final class SourcePolicyTest {
     }
 
     @Test
+    void onlyTheExactPlatformDictatedIdentityNameIsAccepted() {
+        final List<PolicyFinding> found = findings("platform-dictated-name.java");
+        assertEquals(1, found.size());
+        assertRule(found, "abbreviated-name", "getUserId spells id short");
+    }
+
+    @Test
     @DisplayName("a single-character name is refused wherever it is declared")
     void aSingleCharacterNameIsRefused() {
         assertRule(findings("single-character-name.java"), "single-character-name", "n");

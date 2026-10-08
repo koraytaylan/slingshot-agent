@@ -11,8 +11,6 @@ import rs.slingshot.agent.continuation.ContinuationState;
 import rs.slingshot.agent.continuation.ContinuationToken;
 import rs.slingshot.agent.continuation.KeyRing;
 import rs.slingshot.agent.continuation.QueryDigest;
-import rs.slingshot.agent.contract.AgentContract;
-import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.digest.DigestValue;
 import rs.slingshot.agent.identity.EventStoreGeneration;
 import rs.slingshot.agent.json.DocumentValue;
@@ -124,31 +122,24 @@ public record PagedQuery(String commandWireName, DigestValue targetDigest,
     /**
      * The token that reaches the page after this one, where there is one.
      *
-     * <p>The token does not carry the size the enumeration began under. The state a token holds is
-     * a document both halves of this protocol declare, closed at five members by the client's own
-     * schema, and this side does not get to add a sixth to it. So a resumed page is served at the
-     * size the resuming request resolves to rather than at the one its first page used, and a
-     * caller who began with a page of twenty-five and resumed is served the default. That is a
-     * protocol gap rather than an implementation choice, and closing it means the client declaring
-     * the member — its own result-window module already names an {@code initial_result_limit} in
-     * the payload it specifies, which its schema does not carry.</p>
+     * <p>The original page size and expiry are authenticated state. Successors inherit both from
+     * the prepared window, so resuming cannot widen a page or renew the enumeration's lifetime.</p>
      *
      * @param page the page just served
      * @param query the digest of the query it came from
      * @param ring the keys this agent holds, whose current key signs the token
-     * @param nowUnixMilliseconds what this side's clock says
-     * @param contract the authenticated contract, which declares how long a token lives
+     * @param initialResultLimit the maximum page size fixed by the initial request
+     * @param expiresAtUnixMilliseconds the original expiry, without renewal
      * @return the token where rows remain, and nothing where none do
      */
     public Optional<ContinuationToken> tokenFor(Page<?> page, QueryDigest query, KeyRing ring,
-                                                long nowUnixMilliseconds, AgentContract contract) {
+                                                long initialResultLimit, long expiresAtUnixMilliseconds) {
         if (!(page.following() instanceof final More more)) {
             return Optional.empty();
         }
         return Optional.of(ContinuationToken.issue(
                 new ContinuationState(generation, targetDigest, query.value(), more.at(),
-                        nowUnixMilliseconds + contract.value(
-                                ContractLimit.CONTINUATION_TOKEN_LIFETIME_MILLISECONDS)),
+                        initialResultLimit, expiresAtUnixMilliseconds),
                 ring.current()));
     }
 }

@@ -718,6 +718,93 @@ final class LogicalOperationTest {
         return Digest.of(seed.getBytes(StandardCharsets.UTF_8));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2, 3})
+    void missingBucketPrefixesRemainRecoverable(int missing) throws RepositoryException {
+        final Session session = prepared();
+        final String path = OperationStore.pathOf(identity()).path();
+        if (missing > 0) {
+            session.getNode(bucketAncestor(path, missing)).remove();
+            session.save();
+        }
+        final OperationStore.Created result = created(session, accepted(NOW));
+        assertEquals(OperationState.ACCEPTED, result.operation().state());
+        session.refresh(false);
+        assertTrue(session.nodeExists(path));
+        assertInstanceOf(OperationStore.Held.class, OperationStore.read(session, identity()));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void interruptedBucketBatchHasNoPartiallyCommittedChain(boolean committed)
+            throws RepositoryException {
+        final Session session = prepared();
+        final String path = OperationStore.pathOf(identity()).path();
+        final String ancestor = bucketAncestor(path, 3);
+        session.getNode(ancestor).remove();
+        session.save();
+        final Session interrupted = rs.slingshot.agent.store.SaveInterleaving.interruptSave(
+                session, 1, committed);
+        org.junit.jupiter.api.Assertions.assertThrows(RepositoryException.class,
+                () -> OperationStore.create(interrupted, accepted(NOW)));
+        session.refresh(false);
+        assertFalse(session.nodeExists(path));
+        assertEquals(committed, session.nodeExists(ancestor));
+        assertEquals(committed, session.nodeExists(bucketAncestor(path, 1)));
+        created(session, accepted(NOW));
+        session.refresh(false);
+        assertInstanceOf(OperationStore.Held.class, OperationStore.read(session, identity()));
+    }
+
+    private static String bucketAncestor(String path, int levels) {
+        String parent = path;
+        for (int index = 0; index < levels; index += 1) {
+            parent = parent.substring(0, parent.lastIndexOf('/'));
+        }
+        return parent;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "1,false", "1,true", "2,false", "2,true", "3,false", "3,true"})
+    void interruptedExecutionStartBatchPreservesOnlyPublishedBudgets(int boundary, boolean committed)
+            throws RepositoryException {
+        final Session session = prepared();
+        final LogicalOperation accepted = created(session, accepted(NOW)).operation();
+        rs.slingshot.agent.store.LedgerAdmission.prepare(session, caller());
+        for (final rs.slingshot.agent.store.AccountedQuantity quantity : java.util.List.of(
+                rs.slingshot.agent.store.AccountedQuantity.RESULT_ROWS,
+                rs.slingshot.agent.store.AccountedQuantity.RESULT_BYTES,
+                rs.slingshot.agent.store.AccountedQuantity.SNAPSHOT_ROWS,
+                rs.slingshot.agent.store.AccountedQuantity.SNAPSHOT_BYTES)) {
+            rs.slingshot.agent.store.CapacityLedger.prepare(session, quantity, caller());
+        }
+        final Session interrupted = rs.slingshot.agent.store.SaveInterleaving.interruptSave(
+                session, boundary, committed);
+        org.junit.jupiter.api.Assertions.assertThrows(RepositoryException.class,
+                () -> ExecutionJournal.start(interrupted, accepted, NOW, CONTRACT));
+        session.refresh(false);
+        final boolean published = boundary == 3 && committed;
+        final LogicalOperation observed = assertInstanceOf(OperationStore.Held.class,
+                OperationStore.read(session, identity())).operation();
+        assertEquals(published ? OperationState.RUNNING : OperationState.ACCEPTED, observed.state());
+        for (final rs.slingshot.agent.store.AccountedQuantity quantity : java.util.List.of(
+                rs.slingshot.agent.store.AccountedQuantity.EVENT_ROWS,
+                rs.slingshot.agent.store.AccountedQuantity.RESULT_ROWS,
+                rs.slingshot.agent.store.AccountedQuantity.SNAPSHOT_ROWS)) {
+            assertEquals(published ? 1 : 0,
+                    rs.slingshot.agent.store.CapacityLedger.held(session, quantity, CONTRACT));
+        }
+        if (!published) {
+            assertEquals(OperationState.RUNNING,
+                    ExecutionJournal.start(session, accepted, NOW, CONTRACT).orElseThrow().state());
+        }
+        assertEquals(1, rs.slingshot.agent.store.CapacityLedger.held(session,
+                rs.slingshot.agent.store.AccountedQuantity.EVENT_ROWS, CONTRACT));
+        assertEquals(1, rs.slingshot.agent.store.CapacityLedger.held(session,
+                rs.slingshot.agent.store.AccountedQuantity.RESULT_ROWS, CONTRACT));
+    }
+
     private Session prepared() throws RepositoryException {
         final Session session = java.util.Objects.requireNonNull(
                 sling.resourceResolver().adaptTo(Session.class),

@@ -177,7 +177,10 @@ public final class ExclusiveTransitionProbe extends SlingAllMethodsServlet imple
 
     private static String capacityView(Session session) throws RepositoryException {
         session.refresh(false);
-        if (!session.nodeExists(CapacityLedger.totalPath(CAPACITY).path())) {
+        if (!session.nodeExists(CapacityLedger.totalPath(CAPACITY).path())
+                || !session.nodeExists(CapacityLedger.callerPath(CAPACITY, CAPACITY_CALLER).path())
+                || !session.nodeExists(StatePath.deployment(StatePath.CAPACITY)
+                        .child(CapacityReservation.NODE).path())) {
             return "unprepared";
         }
         final long total = CapacityLedger.held(session, CAPACITY, CONTRACT);

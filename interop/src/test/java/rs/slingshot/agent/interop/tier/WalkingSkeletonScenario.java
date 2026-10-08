@@ -103,6 +103,19 @@ final class WalkingSkeletonScenario {
                 answered.body());
     }
 
+    @Test
+    void capabilityTimingsAreNumericOnSuccessAndAbsentOnUnauthenticatedRefusal() {
+        final HttpResponse<String> answered = tier.readAsAuthenticatedUser(CAPABILITIES);
+        assertEquals(200, answered.statusCode(), answered.body());
+        final List<String> timings = answered.headers().allValues("Server-Timing");
+        assertEquals(1, timings.size());
+        assertTrue(timings.getFirst().matches(
+                "cap_shape;dur=[0-9]+,cap_identity;dur=[0-9]+,cap_document;dur=[0-9]+"));
+        final HttpResponse<String> refused = tier.readAsNobody(CAPABILITIES);
+        assertTrue(refused.statusCode() >= 400);
+        assertTrue(refused.headers().allValues("Server-Timing").isEmpty());
+    }
+
     private static List<DocumentValue.Mapping> expectedCommands(AgentContract contract) {
         final CommandRegistry registry = assertInstanceOf(CommandRegistry.Loaded.class,
                 CommandRegistry.read(REPOSITORY.resolve(CommandRegistry.REGISTRY_DIRECTORY))).registry();

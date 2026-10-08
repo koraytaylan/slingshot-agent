@@ -14,8 +14,8 @@ operation_key = "required"
 
 result_bytes = 16384
 failure_categories = ["mutation_outcome_unknown", "property_not_removable", "property_rejected", "repository_commit_failed", "variation_access_denied", "variation_invalid", "variation_not_found"]
-argument_schema_digest = "b3438fa19254b02bd8e024f3a24c846f324199db33563fb972b0ea01df1c3488"
-result_schema_digest = "4a1db93e5f5fd31fd1d35a311f01a376de68d45f7b1ac289d61daed6d8b19229"
-contract_limits_digest = "5afebb38aab4322731e6872e02fadb111beb61ee457976b4e573f891943452c9"
+argument_schema_digest = "0ba1b6b286e162adac075e633637c8069d06c0e50ddab0eb96f91fb397c776b6"
+result_schema_digest = "3a75f99024d8b68ee8ec0abe8d5313d126c22c6e08dd2b4b2eb43735fcfc11da"
+contract_limits_digest = "fe98b915cb84f787a5c54f8fab2e1408e108524e2765e96c9877cd236451da78"
 staging_bytes = 0
 execution = "immediate"

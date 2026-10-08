@@ -15,6 +15,7 @@ import rs.slingshot.agent.command.content.ListChildPagesHandler;
 import rs.slingshot.agent.command.mutation.MutationAnswer;
 import rs.slingshot.agent.command.mutation.MutationOutcome;
 import rs.slingshot.agent.command.mutation.SingleCommit;
+import rs.slingshot.agent.command.mutation.StoredProperties;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.json.DocumentValue;
 
@@ -117,6 +118,10 @@ public final class UpdatePageHandler implements CommandHandler {
             return new MutationOutcome.Refused(PAGE_ACCESS_DENIED, command.pagePath() + " is not a"
                     + " page this caller may change");
         }
+        final StoredProperties.Outcome properties = StoredProperties.of(command.change(), session);
+        if (properties instanceof final StoredProperties.Refused refused) {
+            return new MutationOutcome.Refused(PROPERTY_REJECTED, refused.detail());
+        }
         final Optional<String> immovable = command.change().immovableIn(values);
         if (immovable.isPresent()) {
             return new MutationOutcome.Refused(PROPERTY_NOT_REMOVABLE, immovable.get() + " is a"
@@ -124,7 +129,11 @@ public final class UpdatePageHandler implements CommandHandler {
                     + " rather than applied without it, because a caller told a removal succeeded"
                     + " will build on that.");
         }
-        command.change().set().forEach((name, value) -> values.put(name, value.stored()));
+        final Optional<StoredProperties.Refused> refusal =
+                ((StoredProperties.Held) properties).writeTo(content);
+        if (refusal.isPresent()) {
+            return new MutationOutcome.Refused(PROPERTY_REJECTED, refusal.orElseThrow().detail());
+        }
         if (!UpdatePageCommand.TITLE_UNCHANGED.equals(command.title())) {
             values.put(ListChildPagesHandler.TITLE_PROPERTY, command.title());
         }

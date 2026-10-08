@@ -79,3 +79,8 @@ reason = "It runs per character of the media type on every request that carries 
 type = "ArtifactServlet"
 method = "headerSafe"
 reason = "It runs per character of a value that came out of the repository and is about to become a header, on the route that moves the largest thing this product moves."
+
+[[sensitive_path]]
+type = "ReferenceValues"
+method = "nativeName"
+reason = "It classifies each character of each selected reference-property name; a stream pipeline allocates for each inspected property."

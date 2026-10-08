@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.sling.api.resource.Resource;
+import org.apache.sling.api.resource.ResourceResolver;
+import org.apache.sling.api.wrappers.ValueMapDecorator;
 import org.apache.sling.testing.mock.sling.ResourceResolverType;
 import org.apache.sling.testing.mock.sling.junit5.SlingContext;
 import org.apache.sling.testing.mock.sling.junit5.SlingContextExtension;
@@ -57,7 +59,8 @@ final class RepositoryReachTest {
     }
 
     @Test
-    void multivalueReferencesAreRepointedEntryByEntry() {
+    void multivalueReferencesAreRepointedEntryByEntry()
+            throws org.apache.sling.api.resource.PersistenceException {
         sling.create().resource("/content/source", Map.of("links",
                 new String[]{"/content/target", "/content/other", "/content/target"}));
 
@@ -139,7 +142,101 @@ final class RepositoryReachTest {
         assertEquals(100, advances.get(), "a deep walk advanced outside its active path");
     }
 
+    @Test
+    void aKnownReferenceEndsADeletionCheckBeforeTheRemainingSiblingsAreRead() {
+        final AtomicInteger advances = new AtomicInteger();
+        final Resource reference = resource("/content/synthetic-reference", List.of(), advances,
+                Map.of("link", "/content/synthetic-target"));
+        final List<Resource> children = new java.util.ArrayList<>(List.of(reference));
+        java.util.stream.IntStream.range(0, 1000).mapToObj(child ->
+                resource("/content/synthetic-unrelated-" + child, List.of(), advances))
+                .forEach(children::add);
+        final Resource root = resource("/content", children, advances);
+
+        try (ResourceResolver resolver = resolver(root)) {
+            assertTrue(RepositoryReach.possiblyReferenced(resolver, "/content/synthetic-target",
+                    1002));
+        }
+        assertEquals(1, advances.get(), "a known reference still traversed unrelated siblings");
+    }
+
+    @Test
+    void completeReferenceDiscoveryStillFindsEveryMatchingSibling() {
+        final AtomicInteger advances = new AtomicInteger();
+        final Resource first = resource("/content/synthetic-first", List.of(), advances,
+                Map.of("link", "/content/synthetic-target"));
+        final Resource unrelated = resource("/content/synthetic-unrelated", List.of(), advances);
+        final Resource last = resource("/content/synthetic-last", List.of(), advances,
+                Map.of("links", new String[]{"/content/synthetic-target"}));
+        final Resource root = resource("/content", List.of(first, unrelated, last), advances);
+
+        try (ResourceResolver resolver = resolver(root)) {
+            final RepositoryReach.References found = RepositoryReach.references(resolver,
+                    "/content/synthetic-target", 4);
+            assertTrue(found.complete());
+            assertEquals(List.of(first, last), found.found());
+        }
+        assertEquals(3, advances.get(), "a move's discovery stopped before the final sibling");
+    }
+
+    @Test
+    void absenceRequiresACompleteWalkWithinTheOriginalNodeBudget() {
+        final AtomicInteger advances = new AtomicInteger();
+        final Resource child = resource("/content/synthetic-unrelated", List.of(), advances);
+        final Resource root = resource("/content", List.of(child), advances);
+
+        try (ResourceResolver resolver = resolver(root)) {
+            assertTrue(RepositoryReach.possiblyReferenced(resolver, "/content/synthetic-target",
+                    0));
+            assertTrue(RepositoryReach.possiblyReferenced(resolver, "/content/synthetic-target",
+                    1));
+            assertFalse(RepositoryReach.possiblyReferenced(resolver, "/content/synthetic-target",
+                    2));
+        }
+    }
+
+    @Test
+    void referencesInsideTheRemovedSubtreeDoNotPreventDeletion() {
+        final AtomicInteger advances = new AtomicInteger();
+        final Resource nested = resource("/content/synthetic-target/child", List.of(), advances,
+                Map.of("link", "/content/synthetic-target"));
+        final Resource target = resource("/content/synthetic-target", List.of(nested), advances,
+                Map.of("link", "/content/synthetic-target"));
+        final Resource root = resource("/content", List.of(target), advances);
+
+        try (ResourceResolver resolver = resolver(root)) {
+            assertFalse(RepositoryReach.possiblyReferenced(resolver, "/content/synthetic-target",
+                    3));
+        }
+        assertEquals(1, advances.get(), "a self-reference check traversed the removed subtree");
+    }
+
+    @Test
+    void anAbsentContentRootHasNoVisibleReferences() {
+        assertFalse(RepositoryReach.possiblyReferenced(sling.resourceResolver(),
+                "/content/synthetic-target", 1));
+    }
+
+    private static ResourceResolver resolver(Resource root) {
+        return (ResourceResolver) Proxy.newProxyInstance(
+                Thread.currentThread().getContextClassLoader(),
+                new Class<?>[]{ResourceResolver.class}, (proxy, method, arguments) -> {
+                    if ("getResource".equals(method.getName())) {
+                        return root;
+                    }
+                    if ("close".equals(method.getName())) {
+                        return null;
+                    }
+                    throw new AssertionError("unexpected resolver call: " + method.getName());
+                });
+    }
+
     private static Resource resource(String path, List<Resource> children, AtomicInteger advances) {
+        return resource(path, children, advances, Map.of());
+    }
+
+    private static Resource resource(String path, List<Resource> children, AtomicInteger advances,
+                                     Map<String, Object> values) {
         return (Resource) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),
                 new Class<?>[]{Resource.class}, (proxy, method, arguments) -> {
                     if ("getPath".equals(method.getName())) {
@@ -162,6 +259,9 @@ final class RepositoryReachTest {
                     }
                     if ("toString".equals(method.getName())) {
                         return path;
+                    }
+                    if ("getValueMap".equals(method.getName())) {
+                        return new ValueMapDecorator(values);
                     }
                     return null;
                 });

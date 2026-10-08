@@ -91,8 +91,12 @@ authenticates rather than by whatever the code happens to do:
   bundle owns after the request thread is released, which is the whole reason the streaming route is
   separate from the rest.
 - **Storage.** Everything the agent writes lives under one root the initialisation creates, counted
-  against per-kind bounds, and collected by a sweep whose work is bounded per pass so it never runs
-  long enough to matter.
+  against per-kind bounds. Maintenance shares one declared row budget between operation cleanup and
+  subscription expiry, alternating which family runs first. Both positions survive restarts. A subscription
+  expires only after the maximum persisted retention has elapsed since its last advance; the boundary
+  itself remains live. Expiry rechecks the current record on every contention retry and releases its row
+  and byte charges with deletion in one commit. Live or malformed bindings are preserved. These bounds
+  limit examinations; repository calls and query execution can still take time.
 
 ## How to tell it is working
 

@@ -4,7 +4,7 @@
 package rs.slingshot.agent.command.content;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import org.apache.sling.api.resource.Resource;
@@ -12,21 +12,18 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ValueMap;
 import rs.slingshot.agent.command.CallerContext;
 import rs.slingshot.agent.command.CommandHandler;
-import rs.slingshot.agent.command.PagingSupport;
 import rs.slingshot.agent.command.fragment.FragmentHandlers;
 import rs.slingshot.agent.contract.AgentContract;
 import rs.slingshot.agent.contract.ContractLimit;
 import rs.slingshot.agent.json.DocumentValue;
 
 /**
- * Component definitions, component instances, content fragments, or experience fragments under one
- * anchor.
+ * Bounded incremental catalogues under an exact readable root.
  *
- * <p>Each is a walk of the whole subtree the caller named. What distinguishes a match is a fact
- * about the node — its type, a flag, or a resource type — applied to every node the walk reaches.
- * The walk finishes that subtree. A cap that stopped it would answer a question about part of the
- * tree as though it were a question about the tree, which is the thing a caller cannot already
- * learn from the authoring interface.</p>
+ * <p>Pages use live provider depth-first order, with explicit completeness. A runtime-owned
+ * cursor retains traversal position between requests and rechecks current authority before
+ * materializing each row. Stable trees are enumerated once; concurrent changes are not a snapshot.
+ * A missing root is refused rather than expanded into an unbounded ancestor search.</p>
  */
 public final class ContentCatalogHandler implements CommandHandler {
 
@@ -56,16 +53,19 @@ public final class ContentCatalogHandler implements CommandHandler {
 
     private final AgentContract contract;
     private final Kind kind;
+    private final DiscoveryRegistry discovery;
 
     /**
      * Holds one handler bound to the contract its bounds come from.
      *
      * @param contract the authenticated contract
      * @param kind which catalogue it lists
+     * @param discovery the runtime-owned cursor registry
      */
-    public ContentCatalogHandler(AgentContract contract, Kind kind) {
+    public ContentCatalogHandler(AgentContract contract, Kind kind, DiscoveryRegistry discovery) {
         this.contract = contract;
         this.kind = kind;
+        this.discovery = discovery;
     }
 
     @Override
@@ -76,52 +76,9 @@ public final class ContentCatalogHandler implements CommandHandler {
             return new Failed(refused.category(), refused.detail());
         }
         final Held held = (Held) asked;
-        final Optional<Resource> root = anchor(resolver, held.rootPath(), kind);
-        if (root.isEmpty()) {
-            return new Failed(ListChildPagesHandler.ROOT_NOT_FOUND,
-                    ListChildPagesHandler.whyNothingIsListed(held.rootPath()));
-        }
-        final Optional<Gathered> walked = gather(root.get(), context);
-        if (walked.isEmpty()) {
-            return new Failed(DISCOVERY_BUDGET_EXCEEDED, "this listing examined more than the "
-                    + context.discovery().limit() + " nodes or ran longer than the "
-                    + context.time().limit() + " milliseconds it is allowed before it had visited"
-                    + " every node under " + root.get().getPath() + ", and stopped rather than"
-                    + " answer with part of them; name a narrower root instead");
-        }
-        final Gathered gathered = walked.get();
-        return switch (kind) {
-            case COMPONENT_DEFINITIONS, COMPONENTS -> pagedComponents(gathered.components(), held,
-                    arguments, context);
-            case CONTENT_FRAGMENTS, EXPERIENCE_FRAGMENTS -> pagedPages(gathered.pages(), held,
-                    arguments, context);
-        };
-    }
-
-    private Answer pagedComponents(List<ComponentListingResult.Component> found, Held held,
-                                   DocumentValue.Mapping arguments, CallerContext context) {
-        final PagingSupport.Outcome<ComponentListingResult.Component> page = PagingSupport.page(
-                found, held.window(), wireName(), arguments, context, contract);
-        if (page instanceof final PagingSupport.Refused<ComponentListingResult.Component> refused) {
-            return new Failed(refused.category(), refused.detail());
-        }
-        final PagingSupport.Page<ComponentListingResult.Component> accepted =
-                ((PagingSupport.Accepted<ComponentListingResult.Component>) page).page();
-        return new Produced(ComponentListingResult.documentOf(accepted.rows(),
-                accepted.continuationToken()));
-    }
-
-    private Answer pagedPages(List<PageListingResult.Page> found, Held held,
-                              DocumentValue.Mapping arguments, CallerContext context) {
-        final PagingSupport.Outcome<PageListingResult.Page> page = PagingSupport.page(
-                found, held.window(), wireName(), arguments, context, contract);
-        if (page instanceof final PagingSupport.Refused<PageListingResult.Page> refused) {
-            return new Failed(refused.category(), refused.detail());
-        }
-        final PagingSupport.Page<PageListingResult.Page> accepted =
-                ((PagingSupport.Accepted<PageListingResult.Page>) page).page();
-        return new Produced(PageListingResult.documentOf(accepted.rows(),
-                accepted.continuationToken()));
+        return discovery.page(new DiscoveryRegistry.Request(wireName(), held.rootPath(), held.window(),
+                arguments), resolver, context, new DiscoveryRegistry.Traversal(this::descends,
+                        resource -> row(resource, held.rootPath())));
     }
 
     private String wireName() {
@@ -185,131 +142,29 @@ public final class ContentCatalogHandler implements CommandHandler {
         return new Held(command.rootPath(), command.window());
     }
 
-    /**
-     * Every match under one root, or nothing where the walk ran out of its budget first.
-     *
-     * <p>A partial catalogue is not answered: a list that stopped partway reads as the whole of
-     * what is there. The node count and the elapsed time are both checked, because an author that
-     * answers slowly exhausts the request it is answered on long before it exhausts the count.</p>
-     */
-    private Optional<Gathered> gather(Resource root, CallerContext context) {
-        final List<ComponentListingResult.Component> components = new ArrayList<>();
-        final List<PageListingResult.Page> pages = new ArrayList<>();
-        final boolean finished = BoundedWalk.every(root, context, this::descends,
-                resource -> consider(resource, root.getPath(), components, pages));
-        return finished ? Optional.of(new Gathered(ComponentListingResult.ascending(components),
-                PageListingResult.ascending(pages))) : Optional.empty();
-    }
-
-    private void consider(Resource resource, String anchor,
-                          List<ComponentListingResult.Component> components,
-                          List<PageListingResult.Page> pages) {
-        if (anchor.equals(resource.getPath())) {
-            return;
+    private Optional<DocumentValue.Mapping> row(Resource resource, String root) {
+        if (root.equals(resource.getPath())) {
+            return Optional.empty();
         }
-        if (kind == Kind.COMPONENT_DEFINITIONS) {
-            definitionType(resource).ifPresent(type -> components.add(
-                    new ComponentListingResult.Component(resource.getPath(), type,
-                            titleOf(resource))));
-            return;
+        final Optional<String> type = switch (kind) {
+            case COMPONENT_DEFINITIONS -> definitionType(resource);
+            case COMPONENTS -> instanceType(resource);
+            case CONTENT_FRAGMENTS -> isContentFragment(resource) ? Optional.of("") : Optional.empty();
+            case EXPERIENCE_FRAGMENTS -> isExperienceFragment(resource) ? Optional.of("") : Optional.empty();
+        };
+        if (type.isEmpty()) {
+            return Optional.empty();
         }
-        if (kind == Kind.COMPONENTS) {
-            instanceType(resource).ifPresent(type -> components.add(
-                    new ComponentListingResult.Component(resource.getPath(), type,
-                            titleOf(resource))));
-            return;
+        final var members = new LinkedHashMap<String, DocumentValue>();
+        members.put("repository_path", new DocumentValue.Text(resource.getPath()));
+        if (kind == Kind.COMPONENT_DEFINITIONS || kind == Kind.COMPONENTS) {
+            members.put("resource_type", new DocumentValue.Text(type.orElseThrow()));
         }
-        if (kind == Kind.CONTENT_FRAGMENTS && isContentFragment(resource)) {
-            pages.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
-            return;
+        final String title = titleOf(resource);
+        if (!title.isEmpty()) {
+            members.put("title", new DocumentValue.Text(title));
         }
-        if (kind == Kind.EXPERIENCE_FRAGMENTS && isExperienceFragment(resource)) {
-            pages.add(new PageListingResult.Page(resource.getPath(), titleOf(resource)));
-        }
-    }
-
-    /**
-     * The node a catalogue walks, which is the path the caller named when that node is there.
-     *
-     * <p>Every component available on an author is a definition under {@code /apps}. An
-     * environment name is that author, so {@code /apps/acme-rde} names no folder and
-     * the walk starts at the nearest {@code /apps} or {@code /libs} ancestor. A project folder
-     * the caller named exactly, such as {@code /apps/acme}, stays that folder. Other
-     * catalogues still accept a missing segment that is one existing child's name extended by
-     * a hyphen.</p>
-     *
-     * @param resolver the caller's read-only resolver
-     * @param path the path the caller named
-     * @param kind which catalogue is being listed
-     * @return the node to walk, or nothing where no ancestor of it is readable
-     */
-    private static Optional<Resource> anchor(ResourceResolver resolver, String path, Kind kind) {
-        final Optional<Resource> exact = Optional.ofNullable(resolver.getResource(path));
-        if (exact.isPresent()) {
-            return exact;
-        }
-        final Optional<Resource> deepest = deepestAncestor(resolver, path);
-        if (deepest.isEmpty()) {
-            return deepest;
-        }
-        if (kind == Kind.COMPONENT_DEFINITIONS && underAppsOrLibs(deepest.get().getPath())) {
-            return deepest;
-        }
-        return descend(deepest.get(), path.substring(deepest.get().getPath().length()));
-    }
-
-    private static Optional<Resource> deepestAncestor(ResourceResolver resolver, String path) {
-        String cursor = path;
-        while (cursor.length() > 1) {
-            final int slash = cursor.lastIndexOf('/');
-            cursor = slash <= 0 ? "/" : cursor.substring(0, slash);
-            final Optional<Resource> found = Optional.ofNullable(resolver.getResource(cursor));
-            if (found.isPresent()) {
-                return found;
-            }
-        }
-        return Optional.empty();
-    }
-
-    private static Optional<Resource> descend(Resource parent, String rest) {
-        if (rest.isEmpty() || "/".equals(rest)) {
-            return Optional.of(parent);
-        }
-        final String body = rest.startsWith("/") ? rest.substring(1) : rest;
-        final int slash = body.indexOf('/');
-        final String segment = slash < 0 ? body : body.substring(0, slash);
-        final String after = slash < 0 ? "" : body.substring(slash);
-        return Optional.ofNullable(parent.getChild(segment))
-                .or(() -> uniqueExtension(parent, segment))
-                .flatMap(child -> descend(child, after));
-    }
-
-    /**
-     * The one child whose name the missing segment extends, or that extends the missing segment.
-     *
-     * <p>The boundary is a hyphen, so {@code acme-rde} is {@code acme} and {@code
-     * brand} is not. Two children that both qualify is no answer: guessing between them would list
-     * the wrong project.</p>
-     */
-    private static Optional<Resource> uniqueExtension(Resource parent, String wanted) {
-        final List<Resource> matches = new ArrayList<>();
-        for (final Resource child : parent.getChildren()) {
-            final String name = child.getName();
-            if (extendsName(wanted, name) || extendsName(name, wanted)) {
-                matches.add(child);
-            }
-        }
-        return matches.size() == 1 ? Optional.of(matches.getFirst()) : Optional.empty();
-    }
-
-    private static boolean extendsName(String longer, String shorter) {
-        return longer.length() > shorter.length() && longer.startsWith(shorter)
-                && longer.charAt(shorter.length()) == '-';
-    }
-
-    private static boolean underAppsOrLibs(String path) {
-        return "/apps".equals(path) || path.startsWith("/apps/") || "/libs".equals(path)
-                || path.startsWith("/libs/");
+        return Optional.of(new DocumentValue.Mapping(members));
     }
 
     /**
@@ -373,9 +228,11 @@ public final class ContentCatalogHandler implements CommandHandler {
     }
 
     private static boolean isContentFragment(Resource resource) {
+        if (!FragmentHandlers.CONTENT_FRAGMENT_TYPE.equals(ChildListingHandler.typeOf(resource))) {
+            return false;
+        }
         final Resource content = resource.getChild(ListChildPagesHandler.PAGE_CONTENT);
-        return FragmentHandlers.CONTENT_FRAGMENT_TYPE.equals(ChildListingHandler.typeOf(resource))
-                && content != null
+        return content != null
                 && content.getValueMap().get(FragmentHandlers.CONTENT_FRAGMENT_FLAG, false);
     }
 
@@ -418,7 +275,4 @@ public final class ContentCatalogHandler implements CommandHandler {
     private record Refused(String category, String detail) implements Asked {
     }
 
-    private record Gathered(List<ComponentListingResult.Component> components,
-                            List<PageListingResult.Page> pages) {
-    }
 }
